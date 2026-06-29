@@ -44,9 +44,10 @@ async function bootstrap(): Promise<void> {
   SwaggerModule.setup('docs', app, document);
 
   const port = config.get('PORT', { infer: true });
-  await app.listen(port);
+  // Bind 0.0.0.0 so the container is reachable on hosts like Railway.
+  await app.listen(port, '0.0.0.0');
 
-  new Logger('Bootstrap').log(`CDPP API listening on http://localhost:${port} (docs: /docs)`);
+  new Logger('Bootstrap').log(`CDPP API listening on :${port} (docs: /docs)`);
 }
 
 void bootstrap();
