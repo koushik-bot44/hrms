@@ -21,12 +21,20 @@ const STATUS_MAP: Record<StatusValue, { label: string; tone: Tone }> = {
   ISSUED: { label: 'Issued', tone: 'success' },
   SIGNED: { label: 'Signed', tone: 'navy' },
   REVOKED: { label: 'Revoked', tone: 'danger' },
+  PENDING_APPROVAL: { label: 'Pending approval', tone: 'warning' },
+  SUPERSEDED: { label: 'Superseded', tone: 'navy' },
   // OnboardingState
   INVITED: { label: 'Invited', tone: 'neutral' },
   IN_PROGRESS: { label: 'In progress', tone: 'navy' },
   PENDING_REVIEW: { label: 'Pending review', tone: 'warning' },
   COMPLETED: { label: 'Completed', tone: 'success' },
   REJECTED: { label: 'Rejected', tone: 'danger' },
+  SUBMITTING: { label: 'Submitting', tone: 'navy' },
+  UNDER_REVIEW: { label: 'Under review', tone: 'warning' },
+  PENDING_COMPLIANCE: { label: 'Pending compliance', tone: 'warning' },
+  READY: { label: 'Ready', tone: 'navy' },
+  ACTIVE: { label: 'Active', tone: 'success' },
+  EXITED: { label: 'Exited', tone: 'neutral' },
 };
 
 export interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {

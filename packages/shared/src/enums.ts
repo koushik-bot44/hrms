@@ -38,6 +38,13 @@ export const OnboardingState = {
   PENDING_REVIEW: 'PENDING_REVIEW',
   COMPLETED: 'COMPLETED',
   REJECTED: 'REJECTED',
+  // Full intended onboarding lifecycle (additive — existing members retained):
+  SUBMITTING: 'SUBMITTING',
+  UNDER_REVIEW: 'UNDER_REVIEW',
+  PENDING_COMPLIANCE: 'PENDING_COMPLIANCE',
+  READY: 'READY',
+  ACTIVE: 'ACTIVE',
+  EXITED: 'EXITED',
 } as const;
 export type OnboardingState = (typeof OnboardingState)[keyof typeof OnboardingState];
 
@@ -55,6 +62,9 @@ export const DocumentStatus = {
   ISSUED: 'ISSUED',
   SIGNED: 'SIGNED',
   REVOKED: 'REVOKED',
+  // Full intended document set (additive — existing members retained):
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+  SUPERSEDED: 'SUPERSEDED',
 } as const;
 export type DocumentStatus = (typeof DocumentStatus)[keyof typeof DocumentStatus];
 

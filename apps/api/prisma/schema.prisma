@@ -43,6 +43,13 @@ enum OnboardingState {
   PENDING_REVIEW
   COMPLETED
   REJECTED
+  // Full intended onboarding lifecycle (additive — existing members retained):
+  SUBMITTING
+  UNDER_REVIEW
+  PENDING_COMPLIANCE
+  READY
+  ACTIVE
+  EXITED
 }
 
 enum DocumentClass {
@@ -58,6 +65,9 @@ enum DocumentStatus {
   ISSUED
   SIGNED
   REVOKED
+  // Full intended document set (additive — existing members retained):
+  PENDING_APPROVAL
+  SUPERSEDED
 }
 
 enum RequirementStatus {
