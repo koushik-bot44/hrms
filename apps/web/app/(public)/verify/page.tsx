@@ -15,7 +15,7 @@ export default function VerifyPage() {
       <EmptyState
         icon={ShieldCheck}
         title="Public verification arrives in Phase 4"
-        hint="You'll paste a document's unique ID (e.g. STELLAR-OFR-2026-000042) to confirm its authenticity and current status."
+        hint="You'll paste a document's unique ID (e.g. NAME-OFR-2026-000042) to confirm its authenticity and current status."
       />
     </TierShell>
   );

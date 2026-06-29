@@ -2,12 +2,12 @@
  * Unique-ID format helpers.
  *
  * Format: `{ENTITY}-{TYPE}-{YYYY}-{NNNNNN}`
- *   ENTITY  uppercase alphanumeric entity code (e.g. "STELLAR"), 2..16 chars, starts with a letter
+ *   ENTITY  uppercase alphanumeric entity code (e.g. "NAME"), 2..16 chars, starts with a letter
  *   TYPE    one of the registered 3-letter {@link DocumentTypeCode}s (e.g. "OFR")
  *   YYYY    4-digit year
  *   NNNNNN  6-digit zero-padded sequence (000001..999999), unique per (entity, type, year)
  *
- * Example: `STELLAR-OFR-2026-000042`
+ * Example: `NAME-OFR-2026-000042`
  */
 import { isDocumentTypeCode, DocumentTypeCode } from './document-types';
 

@@ -17,7 +17,7 @@ import { ApiStatusIndicator } from '@/components/api-status-indicator';
 // A representative unique ID, built with the shared formatter so the landing page
 // reflects the real {ENTITY}-{TYPE}-{YYYY}-{NNNNNN} contract.
 const EXAMPLE_ID = formatUniqueId({
-  entityCode: 'STELLAR',
+  entityCode: 'NAME',
   typeCode: 'OFR',
   year: 2026,
   sequence: 42,
