@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import { Users } from 'lucide-react';
-import type { EmployeeSummary } from '@ihrms/shared';
+import type { EmployeeSummary } from '@/lib/contract';
 import { listMyEmployees } from '@/lib/api/employees';
 import { useApiQuery } from '@/lib/api/hooks';
 import { PageHeader } from '@/components/page-header';

@@ -11,7 +11,7 @@ import {
   type EmployeeSummary,
   type OnboardEmployeeInput,
   type OnboardEmployeeResult,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { onboardEmployee } from '@/lib/api/employees';
 import { useApiMutation } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';

@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import type { ZodTypeAny } from 'zod';
-import type { SectionKey } from '@ihrms/shared';
+import type { SectionKey } from '@/lib/contract';
 import { saveSection } from '@/lib/api/onboarding';
 import { useApiMutation } from '@/lib/api/hooks';
 import { cn } from '@/lib/utils';

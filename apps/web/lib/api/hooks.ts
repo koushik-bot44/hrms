@@ -12,7 +12,7 @@ import { ApiError } from './client';
 /**
  * Typed react-query wrappers over the shared API client. `useApiMutation` integrates
  * toasts (UX bar: optimistic updates with toasts). Request/response types come from
- * the callers, which import them from @ihrms/shared — no codegen.
+ * the callers, which import them from @/lib/contract — no codegen.
  */
 export function useApiQuery<T>(
   key: readonly unknown[],

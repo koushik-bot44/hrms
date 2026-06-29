@@ -1,0 +1,76 @@
+# IHRMS API configuration. Env vars mirror the archived NestJS API so deployments are
+# unchanged. The datasource url/username/password are derived from DATABASE_URL (or
+# SPRING_DATASOURCE_*) by DatabaseUrlEnvironmentPostProcessor.
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: ihrms-api
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    hikari:
+      # Boot even if the DB is unreachable; GET /health reports db:"down".
+      initialization-fail-timeout: -1
+      connection-timeout: 3000
+  # Route unmatched paths through the @RestControllerAdvice (consistent error envelope).
+  web:
+    resources:
+      add-mappings: false
+  mvc:
+    throw-exception-if-no-handler-found: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# Application config bound to AppProperties (sourced from env; placeholders for later phases).
+app:
+  cors-origins: ${CORS_ORIGINS:}
+  web-app-url: ${WEB_APP_URL:http://localhost:3001}
+  jwt-secret: ${JWT_SECRET:}
+  refresh-secret: ${REFRESH_SECRET:}
+  access-token-ttl: ${ACCESS_TOKEN_TTL:15m}
+  refresh-token-ttl: ${REFRESH_TOKEN_TTL:7d}
+  refresh-cookie-name: ${REFRESH_COOKIE_NAME:ihrms_refresh}
+  otp-ttl: ${OTP_TTL:300}
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:}
+  s3:
+    endpoint: ${S3_ENDPOINT:}
+    region: ${S3_REGION:us-east-1}
+    bucket: ${S3_BUCKET:}
+    access-key-id: ${S3_ACCESS_KEY_ID:}
+    secret-access-key: ${S3_SECRET_ACCESS_KEY:}
+    force-path-style: ${S3_FORCE_PATH_STYLE:false}
+
+---
+# Local/dev profile: refresh cookie relaxes to insecure + SameSite=Lax (set in auth phase).
+spring:
+  config:
+    activate:
+      on-profile: local
+
+---
+# Production profile: refresh cookie is Secure + SameSite=None (set in auth phase).
+spring:
+  config:
+    activate:
+      on-profile: prod

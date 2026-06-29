@@ -13,7 +13,7 @@ import {
   StaffLoginSchema,
   type EmployeeOtpRequestInput,
   type StaffLoginInput,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
 import { ApiError } from '@/lib/api/client';

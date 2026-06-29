@@ -8,7 +8,7 @@ import type {
   OtpRequestResult,
   Session,
   StaffLoginInput,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { setAuthHooks } from '@/lib/api/client';
 import {
   loginStaff as apiLoginStaff,
@@ -17,7 +17,7 @@ import {
   requestEmployeeOtp as apiRequestOtp,
   verifyEmployeeOtp as apiVerifyOtp,
 } from '@/lib/api/auth';
-import type { AuthResult } from '@ihrms/shared';
+import type { AuthResult } from '@/lib/contract';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 

@@ -8,7 +8,7 @@ import {
   type ProvisionCompanyAdminInput,
   type ProvisionCompanyAdminResult,
   type UpdateCompanyInput,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { apiFetch } from './client';
 
 export function listCompanies(signal?: AbortSignal): Promise<CompanySummary[]> {

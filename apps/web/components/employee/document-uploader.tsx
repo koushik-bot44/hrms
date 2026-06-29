@@ -5,7 +5,7 @@ import { useDropzone, type FileRejection } from 'react-dropzone';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ExternalLink, FileText, Loader2, Upload } from 'lucide-react';
-import { MAX_UPLOAD_BYTES, type DocumentDto, type DocumentType, type SectionKey } from '@ihrms/shared';
+import { MAX_UPLOAD_BYTES, type DocumentDto, type DocumentType, type SectionKey } from '@/lib/contract';
 import { getDocumentViewUrl, uploadDocument } from '@/lib/api/onboarding';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/utils';

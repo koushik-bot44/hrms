@@ -1,4 +1,4 @@
-import { UserRole, type Session } from '@ihrms/shared';
+import { UserRole, type Session } from '@/lib/contract';
 
 /** The landing path for a session — used after login and to bounce out-of-scope users. */
 export function homePathForSession(session: Session): string {

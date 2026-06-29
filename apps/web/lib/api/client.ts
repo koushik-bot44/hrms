@@ -42,7 +42,7 @@ export function setAuthHooks(hooks: AuthHooks | null): void {
 export interface ApiRequestOptions<T> extends Omit<RequestInit, 'body'> {
   /** JSON-serializable request body. */
   body?: unknown;
-  /** Optional zod schema from @ihrms/shared used to parse/validate the response. */
+  /** Optional zod schema from @/lib/contract used to parse/validate the response. */
   schema?: z.ZodType<T>;
   /** Skip the access token + the 401->refresh->retry (used by the auth endpoints). */
   skipAuth?: boolean;
@@ -50,7 +50,7 @@ export interface ApiRequestOptions<T> extends Omit<RequestInit, 'body'> {
 
 /**
  * Thin fetch wrapper. JSON in / JSON out, credentials included, types come from
- * @ihrms/shared (NOT codegen). Attaches the access token and, on a 401, refreshes once
+ * @/lib/contract (NOT codegen). Attaches the access token and, on a 401, refreshes once
  * and retries. Throws {@link ApiError} on non-2xx; a `schema` guarantees the return type.
  */
 export async function apiFetch<T = unknown>(

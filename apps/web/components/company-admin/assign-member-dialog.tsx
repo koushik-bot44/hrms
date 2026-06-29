@@ -11,7 +11,7 @@ import {
   type AssignMemberInput,
   type AssignNewMemberInput,
   type TeamRole,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { assignTeamMember, getAssignableUsers } from '@/lib/api/teams';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';

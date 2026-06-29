@@ -11,7 +11,7 @@ import {
   type TeamRole,
   type TeamSummary,
   type UpdateTeamInput,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { apiFetch } from './client';
 
 export function listTeams(signal?: AbortSignal): Promise<TeamSummary[]> {

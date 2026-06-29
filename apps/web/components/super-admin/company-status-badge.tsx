@@ -1,4 +1,4 @@
-import type { CompanyStatus } from '@ihrms/shared';
+import type { CompanyStatus } from '@/lib/contract';
 import { Badge } from '@/components/ui/badge';
 
 const META: Record<CompanyStatus, { label: string; variant: 'success' | 'warning' }> = {

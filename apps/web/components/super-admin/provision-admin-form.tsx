@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
-import { ProvisionCompanyAdminSchema, type ProvisionCompanyAdminInput } from '@ihrms/shared';
+import { ProvisionCompanyAdminSchema, type ProvisionCompanyAdminInput } from '@/lib/contract';
 import { provisionCompanyAdmin } from '@/lib/api/companies';
 import { useApiMutation } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';

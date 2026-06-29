@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { CreateCompanySchema, type CompanySummary, type CreateCompanyInput } from '@ihrms/shared';
+import { CreateCompanySchema, type CompanySummary, type CreateCompanyInput } from '@/lib/contract';
 import { createCompany } from '@/lib/api/companies';
 import { useApiMutation } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';

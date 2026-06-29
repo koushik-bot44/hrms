@@ -4,7 +4,7 @@ import {
   type EmployeeSummary,
   type OnboardEmployeeInput,
   type OnboardEmployeeResult,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { apiFetch } from './client';
 
 export function listMyEmployees(signal?: AbortSignal): Promise<EmployeeSummary[]> {

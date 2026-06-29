@@ -4,13 +4,13 @@ import type {
   DocumentStatus,
   EmployeeStatus,
   SectionStatus,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 /**
  * One badge for every status across the system. The key type is the union of the four
- * `@ihrms/shared` status enums, so `STATUS_MAP` is checked for exhaustiveness — if any
+ * `@/lib/contract` status enums, so `STATUS_MAP` is checked for exhaustiveness — if any
  * enum gains/renames a member, this fails to compile until updated. Color roles are
  * assigned per status value so the same status always reads the same.
  */

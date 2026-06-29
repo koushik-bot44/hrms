@@ -13,7 +13,7 @@ import {
   type PresignedView,
   type ProfileSectionDto,
   type SectionKey,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { ApiError, apiFetch } from './client';
 
 export function getDashboard(signal?: AbortSignal): Promise<OnboardingDashboard> {

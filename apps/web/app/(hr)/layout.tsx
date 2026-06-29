@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { LayoutDashboard, ShieldCheck, Users } from 'lucide-react';
-import { UserRole } from '@ihrms/shared';
+import { UserRole } from '@/lib/contract';
 import { AppShell, type NavItem } from '@/components/app-shell';
 import { RequireRole } from '@/components/require-role';
 

@@ -8,7 +8,7 @@ import {
   type OtpRequestResult,
   type Session,
   type StaffLoginInput,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { apiFetch } from './client';
 
 /** Auth API calls. `skipAuth` keeps these off the access-token/refresh path. */

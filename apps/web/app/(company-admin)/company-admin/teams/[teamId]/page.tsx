@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowLeft, Users } from 'lucide-react';
-import type { TeamMember, TeamRole } from '@ihrms/shared';
+import type { TeamMember, TeamRole } from '@/lib/contract';
 import { getTeam } from '@/lib/api/teams';
 import { useApiQuery } from '@/lib/api/hooks';
 import { PageHeader } from '@/components/page-header';

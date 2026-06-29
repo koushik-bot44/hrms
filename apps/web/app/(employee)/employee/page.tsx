@@ -10,7 +10,7 @@ import {
   SectionKey,
   evaluateSubmission,
   type DocumentType,
-} from '@ihrms/shared';
+} from '@/lib/contract';
 import { getDashboard, submitOnboarding } from '@/lib/api/onboarding';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { PageHeader } from '@/components/page-header';

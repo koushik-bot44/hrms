@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { CreateTeamSchema, type CreateTeamInput, type TeamSummary } from '@ihrms/shared';
+import { CreateTeamSchema, type CreateTeamInput, type TeamSummary } from '@/lib/contract';
 import { createTeam } from '@/lib/api/teams';
 import { useApiMutation } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';

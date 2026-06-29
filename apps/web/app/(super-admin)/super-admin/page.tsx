@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Building2, MoreHorizontal } from 'lucide-react';
-import type { CompanySummary } from '@ihrms/shared';
+import type { CompanySummary } from '@/lib/contract';
 import { listCompanies } from '@/lib/api/companies';
 import { useApiQuery } from '@/lib/api/hooks';
 import { PageHeader } from '@/components/page-header';
