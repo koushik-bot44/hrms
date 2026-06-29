@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import type { HealthResponse } from '@cdpp/shared';
+import type { HealthResponse } from '@ihrms/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('health')

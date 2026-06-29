@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   // Resolve and transpile the shared workspace package from source.
-  transpilePackages: ['@cdpp/shared'],
+  transpilePackages: ['@ihrms/shared'],
 };
 
 module.exports = nextConfig;

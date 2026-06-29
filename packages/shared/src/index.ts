@@ -1,7 +1,8 @@
 /**
- * @cdpp/shared — cross-app shared contract.
- *
- * Neutral baseline: currently exports only the HealthResponse schema used by the
- * web↔api /health round-trip. Add shared types/DTOs for the new project here.
+ * @ihrms/shared — the single source of truth for the IHRMS cross-app contract:
+ * enums (§4), the employee-ID helpers (§5), and zod DTOs. Both apps import from here;
+ * nothing is duplicated.
  */
+export * from './enums';
+export * from './ids';
 export * from './dto';

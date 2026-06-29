@@ -10,7 +10,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@cdpp/shared": "workspace:*",
+    "@ihrms/shared": "workspace:*",
     "@tanstack/react-query": "^5.101.2",
     "clsx": "^2.1.1",
     "next": "14.2.35",

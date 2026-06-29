@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "pnpm --filter @cdpp/shared build && next build"
+  "buildCommand": "pnpm --filter @ihrms/shared build && next build"
 }

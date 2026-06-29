@@ -27,13 +27,13 @@ export function apiBaseUrl(): string {
 export interface ApiRequestOptions<T> extends Omit<RequestInit, 'body'> {
   /** JSON-serializable request body. */
   body?: unknown;
-  /** Optional zod schema from @cdpp/shared used to parse/validate the response. */
+  /** Optional zod schema from @ihrms/shared used to parse/validate the response. */
   schema?: z.ZodType<T>;
 }
 
 /**
  * Thin fetch wrapper. JSON in / JSON out, credentials included, types come from
- * @cdpp/shared (NOT codegen). Throws {@link ApiError} on non-2xx; when a `schema`
+ * @ihrms/shared (NOT codegen). Throws {@link ApiError} on non-2xx; when a `schema`
  * is supplied the response is parsed through it so the return type is guaranteed.
  */
 export async function apiFetch<T = unknown>(
