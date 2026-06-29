@@ -55,6 +55,7 @@ enum DocumentType {
 }
 
 enum DocumentStatus {
+  PENDING
   UPLOADED
   VERIFIED
   REJECTED

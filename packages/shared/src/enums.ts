@@ -51,6 +51,7 @@ export const DocumentType = {
 export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
 
 export const DocumentStatus = {
+  PENDING: 'PENDING',
   UPLOADED: 'UPLOADED',
   VERIFIED: 'VERIFIED',
   REJECTED: 'REJECTED',
