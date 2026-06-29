@@ -27,6 +27,9 @@ export const envSchema = z.object({
   // Employee OTP time-to-live, seconds.
   OTP_TTL: z.coerce.number().int().positive().default(300),
 
+  // Public URL of the web app, used to build links in emails (e.g. the employee login link).
+  WEB_APP_URL: z.string().default('http://localhost:3001'),
+
   // --- Onboarding email / SMTP — placeholders ---
   SMTP_HOST: z.string().default(''),
   SMTP_PORT: z.coerce.number().int().positive().default(587),

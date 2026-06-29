@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { AuditModule } from './audit/audit.module';
 import { CompaniesModule } from './companies/companies.module';
 import { TeamsModule } from './teams/teams.module';
+import { EmployeesModule } from './employees/employees.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ScopeGuard } from './auth/guards/scope.guard';
 import { AuditInterceptor } from './audit/audit.interceptor';
@@ -24,6 +25,7 @@ import { AuditInterceptor } from './audit/audit.interceptor';
     AuthModule,
     CompaniesModule,
     TeamsModule,
+    EmployeesModule,
     HealthModule,
   ],
   providers: [

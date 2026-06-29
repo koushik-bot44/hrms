@@ -23,6 +23,23 @@ export class MailService {
     this.logger.log(`OTP email dispatched to ${email}`);
   }
 
+  /** Sends a newly-onboarded employee their unique ID + login link (§3.2). */
+  async sendEmployeeOnboarding(
+    email: string,
+    employeeCode: string,
+    loginUrl: string,
+  ): Promise<void> {
+    const host = this.config.get('SMTP_HOST', { infer: true });
+    if (!host) {
+      this.logger.warn(
+        `[DEV ONBOARDING] ${email} -> employee ID: ${employeeCode} · login: ${loginUrl}  (no SMTP configured; logging only)`,
+      );
+      return;
+    }
+    // SMTP seam: wire a transport (e.g. nodemailer) here when SMTP_* is configured.
+    this.logger.log(`Onboarding email dispatched to ${email}`);
+  }
+
   /** Initial credentials for a newly-created staff member (HR/Manager) on a team (§3.1). */
   async sendStaffInvite(email: string, roleLabel: string, tempPassword: string): Promise<void> {
     const host = this.config.get('SMTP_HOST', { infer: true });

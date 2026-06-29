@@ -1,26 +1,32 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { UserPlus, Users } from 'lucide-react';
-import type { EmployeeStatus } from '@ihrms/shared';
+import { Users } from 'lucide-react';
+import type { EmployeeSummary } from '@ihrms/shared';
+import { listMyEmployees } from '@/lib/api/employees';
+import { useApiQuery } from '@/lib/api/hooks';
 import { PageHeader } from '@/components/page-header';
 import { DataTable } from '@/components/data-table';
 import { EmptyState } from '@/components/empty-state';
+import { TableSkeleton } from '@/components/loading-skeleton';
 import { StatusBadge } from '@/components/status-badge';
-import { Button } from '@/components/ui/button';
+import { OnboardEmployeeDialog } from '@/components/hr/onboard-employee-dialog';
 
-interface EmployeeRow {
-  id: string;
-  employeeCode: string;
-  email: string;
-  status: EmployeeStatus;
-}
-
-const columns: ColumnDef<EmployeeRow>[] = [
+const columns: ColumnDef<EmployeeSummary>[] = [
   {
     accessorKey: 'employeeCode',
     header: 'Employee ID',
-    cell: ({ row }) => <span className="font-mono text-xs">{row.original.employeeCode}</span>,
+    cell: ({ row }) => (
+      <span
+        className={
+          row.original.employeeCode === '…'
+            ? 'font-mono text-xs text-muted-foreground'
+            : 'font-mono text-xs'
+        }
+      >
+        {row.original.employeeCode}
+      </span>
+    ),
   },
   { accessorKey: 'email', header: 'Email' },
   {
@@ -29,41 +35,51 @@ const columns: ColumnDef<EmployeeRow>[] = [
     enableSorting: false,
     cell: ({ row }) => <StatusBadge status={row.original.status} />,
   },
+  {
+    accessorKey: 'createdAt',
+    header: 'Onboarded',
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">
+        {new Date(row.original.createdAt).toLocaleDateString()}
+      </span>
+    ),
+  },
 ];
 
 export default function HrEmployeesPage() {
-  const data: EmployeeRow[] = []; // wired to the API in a later phase
+  const { data, isLoading, isError, error } = useApiQuery(['hr-employees'], listMyEmployees);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Employees"
-        description="Look up an employee by ID and review their record."
-        actions={
-          <Button size="sm">
-            <UserPlus />
-            Onboard
-          </Button>
-        }
+        description="Onboard a new employee and track those you've onboarded."
+        actions={<OnboardEmployeeDialog />}
       />
-      <DataTable
-        columns={columns}
-        data={data}
-        searchPlaceholder="Search by ID or email…"
-        emptyState={
-          <EmptyState
-            icon={Users}
-            title="No employees yet"
-            description="Onboard an employee to mint their unique ID and start their record."
-            action={
-              <Button size="sm">
-                <UserPlus />
-                Onboard employee
-              </Button>
-            }
-          />
-        }
-      />
+
+      {isLoading ? (
+        <TableSkeleton rows={5} cols={4} />
+      ) : isError ? (
+        <EmptyState
+          icon={Users}
+          title="Couldn't load employees"
+          description={error?.message ?? 'Please try again.'}
+        />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={data ?? []}
+          searchPlaceholder="Search by ID or email…"
+          emptyState={
+            <EmptyState
+              icon={Users}
+              title="No employees yet"
+              description="Onboard an employee to mint their unique ID and start their record."
+              action={<OnboardEmployeeDialog />}
+            />
+          }
+        />
+      )}
     </div>
   );
 }
