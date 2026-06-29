@@ -70,6 +70,14 @@ enum DocumentStatus {
   SUPERSEDED
 }
 
+// How a document entered the system (distinct from DocumentClass). The status
+// machine governs ISSUED only; COLLECTED/REFERENCED never get a uniqueId.
+enum ProvisioningClass {
+  ISSUED
+  COLLECTED
+  REFERENCED
+}
+
 enum RequirementStatus {
   PENDING
   SUBMITTED
@@ -122,25 +130,97 @@ model User {
   @@map("users")
 }
 
-/// An issued or in-flight document. `uniqueId` is `{ENTITY}-{TYPE}-{YYYY}-{NNNNNN}`.
+/// A vault record across all three provisioning classes. ISSUED docs get a
+/// `uniqueId` (`{ENTITY}-{TYPE}-{YYYY}-{NNNNNN}`) and run the status machine;
+/// COLLECTED/REFERENCED docs leave `uniqueId`/`status` null.
+/// `ownerId` is the consultant the document belongs to.
 model Document {
-  id        String         @id @default(cuid())
-  uniqueId  String         @unique
-  typeCode  String // one of @cdpp/shared DocumentTypeCode (OFR, EXP, ...)
-  class     DocumentClass
-  status    DocumentStatus @default(DRAFT)
-  title     String
-  owner     User           @relation("DocumentOwner", fields: [ownerId], references: [id])
-  ownerId   String
-  entity    Entity         @relation(fields: [entityId], references: [id])
-  entityId  String
+  id                String            @id @default(cuid())
+  provisioningClass ProvisioningClass
+  typeCode          String? // one of @cdpp/shared DocumentTypeCode (OFR, EXP, ...)
+  class             DocumentClass? // doc-type category, set for ISSUED docs
+  status            DocumentStatus? // status machine — ISSUED-class only, else null
+  uniqueId          String?           @unique
+  title             String?
+
+  // Content-addressed storage + integrity (latest version mirrored here).
+  storageKey   String? // opaque object key — NEVER returned to clients
+  sha256       String?
+  mimeType     String?
+  accessPolicy String  @default("PRIVATE")
+
+  // REFERENCED (external check) docs.
+  providerRef String?
+
+  // Supersession lineage (ISSUED). `supersededById` → the successor that replaced this doc.
+  supersededById String?
+  supersededBy   Document?  @relation("Supersession", fields: [supersededById], references: [id])
+  supersedes     Document[] @relation("Supersession")
+
+  owner    User              @relation("DocumentOwner", fields: [ownerId], references: [id])
+  ownerId  String
+  entity   Entity            @relation(fields: [entityId], references: [id])
+  entityId String
+  versions DocumentVersion[]
+
   issuedAt  DateTime?
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([entityId])
   @@index([ownerId])
+  @@index([provisioningClass])
   @@map("documents")
+}
+
+/// Immutable version history. Each (re)upload appends a row with a fresh sha256;
+/// old versions stay queryable.
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  document   Document @relation(fields: [documentId], references: [id])
+  documentId String
+  version    Int
+  sha256     String
+  mimeType   String?
+  storageKey String
+  createdAt  DateTime @default(now())
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@map("document_versions")
+}
+
+/// Per (entity, typeCode, year) monotonic counter for unique-ID allocation.
+/// Incremented inside a row-locked transaction so parallel allocations can't collide.
+model DocumentSequence {
+  id        String   @id @default(cuid())
+  entityId  String
+  typeCode  String
+  year      Int
+  lastSeq   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([entityId, typeCode, year])
+  @@map("document_sequences")
+}
+
+/// Append-only audit ledger. A Prisma client extension forbids update/delete/upsert
+/// on this table; nothing in the app exposes a mutation path.
+model AuditEvent {
+  id         String   @id @default(cuid())
+  action     String
+  actorType  String // SYSTEM | OPERATOR | ...
+  actorId    String?
+  targetType String?
+  targetId   String?
+  ipAddress  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_events")
 }
 
 /// A document/onboarding requirement tracked per user.

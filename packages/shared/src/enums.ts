@@ -85,6 +85,21 @@ export const ConsentKind = {
 export type ConsentKind = (typeof ConsentKind)[keyof typeof ConsentKind];
 
 /**
+ * Provisioning class — how a document entered the system. Distinct from
+ * {@link DocumentClass} (which categorizes issued document types). The vault's
+ * status machine governs ISSUED-class documents only.
+ *   ISSUED      company-authored (offer/appointment/… letters, certificates) — gets a unique ID
+ *   COLLECTED   candidate-submitted evidence (free-form uploads) — no unique ID
+ *   REFERENCED  external checks (e.g. background verification) — no unique ID
+ */
+export const ProvisioningClass = {
+  ISSUED: 'ISSUED',
+  COLLECTED: 'COLLECTED',
+  REFERENCED: 'REFERENCED',
+} as const;
+export type ProvisioningClass = (typeof ProvisioningClass)[keyof typeof ProvisioningClass];
+
+/**
  * Registry of every shared enum, keyed by name. Used by the API's enum-parity test
  * to iterate and compare against the Prisma-generated enums.
  */
@@ -97,6 +112,7 @@ export const SHARED_ENUMS = {
   DocumentStatus,
   RequirementStatus,
   ConsentKind,
+  ProvisioningClass,
 } as const;
 
 export type SharedEnumName = keyof typeof SHARED_ENUMS;

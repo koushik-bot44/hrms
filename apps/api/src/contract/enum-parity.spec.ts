@@ -32,7 +32,7 @@ describe('Prisma <-> @cdpp/shared enum parity', () => {
     });
   }
 
-  it('covers exactly the 8 platform enums', () => {
+  it('covers exactly the 9 platform enums', () => {
     expect(enumNames.sort()).toEqual(
       [
         'ConsentKind',
@@ -40,6 +40,7 @@ describe('Prisma <-> @cdpp/shared enum parity', () => {
         'DocumentStatus',
         'EmploymentType',
         'OnboardingState',
+        'ProvisioningClass',
         'RequirementStatus',
         'Role',
         'WorkAuthStatus',

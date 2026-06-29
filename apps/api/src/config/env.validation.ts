@@ -18,11 +18,16 @@ export const envSchema = z.object({
   JWT_SECRET: z.string().default(''),
   REFRESH_SECRET: z.string().default(''),
 
-  S3_ENDPOINT: z.string().default(''),
-  S3_REGION: z.string().default(''),
+  S3_ENDPOINT: z.string().default(''), // optional override: MinIO/local, AWS/R2 in prod
+  S3_REGION: z.string().default('us-east-1'),
   S3_BUCKET: z.string().default(''),
   S3_ACCESS_KEY_ID: z.string().default(''),
   S3_SECRET_ACCESS_KEY: z.string().default(''),
+  // path-style addressing (required for MinIO); parsed explicitly to avoid 'false'==truthy.
+  S3_FORCE_PATH_STYLE: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
 
   OIDC_ISSUER: z.string().default(''),
   OIDC_CLIENT_ID: z.string().default(''),
