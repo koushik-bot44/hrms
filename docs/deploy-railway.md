@@ -27,8 +27,15 @@ root and `@cdpp/shared`, breaking the build. Leave Root Directory empty (repo ro
    - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`  ← reference the Postgres service
    - `NODE_ENV` = `production`
    - `PORT` is injected by Railway automatically — **do not set it**.
-   - Optional / later: `CORS_ORIGINS` = your Vercel web URL. The rest
-     (`JWT_SECRET`, `REFRESH_SECRET`, `S3_*`, `OIDC_*`, `BGV_*`) may stay empty —
+   - `CORS_ORIGINS` = your Vercel web URL (set once Vercel is up, so the browser can
+     call the API).
+   - **Object storage (document upload/download).** The API boots without these (the
+     storage layer just warns and `/health` stays green), but the vault's
+     upload/download endpoints need an S3-compatible bucket. When ready, point at
+     AWS S3 or Cloudflare R2: `S3_ENDPOINT` (R2/custom only), `S3_REGION`,
+     `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`
+     (`false` for AWS/R2). Railway has no native S3.
+   - The rest (`JWT_SECRET`, `REFRESH_SECRET`, `OIDC_*`, `BGV_*`) may stay empty —
      env validation accepts empty placeholders.
 5. **Deploy.** The healthcheck polls `GET /health` (returns 200 with
    `{ "status": "ok", "db": "up" }`).
