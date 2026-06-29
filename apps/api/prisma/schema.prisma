@@ -1,0 +1,164 @@
+// CDPP database schema.
+//
+// Prisma owns the PostgreSQL enums below. They MUST match `@cdpp/shared` exactly —
+// `src/contract/enum-parity.spec.ts` asserts parity so the two can never silently drift.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums (mirror of @cdpp/shared enums)
+// ---------------------------------------------------------------------------
+
+enum Role {
+  SUPER_ADMIN
+  HR_OPERATOR
+  EMPLOYEE
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+}
+
+enum WorkAuthStatus {
+  CITIZEN
+  PERMANENT_RESIDENT
+  WORK_VISA
+  PENDING
+  NOT_AUTHORIZED
+}
+
+enum OnboardingState {
+  INVITED
+  IN_PROGRESS
+  PENDING_REVIEW
+  COMPLETED
+  REJECTED
+}
+
+enum DocumentClass {
+  LETTER
+  AGREEMENT
+  CERTIFICATE
+  VERIFICATION
+}
+
+enum DocumentStatus {
+  DRAFT
+  PENDING
+  ISSUED
+  SIGNED
+  REVOKED
+}
+
+enum RequirementStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+  WAIVED
+}
+
+enum ConsentKind {
+  BACKGROUND_CHECK
+  DATA_PROCESSING
+  ELECTRONIC_SIGNATURE
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+/// An employer / organization. `code` is the {ENTITY} segment of document unique IDs.
+model Entity {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  name      String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  users     User[]
+  documents Document[]
+
+  @@map("entities")
+}
+
+/// A platform user: an operator or an employee being onboarded.
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  fullName        String
+  role            Role             @default(EMPLOYEE)
+  employmentType  EmploymentType?
+  workAuthStatus  WorkAuthStatus?
+  onboardingState OnboardingState  @default(INVITED)
+  entity          Entity           @relation(fields: [entityId], references: [id])
+  entityId        String
+  documents       Document[]       @relation("DocumentOwner")
+  requirements    Requirement[]
+  consents        Consent[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([entityId])
+  @@map("users")
+}
+
+/// An issued or in-flight document. `uniqueId` is `{ENTITY}-{TYPE}-{YYYY}-{NNNNNN}`.
+model Document {
+  id        String         @id @default(cuid())
+  uniqueId  String         @unique
+  typeCode  String // one of @cdpp/shared DocumentTypeCode (OFR, EXP, ...)
+  class     DocumentClass
+  status    DocumentStatus @default(DRAFT)
+  title     String
+  owner     User           @relation("DocumentOwner", fields: [ownerId], references: [id])
+  ownerId   String
+  entity    Entity         @relation(fields: [entityId], references: [id])
+  entityId  String
+  issuedAt  DateTime?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([entityId])
+  @@index([ownerId])
+  @@map("documents")
+}
+
+/// A document/onboarding requirement tracked per user.
+model Requirement {
+  id        String            @id @default(cuid())
+  user      User              @relation(fields: [userId], references: [id])
+  userId    String
+  class     DocumentClass
+  status    RequirementStatus @default(PENDING)
+  notes     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([userId])
+  @@map("requirements")
+}
+
+/// A consent record captured from a user.
+model Consent {
+  id        String      @id @default(cuid())
+  user      User        @relation(fields: [userId], references: [id])
+  userId    String
+  kind      ConsentKind
+  grantedAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([userId])
+  @@map("consents")
+}
