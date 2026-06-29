@@ -22,4 +22,21 @@ export class MailService {
     // SMTP seam: wire a transport (e.g. nodemailer) here when SMTP_* is configured.
     this.logger.log(`OTP email dispatched to ${email}`);
   }
+
+  /** Initial credentials for a newly-provisioned Company Admin (§3.1). */
+  async sendCompanyAdminInvite(
+    email: string,
+    companyName: string,
+    tempPassword: string,
+  ): Promise<void> {
+    const host = this.config.get('SMTP_HOST', { infer: true });
+    if (!host) {
+      this.logger.warn(
+        `[DEV INVITE] Company Admin for "${companyName}" -> ${email} / temp password: ${tempPassword}  (no SMTP configured; logging only)`,
+      );
+      return;
+    }
+    // SMTP seam: wire a transport (e.g. nodemailer) here when SMTP_* is configured.
+    this.logger.log(`Company-admin invite dispatched to ${email}`);
+  }
 }

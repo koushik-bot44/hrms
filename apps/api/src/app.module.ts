@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { AuditModule } from './audit/audit.module';
+import { CompaniesModule } from './companies/companies.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ScopeGuard } from './auth/guards/scope.guard';
 import { AuditInterceptor } from './audit/audit.interceptor';
@@ -20,6 +21,7 @@ import { AuditInterceptor } from './audit/audit.interceptor';
     PrismaModule,
     AuditModule,
     AuthModule,
+    CompaniesModule,
     HealthModule,
   ],
   providers: [
