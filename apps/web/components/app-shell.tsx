@@ -2,9 +2,10 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LogOut, Menu, ShieldCheck, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/components/auth-provider';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -71,6 +72,22 @@ function Brand({ roleLabel }: { roleLabel: string }) {
 }
 
 function UserMenu({ roleLabel }: { roleLabel: string }) {
+  const { session, logout } = useAuth();
+  const router = useRouter();
+
+  const displayName =
+    session?.type === 'USER'
+      ? session.name || session.email
+      : session?.type === 'EMPLOYEE'
+        ? session.employeeCode
+        : roleLabel;
+  const subtitle = session?.type === 'USER' ? session.email : session?.email;
+
+  const onSignOut = async () => {
+    await logout();
+    router.replace('/login');
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -78,17 +95,20 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
           <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <UserRound className="size-4" />
           </span>
-          <span className="hidden text-sm sm:inline">{roleLabel}</span>
+          <span className="hidden max-w-[12rem] truncate text-sm sm:inline">{displayName}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
-        <DropdownMenuLabel>Signed in (placeholder)</DropdownMenuLabel>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="flex flex-col">
+          <span className="truncate">{displayName}</span>
+          {subtitle ? (
+            <span className="text-xs font-normal text-muted-foreground">{subtitle}</span>
+          ) : null}
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/login">
-            <LogOut className="size-4" />
-            Sign out
-          </Link>
+        <DropdownMenuItem onSelect={() => void onSignOut()}>
+          <LogOut className="size-4" />
+          Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

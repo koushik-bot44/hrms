@@ -3,7 +3,7 @@
  * Idempotent via upsert, safe to re-run.
  */
 import { PrismaClient, UserRole } from '@prisma/client';
-import { hashSync } from 'bcryptjs';
+import { hash } from '@node-rs/argon2';
 
 const prisma = new PrismaClient();
 
@@ -11,14 +11,16 @@ const DEV_EMAIL = 'superadmin@ihrms.local';
 const DEV_PASSWORD = 'SuperAdmin@123'; // dev-only
 
 async function main() {
+  // Staff credentials are argon2-hashed (§6).
+  const passwordHash = await hash(DEV_PASSWORD);
   const admin = await prisma.user.upsert({
     where: { email: DEV_EMAIL },
-    update: {},
+    update: { passwordHash },
     create: {
       email: DEV_EMAIL,
       name: 'Super Admin',
       role: UserRole.SUPER_ADMIN,
-      passwordHash: hashSync(DEV_PASSWORD, 10),
+      passwordHash,
       status: 'ACTIVE',
     },
   });

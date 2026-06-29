@@ -3,6 +3,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -13,6 +14,7 @@ async function bootstrap(): Promise<void> {
   const config = app.get(ConfigService<Env, true>);
 
   app.use(helmet());
+  app.use(cookieParser());
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -36,9 +38,10 @@ async function bootstrap(): Promise<void> {
   });
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('API')
-    .setDescription('Neutral deployable shell API')
+    .setTitle('IHRMS API')
+    .setDescription('IHRMS — auth, onboarding, verification & approval')
     .setVersion('0.1.0')
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('docs', app, document);

@@ -24,37 +24,64 @@ export function apiBaseUrl(): string {
   return BASE_URL;
 }
 
+/**
+ * Auth bridge set by the AuthProvider: how to read the in-memory access token and how
+ * to silently refresh it. Kept here (not React state) so the fetch layer can attach the
+ * token and recover from a 401 without importing React.
+ */
+export interface AuthHooks {
+  getToken: () => string | null;
+  refresh: () => Promise<string | null>;
+}
+
+let authHooks: AuthHooks | null = null;
+export function setAuthHooks(hooks: AuthHooks | null): void {
+  authHooks = hooks;
+}
+
 export interface ApiRequestOptions<T> extends Omit<RequestInit, 'body'> {
   /** JSON-serializable request body. */
   body?: unknown;
   /** Optional zod schema from @ihrms/shared used to parse/validate the response. */
   schema?: z.ZodType<T>;
+  /** Skip the access token + the 401->refresh->retry (used by the auth endpoints). */
+  skipAuth?: boolean;
 }
 
 /**
  * Thin fetch wrapper. JSON in / JSON out, credentials included, types come from
- * @ihrms/shared (NOT codegen). Throws {@link ApiError} on non-2xx; when a `schema`
- * is supplied the response is parsed through it so the return type is guaranteed.
+ * @ihrms/shared (NOT codegen). Attaches the access token and, on a 401, refreshes once
+ * and retries. Throws {@link ApiError} on non-2xx; a `schema` guarantees the return type.
  */
 export async function apiFetch<T = unknown>(
   path: string,
   options: ApiRequestOptions<T> = {},
 ): Promise<T> {
-  const { schema, body, headers, ...init } = options;
+  const { schema, body, headers, skipAuth, ...init } = options;
   const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
-  let res: Response;
-  try {
-    res = await fetch(url, {
+  const run = (token: string | null): Promise<Response> =>
+    fetch(url, {
       credentials: 'include',
       headers: {
         Accept: 'application/json',
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       ...init,
     });
+
+  let res: Response;
+  try {
+    res = await run(skipAuth ? null : authHooks?.getToken() ?? null);
+    if (res.status === 401 && !skipAuth && authHooks) {
+      const refreshed = await authHooks.refresh();
+      if (refreshed) {
+        res = await run(refreshed);
+      }
+    }
   } catch (cause) {
     throw new ApiError(0, `Network error reaching ${url}`, cause);
   }

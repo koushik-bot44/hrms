@@ -14,9 +14,16 @@ export const envSchema = z.object({
   // Comma-separated allowed CORS origins; empty means no cross-origin access.
   CORS_ORIGINS: z.string().default(''),
 
-  // --- Auth (§6) — placeholders, wired in a later phase ---
-  JWT_SECRET: z.string().default(''),
-  REFRESH_SECRET: z.string().default(''),
+  // --- Auth (§6) ---
+  // Dev-defaulted so local runs zero-config; production MUST set real secrets
+  // (enforced by the superRefine below).
+  JWT_SECRET: z.string().default('dev-insecure-access-secret-change-me'),
+  REFRESH_SECRET: z.string().default('dev-insecure-refresh-secret-change-me'),
+  // Token lifetimes (vercel/jsonwebtoken duration strings, e.g. "15m", "7d").
+  ACCESS_TOKEN_TTL: z.string().default('15m'),
+  REFRESH_TOKEN_TTL: z.string().default('7d'),
+  // Name of the httpOnly refresh cookie set on the API domain.
+  REFRESH_COOKIE_NAME: z.string().default('ihrms_refresh'),
   // Employee OTP time-to-live, seconds.
   OTP_TTL: z.coerce.number().int().positive().default(300),
 
@@ -38,6 +45,18 @@ export const envSchema = z.object({
     .string()
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
+}).superRefine((env, ctx) => {
+  if (env.NODE_ENV === 'production') {
+    for (const key of ['JWT_SECRET', 'REFRESH_SECRET'] as const) {
+      if (env[key].startsWith('dev-insecure-')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} must be set to a strong secret in production`,
+        });
+      }
+    }
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;
