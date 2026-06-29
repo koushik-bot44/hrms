@@ -3,37 +3,29 @@ import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { Providers } from './providers';
-import { TopBar } from '@/components/top-bar';
-import { SiteFooter } from '@/components/site-footer';
-import { cn } from '@/lib/utils';
+import { ApiStatusIndicator } from '@/components/api-status-indicator';
 import './globals.css';
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-  display: 'swap',
-});
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: {
-    default: 'CDPP — Document Provisioning Platform',
-    template: '%s · CDPP',
-  },
-  description:
-    'Issue, collect, and reference compliance documents — each verifiable by a unique ID.',
+  title: 'App',
+  description: 'Neutral deployable shell',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={cn(inter.variable)} suppressHydrationWarning>
-      <body className="min-h-dvh bg-background font-sans antialiased">
+    <html lang="en" className={inter.variable}>
+      <body className="min-h-dvh bg-white font-sans text-slate-900 antialiased">
         <Providers>
           <div className="flex min-h-dvh flex-col">
-            <TopBar />
+            <header className="flex items-center justify-between border-b border-slate-200 px-6 py-3">
+              <span className="text-sm font-medium tracking-tight">App</span>
+              <ApiStatusIndicator />
+            </header>
             <main className="flex-1">{children}</main>
-            <SiteFooter />
           </div>
-          <Toaster position="top-right" richColors closeButton />
+          <Toaster position="top-right" />
         </Providers>
       </body>
     </html>

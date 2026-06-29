@@ -1,11 +1,7 @@
 /**
- * @cdpp/shared — the single source of truth for the CDPP cross-app contract.
+ * @cdpp/shared — cross-app shared contract.
  *
- * Exports: platform enums, unique-ID format helpers, the document-type registry,
- * and zod DTOs for API requests/responses. Both `apps/api` and `apps/web` import
- * from here; nothing duplicates these definitions.
+ * Neutral baseline: currently exports only the HealthResponse schema used by the
+ * web↔api /health round-trip. Add shared types/DTOs for the new project here.
  */
-export * from './enums';
-export * from './ids';
-export * from './document-types';
 export * from './dto';

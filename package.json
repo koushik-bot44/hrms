@@ -2,7 +2,7 @@
   "name": "cdpp",
   "version": "0.0.0",
   "private": true,
-  "description": "CDPP — Document Provisioning Platform monorepo",
+  "description": "CDPP monorepo (neutral deployable shell)",
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=20"

@@ -1,39 +1,9 @@
 /**
- * Seed: one Entity ("NAME") + one HR Operator.
- * Idempotent via upsert, so it is safe to re-run.
+ * No-op seed for the neutral shell. Replace with real seed data when the new
+ * project needs it (`prisma db seed`).
  */
-import { PrismaClient, Role, OnboardingState } from '@prisma/client';
-
-const prisma = new PrismaClient();
-
 async function main() {
-  const entity = await prisma.entity.upsert({
-    where: { code: 'NAME' },
-    update: {},
-    create: { code: 'NAME', name: 'NAME' },
-  });
-
-  const operator = await prisma.user.upsert({
-    where: { email: 'hr@name.example' },
-    update: {},
-    create: {
-      email: 'hr@name.example',
-      fullName: 'NAME HR Operator',
-      role: Role.HR_OPERATOR,
-      onboardingState: OnboardingState.COMPLETED,
-      entityId: entity.id,
-    },
-  });
-
-  console.log(`Seed complete: entity ${entity.code} (${entity.id}), HR operator ${operator.email}`);
+  console.log('No seed data (neutral shell).');
 }
 
-main()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (err) => {
-    console.error(err);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+main();

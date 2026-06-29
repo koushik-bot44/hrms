@@ -36,8 +36,8 @@ async function bootstrap(): Promise<void> {
   });
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('CDPP API')
-    .setDescription('Document Provisioning Platform API')
+    .setTitle('API')
+    .setDescription('Neutral deployable shell API')
     .setVersion('0.1.0')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
@@ -47,7 +47,7 @@ async function bootstrap(): Promise<void> {
   // Bind 0.0.0.0 so the container is reachable on hosts like Railway.
   await app.listen(port, '0.0.0.0');
 
-  new Logger('Bootstrap').log(`CDPP API listening on :${port} (docs: /docs)`);
+  new Logger('Bootstrap').log(`API listening on :${port} (docs: /docs)`);
 }
 
 void bootstrap();
