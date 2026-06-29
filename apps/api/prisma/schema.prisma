@@ -150,16 +150,18 @@ model Company {
   @@map("companies")
 }
 
-/// A team within a company. Holding both FKs enforces "exactly one HR + one Manager".
+/// A team within a company. The single hrUserId/managerUserId columns structurally
+/// enforce "exactly one HR + one Manager"; they are nullable so a team can be created
+/// first and have its HR/Manager assigned afterwards (§3.1).
 model Team {
   id            String   @id @default(cuid())
   companyId     String
   company       Company  @relation(fields: [companyId], references: [id])
   name          String
-  hrUserId      String
-  hr            User     @relation("TeamHr", fields: [hrUserId], references: [id])
-  managerUserId String
-  manager       User     @relation("TeamManager", fields: [managerUserId], references: [id])
+  hrUserId      String?
+  hr            User?    @relation("TeamHr", fields: [hrUserId], references: [id])
+  managerUserId String?
+  manager       User?    @relation("TeamManager", fields: [managerUserId], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -23,6 +23,19 @@ export class MailService {
     this.logger.log(`OTP email dispatched to ${email}`);
   }
 
+  /** Initial credentials for a newly-created staff member (HR/Manager) on a team (§3.1). */
+  async sendStaffInvite(email: string, roleLabel: string, tempPassword: string): Promise<void> {
+    const host = this.config.get('SMTP_HOST', { infer: true });
+    if (!host) {
+      this.logger.warn(
+        `[DEV INVITE] ${roleLabel} -> ${email} / temp password: ${tempPassword}  (no SMTP configured; logging only)`,
+      );
+      return;
+    }
+    // SMTP seam: wire a transport (e.g. nodemailer) here when SMTP_* is configured.
+    this.logger.log(`Staff invite dispatched to ${email}`);
+  }
+
   /** Initial credentials for a newly-provisioned Company Admin (§3.1). */
   async sendCompanyAdminInvite(
     email: string,
