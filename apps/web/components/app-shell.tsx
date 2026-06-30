@@ -31,10 +31,23 @@ export interface NavItem {
 
 function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
   const pathname = usePathname();
+  // Only the most specific (longest) matching item is active, so an index route like
+  // "/hr" doesn't also light up while you're on "/hr/employees" (one highlight at a time).
+  const activeHref = React.useMemo(() => {
+    let best: string | null = null;
+    for (const item of items) {
+      const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
+      if (matches && (best === null || item.href.length > best.length)) {
+        best = item.href;
+      }
+    }
+    return best;
+  }, [items, pathname]);
+
   return (
     <nav className="flex flex-col gap-1" aria-label="Primary">
       {items.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const active = item.href === activeHref;
         return (
           <Link
             key={item.href}
