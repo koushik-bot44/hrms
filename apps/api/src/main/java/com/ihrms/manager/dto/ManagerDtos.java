@@ -20,12 +20,16 @@ public final class ManagerDtos {
       NotificationType type,
       String employeeId,
       String employeeCode,
+      String fullName,
       boolean read,
       String createdAt) {}
 
   public record NotificationFeed(List<NotificationView> notifications, long unreadCount) {}
 
-  /** A pending (or decided) approval with the employee summary + who onboarded them. */
+  /**
+   * A pending (or decided) approval with the employee summary + who onboarded them.
+   * {@code employeeCode} is null until the Manager approves (the ID is minted then, §5).
+   */
   public record ApprovalView(
       String id,
       ApprovalStatus status,
@@ -33,7 +37,9 @@ public final class ManagerDtos {
       String submittedAt,
       String decidedAt,
       String employeeCode,
+      String fullName,
       String employeeEmail,
+      String designation,
       EmployeeStatus employeeStatus,
       String hrName) {}
 

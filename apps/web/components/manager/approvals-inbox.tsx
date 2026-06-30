@@ -24,7 +24,7 @@ import { ManagerRecordDialog } from '@/components/manager/record-dialog';
 
 const KEY = ['manager-approvals'] as const;
 
-type Deciding = { id: string; action: 'approve' | 'reject'; employeeCode: string } | null;
+type Deciding = { id: string; action: 'approve' | 'reject'; label: string } | null;
 
 export function ApprovalsInbox() {
   const queryClient = useQueryClient();
@@ -46,7 +46,9 @@ export function ApprovalsInbox() {
   };
 
   const approveMutation = useApiMutation((id: string) => approveApproval(id), {
-    successMessage: (a) => `${a.employeeCode ?? 'Employee'} approved`,
+    // The unique ID is minted on approval — surface it.
+    successMessage: (a) =>
+      a.employeeCode ? `Approved — employee ID ${a.employeeCode}` : 'Employee approved',
     onMutate: (id) => optimisticRemove(id),
     onError: (_e, _id, ctx) => rollback(ctx),
     onSuccess: () => setDeciding(null),
@@ -59,7 +61,7 @@ export function ApprovalsInbox() {
   const rejectMutation = useApiMutation(
     (vars: { id: string; note: string }) => rejectApproval(vars.id, { note: vars.note }),
     {
-      successMessage: (a) => `${a.employeeCode ?? 'Employee'} rejected`,
+      successMessage: (a) => `${a.fullName ?? 'Employee'} rejected`,
       onMutate: (vars) => optimisticRemove(vars.id),
       onError: (_e, _vars, ctx) => rollback(ctx),
       onSuccess: () => setDeciding(null),
@@ -89,8 +91,11 @@ export function ApprovalsInbox() {
         <Card key={a.id}>
           <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
             <div className="min-w-0 space-y-1">
-              <CardTitle className="font-mono text-base">{a.employeeCode}</CardTitle>
+              <CardTitle className="text-base">{a.fullName ?? a.employeeEmail}</CardTitle>
               <p className="truncate text-sm text-muted-foreground">{a.employeeEmail}</p>
+              {a.designation ? (
+                <p className="text-xs text-muted-foreground">{a.designation}</p>
+              ) : null}
             </div>
             {a.employeeStatus ? <StatusBadge status={a.employeeStatus} /> : null}
           </CardHeader>
@@ -100,12 +105,12 @@ export function ApprovalsInbox() {
               Onboarded by {a.hrName ?? 'HR'}
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <ManagerRecordDialog approvalId={a.id} employeeCode={a.employeeCode ?? ''} />
+              <ManagerRecordDialog approvalId={a.id} label={a.fullName ?? 'Employee'} />
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() =>
-                  setDeciding({ id: a.id, action: 'reject', employeeCode: a.employeeCode ?? '' })
+                  setDeciding({ id: a.id, action: 'reject', label: a.fullName ?? a.employeeEmail ?? '' })
                 }
               >
                 <X />
@@ -115,7 +120,7 @@ export function ApprovalsInbox() {
                 size="sm"
                 variant="success"
                 onClick={() =>
-                  setDeciding({ id: a.id, action: 'approve', employeeCode: a.employeeCode ?? '' })
+                  setDeciding({ id: a.id, action: 'approve', label: a.fullName ?? a.employeeEmail ?? '' })
                 }
               >
                 <Check />
@@ -172,7 +177,7 @@ function DecisionDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isReject ? `Reject ${deciding?.employeeCode}` : `Approve ${deciding?.employeeCode}`}
+            {isReject ? `Reject ${deciding?.label}` : `Approve ${deciding?.label}`}
           </DialogTitle>
           <DialogDescription>
             {isReject

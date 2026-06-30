@@ -26,7 +26,13 @@ import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
+import com.ihrms.domain.support.EmployeeCodes;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -58,12 +64,14 @@ class ManagerApiTest {
   @Autowired NotificationRepository notifications;
   @Autowired AuditLogRepository auditLogs;
   @Autowired JdbcTemplate jdbc;
+  @Autowired ManagerService managerService;
 
   private String companyA;
   private User hr1;
   private User manager1;
   private String manager1Token;
   private String manager2Token;
+  private Team team;
   private Employee employee;
   private ApprovalRequest approval;
   private Notification notification;
@@ -78,16 +86,18 @@ class ManagerApiTest {
     hr1 = user(companyA, UserRole.HR, "hr1@a.test");
     manager1 = user(companyA, UserRole.MANAGER, "mgr1@a.test");
     User manager2 = user(companyA, UserRole.MANAGER, "mgr2@a.test");
-    Team team = team(companyA, hr1.getId(), manager1.getId());
+    team = team(companyA, hr1.getId(), manager1.getId());
     manager1Token = managerToken(manager1);
     manager2Token = managerToken(manager2);
 
     employee = new Employee();
-    employee.setEmployeeCode("AAA-EMP-000001");
+    employee.setFullName("Evan Stone");
     employee.setEmail("evan@personal.test");
+    employee.setDesignation("Software Engineer");
     employee.setCompanyId(companyA);
     employee.setOnboardingHrId(hr1.getId());
     employee.setStatus(EmployeeStatus.HR_VERIFIED);
+    // no employeeCode — minted on approval (§5)
     employees.save(employee);
 
     approval = new ApprovalRequest();
@@ -115,7 +125,7 @@ class ManagerApiTest {
     assertThat(body.get("unreadCount").asInt()).isEqualTo(1);
     assertThat(body.get("notifications")).hasSize(1);
     assertThat(body.get("notifications").get(0).get("type").asText()).isEqualTo("APPROVAL_REQUESTED");
-    assertThat(body.get("notifications").get(0).get("employeeCode").asText()).isEqualTo("AAA-EMP-000001");
+    assertThat(body.get("notifications").get(0).get("fullName").asText()).isEqualTo("Evan Stone");
     assertThat(body.get("notifications").get(0).get("read").asBoolean()).isFalse();
 
     mvc.perform(post("/manager/notifications/" + notification.getId() + "/read")
@@ -141,7 +151,9 @@ class ManagerApiTest {
             .andExpect(status().isOk())
             .andReturn();
     JsonNode item = json.readTree(queue.getResponse().getContentAsString()).get(0);
-    assertThat(item.get("employeeCode").asText()).isEqualTo("AAA-EMP-000001");
+    assertThat(item.get("employeeCode").isNull()).isTrue(); // no ID until approval (§5)
+    assertThat(item.get("fullName").asText()).isEqualTo("Evan Stone");
+    assertThat(item.get("designation").asText()).isEqualTo("Software Engineer");
     assertThat(item.get("employeeStatus").asText()).isEqualTo("HR_VERIFIED");
     assertThat(item.get("hrName").asText()).isEqualTo("hr1@a.test");
 
@@ -150,11 +162,15 @@ class ManagerApiTest {
                 .header("Authorization", "Bearer " + manager1Token))
             .andExpect(status().isOk())
             .andReturn();
-    assertThat(json.readTree(decided.getResponse().getContentAsString()).get("status").asText())
-        .isEqualTo("APPROVED");
+    JsonNode result = json.readTree(decided.getResponse().getContentAsString());
+    assertThat(result.get("status").asText()).isEqualTo("APPROVED");
+    // The unique ID is MINTED on approval and surfaced in the response (§5).
+    assertThat(result.get("employeeCode").asText()).isEqualTo("AAA-EMP-000001");
 
-    assertThat(employees.findById(employee.getId()).orElseThrow().getStatus())
-        .isEqualTo(EmployeeStatus.APPROVED);
+    Employee approved = employees.findById(employee.getId()).orElseThrow();
+    assertThat(approved.getStatus()).isEqualTo(EmployeeStatus.APPROVED);
+    assertThat(approved.getEmployeeCode()).isEqualTo("AAA-EMP-000001");
+    assertThat(EmployeeCodes.EMPLOYEE_CODE.matcher(approved.getEmployeeCode()).matches()).isTrue();
     assertThat(notifications.findByRecipientUserId(hr1.getId()))
         .anySatisfy(n -> assertThat(n.getType()).isEqualTo(NotificationType.EMPLOYEE_APPROVED));
     assertThat(auditLogs.findByAction("APPROVAL_APPROVED"))
@@ -187,8 +203,9 @@ class ManagerApiTest {
             .content(json.writeValueAsString(Map.of("note", "AADHAAR is missing"))))
         .andExpect(status().isOk());
 
-    assertThat(employees.findById(employee.getId()).orElseThrow().getStatus())
-        .isEqualTo(EmployeeStatus.REJECTED);
+    Employee rejected = employees.findById(employee.getId()).orElseThrow();
+    assertThat(rejected.getStatus()).isEqualTo(EmployeeStatus.REJECTED);
+    assertThat(rejected.getEmployeeCode()).isNull(); // reject allocates NO code (§5)
     assertThat(notifications.findByRecipientUserId(hr1.getId()))
         .anySatisfy(n -> assertThat(n.getType()).isEqualTo(NotificationType.EMPLOYEE_REJECTED));
     assertThat(auditLogs.findByAction("APPROVAL_REJECTED"))
@@ -262,7 +279,8 @@ class ManagerApiTest {
             .andExpect(status().isOk())
             .andReturn();
     JsonNode body = json.readTree(rec.getResponse().getContentAsString());
-    assertThat(body.get("employeeCode").asText()).isEqualTo("AAA-EMP-000001");
+    assertThat(body.get("employeeCode").isNull()).isTrue(); // viewed pre-approval -> no ID yet
+    assertThat(body.get("fullName").asText()).isEqualTo("Evan Stone");
     assertThat(body.get("email").asText()).isEqualTo("evan@personal.test");
     assertThat(body.get("sections")).isEmpty();
     assertThat(body.get("documents")).isEmpty();
@@ -274,6 +292,41 @@ class ManagerApiTest {
             get("/manager/approvals/" + approval.getId() + "/record")
                 .header("Authorization", "Bearer " + manager2Token))
         .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void parallelApprovalsAllocateDistinctWellFormedCodes() {
+    IhrmsPrincipal.User mgr =
+        new IhrmsPrincipal.User(
+            manager1.getId(), manager1.getEmail(), manager1.getName(), UserRole.MANAGER, companyA, null);
+    int n = 12;
+    List<String> approvalIds = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      Employee e = new Employee();
+      e.setFullName("Emp " + i);
+      e.setEmail("emp" + i + "@p.test");
+      e.setCompanyId(companyA);
+      e.setOnboardingHrId(hr1.getId());
+      e.setStatus(EmployeeStatus.HR_VERIFIED);
+      employees.save(e);
+      ApprovalRequest a = new ApprovalRequest();
+      a.setEmployeeId(e.getId());
+      a.setHrUserId(hr1.getId());
+      a.setManagerUserId(manager1.getId());
+      a.setTeamId(team.getId());
+      a.setStatus(ApprovalStatus.PENDING);
+      approvals.save(a);
+      approvalIds.add(a.getId());
+    }
+
+    // Approve all in parallel within the same company -> the atomic sequence must not collide.
+    Set<String> codes =
+        approvalIds.parallelStream()
+            .map(id -> managerService.approve(mgr, id).employeeCode())
+            .collect(Collectors.toCollection(ConcurrentHashMap::newKeySet));
+
+    assertThat(codes).hasSize(n); // no duplicate codes under concurrency
+    assertThat(codes).allMatch(c -> EmployeeCodes.EMPLOYEE_CODE.matcher(c).matches());
   }
 
   // --- fixtures -------------------------------------------------------------

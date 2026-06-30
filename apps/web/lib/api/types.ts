@@ -708,6 +708,7 @@ export interface components {
             type?: "EMPLOYEE_ONBOARDED" | "EMPLOYEE_SUBMITTED" | "APPROVAL_REQUESTED" | "EMPLOYEE_APPROVED" | "EMPLOYEE_REJECTED";
             employeeId?: string;
             employeeCode?: string;
+            fullName?: string;
             read?: boolean;
             createdAt?: string;
         };
@@ -727,7 +728,9 @@ export interface components {
             submittedAt?: string;
             decidedAt?: string;
             employeeCode?: string;
+            fullName?: string;
             employeeEmail?: string;
+            designation?: string;
             /** @enum {string} */
             employeeStatus?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             hrName?: string;

@@ -78,9 +78,8 @@ HR's team** — that is the path that connects an employee to their approver.
 2. On completion, HR **routes an approval request** to the **team's Manager**.
 3. **Manager** sees it in their **notifications/approvals inbox** and **approves** → final step in v1.
 4. **On approval, the system allocates the unique employee ID** (§5) from the company's atomic
-   sequence and stamps it on the record. The ID is an **org/HR-facing identifier** — it is *not* used
-   to log in. (Allocation-at-approval ships as a separate delta; until then approved records may carry
-   no ID.)
+   per-company sequence, stamps it on the record, and welcomes the employee with it. The ID is an
+   **org/HR-facing identifier** — it is *not* used to log in.
 
 ### 3.4 HR lookup
 At any time, **HR finds an employee** in their workspace (by name/email, or by ID once allocated) and

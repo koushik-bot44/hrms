@@ -140,19 +140,27 @@ export type RouteToManagerResult = Omit<
 
 export type NotificationItem = Omit<
   Required<Schemas['NotificationView']>,
-  'employeeId' | 'employeeCode'
+  'employeeId' | 'employeeCode' | 'fullName'
 > & {
   employeeId: string | null;
   employeeCode: string | null;
+  fullName: string | null;
 };
 
 export type NotificationFeed = Omit<Required<Schemas['NotificationFeed']>, 'notifications'> & {
   notifications: NotificationItem[];
 };
 
-export type Approval = Omit<Required<Schemas['ApprovalView']>, 'note' | 'decidedAt'> & {
+export type Approval = Omit<
+  Required<Schemas['ApprovalView']>,
+  'note' | 'decidedAt' | 'employeeCode' | 'fullName' | 'designation'
+> & {
   note: string | null;
+  // employeeCode is null until the Manager approves (the ID is minted then, §5).
+  employeeCode: string | null;
   decidedAt: string | null;
+  fullName: string | null;
+  designation: string | null;
 };
 
 // --- Audit explorer (§7) --------------------------------------------------

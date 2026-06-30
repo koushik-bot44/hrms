@@ -69,6 +69,17 @@ public class MailService {
     log.info("Selection email dispatched to {}", email);
   }
 
+  /** Welcome the approved employee with their newly-minted unique ID (§3.3/§5). */
+  public void sendEmployeeWelcome(String email, String fullName, String employeeCode) {
+    String body =
+        String.format("Welcome aboard, %s! Your employee ID is %s.", fullName, employeeCode);
+    if (noSmtp()) {
+      log.warn("[DEV WELCOME] {} -> {}  (no SMTP configured; logging only)", email, body);
+      return;
+    }
+    log.info("Welcome email dispatched to {} (ID {})", email, employeeCode);
+  }
+
   private boolean noSmtp() {
     String host = props.mail() == null ? null : props.mail().host();
     return host == null || host.isBlank();

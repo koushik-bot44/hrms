@@ -31,7 +31,7 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 function message(n: NotificationItem): string {
-  const who = n.employeeCode ?? 'An employee';
+  const who = n.fullName ?? n.employeeCode ?? 'An employee';
   switch (n.type) {
     case 'EMPLOYEE_ONBOARDED':
       return `${who} was onboarded`;

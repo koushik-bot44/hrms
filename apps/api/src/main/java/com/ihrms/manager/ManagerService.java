@@ -3,22 +3,27 @@ package com.ihrms.manager;
 import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.auth.MailService;
 import com.ihrms.domain.enums.ApprovalStatus;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.NotificationType;
 import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.model.ApprovalRequest;
+import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Notification;
 import com.ihrms.domain.model.ProfileSection;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
+import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.ProfileSectionRepository;
 import com.ihrms.domain.repository.UserRepository;
+import com.ihrms.domain.support.EmployeeCodeService;
+import com.ihrms.domain.support.EmployeeCodes;
 import com.ihrms.manager.dto.ManagerDtos.ApprovalView;
 import com.ihrms.manager.dto.ManagerDtos.NotificationFeed;
 import com.ihrms.manager.dto.ManagerDtos.NotificationView;
@@ -50,9 +55,12 @@ public class ManagerService {
   private final ApprovalRequestRepository approvals;
   private final EmployeeRepository employees;
   private final UserRepository users;
+  private final CompanyRepository companies;
   private final ProfileSectionRepository sections;
   private final DocumentRepository documents;
+  private final EmployeeCodeService codes;
   private final StorageService storage;
+  private final MailService mail;
   private final AuditService audit;
 
   public ManagerService(
@@ -60,17 +68,23 @@ public class ManagerService {
       ApprovalRequestRepository approvals,
       EmployeeRepository employees,
       UserRepository users,
+      CompanyRepository companies,
       ProfileSectionRepository sections,
       DocumentRepository documents,
+      EmployeeCodeService codes,
       StorageService storage,
+      MailService mail,
       AuditService audit) {
     this.notifications = notifications;
     this.approvals = approvals;
     this.employees = employees;
     this.users = users;
+    this.companies = companies;
     this.sections = sections;
     this.documents = documents;
+    this.codes = codes;
     this.storage = storage;
+    this.mail = mail;
     this.audit = audit;
   }
 
@@ -141,8 +155,7 @@ public class ManagerService {
         "EMPLOYEE_RECORD_VIEWED",
         "Employee",
         employee.getId(),
-        Map.<String, Object>of(
-            "employeeCode", employee.getEmployeeCode(), "approvalRequestId", approval.getId()),
+        Map.<String, Object>of("email", employee.getEmail(), "approvalRequestId", approval.getId()),
         null);
     return buildRecord(employee);
   }
@@ -154,17 +167,43 @@ public class ManagerService {
     approval.setDecidedAt(Instant.now());
     approvals.save(approval);
 
-    Employee employee = setEmployeeStatus(approval, EmployeeStatus.APPROVED);
+    Employee employee =
+        employees
+            .findById(approval.getEmployeeId())
+            .orElseThrow(() -> notFound("Employee not found"));
+    // The moment the employee ID is born: mint it from the atomic per-company sequence (§5).
+    if (employee.getEmployeeCode() == null) {
+      employee.setEmployeeCode(allocateCode(employee));
+    }
+    employee.setStatus(EmployeeStatus.APPROVED);
+    employees.save(employee);
+
     notifyHr(approval, NotificationType.EMPLOYEE_APPROVED);
+    mail.sendEmployeeWelcome(employee.getEmail(), employee.getFullName(), employee.getEmployeeCode());
 
     audit.record(
         AuditActor.from(manager),
         "APPROVAL_APPROVED",
         "Employee",
         employee.getId(),
-        Map.<String, Object>of("approvalRequestId", approval.getId()),
+        Map.<String, Object>of(
+            "approvalRequestId", approval.getId(), "employeeCode", employee.getEmployeeCode()),
         null);
     return approvalView(approval);
+  }
+
+  /** Allocate the next unique employee code for the employee's company (atomic, collision-safe, §5). */
+  private String allocateCode(Employee employee) {
+    Company company =
+        companies
+            .findById(employee.getCompanyId())
+            .orElseThrow(() -> notFound("Company not found"));
+    int sequence = codes.allocateSequence(employee.getCompanyId());
+    if (sequence > EmployeeCodes.SEQ_MAX) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Employee ID sequence exhausted for this company");
+    }
+    return EmployeeCodes.format(company.getCode(), sequence);
   }
 
   @Transactional
@@ -219,12 +258,16 @@ public class ManagerService {
   }
 
   private NotificationView notificationView(Notification n) {
-    String employeeCode =
-        n.getEmployeeId() == null
-            ? null
-            : employees.findById(n.getEmployeeId()).map(Employee::getEmployeeCode).orElse(null);
+    Employee employee =
+        n.getEmployeeId() == null ? null : employees.findById(n.getEmployeeId()).orElse(null);
     return new NotificationView(
-        n.getId(), n.getType(), n.getEmployeeId(), employeeCode, n.isRead(), n.getCreatedAt().toString());
+        n.getId(),
+        n.getType(),
+        n.getEmployeeId(),
+        employee == null ? null : employee.getEmployeeCode(),
+        employee == null ? null : employee.getFullName(),
+        n.isRead(),
+        n.getCreatedAt().toString());
   }
 
   private ApprovalView approvalView(ApprovalRequest a) {
@@ -237,7 +280,9 @@ public class ManagerService {
         a.getSubmittedAt().toString(),
         a.getDecidedAt() == null ? null : a.getDecidedAt().toString(),
         employee == null ? null : employee.getEmployeeCode(),
+        employee == null ? null : employee.getFullName(),
         employee == null ? null : employee.getEmail(),
+        employee == null ? null : employee.getDesignation(),
         employee == null ? null : employee.getStatus(),
         hrName);
   }

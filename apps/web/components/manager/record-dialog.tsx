@@ -27,10 +27,10 @@ function humanize(key: string): string {
 /** Read-only view of the sections + documents HR verified, opened from a manager approval. */
 export function ManagerRecordDialog({
   approvalId,
-  employeeCode,
+  label,
 }: {
   approvalId: string;
-  employeeCode: string;
+  label: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const query = useApiQuery(
@@ -50,7 +50,7 @@ export function ManagerRecordDialog({
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="font-mono">{employeeCode}</DialogTitle>
+          <DialogTitle>{label}</DialogTitle>
           <DialogDescription>The sections and documents HR verified for this employee.</DialogDescription>
         </DialogHeader>
         {query.isLoading ? (

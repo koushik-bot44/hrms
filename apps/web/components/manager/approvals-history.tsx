@@ -41,8 +41,11 @@ export function ApprovalsHistory() {
         <Card key={a.id}>
           <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
             <div className="min-w-0 space-y-1">
-              <CardTitle className="font-mono text-base">{a.employeeCode}</CardTitle>
+              <CardTitle className="text-base">{a.fullName ?? a.employeeEmail}</CardTitle>
               <p className="truncate text-sm text-muted-foreground">{a.employeeEmail}</p>
+              {a.employeeCode ? (
+                <p className="font-mono text-xs text-muted-foreground">{a.employeeCode}</p>
+              ) : null}
             </div>
             <StatusBadge status={a.status} />
           </CardHeader>
@@ -60,7 +63,7 @@ export function ApprovalsHistory() {
                 {a.note}
               </p>
             ) : null}
-            <ManagerRecordDialog approvalId={a.id} employeeCode={a.employeeCode ?? ''} />
+            <ManagerRecordDialog approvalId={a.id} label={a.fullName ?? 'Employee'} />
           </CardContent>
         </Card>
       ))}
