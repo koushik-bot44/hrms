@@ -60,8 +60,9 @@ springdoc:
 app:
   cors-origins: ${CORS_ORIGINS:}
   web-app-url: ${WEB_APP_URL:http://localhost:3001}
-  jwt-secret: ${JWT_SECRET:}
-  refresh-secret: ${REFRESH_SECRET:}
+  # Dev defaults are long enough for HS256 (>=32 bytes); production MUST override with real secrets.
+  jwt-secret: ${JWT_SECRET:dev-insecure-access-secret-change-me-please-0001}
+  refresh-secret: ${REFRESH_SECRET:dev-insecure-refresh-secret-change-me-please-0001}
   access-token-ttl: ${ACCESS_TOKEN_TTL:15m}
   refresh-token-ttl: ${REFRESH_TOKEN_TTL:7d}
   refresh-cookie-name: ${REFRESH_COOKIE_NAME:ihrms_refresh}

@@ -1,0 +1,25 @@
+package com.ihrms.auth.dto;
+
+import com.ihrms.domain.enums.UserRole;
+
+/**
+ * The public session (contract §3.2) — a discriminated union on {@code type}. Returned by
+ * {@code /auth/me} and inside {@code AuthResult.session}. Jackson serializes the concrete
+ * record's fields (nulls included for USER's companyId/teamId, matching the contract).
+ */
+public sealed interface SessionView permits SessionView.UserSession, SessionView.EmployeeSession {
+
+  record UserSession(
+      String type,
+      String userId,
+      String email,
+      String name,
+      UserRole role,
+      String companyId,
+      String teamId)
+      implements SessionView {}
+
+  record EmployeeSession(
+      String type, String employeeId, String employeeCode, String email, String companyId)
+      implements SessionView {}
+}

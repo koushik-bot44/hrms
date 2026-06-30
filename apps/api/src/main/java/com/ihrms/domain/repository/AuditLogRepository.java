@@ -18,5 +18,7 @@ public interface AuditLogRepository extends Repository<AuditLog, String> {
 
   List<AuditLog> findByCompanyId(String companyId);
 
+  List<AuditLog> findByAction(String action);
+
   long count();
 }
