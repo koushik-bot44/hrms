@@ -5,3 +5,4 @@ export * from './teams';
 export * from './employees';
 export * from './onboarding';
 export * from './review';
+export * from './manager';

@@ -120,3 +120,22 @@ export type RouteToManagerResult = Omit<
 > & {
   managerName: string | null;
 };
+
+// --- Manager inbox (§2/§3.3) ----------------------------------------------
+
+export type NotificationItem = Omit<
+  Required<Schemas['NotificationView']>,
+  'employeeId' | 'employeeCode'
+> & {
+  employeeId: string | null;
+  employeeCode: string | null;
+};
+
+export type NotificationFeed = Omit<Required<Schemas['NotificationFeed']>, 'notifications'> & {
+  notifications: NotificationItem[];
+};
+
+export type Approval = Omit<Required<Schemas['ApprovalView']>, 'note' | 'decidedAt'> & {
+  note: string | null;
+  decidedAt: string | null;
+};

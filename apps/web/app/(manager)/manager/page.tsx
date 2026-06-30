@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
-import { ClipboardCheck } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
-import { EmptyState } from '@/components/empty-state';
+import { ApprovalsInbox } from '@/components/manager/approvals-inbox';
 
 export const metadata: Metadata = { title: 'Approvals' };
 
@@ -10,13 +9,9 @@ export default function ManagerApprovalsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Approvals"
-        description="Verified employees awaiting your final approval."
+        description="Verified employees on your team awaiting your final approval."
       />
-      <EmptyState
-        icon={ClipboardCheck}
-        title="No pending approvals"
-        description="When HR routes a verified employee to you, it shows up here to approve."
-      />
+      <ApprovalsInbox />
     </div>
   );
 }

@@ -61,6 +61,8 @@ public class SecurityConfig {
                     .hasRole("HR")
                     .requestMatchers("/me/onboarding/**")
                     .hasRole("EMPLOYEE")
+                    .requestMatchers("/manager/**")
+                    .hasRole("MANAGER")
                     .anyRequest()
                     .authenticated())
         .exceptionHandling(
