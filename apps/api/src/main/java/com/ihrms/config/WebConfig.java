@@ -17,6 +17,8 @@ public class WebConfig implements WebMvcConfigurer {
 
   @Override
   public void addInterceptors(InterceptorRegistry registry) {
-    registry.addInterceptor(auditInterceptor);
+    // The public blob endpoint (db storage) carries no actor context and is already audited at the
+    // onboarding/review service layer, so keep its raw PUT/GET out of the audit trail.
+    registry.addInterceptor(auditInterceptor).excludePathPatterns("/storage/blobs/**");
   }
 }

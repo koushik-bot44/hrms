@@ -3,6 +3,9 @@
 # SPRING_DATASOURCE_*) by DatabaseUrlEnvironmentPostProcessor.
 server:
   port: ${PORT:8080}
+  # Honour X-Forwarded-* behind the Railway/Vercel proxy so derived absolute URLs (e.g. the
+  # db-storage blob URLs) use the real public scheme + host, and audit IPs are the client's.
+  forward-headers-strategy: framework
 
 spring:
   application:
@@ -86,6 +89,13 @@ app:
     access-key-id: ${S3_ACCESS_KEY_ID:}
     secret-access-key: ${S3_SECRET_ACCESS_KEY:}
     force-path-style: ${S3_FORCE_PATH_STYLE:false}
+  storage:
+    # 's3' (default; uses the S3_* block above) or 'db' (store bytes in Postgres, no bucket needed).
+    driver: ${STORAGE_DRIVER:s3}
+    # Absolute base URL of THIS API for db-storage blob links; blank = derive from the request.
+    public-base-url: ${STORAGE_PUBLIC_URL:}
+    # Max accepted upload size for the db blob endpoint (bytes); matches the 10 MiB request cap.
+    max-bytes: ${STORAGE_MAX_BYTES:10485760}
 
 ---
 # Local/dev profile: refresh cookie relaxes to insecure + SameSite=Lax (set in auth phase).

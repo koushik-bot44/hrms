@@ -53,6 +53,10 @@ public class SecurityConfig {
                         "/auth/refresh",
                         "/auth/logout")
                     .permitAll()
+                    // db-storage blob endpoint: the encrypted path token is the authorization
+                    // (a presigned-URL equivalent), so no JWT is required.
+                    .requestMatchers("/storage/blobs/**")
+                    .permitAll()
                     .requestMatchers("/companies/**")
                     .hasRole("SUPER_ADMIN")
                     .requestMatchers("/teams/**")

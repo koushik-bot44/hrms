@@ -20,7 +20,8 @@ public record AppProperties(
     String refreshCookieName,
     int otpTtl,
     Mail mail,
-    S3 s3) {
+    S3 s3,
+    Storage storage) {
 
   public record Mail(String host, int port, String username, String password, String from) {}
 
@@ -31,6 +32,9 @@ public record AppProperties(
       String accessKeyId,
       String secretAccessKey,
       boolean forcePathStyle) {}
+
+  /** Storage backend selection: {@code driver} = {@code s3} (default) or {@code db}. */
+  public record Storage(String driver, String publicBaseUrl, long maxBytes) {}
 
   /** CORS_ORIGINS as a trimmed, non-empty list. */
   public List<String> corsOriginList() {
