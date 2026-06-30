@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -17,7 +18,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
-/** The onboarded subject (table {@code employees}). Auth = employeeCode + email + OTP (§6). */
+/** The onboarded subject (table {@code employees}). Auth = full name + email + OTP (§6). */
 @Entity
 @Table(name = "employees")
 @Getter
@@ -30,11 +31,22 @@ public class Employee {
   @Column(name = "id")
   private String id;
 
-  @Column(name = "employeeCode", nullable = false)
+  /** Org/HR-facing identifier, allocated on Manager approval (§5); null until then. */
+  @Column(name = "employeeCode")
   private String employeeCode;
+
+  @Column(name = "fullName")
+  private String fullName;
 
   @Column(name = "email", nullable = false)
   private String email;
+
+  @Column(name = "designation")
+  private String designation;
+
+  @JdbcTypeCode(SqlTypes.DATE)
+  @Column(name = "dateOfJoining")
+  private LocalDate dateOfJoining;
 
   @Column(name = "companyId", nullable = false)
   private String companyId;

@@ -55,7 +55,9 @@ export default function LoginPage() {
             <ShieldCheck className="size-5" />
           </div>
           <CardTitle className="text-lg">Sign in to IHRMS</CardTitle>
-          <CardDescription>Staff sign in with a password; employees with their ID.</CardDescription>
+          <CardDescription>
+            Staff sign in with a password; employees with their name &amp; email.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="staff">
@@ -136,12 +138,12 @@ function EmployeeLoginForm() {
   const auth = useAuth();
   const router = useRouter();
   const [step, setStep] = React.useState<'request' | 'verify'>('request');
-  const [employeeCode, setEmployeeCode] = React.useState('');
+  const [email, setEmail] = React.useState('');
   const [devOtp, setDevOtp] = React.useState<string | undefined>(undefined);
 
   const requestForm = useForm<EmployeeOtpRequestInput>({
     resolver: zodResolver(EmployeeOtpRequestSchema),
-    defaultValues: { employeeCode: '', email: '' },
+    defaultValues: { fullName: '', email: '' },
   });
 
   const verifyForm = useForm<OtpOnlyInput>({
@@ -149,10 +151,17 @@ function EmployeeLoginForm() {
     defaultValues: { otp: '' },
   });
 
+  // The selection email links here with ?email=… — prefill it (client-only, no Suspense needed).
+  React.useEffect(() => {
+    const prefill = new URLSearchParams(window.location.search).get('email');
+    if (prefill) requestForm.setValue('email', prefill);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const onRequest = requestForm.handleSubmit(async (values) => {
     try {
       const result = await auth.requestEmployeeOtp(values);
-      setEmployeeCode(values.employeeCode);
+      setEmail(values.email);
       setDevOtp(result.devOtp);
       setStep('verify');
       toast.success('If the details match, a 6-digit code is on its way to your email.');
@@ -163,7 +172,7 @@ function EmployeeLoginForm() {
 
   const onVerify = verifyForm.handleSubmit(async ({ otp }) => {
     try {
-      const session = await auth.verifyEmployeeOtp({ employeeCode, otp });
+      const session = await auth.verifyEmployeeOtp({ email, otp });
       toast.success('Signed in');
       router.replace(homePathForSession(session));
     } catch (error) {
@@ -174,17 +183,13 @@ function EmployeeLoginForm() {
   if (step === 'request') {
     return (
       <form onSubmit={onRequest} className="space-y-4" noValidate>
-        <Field
-          id="emp-code"
-          label="Employee ID"
-          error={requestForm.formState.errors.employeeCode?.message}
-        >
+        <Field id="emp-name" label="Full name" error={requestForm.formState.errors.fullName?.message}>
           <Input
-            id="emp-code"
-            placeholder="ACME-EMP-000123"
-            autoCapitalize="characters"
-            aria-invalid={Boolean(requestForm.formState.errors.employeeCode)}
-            {...requestForm.register('employeeCode')}
+            id="emp-name"
+            autoComplete="name"
+            placeholder="Alex Doe"
+            aria-invalid={Boolean(requestForm.formState.errors.fullName)}
+            {...requestForm.register('fullName')}
           />
         </Field>
         <Field id="emp-email" label="Email" error={requestForm.formState.errors.email?.message}>
@@ -207,8 +212,8 @@ function EmployeeLoginForm() {
   return (
     <form onSubmit={onVerify} className="space-y-4" noValidate>
       <p className="text-sm text-muted-foreground">
-        Enter the 6-digit code sent for{' '}
-        <span className="font-medium text-foreground">{employeeCode}</span>.
+        Enter the 6-digit code sent to{' '}
+        <span className="font-medium text-foreground">{email}</span>.
       </p>
       {devOtp ? (
         <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
@@ -239,7 +244,7 @@ function EmployeeLoginForm() {
         }}
       >
         <ArrowLeft className="size-4" />
-        Use a different ID
+        Use a different email
       </Button>
     </form>
   );

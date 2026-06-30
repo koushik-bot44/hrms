@@ -117,32 +117,43 @@ class AuthFlowTest {
   // --- Employee OTP ---------------------------------------------------------
 
   @Test
-  void employeeOtpRequestIsEnumerationSafeAndVerifyIsSingleUse() throws Exception {
-    Employee employee = employeeFixture("ACME", "ACME-EMP-000001", "alex@personal.test");
+  void employeeOtpIsNameMatchedEnumerationSafeAndSingleUse() throws Exception {
+    Employee employee = employeeFixture("ACME", "Alex Doe", "alex@personal.test");
 
-    // Unknown code: same shape, but no devOtp leaked.
+    // Unknown email: same shape, no devOtp leaked.
     MvcResult unknown =
         mvc.perform(
                 post("/auth/employee/request-otp")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         json.writeValueAsString(
-                            Map.of("employeeCode", "ACME-EMP-999999", "email", "nobody@x.test"))))
+                            Map.of("fullName", "Nobody At All", "email", "nobody@x.test"))))
             .andExpect(status().isCreated())
             .andReturn();
     JsonNode unknownBody = json.readTree(unknown.getResponse().getContentAsString());
     assertThat(unknownBody.get("sent").asBoolean()).isTrue();
     assertThat(unknownBody.has("devOtp")).isFalse();
 
-    // Real code+email: devOtp surfaced in non-prod so the flow can be walked.
+    // Right email, WRONG name: same generic shape, NO otp issued (anti-enumeration).
+    MvcResult wrongName =
+        mvc.perform(
+                post("/auth/employee/request-otp")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        json.writeValueAsString(
+                            Map.of("fullName", "Someone Else", "email", "alex@personal.test"))))
+            .andExpect(status().isCreated())
+            .andReturn();
+    assertThat(json.readTree(wrongName.getResponse().getContentAsString()).has("devOtp")).isFalse();
+
+    // Correct name + email (case-insensitive, trimmed): devOtp surfaced in non-prod.
     MvcResult requested =
         mvc.perform(
                 post("/auth/employee/request-otp")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         json.writeValueAsString(
-                            Map.of(
-                                "employeeCode", "ACME-EMP-000001", "email", "alex@personal.test"))))
+                            Map.of("fullName", "  alex doe ", "email", "Alex@Personal.test"))))
             .andExpect(status().isCreated())
             .andReturn();
     JsonNode requestedBody = json.readTree(requested.getResponse().getContentAsString());
@@ -151,33 +162,31 @@ class AuthFlowTest {
     String otp = requestedBody.get("devOtp").asText();
     assertThat(otp).hasSize(6);
 
-    // Verify succeeds -> EMPLOYEE session.
+    // Verify (email + otp) -> EMPLOYEE session; employeeCode is null (no ID until approval, §5).
     MvcResult verified =
         mvc.perform(
                 post("/auth/employee/verify-otp")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
-                        json.writeValueAsString(
-                            Map.of("employeeCode", "ACME-EMP-000001", "otp", otp))))
+                        json.writeValueAsString(Map.of("email", "alex@personal.test", "otp", otp))))
             .andExpect(status().isCreated())
             .andReturn();
     JsonNode session = json.readTree(verified.getResponse().getContentAsString()).get("session");
     assertThat(session.get("type").asText()).isEqualTo("EMPLOYEE");
     assertThat(session.get("employeeId").asText()).isEqualTo(employee.getId());
-    assertThat(session.get("employeeCode").asText()).isEqualTo("ACME-EMP-000001");
+    assertThat(session.get("employeeCode").isNull()).isTrue();
 
     // Single-use: the same OTP cannot be replayed.
     mvc.perform(
             post("/auth/employee/verify-otp")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    json.writeValueAsString(Map.of("employeeCode", "ACME-EMP-000001", "otp", otp))))
+                .content(json.writeValueAsString(Map.of("email", "alex@personal.test", "otp", otp))))
         .andExpect(status().isUnauthorized());
   }
 
   @Test
   void employeeOtpRejectsExpiredCode() throws Exception {
-    Employee employee = employeeFixture("BETA", "BETA-EMP-000001", "sam@personal.test");
+    Employee employee = employeeFixture("BETA", "Sam Roe", "sam@personal.test");
     // Plant a known OTP that already expired.
     employee.setOtpHash(encoder.encode("123456"));
     employee.setOtpExpiresAt(Instant.now().minusSeconds(5));
@@ -187,8 +196,7 @@ class AuthFlowTest {
             post("/auth/employee/verify-otp")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
-                    json.writeValueAsString(
-                        Map.of("employeeCode", "BETA-EMP-000001", "otp", "123456"))))
+                    json.writeValueAsString(Map.of("email", "sam@personal.test", "otp", "123456"))))
         .andExpect(status().isUnauthorized());
   }
 
@@ -258,7 +266,7 @@ class AuthFlowTest {
     return users.save(u);
   }
 
-  private Employee employeeFixture(String companyCode, String employeeCode, String email) {
+  private Employee employeeFixture(String companyCode, String fullName, String email) {
     Company company = new Company();
     company.setName(companyCode + " Inc");
     company.setCode(companyCode);
@@ -267,10 +275,11 @@ class AuthFlowTest {
     User hr = staff("hr-" + companyCode.toLowerCase() + "@acme.test", UserRole.HR, company.getId(), "Password@123");
 
     Employee employee = new Employee();
-    employee.setEmployeeCode(employeeCode);
+    employee.setFullName(fullName);
     employee.setEmail(email);
     employee.setCompanyId(company.getId());
     employee.setOnboardingHrId(hr.getId());
+    // No employeeCode — allocated on Manager approval (§5).
     return employees.save(employee);
   }
 }

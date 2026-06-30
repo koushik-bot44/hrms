@@ -16,12 +16,14 @@ public final class AuthDtos {
       @NotBlank(message = "Password is required") @Size(min = 8, message = "At least 8 characters")
           String password) {}
 
+  /** Employee start-login: full name + email -> OTP to the email (the security factor). */
   public record EmployeeOtpRequest(
-      @NotBlank(message = "Employee ID is required") String employeeCode,
+      @NotBlank(message = "Full name is required") String fullName,
       @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email) {}
 
+  /** Employee verify: email + the 6-digit OTP -> session. */
   public record EmployeeOtpVerifyRequest(
-      @NotBlank(message = "Employee ID is required") String employeeCode,
+      @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
       @NotBlank @Pattern(regexp = "\\d{6}", message = "Enter the 6-digit code") String otp) {}
 
   /** {@code AuthResult = { accessToken, session }}. */

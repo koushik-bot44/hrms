@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { UserRole } from '../enums';
-import { EMPLOYEE_CODE_REGEX } from '../ids';
 
 /**
  * Auth contracts (ARCHITECTURE.md §6) — shared by api (validation) and web (forms).
- * Staff log in with email + password; employees with employeeCode + email -> OTP.
+ * Staff log in with email + password; employees with full name + email -> OTP (the OTP to the
+ * email is the security factor). The employee ID is not a login handle.
  */
 
 // ---------------------------------------------------------------------------
@@ -18,21 +18,13 @@ export const StaffLoginSchema = z.object({
 export type StaffLoginInput = z.infer<typeof StaffLoginSchema>;
 
 export const EmployeeOtpRequestSchema = z.object({
-  employeeCode: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(EMPLOYEE_CODE_REGEX, 'Enter a valid employee ID (e.g. ACME-EMP-000123)'),
-  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
+  fullName: z.string().trim().min(2, 'Enter your full name').max(120),
+  email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
 });
 export type EmployeeOtpRequestInput = z.infer<typeof EmployeeOtpRequestSchema>;
 
 export const EmployeeOtpVerifySchema = z.object({
-  employeeCode: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(EMPLOYEE_CODE_REGEX, 'Enter a valid employee ID'),
+  email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
   otp: z
     .string()
     .trim()
@@ -58,7 +50,8 @@ export const SessionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('EMPLOYEE'),
     employeeId: z.string(),
-    employeeCode: z.string(),
+    // null until the employee is approved (the ID is allocated on Manager approval, §5).
+    employeeCode: z.string().nullable(),
     email: z.string(),
     companyId: z.string(),
   }),

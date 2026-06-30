@@ -69,16 +69,20 @@ public class AuthService {
     return issue(Principals.of(user));
   }
 
-  // --- Employee (employeeCode + email -> OTP) -------------------------------
+  // --- Employee (full name + email -> OTP) ----------------------------------
 
   public OtpRequestResult requestEmployeeOtp(EmployeeOtpRequest req) {
     int ttl = props.otpTtl();
-    String code = req.employeeCode().trim().toUpperCase();
-    Employee employee = employees.findByEmployeeCode(code).orElse(null);
+    String email = req.email().trim().toLowerCase();
+    Employee employee = employees.findByEmail(email).orElse(null);
 
-    // Issue only when code + email match; otherwise return the same shape (enumeration-safe).
+    // Issue only when the email resolves an employee AND the full name matches (case-insensitive,
+    // trimmed). Otherwise return the same shape so neither email nor name can be enumerated. OTP
+    // issuance is additionally rate-limited per IP by RateLimitFilter on /auth/**.
     boolean matches =
-        employee != null && employee.getEmail().equalsIgnoreCase(req.email().trim());
+        employee != null
+            && employee.getFullName() != null
+            && employee.getFullName().trim().equalsIgnoreCase(req.fullName().trim());
     if (matches) {
       String otp = Principals.generateOtp();
       employee.setOtpHash(encoder.encode(otp));
@@ -91,8 +95,8 @@ public class AuthService {
   }
 
   public IssuedSession verifyEmployeeOtp(EmployeeOtpVerifyRequest req) {
-    String code = req.employeeCode().trim().toUpperCase();
-    Employee employee = employees.findByEmployeeCode(code).orElse(null);
+    String email = req.email().trim().toLowerCase();
+    Employee employee = employees.findByEmail(email).orElse(null);
     if (employee == null || employee.getOtpHash() == null || employee.getOtpExpiresAt() == null) {
       throw unauthorized("Invalid or expired code");
     }

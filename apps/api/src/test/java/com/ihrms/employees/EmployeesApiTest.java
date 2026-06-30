@@ -15,13 +15,7 @@ import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.AuditLogRepository;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.UserRepository;
-import com.ihrms.domain.support.EmployeeCodes;
-import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeRequest;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -35,8 +29,13 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** HR onboarding (contract §3.5): minted code, INVITED + login link, HR scoping, audit, concurrency. */
+/**
+ * HR onboarding (ARCHITECTURE.md §3.2): the record is created with full name / email / designation /
+ * date of joining, status INVITED and <strong>no employee ID</strong> (allocated on approval, §5); a
+ * selection email is logged; email is globally unique; HR scoping + audit.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ExtendWith(OutputCaptureExtension.class)
@@ -46,7 +45,6 @@ class EmployeesApiTest {
   @Autowired MockMvc mvc;
   @Autowired ObjectMapper json;
   @Autowired TokenService tokens;
-  @Autowired EmployeesService employeesService;
   @Autowired CompanyRepository companies;
   @Autowired UserRepository users;
   @Autowired AuditLogRepository auditLogs;
@@ -68,37 +66,42 @@ class EmployeesApiTest {
   }
 
   @Test
-  void onboardMintsSequentialCodesEmailsLinkAndAudits(CapturedOutput output) throws Exception {
+  void onboardCreatesInvitedRecordWithNoIdEmailsSelectionAndAudits(CapturedOutput output)
+      throws Exception {
     MvcResult first =
-        mvc.perform(asHr("Alex@Personal.TEST"))
+        mvc.perform(asHr("Alex Doe", "Alex@Personal.TEST"))
             .andExpect(status().isCreated())
             .andReturn();
-    JsonNode body = json.readTree(first.getResponse().getContentAsString());
-    JsonNode employee = body.get("employee");
-    assertThat(employee.get("employeeCode").asText()).isEqualTo("ACME-EMP-000001");
+    JsonNode employee = json.readTree(first.getResponse().getContentAsString()).get("employee");
+    assertThat(employee.get("employeeCode").isNull()).isTrue(); // no ID at onboarding (§5)
+    assertThat(employee.get("fullName").asText()).isEqualTo("Alex Doe");
     assertThat(employee.get("email").asText()).isEqualTo("alex@personal.test"); // lower-cased
+    assertThat(employee.get("designation").asText()).isEqualTo("Software Engineer");
+    assertThat(employee.get("dateOfJoining").asText()).isEqualTo("2026-07-01");
     assertThat(employee.get("status").asText()).isEqualTo("INVITED");
-    assertThat(employee.get("createdAt").asText()).isNotBlank();
-    assertThat(body.get("loginUrl").asText()).endsWith("/login");
-    // The onboarding email fires — the dev log carries the minted ID + login link.
-    assertThat(output.getOut()).contains("[DEV ONBOARDING]").contains("ACME-EMP-000001");
+    // The selection email fires (dev log) with the name + designation — and NO employee ID.
+    assertThat(output.getOut())
+        .contains("[DEV SELECTION]")
+        .contains("Alex Doe")
+        .contains("Software Engineer")
+        .doesNotContain("EMP-");
 
-    // Second onboard increments the per-company sequence.
-    MvcResult second = mvc.perform(asHr("sam@personal.test")).andExpect(status().isCreated()).andReturn();
-    assertThat(json.readTree(second.getResponse().getContentAsString())
-            .get("employee").get("employeeCode").asText())
-        .isEqualTo("ACME-EMP-000002");
+    MvcResult second =
+        mvc.perform(asHr("Sam Roe", "sam@personal.test")).andExpect(status().isCreated()).andReturn();
+    assertThat(json.readTree(second.getResponse().getContentAsString()).get("loginUrl").asText())
+        .contains("/login");
 
     // GET lists both, newest first.
-    MvcResult list =
-        mvc.perform(get("/employees").header("Authorization", "Bearer " + hrToken))
-            .andExpect(status().isOk())
-            .andReturn();
-    JsonNode arr = json.readTree(list.getResponse().getContentAsString());
+    JsonNode arr =
+        json.readTree(
+            mvc.perform(get("/employees").header("Authorization", "Bearer " + hrToken))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
     assertThat(arr).hasSize(2);
-    assertThat(arr.get(0).get("employeeCode").asText()).isEqualTo("ACME-EMP-000002");
+    assertThat(arr.get(0).get("email").asText()).isEqualTo("sam@personal.test");
 
-    // Audit row, scoped to the HR's company, with the acting HR as actor.
     assertThat(auditLogs.findByAction("EMPLOYEE_ONBOARDED"))
         .hasSize(2)
         .allSatisfy(
@@ -110,8 +113,14 @@ class EmployeesApiTest {
   }
 
   @Test
+  void emailIsGloballyUnique() throws Exception {
+    mvc.perform(asHr("Alex Doe", "dup@personal.test")).andExpect(status().isCreated());
+    mvc.perform(asHr("Alex Twin", "dup@personal.test")).andExpect(status().isConflict());
+  }
+
+  @Test
   void hrSeesOnlyTheEmployeesItOnboarded() throws Exception {
-    mvc.perform(asHr("e1@personal.test")).andExpect(status().isCreated());
+    mvc.perform(asHr("E One", "e1@personal.test")).andExpect(status().isCreated());
 
     User otherHr = hrUser(companyId, "hr2@acme.test");
     String otherToken = tokenFor(otherHr);
@@ -139,34 +148,19 @@ class EmployeesApiTest {
         .andExpect(status().isForbidden());
   }
 
-  @Test
-  void concurrentOnboardsAllocateDistinctWellFormedCodes() {
-    IhrmsPrincipal.User actor =
-        new IhrmsPrincipal.User(hr.getId(), hr.getEmail(), hr.getName(), UserRole.HR, companyId, null);
-    int n = 12;
-    Set<String> codes =
-        IntStream.range(0, n)
-            .parallel()
-            .mapToObj(
-                i ->
-                    employeesService
-                        .onboard(new OnboardEmployeeRequest("e" + i + "@personal.test"), actor, "127.0.0.1")
-                        .employee()
-                        .employeeCode())
-            .collect(Collectors.toCollection(ConcurrentHashMap::newKeySet));
-
-    assertThat(codes).hasSize(n); // no collisions under concurrency
-    assertThat(codes).allMatch(code -> EmployeeCodes.EMPLOYEE_CODE.matcher(code).matches());
-  }
-
   // --- fixtures -------------------------------------------------------------
 
-  private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder asHr(String email)
-      throws Exception {
+  private MockHttpServletRequestBuilder asHr(String fullName, String email) throws Exception {
     return post("/employees")
         .header("Authorization", "Bearer " + hrToken)
         .contentType(MediaType.APPLICATION_JSON)
-        .content(json.writeValueAsString(Map.of("email", email)));
+        .content(
+            json.writeValueAsString(
+                Map.of(
+                    "fullName", fullName,
+                    "email", email,
+                    "designation", "Software Engineer",
+                    "dateOfJoining", "2026-07-01")));
   }
 
   private String company(String code) {

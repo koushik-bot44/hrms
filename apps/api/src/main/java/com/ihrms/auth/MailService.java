@@ -52,17 +52,21 @@ public class MailService {
     log.info("Staff invite ({}) dispatched to {}", role, email);
   }
 
-  /** Onboarding email: the employee's minted ID + the login link (§3.2). */
-  public void sendEmployeeOnboarding(String email, String employeeCode, String loginUrl) {
+  /**
+   * Selection email at onboarding (§3.2): a friendly note + the employee-login link. No ID — the
+   * unique employee ID is allocated only on Manager approval (§5).
+   */
+  public void sendEmployeeSelection(
+      String email, String fullName, String designation, String companyName, String loginUrl) {
+    String body =
+        String.format(
+            "Hello %s, you are selected to the %s role in %s. Sign in to start your onboarding: %s",
+            fullName, designation, companyName, loginUrl);
     if (noSmtp()) {
-      log.warn(
-          "[DEV ONBOARDING] {} -> ID {} | login {}  (no SMTP configured; logging only)",
-          email,
-          employeeCode,
-          loginUrl);
+      log.warn("[DEV SELECTION] {} -> {}  (no SMTP configured; logging only)", email, body);
       return;
     }
-    log.info("Onboarding email dispatched to {} (ID {})", email, employeeCode);
+    log.info("Selection email dispatched to {}", email);
   }
 
   private boolean noSmtp() {

@@ -65,7 +65,14 @@ export type AssignMemberResult = Omit<
 
 // --- Employees (§3.5) ------------------------------------------------------
 
-export type EmployeeSummary = Required<Schemas['EmployeeSummaryView']>;
+export type EmployeeSummary = Omit<
+  Required<Schemas['EmployeeSummaryView']>,
+  'employeeCode' | 'dateOfJoining'
+> & {
+  // employeeCode is null until the employee is approved (the ID is allocated then, §5).
+  employeeCode: string | null;
+  dateOfJoining: string | null;
+};
 
 export type OnboardEmployeeResult = Omit<
   Required<Schemas['OnboardEmployeeResult']>,

@@ -10,28 +10,29 @@ import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
-import com.ihrms.domain.support.EmployeeCodeService;
-import com.ihrms.domain.support.EmployeeCodes;
 import com.ihrms.employees.dto.EmployeeDtos.EmployeeSummaryView;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeRequest;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeResult;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Employee onboarding (ARCHITECTURE.md §3.2/§5). HR-only (URL rule + @PreAuthorize); scoped to
- * the HR's company. The employee ID is allocated from an atomic per-company sequence so concurrent
- * onboards never collide; the new record + login link are emailed and the action is audited.
+ * Employee onboarding (ARCHITECTURE.md §3.2). HR-only (URL rule + @PreAuthorize); scoped to the HR's
+ * company. HR provides full name, email, designation and date of joining; the record is created with
+ * {@code status = INVITED} and <strong>no employee ID</strong> — the unique ID is allocated only on
+ * Manager approval (§5). A selection email + employee-login link is sent and the action is audited.
  */
 @Service
 public class EmployeesService {
 
   private final EmployeeRepository employees;
   private final CompanyRepository companies;
-  private final EmployeeCodeService codes;
   private final AuditService audit;
   private final MailService mail;
   private final AppProperties props;
@@ -39,13 +40,11 @@ public class EmployeesService {
   public EmployeesService(
       EmployeeRepository employees,
       CompanyRepository companies,
-      EmployeeCodeService codes,
       AuditService audit,
       MailService mail,
       AppProperties props) {
     this.employees = employees;
     this.companies = companies;
-    this.codes = codes;
     this.audit = audit;
     this.mail = mail;
     this.props = props;
@@ -59,31 +58,38 @@ public class EmployeesService {
             .findById(companyId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "No company in scope"));
 
-    int sequence = codes.allocateSequence(companyId);
-    if (sequence > EmployeeCodes.SEQ_MAX) {
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "Employee ID sequence exhausted for this company");
-    }
-    String employeeCode = EmployeeCodes.format(company.getCode(), sequence);
     String email = input.email().trim().toLowerCase();
+    String fullName = input.fullName().trim();
+    String designation = input.designation().trim();
 
     Employee employee = new Employee();
-    employee.setEmployeeCode(employeeCode);
+    employee.setFullName(fullName);
     employee.setEmail(email);
+    employee.setDesignation(designation);
+    employee.setDateOfJoining(input.dateOfJoining());
     employee.setCompanyId(companyId);
     employee.setOnboardingHrId(actor.userId());
     employee.setStatus(EmployeeStatus.INVITED);
-    employees.save(employee);
+    try {
+      // Flush inside the try so the global-unique-email violation surfaces here as a 409.
+      employees.saveAndFlush(employee);
+    } catch (DataIntegrityViolationException e) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "An employee with this email already exists");
+    }
 
-    String loginUrl = props.webAppUrl().replaceAll("/+$", "") + "/login";
-    mail.sendEmployeeOnboarding(email, employeeCode, loginUrl);
+    String loginUrl =
+        props.webAppUrl().replaceAll("/+$", "")
+            + "/login?email="
+            + URLEncoder.encode(email, StandardCharsets.UTF_8);
+    mail.sendEmployeeSelection(email, fullName, designation, company.getName(), loginUrl);
 
     audit.record(
         AuditActor.from(actor),
         "EMPLOYEE_ONBOARDED",
         "Employee",
         employee.getId(),
-        Map.of("employeeCode", employeeCode, "email", email),
+        Map.of("email", email, "fullName", fullName, "designation", designation),
         ip);
 
     return new OnboardEmployeeResult(summary(employee), loginUrl);
@@ -101,7 +107,14 @@ public class EmployeesService {
 
   private static EmployeeSummaryView summary(Employee e) {
     return new EmployeeSummaryView(
-        e.getId(), e.getEmployeeCode(), e.getEmail(), e.getStatus(), e.getCreatedAt().toString());
+        e.getId(),
+        e.getEmployeeCode(),
+        e.getFullName(),
+        e.getEmail(),
+        e.getDesignation(),
+        e.getDateOfJoining() == null ? null : e.getDateOfJoining().toString(),
+        e.getStatus(),
+        e.getCreatedAt().toString());
   }
 
   private String companyOf(IhrmsPrincipal.User actor) {

@@ -14,21 +14,28 @@ import { OnboardEmployeeDialog } from '@/components/hr/onboard-employee-dialog';
 
 const columns: ColumnDef<EmployeeSummary>[] = [
   {
-    accessorKey: 'employeeCode',
-    header: 'Employee ID',
-    cell: ({ row }) => (
-      <span
-        className={
-          row.original.employeeCode === '…'
-            ? 'font-mono text-xs text-muted-foreground'
-            : 'font-mono text-xs'
-        }
-      >
-        {row.original.employeeCode}
-      </span>
-    ),
+    accessorKey: 'fullName',
+    header: 'Name',
+    cell: ({ row }) => <span className="font-medium">{row.original.fullName ?? '—'}</span>,
   },
   { accessorKey: 'email', header: 'Email' },
+  {
+    accessorKey: 'designation',
+    header: 'Designation',
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">{row.original.designation ?? '—'}</span>
+    ),
+  },
+  {
+    accessorKey: 'employeeCode',
+    header: 'Employee ID',
+    cell: ({ row }) =>
+      row.original.employeeCode ? (
+        <span className="font-mono text-xs">{row.original.employeeCode}</span>
+      ) : (
+        <span className="text-xs text-muted-foreground">— on approval</span>
+      ),
+  },
   {
     accessorKey: 'status',
     header: 'Status',
@@ -69,7 +76,7 @@ export default function HrEmployeesPage() {
         <DataTable
           columns={columns}
           data={data ?? []}
-          searchPlaceholder="Search by ID or email…"
+          searchPlaceholder="Search by name or email…"
           emptyState={
             <EmptyState
               icon={Users}

@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/storage/blobs/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["download"];
+        put: operations["upload"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding/sections/{key}": {
         parameters: {
             query?: never;
@@ -468,6 +484,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/manager/approvals/{id}/record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["approvalRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/manager/approvals/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["approvalHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -527,6 +575,22 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/onboarding/documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteDocument"];
         options?: never;
         head?: never;
         patch?: never;
@@ -653,12 +717,19 @@ export interface components {
             hrName?: string;
         };
         OnboardEmployeeRequest: {
+            fullName: string;
             email: string;
+            designation: string;
+            /** Format: date */
+            dateOfJoining: string;
         };
         EmployeeSummaryView: {
             id?: string;
             employeeCode?: string;
+            fullName?: string;
             email?: string;
+            designation?: string;
+            dateOfJoining?: string;
             /** @enum {string} */
             status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             createdAt?: string;
@@ -722,11 +793,11 @@ export interface components {
             password: string;
         };
         EmployeeOtpVerifyRequest: {
-            employeeCode: string;
+            email: string;
             otp: string;
         };
         EmployeeOtpRequest: {
-            employeeCode: string;
+            fullName: string;
             email: string;
         };
         OtpRequestResult: {
@@ -897,6 +968,52 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["AssignMemberResult"];
                 };
+            };
+        };
+    };
+    download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    upload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": string;
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1658,6 +1775,48 @@ export interface operations {
             };
         };
     };
+    approvalRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
+    approvalHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApprovalView"][];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -1745,6 +1904,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AuditPage"];
+                };
+            };
+        };
+    };
+    deleteDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OnboardingDashboard"];
                 };
             };
         };

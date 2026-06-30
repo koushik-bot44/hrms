@@ -4,8 +4,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { CheckCircle2, Copy, UserPlus } from 'lucide-react';
+import { CheckCircle2, UserPlus } from 'lucide-react';
 import {
   OnboardEmployeeSchema,
   type EmployeeSummary,
@@ -44,19 +43,22 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
     formState: { errors, isSubmitting },
   } = useForm<OnboardEmployeeInput>({
     resolver: zodResolver(OnboardEmployeeSchema),
-    defaultValues: { email: '' },
+    defaultValues: { fullName: '', email: '', designation: '', dateOfJoining: '' },
   });
 
   const mutation = useApiMutation((body: OnboardEmployeeInput) => onboardEmployee(body), {
-    successMessage: (data) => `Onboarded — ${data.employee.employeeCode}`,
-    // Optimistic insert with a placeholder code, replaced when the list refetches.
+    successMessage: (data) => `${data.employee.fullName} onboarded`,
+    // Optimistic insert (no ID yet — it's assigned on approval), replaced when the list refetches.
     onMutate: async (vars): Promise<OptimisticContext> => {
       await queryClient.cancelQueries({ queryKey: EMPLOYEES_KEY });
       const prev = queryClient.getQueryData<EmployeeSummary[]>(EMPLOYEES_KEY);
       const optimistic: EmployeeSummary = {
         id: `optimistic-${vars.email}`,
-        employeeCode: '…',
+        employeeCode: null,
+        fullName: vars.fullName,
         email: vars.email,
+        designation: vars.designation,
+        dateOfJoining: vars.dateOfJoining,
         status: 'INVITED',
         createdAt: new Date().toISOString(),
       };
@@ -70,7 +72,7 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
       if (ctx?.prev) {
         queryClient.setQueryData(EMPLOYEES_KEY, ctx.prev);
       }
-      if (error.status === 400) {
+      if (error.status === 400 || error.status === 409) {
         setError('email', { message: error.message });
       }
     },
@@ -89,13 +91,6 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
     setOpen(false);
     setResult(null);
     reset();
-  };
-
-  const copyCode = () => {
-    if (result) {
-      void navigator.clipboard?.writeText(result.employee.employeeCode);
-      toast.success('Employee ID copied');
-    }
   };
 
   return (
@@ -126,19 +121,12 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
               </div>
               <DialogTitle>Employee onboarded</DialogTitle>
               <DialogDescription>
-                We emailed the unique ID and a login link to{' '}
-                <span className="font-medium text-foreground">{result.employee.email}</span>.
+                We emailed a selection note and a login link to{' '}
+                <span className="font-medium text-foreground">{result.employee.email}</span>. They
+                sign in with their full name + email; a unique employee ID is assigned once a Manager
+                approves them.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-1.5">
-              <span className="text-sm font-medium">Employee ID</span>
-              <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
-                <span className="font-mono text-sm">{result.employee.employeeCode}</span>
-                <Button type="button" variant="ghost" size="icon" onClick={copyCode} aria-label="Copy">
-                  <Copy className="size-4" />
-                </Button>
-              </div>
-            </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setResult(null)}>
                 Onboard another
@@ -151,32 +139,50 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
             <DialogHeader>
               <DialogTitle>Onboard an employee</DialogTitle>
               <DialogDescription>
-                Enter the employee&apos;s email. We&apos;ll mint their unique ID and email it with a
-                login link.
+                Enter their details. We&apos;ll email a selection note with a login link — no ID is
+                needed to sign in.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={onSubmit} className="space-y-4" noValidate>
-              <div className="space-y-1.5">
-                <label htmlFor="employee-email" className="text-sm font-medium">
-                  Employee email
-                </label>
+              <Field id="onb-name" label="Full name" error={errors.fullName?.message}>
                 <Input
-                  id="employee-email"
+                  id="onb-name"
+                  placeholder="Alex Doe"
+                  aria-invalid={Boolean(errors.fullName)}
+                  {...register('fullName')}
+                />
+              </Field>
+              <Field id="onb-email" label="Email" error={errors.email?.message}>
+                <Input
+                  id="onb-email"
                   type="email"
                   placeholder="new.hire@personal.com"
                   aria-invalid={Boolean(errors.email)}
                   {...register('email')}
                 />
-                {errors.email ? (
-                  <p className="text-xs text-destructive">{errors.email.message}</p>
-                ) : null}
-              </div>
+              </Field>
+              <Field id="onb-designation" label="Designation" error={errors.designation?.message}>
+                <Input
+                  id="onb-designation"
+                  placeholder="Software Engineer"
+                  aria-invalid={Boolean(errors.designation)}
+                  {...register('designation')}
+                />
+              </Field>
+              <Field id="onb-doj" label="Date of joining" error={errors.dateOfJoining?.message}>
+                <Input
+                  id="onb-doj"
+                  type="date"
+                  aria-invalid={Boolean(errors.dateOfJoining)}
+                  {...register('dateOfJoining')}
+                />
+              </Field>
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Onboarding…' : 'Onboard & email ID'}
+                  {isSubmitting ? 'Onboarding…' : 'Onboard & email'}
                 </Button>
               </div>
             </form>
@@ -184,5 +190,27 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Field({
+  id,
+  label,
+  error,
+  children,
+}: {
+  id: string;
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      {children}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
   );
 }

@@ -56,26 +56,35 @@ HR's team** — that is the path that connects an employee to their approver.
 2. **Company Admin** creates **Teams** and assigns one **HR** and one **Manager** to each.
 
 ### 3.2 Onboarding (the spine — starts with HR)
-1. **HR** initiates onboarding for a new employee → system mints a **unique employee ID** and
-   **emails it** to the employee.
-2. **Employee** logs in with **ID + email/OTP** and lands on their **dashboard**.
-3. Employee fills **tabbed/sectioned forms** and uploads documents:
+1. **HR** initiates onboarding with **{full name, email, designation, date of joining}**. The system
+   creates the employee record (`status = INVITED`). **No employee ID is minted here** — the unique
+   ID is allocated only on Manager approval (see §3.3 / §5).
+2. The system **emails the employee a selection note** — *"Hello {full name}, you are selected to the
+   {designation} role in {company name}."* — plus a **link to the employee login**. The email carries
+   **no ID** (there isn't one yet).
+3. **Employee** logs in with **full name + email → OTP** (the OTP to that email is the security
+   factor) and lands on their **dashboard**.
+4. Employee fills **tabbed/sectioned forms** and uploads documents:
    - **Personal details**
    - **Background details** (uploads — e.g. previous-company experience letters)
    - **Government details** (uploads — e.g. PAN card)
    - …(extensible — new sections can be added)
-4. Every field value and uploaded file is stored **under that employee's record**, keyed by the ID.
-5. Employee **submits** for verification.
+5. Every field value and uploaded file is stored **under that employee's record**.
+6. Employee **submits** for verification.
 
 ### 3.3 Verification & approval
 1. **HR** opens the employee's record (by ID), reviews each section/document, marks items
    **verified** (or rejects/requests changes).
 2. On completion, HR **routes an approval request** to the **team's Manager**.
 3. **Manager** sees it in their **notifications/approvals inbox** and **approves** → final step in v1.
+4. **On approval, the system allocates the unique employee ID** (§5) from the company's atomic
+   sequence and stamps it on the record. The ID is an **org/HR-facing identifier** — it is *not* used
+   to log in. (Allocation-at-approval ships as a separate delta; until then approved records may carry
+   no ID.)
 
 ### 3.4 HR lookup
-At any time, **HR enters an employee ID** in their workspace and sees **all** of that employee's
-details and documents in one place.
+At any time, **HR finds an employee** in their workspace (by name/email, or by ID once allocated) and
+sees **all** of that employee's details and documents in one place.
 
 ---
 
@@ -89,8 +98,10 @@ indicative. **Schema is additive-only thereafter.**
   `companyId?` (null for Super Admin), `teamId?` (for HR/Manager), `authCredential` (see §6),
   `status`, `createdAt`.
 - **Employee** _(the onboarded subject — distinct from User; different auth & lifecycle)_ —
-  `id`, `employeeCode` (unique, see §5), `email`, `companyId`, `onboardingHrId` (→ User),
-  `status` (EmployeeStatus), OTP/session fields (see §6), `createdAt`.
+  `id`, `fullName`, `email` (**globally unique** — the login handle, with OTP), `designation`
+  (job-title string, e.g. "Software Engineer"), `dateOfJoining`, `companyId`,
+  `onboardingHrId` (→ User), `employeeCode` (**nullable**; unique once set — allocated on Manager
+  approval, see §5), `status` (EmployeeStatus), OTP/session fields (see §6), `createdAt`.
 
 ### Organisation
 - **Company** — `id`, `name`, `code` (short mnemonic, e.g. `ACME`; used in the employee ID),
@@ -133,15 +144,15 @@ indicative. **Schema is additive-only thereafter.**
 
 ## 5. Unique Employee ID
 
-Every employee gets a unique, human-readable, **company-scoped** ID, emailed at onboarding.
+Every **approved** employee gets a unique, human-readable, **company-scoped** ID. It is allocated **on
+Manager approval** (not at onboarding) and is an **org/HR-facing identifier** — it is **not** used to
+log in (employees authenticate with full name + email + OTP, see §6).
 
-- **Proposed format:** `{COMPANY_CODE}-EMP-{NNNNNN}` — e.g. `ACME-EMP-000123`.
+- **Format:** `{COMPANY_CODE}-EMP-{NNNNNN}` — e.g. `ACME-EMP-000123`.
 - `COMPANY_CODE` is the company's short mnemonic; `NNNNNN` is a zero-padded sequence **unique within
   the company** (atomic, gap-tolerant allocation, no collisions under concurrency).
-- The ID is the employee's login handle (paired with email + OTP) and the key under which all their
-  records are stored.
-
-_Decision point:_ format is a proposal — confirm or adjust before Phase 1 finalises it.
+- Until approval the record exists (`status` in {INVITED … HR_VERIFIED}) with **no ID**; the ID is
+  stamped on the transition to `APPROVED`, then used as the org-facing reference for HR lookups.
 
 ---
 
@@ -158,7 +169,10 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
   - Employee → only their own record.
   - Centralise these relationship checks; do not scatter them across handlers.
 - **Authentication**
-  - **Employee:** unique ID + email + **OTP** (no password). Single-use, time-boxed OTP.
+  - **Employee:** **full name + email → OTP** (no password; no ID at login). The single-use,
+    time-boxed **OTP sent to the email is the security factor**; email is the globally-unique handle
+    and the full name is matched against the record. OTP issuance is **rate-limited** and
+    **enumeration-safe** (a generic "if a match exists, a code was sent" response).
   - **Staff (User):** email + password (hashed with a strong KDF, e.g. argon2/bcrypt) in v1;
     structured so SSO can drop in later. _[decision point: confirm staff auth method.]_
   - Session: short-lived access token + httpOnly refresh cookie on the API domain; CORS with

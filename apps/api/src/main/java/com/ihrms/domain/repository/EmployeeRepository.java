@@ -8,6 +8,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface EmployeeRepository extends JpaRepository<Employee, String> {
   Optional<Employee> findByEmployeeCode(String employeeCode);
 
+  /** Employees authenticate by email (globally unique) + full name + OTP (§6). */
+  Optional<Employee> findByEmail(String email);
+
   List<Employee> findByCompanyIdAndOnboardingHrId(String companyId, String onboardingHrId);
 
   List<Employee> findByCompanyIdAndOnboardingHrIdOrderByCreatedAtDesc(
