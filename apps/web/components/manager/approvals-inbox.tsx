@@ -49,7 +49,10 @@ export function ApprovalsInbox() {
     onMutate: (id) => optimisticRemove(id),
     onError: (_e, _id, ctx) => rollback(ctx),
     onSuccess: () => setDeciding(null),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: KEY }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: KEY });
+      void queryClient.invalidateQueries({ queryKey: ['manager-approvals-history'] });
+    },
   });
 
   const rejectMutation = useApiMutation(
@@ -59,7 +62,10 @@ export function ApprovalsInbox() {
       onMutate: (vars) => optimisticRemove(vars.id),
       onError: (_e, _vars, ctx) => rollback(ctx),
       onSuccess: () => setDeciding(null),
-      onSettled: () => void queryClient.invalidateQueries({ queryKey: KEY }),
+      onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: KEY });
+      void queryClient.invalidateQueries({ queryKey: ['manager-approvals-history'] });
+    },
     },
   );
 

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { PageHeader } from '@/components/page-header';
-import { ApprovalsInbox } from '@/components/manager/approvals-inbox';
+import { ApprovalsWorkspace } from '@/components/manager/approvals-workspace';
 
 export const metadata: Metadata = { title: 'Approvals' };
 
@@ -9,9 +9,9 @@ export default function ManagerApprovalsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Approvals"
-        description="Verified employees on your team awaiting your final approval."
+        description="Approve verified employees on your team, and review your past decisions."
       />
-      <ApprovalsInbox />
+      <ApprovalsWorkspace />
     </div>
   );
 }

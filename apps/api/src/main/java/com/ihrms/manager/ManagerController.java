@@ -52,6 +52,11 @@ public class ManagerController {
     return manager.pendingApprovals(actor);
   }
 
+  @GetMapping("/approvals/history")
+  public List<ApprovalView> approvalHistory(@AuthenticationPrincipal IhrmsPrincipal.User actor) {
+    return manager.approvalHistory(actor);
+  }
+
   @PostMapping("/approvals/{id}/approve")
   public ApprovalView approve(
       @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {

@@ -28,6 +28,11 @@ export function getApprovals(signal?: AbortSignal): Promise<Approval[]> {
   return apiFetch<Approval[]>('/manager/approvals', { signal });
 }
 
+/** Past decisions (approved + rejected), most recently decided first. */
+export function getApprovalHistory(signal?: AbortSignal): Promise<Approval[]> {
+  return apiFetch<Approval[]>('/manager/approvals/history', { signal });
+}
+
 export function approveApproval(id: string): Promise<Approval> {
   return apiFetch<Approval>(`/manager/approvals/${encodeURIComponent(id)}/approve`, {
     method: 'POST',

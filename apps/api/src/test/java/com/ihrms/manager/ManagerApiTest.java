@@ -218,6 +218,41 @@ class ManagerApiTest {
         .andExpect(status().isNotFound());
   }
 
+  @Test
+  void approvalHistoryListsDecidedDecisionsScopedToTheManager() throws Exception {
+    // Nothing decided yet -> empty history.
+    MvcResult before =
+        mvc.perform(
+                get("/manager/approvals/history").header("Authorization", "Bearer " + manager1Token))
+            .andExpect(status().isOk())
+            .andReturn();
+    assertThat(json.readTree(before.getResponse().getContentAsString())).isEmpty();
+
+    // Approve -> it leaves the pending queue and shows up in history.
+    mvc.perform(post("/manager/approvals/" + approval.getId() + "/approve")
+            .header("Authorization", "Bearer " + manager1Token))
+        .andExpect(status().isOk());
+
+    MvcResult history =
+        mvc.perform(
+                get("/manager/approvals/history").header("Authorization", "Bearer " + manager1Token))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode items = json.readTree(history.getResponse().getContentAsString());
+    assertThat(items).hasSize(1);
+    assertThat(items.get(0).get("status").asText()).isEqualTo("APPROVED");
+    assertThat(items.get(0).get("employeeCode").asText()).isEqualTo("AAA-EMP-000001");
+    assertThat(items.get(0).get("decidedAt").isNull()).isFalse();
+
+    // Another manager's history stays empty (scoped to managerUserId).
+    MvcResult otherHistory =
+        mvc.perform(
+                get("/manager/approvals/history").header("Authorization", "Bearer " + manager2Token))
+            .andExpect(status().isOk())
+            .andReturn();
+    assertThat(json.readTree(otherHistory.getResponse().getContentAsString())).isEmpty();
+  }
+
   // --- fixtures -------------------------------------------------------------
 
   private String company(String code) {

@@ -91,6 +91,16 @@ public class ManagerService {
         .toList();
   }
 
+  /** Past decisions (approved + rejected) the Manager has made, most recent first. */
+  public List<ApprovalView> approvalHistory(IhrmsPrincipal.User manager) {
+    return approvals
+        .findByManagerUserIdAndStatusInOrderByDecidedAtDesc(
+            manager.userId(), List.of(ApprovalStatus.APPROVED, ApprovalStatus.REJECTED))
+        .stream()
+        .map(this::approvalView)
+        .toList();
+  }
+
   @Transactional
   public ApprovalView approve(IhrmsPrincipal.User manager, String approvalId) {
     ApprovalRequest approval = requirePending(manager, approvalId);
