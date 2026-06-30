@@ -1,9 +1,7 @@
 /**
- * Canonical IHRMS enums (ARCHITECTURE.md §4) — the SINGLE source of truth.
- *
- * Prisma re-declares matching DB enums in `apps/api/prisma/schema.prisma`; an
- * enum-parity unit test asserts the two never drift. Both apps import these from
- * `@ihrms/shared` — nothing duplicates them.
+ * Canonical IHRMS enums (ARCHITECTURE.md §4). Kept as local constants (the Java backend is the
+ * authoritative source; the OpenAPI schema renders these as matching string-literal unions). The
+ * web imports them from `@/lib/contract`.
  *
  * Pattern: a `const` object (runtime values) + a string-union `type` of the same name.
  */

@@ -1,33 +1,29 @@
-import {
-  AssignMemberResultSchema,
-  AssignableUserListSchema,
-  TeamDetailSchema,
-  TeamListSchema,
-  type AssignMemberInput,
-  type AssignMemberResult,
-  type AssignableUser,
-  type CreateTeamInput,
-  type TeamDetail,
-  type TeamRole,
-  type TeamSummary,
-  type UpdateTeamInput,
+import type {
+  AssignMemberInput,
+  AssignMemberResult,
+  AssignableUser,
+  CreateTeamInput,
+  TeamDetail,
+  TeamRole,
+  TeamSummary,
+  UpdateTeamInput,
 } from '@/lib/contract';
 import { apiFetch } from './client';
 
 export function listTeams(signal?: AbortSignal): Promise<TeamSummary[]> {
-  return apiFetch('/teams', { schema: TeamListSchema, signal });
+  return apiFetch<TeamSummary[]>('/teams', { signal });
 }
 
 export function getTeam(id: string, signal?: AbortSignal): Promise<TeamDetail> {
-  return apiFetch(`/teams/${id}`, { schema: TeamDetailSchema, signal });
+  return apiFetch<TeamDetail>(`/teams/${id}`, { signal });
 }
 
 export function createTeam(body: CreateTeamInput): Promise<TeamDetail> {
-  return apiFetch('/teams', { method: 'POST', body, schema: TeamDetailSchema });
+  return apiFetch<TeamDetail>('/teams', { method: 'POST', body });
 }
 
 export function updateTeam(id: string, body: UpdateTeamInput): Promise<TeamDetail> {
-  return apiFetch(`/teams/${id}`, { method: 'PATCH', body, schema: TeamDetailSchema });
+  return apiFetch<TeamDetail>(`/teams/${id}`, { method: 'PATCH', body });
 }
 
 export function deleteTeam(id: string): Promise<unknown> {
@@ -35,10 +31,7 @@ export function deleteTeam(id: string): Promise<unknown> {
 }
 
 export function getAssignableUsers(role: TeamRole, signal?: AbortSignal): Promise<AssignableUser[]> {
-  return apiFetch(`/teams/assignable-users?role=${role}`, {
-    schema: AssignableUserListSchema,
-    signal,
-  });
+  return apiFetch<AssignableUser[]>(`/teams/assignable-users?role=${role}`, { signal });
 }
 
 export function assignTeamMember(
@@ -47,5 +40,5 @@ export function assignTeamMember(
   body: AssignMemberInput,
 ): Promise<AssignMemberResult> {
   const slot = role === 'HR' ? 'hr' : 'manager';
-  return apiFetch(`/teams/${id}/${slot}`, { method: 'PUT', body, schema: AssignMemberResultSchema });
+  return apiFetch<AssignMemberResult>(`/teams/${id}/${slot}`, { method: 'PUT', body });
 }

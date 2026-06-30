@@ -1,15 +1,11 @@
 import {
   ALLOWED_UPLOAD_MIME_TYPES,
-  DocumentDtoSchema,
   MAX_UPLOAD_BYTES,
-  OnboardingDashboardSchema,
-  PresignedUploadSchema,
-  PresignedViewSchema,
-  ProfileSectionDtoSchema,
   type AllowedUploadMimeType,
   type DocumentDto,
   type DocumentType,
   type OnboardingDashboard,
+  type PresignedUpload,
   type PresignedView,
   type ProfileSectionDto,
   type SectionKey,
@@ -17,23 +13,22 @@ import {
 import { ApiError, apiFetch } from './client';
 
 export function getDashboard(signal?: AbortSignal): Promise<OnboardingDashboard> {
-  return apiFetch('/me/onboarding', { schema: OnboardingDashboardSchema, signal });
+  return apiFetch<OnboardingDashboard>('/me/onboarding', { signal });
 }
 
 export function saveSection(key: SectionKey, data: Record<string, unknown>): Promise<ProfileSectionDto> {
-  return apiFetch(`/me/onboarding/sections/${key}`, {
+  return apiFetch<ProfileSectionDto>(`/me/onboarding/sections/${key}`, {
     method: 'PUT',
     body: { data },
-    schema: ProfileSectionDtoSchema,
   });
 }
 
 export function getDocumentViewUrl(id: string): Promise<PresignedView> {
-  return apiFetch(`/me/onboarding/documents/${id}/url`, { schema: PresignedViewSchema });
+  return apiFetch<PresignedView>(`/me/onboarding/documents/${id}/url`);
 }
 
 export function submitOnboarding(): Promise<OnboardingDashboard> {
-  return apiFetch('/me/onboarding/submit', { method: 'POST', schema: OnboardingDashboardSchema });
+  return apiFetch<OnboardingDashboard>('/me/onboarding/submit', { method: 'POST' });
 }
 
 function isAllowedMime(type: string): type is AllowedUploadMimeType {
@@ -57,24 +52,21 @@ export async function uploadDocument(
     throw new ApiError(400, 'File is too large (max 10 MB)');
   }
 
-  const presign = PresignedUploadSchema.parse(
-    await apiFetch('/me/onboarding/documents', {
-      method: 'POST',
-      body: {
-        sectionKey,
-        docType,
-        fileName: file.name,
-        mimeType: file.type,
-        sizeBytes: file.size,
-      },
-    }),
-  );
+  const presign = await apiFetch<PresignedUpload>('/me/onboarding/documents', {
+    method: 'POST',
+    body: {
+      sectionKey,
+      docType,
+      fileName: file.name,
+      mimeType: file.type,
+      sizeBytes: file.size,
+    },
+  });
 
   await putWithProgress(presign.uploadUrl, file, presign.headers, onProgress);
 
-  return apiFetch(`/me/onboarding/documents/${presign.documentId}/confirm`, {
+  return apiFetch<DocumentDto>(`/me/onboarding/documents/${presign.documentId}/confirm`, {
     method: 'POST',
-    schema: DocumentDtoSchema,
   });
 }
 

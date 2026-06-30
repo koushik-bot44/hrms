@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DocumentStatus, DocumentType, EmployeeStatus, SectionKey, SectionStatus } from '../enums';
+import { DocumentStatus, DocumentType, SectionKey } from '../enums';
 
 /**
  * Employee onboarding contracts (ARCHITECTURE.md §3.2 / §4). The employee fills tabbed
@@ -133,50 +133,6 @@ export const DocumentUploadRequestSchema = z.object({
 });
 export type DocumentUploadRequestInput = z.infer<typeof DocumentUploadRequestSchema>;
 
-// ---------------------------------------------------------------------------
-// Responses (storageKey is NEVER exposed)
-// ---------------------------------------------------------------------------
-
-export const ProfileSectionDtoSchema = z.object({
-  key: z.nativeEnum(SectionKey),
-  data: z.record(z.unknown()),
-  status: z.nativeEnum(SectionStatus),
-  updatedAt: z.string(),
-});
-export type ProfileSectionDto = z.infer<typeof ProfileSectionDtoSchema>;
-
-export const DocumentDtoSchema = z.object({
-  id: z.string(),
-  sectionKey: z.nativeEnum(SectionKey),
-  docType: z.nativeEnum(DocumentType),
-  fileName: z.string(),
-  mimeType: z.string(),
-  sha256: z.string().nullable(),
-  status: z.nativeEnum(DocumentStatus),
-  uploadedAt: z.string(),
-});
-export type DocumentDto = z.infer<typeof DocumentDtoSchema>;
-
-export const OnboardingDashboardSchema = z.object({
-  employeeCode: z.string(),
-  email: z.string(),
-  status: z.nativeEnum(EmployeeStatus),
-  sections: z.array(ProfileSectionDtoSchema),
-  documents: z.array(DocumentDtoSchema),
-});
-export type OnboardingDashboard = z.infer<typeof OnboardingDashboardSchema>;
-
-export const PresignedUploadSchema = z.object({
-  documentId: z.string(),
-  uploadUrl: z.string(),
-  method: z.literal('PUT'),
-  headers: z.record(z.string()),
-  expiresInSeconds: z.number().int().positive(),
-});
-export type PresignedUpload = z.infer<typeof PresignedUploadSchema>;
-
-export const PresignedViewSchema = z.object({
-  url: z.string(),
-  expiresInSeconds: z.number().int().positive(),
-});
-export type PresignedView = z.infer<typeof PresignedViewSchema>;
+// Response shapes (ProfileSectionDto, DocumentDto, OnboardingDashboard, PresignedUpload,
+// PresignedView — storageKey is NEVER exposed) are derived from the Java OpenAPI schema in
+// `../responses.ts`.
