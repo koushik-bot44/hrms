@@ -52,4 +52,9 @@ public class StorageService {
   public byte[] getObjectBytes(String key) {
     return backend.getObjectBytes(key);
   }
+
+  /** Remove the stored object (used when an employee deletes a document). */
+  public void delete(String key) {
+    backend.delete(key);
+  }
 }

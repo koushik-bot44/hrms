@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -260,6 +261,47 @@ class OnboardingApiTest {
                         Map.of("sectionKey", "GOVERNMENT", "docType", "PAN", "fileName", "big.pdf",
                             "mimeType", "application/pdf", "sizeBytes", 20L * 1024 * 1024))))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void capsDocumentsPerTypeThenDeleteFreesASlot() throws Exception {
+    String first = uploadPan(empToken); // 1st (e.g. front)
+    uploadPan(empToken); // 2nd (e.g. back) — the cap is 2
+
+    // 3rd of the same type is rejected.
+    mvc.perform(
+            post("/me/onboarding/documents")
+                .header("Authorization", "Bearer " + empToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    json.writeValueAsString(
+                        Map.of("sectionKey", "GOVERNMENT", "docType", "PAN", "fileName", "extra.pdf",
+                            "mimeType", "application/pdf", "sizeBytes", 2048))))
+        .andExpect(status().isConflict());
+
+    // Deleting one frees a slot (and the dashboard reflects it).
+    MvcResult del =
+        mvc.perform(
+                delete("/me/onboarding/documents/" + first)
+                    .header("Authorization", "Bearer " + empToken))
+            .andExpect(status().isOk())
+            .andReturn();
+    assertThat(json.readTree(del.getResponse().getContentAsString()).get("documents").size())
+        .isEqualTo(1);
+
+    // Now another upload of the same type is allowed again.
+    uploadPan(empToken);
+    assertThat(auditLogs.findByAction("DOCUMENT_DELETED")).hasSize(1);
+  }
+
+  @Test
+  void cannotDeleteAnotherEmployeesDocument() throws Exception {
+    String documentId = uploadPan(empToken);
+    Employee other = employee("ACME-EMP-000002", "sam@personal.test");
+    mvc.perform(
+            delete("/me/onboarding/documents/" + documentId)
+                .header("Authorization", "Bearer " + tokenFor(other)))
+        .andExpect(status().isNotFound());
   }
 
   // --- helpers --------------------------------------------------------------

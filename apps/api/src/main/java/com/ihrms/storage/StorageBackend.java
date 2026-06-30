@@ -19,4 +19,7 @@ public interface StorageBackend {
 
   /** Server-side read of the stored bytes (for hashing on confirm). */
   byte[] getObjectBytes(String key);
+
+  /** Remove the stored object (best-effort; used when an employee deletes a document). */
+  void delete(String key);
 }

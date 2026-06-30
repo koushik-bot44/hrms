@@ -145,6 +145,11 @@ public class S3StorageBackend implements StorageBackend {
     return bytes.asByteArray();
   }
 
+  @Override
+  public void delete(String key) {
+    requireClient().deleteObject(b -> b.bucket(bucket).key(key));
+  }
+
   private S3Client requireClient() {
     if (client == null) {
       throw new ResponseStatusException(

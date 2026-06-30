@@ -27,6 +27,11 @@ export function getDocumentViewUrl(id: string): Promise<PresignedView> {
   return apiFetch<PresignedView>(`/me/onboarding/documents/${id}/url`);
 }
 
+/** Remove one of the employee's own documents (allowed while the record is editable). */
+export function deleteDocument(id: string): Promise<OnboardingDashboard> {
+  return apiFetch<OnboardingDashboard>(`/me/onboarding/documents/${id}`, { method: 'DELETE' });
+}
+
 export function submitOnboarding(): Promise<OnboardingDashboard> {
   return apiFetch<OnboardingDashboard>('/me/onboarding/submit', { method: 'POST' });
 }

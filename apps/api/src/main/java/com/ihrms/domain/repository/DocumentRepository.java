@@ -1,5 +1,7 @@
 package com.ihrms.domain.repository;
 
+import com.ihrms.domain.enums.DocumentType;
+import com.ihrms.domain.enums.SectionKey;
 import com.ihrms.domain.model.Document;
 import java.util.List;
 import java.util.Optional;
@@ -11,4 +13,8 @@ public interface DocumentRepository extends JpaRepository<Document, String> {
   List<Document> findByEmployeeIdOrderByUploadedAtDesc(String employeeId);
 
   Optional<Document> findByIdAndEmployeeId(String id, String employeeId);
+
+  /** How many documents the employee already has of a given type within a section (cap check). */
+  int countByEmployeeIdAndSectionKeyAndDocType(
+      String employeeId, SectionKey sectionKey, DocumentType docType);
 }

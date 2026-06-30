@@ -35,6 +35,11 @@ public class DocumentBlobStore {
         data.length);
   }
 
+  /** Remove the bytes for a storage key (no-op if absent). */
+  public void delete(String storageKey) {
+    jdbc.update("DELETE FROM \"document_blobs\" WHERE \"storageKey\"=?", storageKey);
+  }
+
   /** Fetch the bytes + content type for a storage key, if present. */
   public Optional<Blob> find(String storageKey) {
     return jdbc.query(

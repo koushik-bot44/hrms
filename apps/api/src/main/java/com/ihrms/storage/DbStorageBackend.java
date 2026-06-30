@@ -53,6 +53,11 @@ public class DbStorageBackend implements StorageBackend {
             () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Stored file not found"));
   }
 
+  @Override
+  public void delete(String key) {
+    blobs.delete(key);
+  }
+
   private String baseUrl() {
     if (configuredBaseUrl != null && !configuredBaseUrl.isBlank()) {
       return stripTrailingSlash(configuredBaseUrl.trim());

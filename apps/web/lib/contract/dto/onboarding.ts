@@ -55,6 +55,8 @@ export const SECTION_DATA_SCHEMAS = {
 // ---------------------------------------------------------------------------
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+/** Max files per document type, per section (e.g. PAN front + back). Mirrors the API cap. */
+export const MAX_DOCUMENTS_PER_TYPE = 2;
 export const ALLOWED_UPLOAD_MIME_TYPES = [
   'application/pdf',
   'image/png',

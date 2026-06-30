@@ -13,6 +13,7 @@ import com.ihrms.domain.model.ProfileSection;
 import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.ProfileSectionRepository;
+import com.ihrms.onboarding.dto.OnboardingDtos;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentUploadRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentView;
 import com.ihrms.onboarding.dto.OnboardingDtos.OnboardingDashboard;
@@ -26,6 +27,8 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +42,8 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 public class OnboardingService {
+
+  private static final Logger log = LoggerFactory.getLogger(OnboardingService.class);
 
   private static final int UPLOAD_TTL_SECONDS = 300; // presigned PUT
   private static final int VIEW_TTL_SECONDS = 60; // presigned GET (short-lived, audited download)
@@ -104,6 +109,17 @@ public class OnboardingService {
     Employee employee = loadEmployee(emp.employeeId());
     assertEditable(employee);
 
+    int existing =
+        documents.countByEmployeeIdAndSectionKeyAndDocType(
+            emp.employeeId(), body.sectionKey(), body.docType());
+    if (existing >= OnboardingDtos.MAX_DOCUMENTS_PER_TYPE) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "You can upload at most "
+              + OnboardingDtos.MAX_DOCUMENTS_PER_TYPE
+              + " files for this document (e.g. front and back). Remove one to add another.");
+    }
+
     String storageKey =
         storage.buildKey(emp.companyId(), emp.employeeId(), body.sectionKey().name(), body.fileName());
     Document doc = new Document();
@@ -153,6 +169,25 @@ public class OnboardingService {
     audit(emp, "DOCUMENT_VIEWED", "Document", documentId,
         Map.<String, Object>of("docType", doc.getDocType().name()), ip);
     return new PresignedView(url, VIEW_TTL_SECONDS);
+  }
+
+  /** Remove one of the employee's own documents (only while the record is still editable). */
+  public OnboardingDashboard deleteDocument(
+      IhrmsPrincipal.Employee emp, String documentId, String ip) {
+    Document doc = loadOwnDocument(emp.employeeId(), documentId);
+    Employee employee = loadEmployee(emp.employeeId());
+    assertEditable(employee);
+
+    documents.delete(doc);
+    try {
+      storage.delete(doc.getStorageKey());
+    } catch (RuntimeException e) {
+      log.warn("Could not delete stored bytes for document {}: {}", documentId, e.getMessage());
+    }
+
+    audit(emp, "DOCUMENT_DELETED", "Document", documentId,
+        Map.<String, Object>of("docType", doc.getDocType().name(), "fileName", doc.getFileName()), ip);
+    return dashboardOf(employee);
   }
 
   @Transactional

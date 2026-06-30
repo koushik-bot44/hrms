@@ -20,6 +20,9 @@ public final class OnboardingDtos {
   /** 10 MiB, matching the shared MAX_UPLOAD_BYTES. */
   public static final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024;
 
+  /** Max files an employee may upload per document type, per section (e.g. PAN front + back). */
+  public static final int MAX_DOCUMENTS_PER_TYPE = 2;
+
   private OnboardingDtos() {}
 
   public record SaveSectionRequest(@NotNull(message = "data is required") Map<String, Object> data) {}
