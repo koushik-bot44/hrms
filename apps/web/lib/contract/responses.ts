@@ -95,3 +95,28 @@ export type OnboardingDashboard = Omit<
 export type PresignedUpload = Required<Schemas['PresignedUpload']>;
 
 export type PresignedView = Required<Schemas['PresignedView']>;
+
+// --- HR verification & routing (§3.3/§3.4) --------------------------------
+
+export type RecordSection = Omit<Required<Schemas['RecordSection']>, 'data'> & {
+  data: Record<string, unknown>;
+};
+
+export type RecordDocument = Omit<Required<Schemas['RecordDocument']>, 'sha256'> & {
+  sha256: string | null;
+};
+
+export type EmployeeRecord = Omit<
+  Required<Schemas['EmployeeRecordView']>,
+  'sections' | 'documents'
+> & {
+  sections: RecordSection[];
+  documents: RecordDocument[];
+};
+
+export type RouteToManagerResult = Omit<
+  Required<Schemas['RouteToManagerResult']>,
+  'managerName'
+> & {
+  managerName: string | null;
+};

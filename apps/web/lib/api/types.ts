@@ -132,6 +132,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/{employeeCode}/route-to-manager": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["routeToManager"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies": {
         parameters: {
             query?: never;
@@ -260,6 +276,38 @@ export interface paths {
         patch: operations["update"];
         trace?: never;
     };
+    "/employees/{employeeCode}/sections/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["reviewSection"];
+        trace?: never;
+    };
+    "/employees/{employeeCode}/documents/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["reviewDocument"];
+        trace?: never;
+    };
     "/companies/{id}": {
         parameters: {
             query?: never;
@@ -332,6 +380,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{employeeCode}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["record"];
         put?: never;
         post?: never;
         delete?: never;
@@ -461,6 +525,16 @@ export interface components {
             employee?: components["schemas"]["EmployeeSummaryView"];
             loginUrl?: string;
         };
+        RouteToManagerRequest: {
+            note?: string;
+        };
+        RouteToManagerResult: {
+            employeeCode?: string;
+            /** @enum {string} */
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            approvalRequestId?: string;
+            managerName?: string;
+        };
         CreateCompanyRequest: {
             name: string;
             code: string;
@@ -521,6 +595,44 @@ export interface components {
         };
         UpdateTeamRequest: {
             name: string;
+        };
+        ReviewRequest: {
+            /** @enum {string} */
+            decision: "VERIFIED" | "REJECTED";
+            reason?: string;
+        };
+        EmployeeRecordView: {
+            employeeCode?: string;
+            email?: string;
+            /** @enum {string} */
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            reviewComplete?: boolean;
+            sections?: components["schemas"]["RecordSection"][];
+            documents?: components["schemas"]["RecordDocument"][];
+        };
+        RecordDocument: {
+            id?: string;
+            /** @enum {string} */
+            sectionKey?: "PERSONAL" | "BACKGROUND" | "GOVERNMENT";
+            /** @enum {string} */
+            docType?: "EXPERIENCE_LETTER" | "PAN" | "AADHAAR" | "BGV_DOCUMENT" | "OTHER";
+            fileName?: string;
+            mimeType?: string;
+            sha256?: string;
+            /** @enum {string} */
+            status?: "PENDING" | "UPLOADED" | "VERIFIED" | "REJECTED";
+            uploadedAt?: string;
+            viewUrl?: string;
+        };
+        RecordSection: {
+            /** @enum {string} */
+            key?: "PERSONAL" | "BACKGROUND" | "GOVERNMENT";
+            data?: {
+                [key: string]: Record<string, never>;
+            };
+            /** @enum {string} */
+            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REJECTED";
+            updatedAt?: string;
         };
         UpdateCompanyRequest: {
             name?: string;
@@ -793,6 +905,32 @@ export interface operations {
             };
         };
     };
+    routeToManager: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employeeCode: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RouteToManagerRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RouteToManagerResult"];
+                };
+            };
+        };
+    };
     list_2: {
         parameters: {
             query?: never;
@@ -1049,6 +1187,60 @@ export interface operations {
             };
         };
     };
+    reviewSection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employeeCode: string;
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
+    reviewDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employeeCode: string;
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
     get_1: {
         parameters: {
             query?: never;
@@ -1179,6 +1371,28 @@ export interface operations {
                     "*/*": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employeeCode: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmployeeRecordView"];
                 };
             };
         };
