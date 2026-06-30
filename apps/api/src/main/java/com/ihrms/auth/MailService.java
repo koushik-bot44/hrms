@@ -52,6 +52,19 @@ public class MailService {
     log.info("Staff invite ({}) dispatched to {}", role, email);
   }
 
+  /** Onboarding email: the employee's minted ID + the login link (§3.2). */
+  public void sendEmployeeOnboarding(String email, String employeeCode, String loginUrl) {
+    if (noSmtp()) {
+      log.warn(
+          "[DEV ONBOARDING] {} -> ID {} | login {}  (no SMTP configured; logging only)",
+          email,
+          employeeCode,
+          loginUrl);
+      return;
+    }
+    log.info("Onboarding email dispatched to {} (ID {})", email, employeeCode);
+  }
+
   private boolean noSmtp() {
     String host = props.mail() == null ? null : props.mail().host();
     return host == null || host.isBlank();

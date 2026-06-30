@@ -10,5 +10,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, String> {
 
   List<Employee> findByCompanyIdAndOnboardingHrId(String companyId, String onboardingHrId);
 
+  List<Employee> findByCompanyIdAndOnboardingHrIdOrderByCreatedAtDesc(
+      String companyId, String onboardingHrId);
+
   long countByCompanyId(String companyId);
 }
