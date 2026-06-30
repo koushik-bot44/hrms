@@ -1,5 +1,6 @@
 import type {
   Approval,
+  EmployeeRecord,
   NotificationFeed,
   NotificationItem,
   RejectApprovalInput,
@@ -31,6 +32,11 @@ export function getApprovals(signal?: AbortSignal): Promise<Approval[]> {
 /** Past decisions (approved + rejected), most recently decided first. */
 export function getApprovalHistory(signal?: AbortSignal): Promise<Approval[]> {
   return apiFetch<Approval[]>('/manager/approvals/history', { signal });
+}
+
+/** The employee record (sections + documents with view URLs) behind one of the manager's approvals. */
+export function getApprovalRecord(id: string, signal?: AbortSignal): Promise<EmployeeRecord> {
+  return apiFetch<EmployeeRecord>(`/manager/approvals/${encodeURIComponent(id)}/record`, { signal });
 }
 
 export function approveApproval(id: string): Promise<Approval> {

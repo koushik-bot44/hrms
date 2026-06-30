@@ -4,19 +4,29 @@ import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.domain.enums.ApprovalStatus;
+import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.NotificationType;
+import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.model.ApprovalRequest;
+import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Notification;
+import com.ihrms.domain.model.ProfileSection;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
+import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.NotificationRepository;
+import com.ihrms.domain.repository.ProfileSectionRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.manager.dto.ManagerDtos.ApprovalView;
 import com.ihrms.manager.dto.ManagerDtos.NotificationFeed;
 import com.ihrms.manager.dto.ManagerDtos.NotificationView;
 import com.ihrms.manager.dto.ManagerDtos.RejectApprovalRequest;
+import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
+import com.ihrms.review.dto.ReviewDtos.RecordDocument;
+import com.ihrms.review.dto.ReviewDtos.RecordSection;
+import com.ihrms.storage.StorageService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -34,10 +44,15 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ManagerService {
 
+  private static final int VIEW_TTL_SECONDS = 60; // presigned GET (short-lived, audited download)
+
   private final NotificationRepository notifications;
   private final ApprovalRequestRepository approvals;
   private final EmployeeRepository employees;
   private final UserRepository users;
+  private final ProfileSectionRepository sections;
+  private final DocumentRepository documents;
+  private final StorageService storage;
   private final AuditService audit;
 
   public ManagerService(
@@ -45,11 +60,17 @@ public class ManagerService {
       ApprovalRequestRepository approvals,
       EmployeeRepository employees,
       UserRepository users,
+      ProfileSectionRepository sections,
+      DocumentRepository documents,
+      StorageService storage,
       AuditService audit) {
     this.notifications = notifications;
     this.approvals = approvals;
     this.employees = employees;
     this.users = users;
+    this.sections = sections;
+    this.documents = documents;
+    this.storage = storage;
     this.audit = audit;
   }
 
@@ -99,6 +120,31 @@ public class ManagerService {
         .stream()
         .map(this::approvalView)
         .toList();
+  }
+
+  /**
+   * The employee record behind one of the Manager's approvals (sections + documents with short-lived
+   * view URLs) so they can review what HR verified before deciding. Scoped to the Manager's own
+   * approvals (404 otherwise); a sensitive read, so it's audited.
+   */
+  public EmployeeRecordView recordForApproval(IhrmsPrincipal.User manager, String approvalId) {
+    ApprovalRequest approval =
+        approvals
+            .findByIdAndManagerUserId(approvalId, manager.userId())
+            .orElseThrow(() -> notFound("Approval not found"));
+    Employee employee =
+        employees
+            .findById(approval.getEmployeeId())
+            .orElseThrow(() -> notFound("Employee not found"));
+    audit.record(
+        AuditActor.from(manager),
+        "EMPLOYEE_RECORD_VIEWED",
+        "Employee",
+        employee.getId(),
+        Map.<String, Object>of(
+            "employeeCode", employee.getEmployeeCode(), "approvalRequestId", approval.getId()),
+        null);
+    return buildRecord(employee);
   }
 
   @Transactional
@@ -194,6 +240,47 @@ public class ManagerService {
         employee == null ? null : employee.getEmail(),
         employee == null ? null : employee.getStatus(),
         hrName);
+  }
+
+  private EmployeeRecordView buildRecord(Employee employee) {
+    List<ProfileSection> secs = sections.findByEmployeeIdOrderByKeyAsc(employee.getId());
+    List<Document> docs =
+        documents.findByEmployeeIdOrderByUploadedAtDesc(employee.getId()).stream()
+            .filter(d -> d.getStatus() != DocumentStatus.PENDING)
+            .toList();
+    boolean complete =
+        employee.getStatus() == EmployeeStatus.SUBMITTED
+            && !secs.isEmpty()
+            && secs.stream().allMatch(s -> s.getStatus() == SectionStatus.VERIFIED)
+            && docs.stream().allMatch(d -> d.getStatus() == DocumentStatus.VERIFIED);
+    return new EmployeeRecordView(
+        employee.getEmployeeCode(),
+        employee.getEmail(),
+        employee.getStatus(),
+        complete,
+        secs.stream().map(ManagerService::recordSection).toList(),
+        docs.stream().map(this::recordDocument).toList());
+  }
+
+  private static RecordSection recordSection(ProfileSection s) {
+    return new RecordSection(
+        s.getKey(),
+        s.getData() == null ? Map.of() : s.getData(),
+        s.getStatus(),
+        s.getUpdatedAt().toString());
+  }
+
+  private RecordDocument recordDocument(Document d) {
+    return new RecordDocument(
+        d.getId(),
+        d.getSectionKey(),
+        d.getDocType(),
+        d.getFileName(),
+        d.getMimeType(),
+        d.getSha256(),
+        d.getStatus(),
+        d.getUploadedAt().toString(),
+        storage.presignedGetUrl(d.getStorageKey(), VIEW_TTL_SECONDS));
   }
 
   private ResponseStatusException notFound(String message) {

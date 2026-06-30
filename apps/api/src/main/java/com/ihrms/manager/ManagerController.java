@@ -5,6 +5,7 @@ import com.ihrms.manager.dto.ManagerDtos.ApprovalView;
 import com.ihrms.manager.dto.ManagerDtos.NotificationFeed;
 import com.ihrms.manager.dto.ManagerDtos.NotificationView;
 import com.ihrms.manager.dto.ManagerDtos.RejectApprovalRequest;
+import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -55,6 +56,12 @@ public class ManagerController {
   @GetMapping("/approvals/history")
   public List<ApprovalView> approvalHistory(@AuthenticationPrincipal IhrmsPrincipal.User actor) {
     return manager.approvalHistory(actor);
+  }
+
+  @GetMapping("/approvals/{id}/record")
+  public EmployeeRecordView approvalRecord(
+      @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
+    return manager.recordForApproval(actor, id);
   }
 
   @PostMapping("/approvals/{id}/approve")

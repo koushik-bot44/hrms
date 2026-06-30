@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { StatusBadge } from '@/components/status-badge';
+import { ManagerRecordDialog } from '@/components/manager/record-dialog';
 
 const KEY = ['manager-approvals-history'] as const;
 
@@ -59,6 +60,7 @@ export function ApprovalsHistory() {
                 {a.note}
               </p>
             ) : null}
+            <ManagerRecordDialog approvalId={a.id} employeeCode={a.employeeCode ?? ''} />
           </CardContent>
         </Card>
       ))}

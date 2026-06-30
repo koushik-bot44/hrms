@@ -253,6 +253,29 @@ class ManagerApiTest {
     assertThat(json.readTree(otherHistory.getResponse().getContentAsString())).isEmpty();
   }
 
+  @Test
+  void managerCanViewTheRecordBehindTheirApprovalButNotOthers() throws Exception {
+    MvcResult rec =
+        mvc.perform(
+                get("/manager/approvals/" + approval.getId() + "/record")
+                    .header("Authorization", "Bearer " + manager1Token))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode body = json.readTree(rec.getResponse().getContentAsString());
+    assertThat(body.get("employeeCode").asText()).isEqualTo("AAA-EMP-000001");
+    assertThat(body.get("email").asText()).isEqualTo("evan@personal.test");
+    assertThat(body.get("sections")).isEmpty();
+    assertThat(body.get("documents")).isEmpty();
+    // A sensitive read -> audited.
+    assertThat(auditLogs.findByAction("EMPLOYEE_RECORD_VIEWED")).isNotEmpty();
+
+    // A different manager cannot view it (scoped to managerUserId).
+    mvc.perform(
+            get("/manager/approvals/" + approval.getId() + "/record")
+                .header("Authorization", "Bearer " + manager2Token))
+        .andExpect(status().isNotFound());
+  }
+
   // --- fixtures -------------------------------------------------------------
 
   private String company(String code) {

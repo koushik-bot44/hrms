@@ -20,6 +20,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { StatusBadge } from '@/components/status-badge';
+import { ManagerRecordDialog } from '@/components/manager/record-dialog';
 
 const KEY = ['manager-approvals'] as const;
 
@@ -98,7 +99,8 @@ export function ApprovalsInbox() {
               <UserCheck className="size-3.5" aria-hidden />
               Onboarded by {a.hrName ?? 'HR'}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <ManagerRecordDialog approvalId={a.id} employeeCode={a.employeeCode ?? ''} />
               <Button
                 size="sm"
                 variant="outline"
