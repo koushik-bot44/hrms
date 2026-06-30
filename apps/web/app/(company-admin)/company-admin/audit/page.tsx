@@ -1,19 +1,14 @@
 import type { Metadata } from 'next';
-import { ScrollText } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
-import { EmptyState } from '@/components/empty-state';
+import { AuditExplorer } from '@/components/audit/audit-explorer';
 
 export const metadata: Metadata = { title: 'Audit logs' };
 
 export default function CompanyAdminAuditPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Audit logs" description="Your company's audit trail." />
-      <EmptyState
-        icon={ScrollText}
-        title="The audit view arrives in a later phase"
-        description="Review every logged action within your company — filterable and sortable."
-      />
+      <PageHeader title="Audit logs" description="Every logged action within your company." />
+      <AuditExplorer scope="company" />
     </div>
   );
 }

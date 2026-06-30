@@ -139,3 +139,20 @@ export type Approval = Omit<Required<Schemas['ApprovalView']>, 'note' | 'decided
   note: string | null;
   decidedAt: string | null;
 };
+
+// --- Audit explorer (§7) --------------------------------------------------
+
+export type AuditLogEntry = Omit<
+  Required<Schemas['AuditLogView']>,
+  'actorId' | 'targetType' | 'targetId' | 'ipAddress' | 'metadata'
+> & {
+  actorId: string | null;
+  targetType: string | null;
+  targetId: string | null;
+  ipAddress: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+export type AuditLogPage = Omit<Required<Schemas['AuditPage']>, 'content'> & {
+  content: AuditLogEntry[];
+};

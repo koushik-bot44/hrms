@@ -41,7 +41,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class OnboardingService {
 
   private static final int UPLOAD_TTL_SECONDS = 300; // presigned PUT
-  private static final int VIEW_TTL_SECONDS = 120; // presigned GET (short-lived)
+  private static final int VIEW_TTL_SECONDS = 60; // presigned GET (short-lived, audited download)
 
   /** Statuses where the employee may still edit their record (before submission). */
   private static final Set<EmployeeStatus> EDITABLE =

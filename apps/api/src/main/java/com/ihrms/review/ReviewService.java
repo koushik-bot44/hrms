@@ -48,7 +48,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ReviewService {
 
-  private static final int VIEW_TTL_SECONDS = 120; // presigned GET (short-lived)
+  private static final int VIEW_TTL_SECONDS = 60; // presigned GET (short-lived, audited download)
 
   private final EmployeeRepository employees;
   private final ProfileSectionRepository sections;

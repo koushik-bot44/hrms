@@ -174,7 +174,7 @@ class OnboardingApiTest {
             .andReturn();
     JsonNode v = json.readTree(view.getResponse().getContentAsString());
     assertThat(v.get("url").asText()).startsWith("http");
-    assertThat(v.get("expiresInSeconds").asInt()).isEqualTo(120);
+    assertThat(v.get("expiresInSeconds").asInt()).isEqualTo(60); // shortened for audited downloads
 
     assertThat(auditLogs.findByAction("DOCUMENT_UPLOAD_REQUESTED")).hasSize(1);
     assertThat(auditLogs.findByAction("DOCUMENT_UPLOADED")).hasSize(1);

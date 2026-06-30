@@ -516,6 +516,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["query"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -789,6 +805,39 @@ export interface components {
             employeeCount?: number;
             hasAdmin?: boolean;
             createdAt?: string;
+        };
+        Pageable: {
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            sort?: string[];
+        };
+        AuditLogView: {
+            id?: string;
+            companyId?: string;
+            actorType?: string;
+            actorId?: string;
+            actorLabel?: string;
+            action?: string;
+            targetType?: string;
+            targetId?: string;
+            metadata?: {
+                [key: string]: Record<string, never>;
+            };
+            ipAddress?: string;
+            createdAt?: string;
+        };
+        AuditPage: {
+            content?: components["schemas"]["AuditLogView"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
         };
     };
     responses: never;
@@ -1669,6 +1718,33 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SessionView"];
+                };
+            };
+        };
+    };
+    query: {
+        parameters: {
+            query: {
+                companyId?: string;
+                action?: string;
+                actorType?: string;
+                from?: string;
+                to?: string;
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuditPage"];
                 };
             };
         };

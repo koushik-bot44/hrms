@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
-import { ScrollText } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
-import { EmptyState } from '@/components/empty-state';
+import { AuditExplorer } from '@/components/audit/audit-explorer';
 
 export const metadata: Metadata = { title: 'Audit logs' };
 
@@ -10,13 +9,9 @@ export default function SuperAdminAuditPage() {
     <div className="space-y-6">
       <PageHeader
         title="Audit logs"
-        description="Every company's audit trail, partitioned per company."
+        description="Every company's audit trail, kept separate per company. Pick a company to explore it."
       />
-      <EmptyState
-        icon={ScrollText}
-        title="The audit explorer arrives in a later phase"
-        description="Filter, sort and search every logged action across all companies, separated per company."
-      />
+      <AuditExplorer scope="super" />
     </div>
   );
 }

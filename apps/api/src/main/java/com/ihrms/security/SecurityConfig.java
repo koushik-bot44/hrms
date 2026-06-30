@@ -63,8 +63,23 @@ public class SecurityConfig {
                     .hasRole("EMPLOYEE")
                     .requestMatchers("/manager/**")
                     .hasRole("MANAGER")
+                    .requestMatchers("/audit/**")
+                    .hasAnyRole("SUPER_ADMIN", "COMPANY_ADMIN")
                     .anyRequest()
                     .authenticated())
+        // Hardened response headers (§6): nosniff, frame DENY, HSTS (prod/HTTPS), no-referrer.
+        .headers(
+            headers ->
+                headers
+                    .contentTypeOptions(Customizer.withDefaults())
+                    .frameOptions(frame -> frame.deny())
+                    .httpStrictTransportSecurity(
+                        hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31_536_000))
+                    .referrerPolicy(
+                        referrer ->
+                            referrer.policy(
+                                org.springframework.security.web.header.writers
+                                    .ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
         .exceptionHandling(
             e -> e.authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDeniedHandler))
         .addFilterBefore(
