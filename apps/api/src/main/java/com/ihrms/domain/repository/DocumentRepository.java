@@ -8,5 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface DocumentRepository extends JpaRepository<Document, String> {
   List<Document> findByEmployeeId(String employeeId);
 
+  List<Document> findByEmployeeIdOrderByUploadedAtDesc(String employeeId);
+
   Optional<Document> findByIdAndEmployeeId(String id, String employeeId);
 }

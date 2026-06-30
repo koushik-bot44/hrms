@@ -46,6 +46,12 @@ public class ApiExceptionHandler {
     return build(HttpStatus.BAD_REQUEST, messages.isEmpty() ? "Validation failed" : messages, req);
   }
 
+  @ExceptionHandler(ValidationException.class)
+  public ResponseEntity<Map<String, Object>> handleCustomValidation(
+      ValidationException ex, HttpServletRequest req) {
+    return build(HttpStatus.BAD_REQUEST, ex.messages(), req);
+  }
+
   @ExceptionHandler(MissingServletRequestParameterException.class)
   public ResponseEntity<Map<String, Object>> handleMissingParam(
       MissingServletRequestParameterException ex, HttpServletRequest req) {

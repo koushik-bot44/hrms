@@ -9,5 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ProfileSectionRepository extends JpaRepository<ProfileSection, String> {
   List<ProfileSection> findByEmployeeId(String employeeId);
 
+  List<ProfileSection> findByEmployeeIdOrderByKeyAsc(String employeeId);
+
   Optional<ProfileSection> findByEmployeeIdAndKey(String employeeId, SectionKey key);
 }
