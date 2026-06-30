@@ -3,7 +3,7 @@ import { Activity, CheckCircle2, Clock, UserPlus } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
-import { Button } from '@/components/ui/button';
+import { OnboardEmployeeDialog } from '@/components/hr/onboard-employee-dialog';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 
@@ -19,12 +19,7 @@ export default function HrDashboardPage() {
       <PageHeader
         title="HR workspace"
         description="Onboard new employees and track their progress."
-        actions={
-          <Button size="sm">
-            <UserPlus />
-            Onboard employee
-          </Button>
-        }
+        actions={<OnboardEmployeeDialog />}
       />
       <div className="grid gap-4 sm:grid-cols-3">
         {STATS.map((s) => (
