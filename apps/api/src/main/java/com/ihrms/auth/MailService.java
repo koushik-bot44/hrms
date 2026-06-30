@@ -21,12 +21,39 @@ public class MailService {
   }
 
   public void sendOtp(String email, String code) {
-    String host = props.mail() == null ? null : props.mail().host();
-    if (host == null || host.isBlank()) {
+    if (noSmtp()) {
       log.warn("[DEV OTP] {} -> {}  (no SMTP configured; logging only)", email, code);
       return;
     }
     // SMTP seam: wire a JavaMailSender here when MAIL_* is configured.
     log.info("OTP email dispatched to {}", email);
+  }
+
+  /** Initial credentials for a newly provisioned Company Admin. */
+  public void sendCompanyAdminInvite(String email, String companyName, String tempPassword) {
+    if (noSmtp()) {
+      log.warn(
+          "[DEV INVITE] Company Admin for \"{}\" -> {} / {}  (no SMTP configured; logging only)",
+          companyName,
+          email,
+          tempPassword);
+      return;
+    }
+    log.info("Company admin invite dispatched to {}", email);
+  }
+
+  /** Initial credentials for a newly created HR/Manager staff user. */
+  public void sendStaffInvite(String email, String role, String tempPassword) {
+    if (noSmtp()) {
+      log.warn(
+          "[DEV INVITE] {} -> {} / {}  (no SMTP configured; logging only)", role, email, tempPassword);
+      return;
+    }
+    log.info("Staff invite ({}) dispatched to {}", role, email);
+  }
+
+  private boolean noSmtp() {
+    String host = props.mail() == null ? null : props.mail().host();
+    return host == null || host.isBlank();
   }
 }
