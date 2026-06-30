@@ -84,22 +84,33 @@ public class ReviewService {
     this.storage = storage;
   }
 
-  /** §3.4 lookup: the full record (sections + documents with presigned URLs). Sensitive read -> audited. */
-  public EmployeeRecordView getRecord(IhrmsPrincipal.User actor, String employeeCode, String ip) {
-    Employee employee = loadOwnEmployee(actor, employeeCode);
+  /** Open a record by INTERNAL id — the verification entry (pre-approval employees have no code). */
+  public EmployeeRecordView getRecord(IhrmsPrincipal.User actor, String employeeId, String ip) {
+    return viewRecord(actor, loadOwnById(actor, employeeId), ip);
+  }
+
+  /**
+   * §3.4 records lookup by employee code (post-approval only — only approved employees have a code,
+   * so a code miss is naturally not-found). Read-only; scoped to the acting HR; the view is audited.
+   */
+  public EmployeeRecordView lookupByCode(IhrmsPrincipal.User actor, String employeeCode, String ip) {
+    return viewRecord(actor, loadOwnByCode(actor, employeeCode), ip);
+  }
+
+  private EmployeeRecordView viewRecord(IhrmsPrincipal.User actor, Employee employee, String ip) {
     audit.record(
         AuditActor.from(actor),
         "EMPLOYEE_RECORD_VIEWED",
         "Employee",
         employee.getId(),
-        Map.of("employeeCode", employee.getEmployeeCode()),
+        Map.<String, Object>of("email", employee.getEmail()),
         ip);
     return record(employee);
   }
 
   public EmployeeRecordView reviewSection(
-      IhrmsPrincipal.User actor, String employeeCode, String keyParam, ReviewRequest req, String ip) {
-    Employee employee = loadOwnEmployee(actor, employeeCode);
+      IhrmsPrincipal.User actor, String employeeId, String keyParam, ReviewRequest req, String ip) {
+    Employee employee = loadOwnById(actor, employeeId);
     assertReviewable(employee);
     SectionKey key = parseKey(keyParam);
     ProfileSection section =
@@ -121,8 +132,8 @@ public class ReviewService {
   }
 
   public EmployeeRecordView reviewDocument(
-      IhrmsPrincipal.User actor, String employeeCode, String documentId, ReviewRequest req, String ip) {
-    Employee employee = loadOwnEmployee(actor, employeeCode);
+      IhrmsPrincipal.User actor, String employeeId, String documentId, ReviewRequest req, String ip) {
+    Employee employee = loadOwnById(actor, employeeId);
     assertReviewable(employee);
     Document doc =
         documents
@@ -145,8 +156,8 @@ public class ReviewService {
   /** §3.3 step 2: route the completed review to the Manager on the HR's team. */
   @Transactional
   public RouteToManagerResult routeToManager(
-      IhrmsPrincipal.User actor, String employeeCode, RouteToManagerRequest req, String ip) {
-    Employee employee = loadOwnEmployee(actor, employeeCode);
+      IhrmsPrincipal.User actor, String employeeId, RouteToManagerRequest req, String ip) {
+    Employee employee = loadOwnById(actor, employeeId);
     assertReviewable(employee);
 
     List<ProfileSection> mySections = sections.findByEmployeeId(employee.getId());
@@ -213,8 +224,12 @@ public class ReviewService {
             .toList();
     boolean complete = isReviewComplete(employee, secs, docs);
     return new EmployeeRecordView(
+        employee.getId(),
         employee.getEmployeeCode(),
+        employee.getFullName(),
         employee.getEmail(),
+        employee.getDesignation(),
+        employee.getDateOfJoining() == null ? null : employee.getDateOfJoining().toString(),
         employee.getStatus(),
         complete,
         secs.stream().map(ReviewService::sectionView).toList(),
@@ -250,12 +265,20 @@ public class ReviewService {
         storage.presignedGetUrl(d.getStorageKey(), VIEW_TTL_SECONDS));
   }
 
-  /** Resolve the employee by code and confirm it is the acting HR's own (404 otherwise — no leak). */
-  private Employee loadOwnEmployee(IhrmsPrincipal.User actor, String employeeCode) {
-    Employee employee =
-        employees
-            .findByEmployeeCode(employeeCode)
-            .orElseThrow(() -> notFound("Employee not found"));
+  /** Resolve by INTERNAL id and confirm it is the acting HR's own (404 otherwise — no leak). */
+  private Employee loadOwnById(IhrmsPrincipal.User actor, String employeeId) {
+    return assertOwn(
+        actor, employees.findById(employeeId).orElseThrow(() -> notFound("Employee not found")));
+  }
+
+  /** Resolve by employee code (post-approval lookup); same own-scope guard. */
+  private Employee loadOwnByCode(IhrmsPrincipal.User actor, String employeeCode) {
+    return assertOwn(
+        actor,
+        employees.findByEmployeeCode(employeeCode).orElseThrow(() -> notFound("Employee not found")));
+  }
+
+  private Employee assertOwn(IhrmsPrincipal.User actor, Employee employee) {
     AuthorizationService.EmployeeScope scope =
         new AuthorizationService.EmployeeScope(
             employee.getId(),

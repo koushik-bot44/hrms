@@ -10,7 +10,7 @@ import { RequireRole } from '@/components/require-role';
 const nav: NavItem[] = [
   { label: 'Dashboard', href: '/hr', icon: LayoutDashboard },
   { label: 'Employees', href: '/hr/employees', icon: Users },
-  { label: 'Verification', href: '/hr/verification', icon: ShieldCheck },
+  { label: 'Look up by ID', href: '/hr/verification', icon: ShieldCheck },
 ];
 
 export default function HrLayout({ children }: { children: ReactNode }) {

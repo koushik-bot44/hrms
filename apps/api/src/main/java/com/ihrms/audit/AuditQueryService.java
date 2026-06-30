@@ -110,11 +110,12 @@ public class AuditQueryService {
         userIds.isEmpty()
             ? Map.of()
             : users.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, User::getName));
+    // Employee actors may have no code yet (allocated on approval) — fall back to name/id, never null.
     Map<String, String> employeeCodes =
         employeeIds.isEmpty()
             ? Map.of()
             : employees.findAllById(employeeIds).stream()
-                .collect(Collectors.toMap(Employee::getId, Employee::getEmployeeCode));
+                .collect(Collectors.toMap(Employee::getId, AuditQueryService::employeeLabel));
     return logs.stream().map(l -> toView(l, userNames, employeeCodes)).toList();
   }
 
@@ -147,6 +148,14 @@ public class AuditQueryService {
         l.getMetadata(),
         l.getIpAddress(),
         l.getCreatedAt().toString());
+  }
+
+  /** Label for an employee actor: code if approved, else full name, else the id — never null. */
+  private static String employeeLabel(Employee e) {
+    if (e.getEmployeeCode() != null) {
+      return e.getEmployeeCode();
+    }
+    return e.getFullName() != null ? e.getFullName() : e.getId();
   }
 
   private static boolean isPresent(String s) {

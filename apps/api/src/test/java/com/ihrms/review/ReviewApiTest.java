@@ -35,6 +35,7 @@ import com.ihrms.domain.repository.ProfileSectionRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.storage.StorageService;
+import java.time.LocalDate;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,9 +50,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * HR verification & routing (contract §3.3/§3.4), storage MOCKED so it runs in {@code ./mvnw
- * package} with only a DB: own-scope lookup (cross-HR/cross-company denied), verify/reject persists,
- * routing creates the ApprovalRequest + Manager Notification and sets HR_VERIFIED, gating, and audit.
+ * HR verification & routing (contract §3.3/§3.4), storage MOCKED so it runs in {@code ./mvnw package}
+ * with only a DB: the verification entry + actions key off the INTERNAL id (pre-approval employees
+ * have no code); own-scope (cross-HR/cross-company denied); verify/reject persists; routing creates
+ * the ApprovalRequest + Manager Notification and sets HR_VERIFIED; audit; and {@code /lookup/{code}}
+ * resolves approved employees only.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -78,7 +81,7 @@ class ReviewApiTest {
   private User hr1;
   private User manager1;
   private String hr1Token;
-  private Employee emp; // onboarded by hr1, SUBMITTED, with 2 sections + 1 PAN doc
+  private Employee emp; // onboarded by hr1, SUBMITTED, NO code, 2 sections + 1 PAN doc
 
   @BeforeEach
   void setup() {
@@ -91,18 +94,22 @@ class ReviewApiTest {
     manager1 = user(companyA, UserRole.MANAGER, "mgr1@acme.test");
     team(companyA, hr1.getId(), manager1.getId());
     hr1Token = tokenFor(hr1);
-    emp = submittedEmployee(hr1.getId(), "AAA-EMP-000001");
+    emp = submittedEmployee(hr1.getId());
     when(storage.presignedGetUrl(any(), anyInt())).thenReturn("http://storage.local/get?sig=test");
   }
 
   @Test
-  void hrSeesOnlyTheirOwnOnboardedEmployeeRecord() throws Exception {
+  void hrOpensTheirOwnEmployeeRecordByIdCrossAccessDenied() throws Exception {
     MvcResult res =
-        mvc.perform(get("/employees/" + emp.getEmployeeCode()).header("Authorization", "Bearer " + hr1Token))
+        mvc.perform(get("/employees/" + emp.getId() + "/record").header("Authorization", "Bearer " + hr1Token))
             .andExpect(status().isOk())
             .andReturn();
     JsonNode body = json.readTree(res.getResponse().getContentAsString());
-    assertThat(body.get("employeeCode").asText()).isEqualTo("AAA-EMP-000001");
+    assertThat(body.get("id").asText()).isEqualTo(emp.getId());
+    assertThat(body.get("employeeCode").isNull()).isTrue(); // no code pre-approval (§5)
+    assertThat(body.get("fullName").asText()).isEqualTo("Evan Stone");
+    assertThat(body.get("designation").asText()).isEqualTo("Software Engineer");
+    assertThat(body.get("dateOfJoining").asText()).isEqualTo("2026-07-01");
     assertThat(body.get("status").asText()).isEqualTo("SUBMITTED");
     assertThat(body.get("reviewComplete").asBoolean()).isFalse();
     assertThat(body.get("sections")).hasSize(2);
@@ -115,11 +122,28 @@ class ReviewApiTest {
 
     // Cross-HR (same company, different onboarder) and cross-company are both denied.
     String hr2 = tokenFor(user(companyA, UserRole.HR, "hr2@acme.test"));
-    mvc.perform(get("/employees/" + emp.getEmployeeCode()).header("Authorization", "Bearer " + hr2))
+    mvc.perform(get("/employees/" + emp.getId() + "/record").header("Authorization", "Bearer " + hr2))
         .andExpect(status().isNotFound());
     String companyB = company("BBB");
     String hr3 = tokenFor(user(companyB, UserRole.HR, "hr3@beta.test"));
-    mvc.perform(get("/employees/" + emp.getEmployeeCode()).header("Authorization", "Bearer " + hr3))
+    mvc.perform(get("/employees/" + emp.getId() + "/record").header("Authorization", "Bearer " + hr3))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void lookupByCodeFindsApprovedOnly() throws Exception {
+    Employee approved = approvedEmployee(hr1.getId(), "AAA-EMP-000007");
+    MvcResult res =
+        mvc.perform(get("/employees/lookup/AAA-EMP-000007").header("Authorization", "Bearer " + hr1Token))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode body = json.readTree(res.getResponse().getContentAsString());
+    assertThat(body.get("id").asText()).isEqualTo(approved.getId());
+    assertThat(body.get("employeeCode").asText()).isEqualTo("AAA-EMP-000007");
+    assertThat(body.get("status").asText()).isEqualTo("APPROVED");
+
+    // A pre-approval / unknown code is not found (the submitted emp has no code, so isn't findable here).
+    mvc.perform(get("/employees/lookup/AAA-EMP-999999").header("Authorization", "Bearer " + hr1Token))
         .andExpect(status().isNotFound());
   }
 
@@ -128,7 +152,7 @@ class ReviewApiTest {
     String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
 
     // Routing is rejected until everything is verified.
-    mvc.perform(post("/employees/" + emp.getEmployeeCode() + "/route-to-manager")
+    mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
             .header("Authorization", "Bearer " + hr1Token))
         .andExpect(status().isBadRequest());
 
@@ -142,7 +166,7 @@ class ReviewApiTest {
 
     // Route to the team's Manager.
     MvcResult routed =
-        mvc.perform(post("/employees/" + emp.getEmployeeCode() + "/route-to-manager")
+        mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
                 .header("Authorization", "Bearer " + hr1Token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("note", "Looks good"))))
@@ -170,12 +194,12 @@ class ReviewApiTest {
         .satisfies(r -> assertThat(r.getCompanyId()).isEqualTo(companyA));
 
     // Locked after routing: review + re-route are rejected.
-    mvc.perform(patch("/employees/" + emp.getEmployeeCode() + "/sections/PERSONAL")
+    mvc.perform(patch("/employees/" + emp.getId() + "/sections/PERSONAL")
             .header("Authorization", "Bearer " + hr1Token)
             .contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(Map.of("decision", "VERIFIED"))))
         .andExpect(status().isConflict());
-    mvc.perform(post("/employees/" + emp.getEmployeeCode() + "/route-to-manager")
+    mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
             .header("Authorization", "Bearer " + hr1Token))
         .andExpect(status().isConflict());
   }
@@ -193,7 +217,7 @@ class ReviewApiTest {
         .singleElement()
         .satisfies(r -> assertThat(r.getMetadata()).containsEntry("reason", "Scan is blurry"));
 
-    mvc.perform(post("/employees/" + emp.getEmployeeCode() + "/route-to-manager")
+    mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
             .header("Authorization", "Bearer " + hr1Token))
         .andExpect(status().isBadRequest());
   }
@@ -202,7 +226,7 @@ class ReviewApiTest {
 
   private void review(String pathSuffix, String decision, String reason) throws Exception {
     var body = reason == null ? Map.of("decision", decision) : Map.of("decision", decision, "reason", reason);
-    mvc.perform(patch("/employees/" + emp.getEmployeeCode() + "/" + pathSuffix)
+    mvc.perform(patch("/employees/" + emp.getId() + "/" + pathSuffix)
             .header("Authorization", "Bearer " + hr1Token)
             .contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(body)))
@@ -211,7 +235,7 @@ class ReviewApiTest {
 
   private MvcResult reviewDoc(String docId, String decision, String reason) throws Exception {
     var body = reason == null ? Map.of("decision", decision) : Map.of("decision", decision, "reason", reason);
-    return mvc.perform(patch("/employees/" + emp.getEmployeeCode() + "/documents/" + docId)
+    return mvc.perform(patch("/employees/" + emp.getId() + "/documents/" + docId)
             .header("Authorization", "Bearer " + hr1Token)
             .contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(body)))
@@ -244,13 +268,16 @@ class ReviewApiTest {
     teams.save(t);
   }
 
-  private Employee submittedEmployee(String hrId, String code) {
+  private Employee submittedEmployee(String hrId) {
     Employee e = new Employee();
-    e.setEmployeeCode(code);
+    e.setFullName("Evan Stone");
     e.setEmail("evan@personal.test");
+    e.setDesignation("Software Engineer");
+    e.setDateOfJoining(LocalDate.parse("2026-07-01"));
     e.setCompanyId(companyA);
     e.setOnboardingHrId(hrId);
     e.setStatus(EmployeeStatus.SUBMITTED);
+    // no employeeCode — allocated on approval (§5)
     employees.save(e);
 
     section(e.getId(), SectionKey.PERSONAL, Map.of("fullName", "Evan Stone"));
@@ -267,6 +294,18 @@ class ReviewApiTest {
     d.setStatus(DocumentStatus.UPLOADED);
     documents.save(d);
     return e;
+  }
+
+  private Employee approvedEmployee(String hrId, String code) {
+    Employee e = new Employee();
+    e.setEmployeeCode(code);
+    e.setFullName("Approved Person");
+    e.setEmail("approved-" + code.toLowerCase() + "@personal.test");
+    e.setDesignation("Engineer");
+    e.setCompanyId(companyA);
+    e.setOnboardingHrId(hrId);
+    e.setStatus(EmployeeStatus.APPROVED);
+    return employees.save(e);
   }
 
   private void section(String employeeId, SectionKey key, Map<String, Object> data) {

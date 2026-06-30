@@ -7,7 +7,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, UserPlus } from 'lucide-react';
 import {
   OnboardEmployeeSchema,
-  type EmployeeSummary,
   type OnboardEmployeeInput,
   type OnboardEmployeeResult,
 } from '@/lib/contract';
@@ -25,10 +24,6 @@ import {
 import { Input } from '@/components/ui/input';
 
 const EMPLOYEES_KEY = ['hr-employees'] as const;
-
-interface OptimisticContext {
-  prev?: EmployeeSummary[];
-}
 
 export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
@@ -48,30 +43,7 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
 
   const mutation = useApiMutation((body: OnboardEmployeeInput) => onboardEmployee(body), {
     successMessage: (data) => `${data.employee.fullName} onboarded`,
-    // Optimistic insert (no ID yet — it's assigned on approval), replaced when the list refetches.
-    onMutate: async (vars): Promise<OptimisticContext> => {
-      await queryClient.cancelQueries({ queryKey: EMPLOYEES_KEY });
-      const prev = queryClient.getQueryData<EmployeeSummary[]>(EMPLOYEES_KEY);
-      const optimistic: EmployeeSummary = {
-        id: `optimistic-${vars.email}`,
-        employeeCode: null,
-        fullName: vars.fullName,
-        email: vars.email,
-        designation: vars.designation,
-        dateOfJoining: vars.dateOfJoining,
-        status: 'INVITED',
-        createdAt: new Date().toISOString(),
-      };
-      queryClient.setQueryData<EmployeeSummary[]>(EMPLOYEES_KEY, (old) =>
-        old ? [optimistic, ...old] : [optimistic],
-      );
-      return { prev };
-    },
-    onError: (error, _vars, context) => {
-      const ctx = context as OptimisticContext | undefined;
-      if (ctx?.prev) {
-        queryClient.setQueryData(EMPLOYEES_KEY, ctx.prev);
-      }
+    onError: (error) => {
       if (error.status === 400 || error.status === 409) {
         setError('email', { message: error.message });
       }
@@ -80,6 +52,7 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
       setResult(data);
       reset();
     },
+    // Refresh the HR queue (any filter/page).
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY });
     },

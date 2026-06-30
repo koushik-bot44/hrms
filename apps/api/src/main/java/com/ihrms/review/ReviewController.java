@@ -20,8 +20,10 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * HR verification & routing workspace (contract §3.3/§3.4). HR-only (URL rule + @PreAuthorize);
- * every operation is scoped to the acting HR's own onboarded employees.
+ * HR verification & routing workspace (contract §3.3/§3.4). HR-only (URL rule + @PreAuthorize); every
+ * operation is scoped to the acting HR's own onboarded employees. The verification entry + actions key
+ * off the INTERNAL employee id (pre-approval employees have no code); {@code /lookup/{code}} is the
+ * §3.4 post-approval records lookup by employee ID (only approved employees have a code).
  */
 @RestController
 @RequestMapping("/employees")
@@ -34,41 +36,49 @@ public class ReviewController {
     this.review = review;
   }
 
-  @GetMapping("/{employeeCode}")
+  @GetMapping("/{id}/record")
   public EmployeeRecordView record(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return review.getRecord(actor, id, request.getRemoteAddr());
+  }
+
+  @GetMapping("/lookup/{employeeCode}")
+  public EmployeeRecordView lookup(
       @PathVariable String employeeCode,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return review.getRecord(actor, employeeCode, request.getRemoteAddr());
+    return review.lookupByCode(actor, employeeCode, request.getRemoteAddr());
   }
 
-  @PatchMapping("/{employeeCode}/sections/{key}")
+  @PatchMapping("/{id}/sections/{key}")
   public EmployeeRecordView reviewSection(
-      @PathVariable String employeeCode,
+      @PathVariable String id,
       @PathVariable String key,
       @Valid @RequestBody ReviewRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return review.reviewSection(actor, employeeCode, key, body, request.getRemoteAddr());
+    return review.reviewSection(actor, id, key, body, request.getRemoteAddr());
   }
 
-  @PatchMapping("/{employeeCode}/documents/{documentId}")
+  @PatchMapping("/{id}/documents/{documentId}")
   public EmployeeRecordView reviewDocument(
-      @PathVariable String employeeCode,
+      @PathVariable String id,
       @PathVariable String documentId,
       @Valid @RequestBody ReviewRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return review.reviewDocument(actor, employeeCode, documentId, body, request.getRemoteAddr());
+    return review.reviewDocument(actor, id, documentId, body, request.getRemoteAddr());
   }
 
-  @PostMapping("/{employeeCode}/route-to-manager")
+  @PostMapping("/{id}/route-to-manager")
   @ResponseStatus(HttpStatus.CREATED)
   public RouteToManagerResult routeToManager(
-      @PathVariable String employeeCode,
+      @PathVariable String id,
       @Valid @RequestBody(required = false) RouteToManagerRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return review.routeToManager(actor, employeeCode, body, request.getRemoteAddr());
+    return review.routeToManager(actor, id, body, request.getRemoteAddr());
   }
 }

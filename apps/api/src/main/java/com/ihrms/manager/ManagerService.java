@@ -254,8 +254,12 @@ public class ManagerService {
             && secs.stream().allMatch(s -> s.getStatus() == SectionStatus.VERIFIED)
             && docs.stream().allMatch(d -> d.getStatus() == DocumentStatus.VERIFIED);
     return new EmployeeRecordView(
+        employee.getId(),
         employee.getEmployeeCode(),
+        employee.getFullName(),
         employee.getEmail(),
+        employee.getDesignation(),
+        employee.getDateOfJoining() == null ? null : employee.getDateOfJoining().toString(),
         employee.getStatus(),
         complete,
         secs.stream().map(ManagerService::recordSection).toList(),

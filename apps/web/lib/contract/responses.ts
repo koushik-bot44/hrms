@@ -81,6 +81,11 @@ export type OnboardEmployeeResult = Omit<
   employee: EmployeeSummary;
 };
 
+/** A page of the HR's onboarding queue. */
+export type EmployeePage = Omit<Required<Schemas['EmployeePage']>, 'content'> & {
+  content: EmployeeSummary[];
+};
+
 // --- Employee onboarding (§3.6) -------------------------------------------
 
 export type ProfileSectionDto = Omit<Required<Schemas['ProfileSectionView']>, 'data'> & {
@@ -115,8 +120,11 @@ export type RecordDocument = Omit<Required<Schemas['RecordDocument']>, 'sha256'>
 
 export type EmployeeRecord = Omit<
   Required<Schemas['EmployeeRecordView']>,
-  'sections' | 'documents'
+  'sections' | 'documents' | 'employeeCode' | 'dateOfJoining'
 > & {
+  // employeeCode is null until approval (§5); dateOfJoining may be absent on legacy rows.
+  employeeCode: string | null;
+  dateOfJoining: string | null;
   sections: RecordSection[];
   documents: RecordDocument[];
 };

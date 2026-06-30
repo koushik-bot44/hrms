@@ -99,8 +99,8 @@ class EmployeesApiTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString());
-    assertThat(arr).hasSize(2);
-    assertThat(arr.get(0).get("email").asText()).isEqualTo("sam@personal.test");
+    assertThat(arr.get("content")).hasSize(2);
+    assertThat(arr.get("content").get(0).get("email").asText()).isEqualTo("sam@personal.test");
 
     assertThat(auditLogs.findByAction("EMPLOYEE_ONBOARDED"))
         .hasSize(2)
@@ -129,13 +129,43 @@ class EmployeesApiTest {
         mvc.perform(get("/employees").header("Authorization", "Bearer " + hrToken))
             .andExpect(status().isOk())
             .andReturn();
-    assertThat(json.readTree(mineList.getResponse().getContentAsString())).hasSize(1);
+    assertThat(json.readTree(mineList.getResponse().getContentAsString()).get("content")).hasSize(1);
 
     MvcResult othersList =
         mvc.perform(get("/employees").header("Authorization", "Bearer " + otherToken))
             .andExpect(status().isOk())
             .andReturn();
-    assertThat(json.readTree(othersList.getResponse().getContentAsString())).isEmpty();
+    assertThat(json.readTree(othersList.getResponse().getContentAsString()).get("content")).isEmpty();
+  }
+
+  @Test
+  void queueSupportsSearchAndStatusFilter() throws Exception {
+    mvc.perform(asHr("Alice Wonder", "alice@personal.test")).andExpect(status().isCreated());
+    mvc.perform(asHr("Bob Builder", "bob@personal.test")).andExpect(status().isCreated());
+
+    // Name search (case-insensitive substring).
+    JsonNode byName = queue(get("/employees").param("search", "alice"));
+    assertThat(byName.get("content")).hasSize(1);
+    assertThat(byName.get("content").get(0).get("fullName").asText()).isEqualTo("Alice Wonder");
+
+    // Email search.
+    assertThat(queue(get("/employees").param("search", "bob@")).get("content")).hasSize(1);
+
+    // Status filter: both are INVITED; APPROVED matches none.
+    JsonNode invited = queue(get("/employees").param("status", "INVITED"));
+    assertThat(invited.get("content")).hasSize(2);
+    assertThat(invited.get("totalElements").asInt()).isEqualTo(2);
+    assertThat(queue(get("/employees").param("status", "APPROVED")).get("content")).isEmpty();
+  }
+
+  private JsonNode queue(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder req)
+      throws Exception {
+    return json.readTree(
+        mvc.perform(req.header("Authorization", "Bearer " + hrToken))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
   }
 
   @Test

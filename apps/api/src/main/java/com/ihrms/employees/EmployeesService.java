@@ -10,14 +10,21 @@ import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.employees.dto.EmployeeDtos.EmployeePage;
 import com.ihrms.employees.dto.EmployeeDtos.EmployeeSummaryView;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeRequest;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeResult;
+import jakarta.persistence.criteria.Predicate;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -95,14 +102,38 @@ public class EmployeesService {
     return new OnboardEmployeeResult(summary(employee), loginUrl);
   }
 
-  /** Employees this HR onboarded, within their company (§6). */
-  public List<EmployeeSummaryView> listMine(IhrmsPrincipal.User actor) {
+  /**
+   * The HR's onboarding queue: their onboarded employees within their company (§6), with optional
+   * name/email search and status filter, paginated. This is how HR reaches in-flight employees —
+   * they have no employee ID yet (allocated on approval, §5).
+   */
+  public EmployeePage queue(
+      IhrmsPrincipal.User actor, String search, EmployeeStatus status, Pageable pageable) {
     String companyId = companyOf(actor);
-    return employees
-        .findByCompanyIdAndOnboardingHrIdOrderByCreatedAtDesc(companyId, actor.userId())
-        .stream()
-        .map(EmployeesService::summary)
-        .toList();
+    Specification<Employee> spec =
+        (root, q, cb) -> {
+          List<Predicate> p = new ArrayList<>();
+          p.add(cb.equal(root.get("companyId"), companyId));
+          p.add(cb.equal(root.get("onboardingHrId"), actor.userId())); // own onboarded only (§6)
+          if (status != null) {
+            p.add(cb.equal(root.get("status"), status));
+          }
+          if (search != null && !search.isBlank()) {
+            String like = "%" + search.trim().toLowerCase() + "%";
+            p.add(
+                cb.or(
+                    cb.like(cb.lower(root.get("fullName")), like),
+                    cb.like(cb.lower(root.get("email")), like)));
+          }
+          return cb.and(p.toArray(new Predicate[0]));
+        };
+    Page<Employee> page = employees.findAll(spec, pageable);
+    return new EmployeePage(
+        page.getContent().stream().map(EmployeesService::summary).toList(),
+        page.getNumber(),
+        page.getSize(),
+        page.getTotalElements(),
+        page.getTotalPages());
   }
 
   private static EmployeeSummaryView summary(Employee e) {

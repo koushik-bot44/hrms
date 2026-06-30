@@ -1,17 +1,17 @@
 import type { Metadata } from 'next';
 import { PageHeader } from '@/components/page-header';
-import { VerificationWorkspace } from '@/components/hr/verification-workspace';
+import { EmployeeLookup } from '@/components/hr/employee-lookup';
 
-export const metadata: Metadata = { title: 'Verification' };
+export const metadata: Metadata = { title: 'Look up by ID' };
 
-export default function HrVerificationPage() {
+export default function HrLookupPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Verification"
-        description="Look up an employee by ID, review their submitted sections and documents, then route to the Manager."
+        title="Look up by Employee ID"
+        description="Find an approved employee by their ID and view their full record (read-only)."
       />
-      <VerificationWorkspace />
+      <EmployeeLookup />
     </div>
   );
 }

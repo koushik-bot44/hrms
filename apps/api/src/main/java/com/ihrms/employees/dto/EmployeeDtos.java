@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.List;
 
 /** Employee-onboarding request/response DTOs — JSON shapes match api-contract.md §3.5. */
 public final class EmployeeDtos {
@@ -38,4 +39,8 @@ public final class EmployeeDtos {
 
   /** {@code { employee, loginUrl }} — the new record plus the login link that was emailed. */
   public record OnboardEmployeeResult(EmployeeSummaryView employee, String loginUrl) {}
+
+  /** A page of the HR's onboarding queue (their onboarded employees, filtered + paginated). */
+  public record EmployeePage(
+      List<EmployeeSummaryView> content, int page, int size, long totalElements, int totalPages) {}
 }

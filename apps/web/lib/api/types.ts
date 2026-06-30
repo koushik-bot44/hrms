@@ -212,7 +212,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/employees/{employeeCode}/route-to-manager": {
+    "/employees/{id}/route-to-manager": {
         parameters: {
             query?: never;
             header?: never;
@@ -356,7 +356,7 @@ export interface paths {
         patch: operations["update"];
         trace?: never;
     };
-    "/employees/{employeeCode}/sections/{key}": {
+    "/employees/{id}/sections/{key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -372,7 +372,7 @@ export interface paths {
         patch: operations["reviewSection"];
         trace?: never;
     };
-    "/employees/{employeeCode}/documents/{documentId}": {
+    "/employees/{id}/documents/{documentId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -532,7 +532,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/employees/{employeeCode}": {
+    "/employees/{id}/record": {
         parameters: {
             query?: never;
             header?: never;
@@ -540,6 +540,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["record"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/lookup/{employeeCode}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["lookup"];
         put?: never;
         post?: never;
         delete?: never;
@@ -815,8 +831,12 @@ export interface components {
             reason?: string;
         };
         EmployeeRecordView: {
+            id?: string;
             employeeCode?: string;
+            fullName?: string;
             email?: string;
+            designation?: string;
+            dateOfJoining?: string;
             /** @enum {string} */
             status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             reviewComplete?: boolean;
@@ -865,6 +885,24 @@ export interface components {
             /** Format: int32 */
             expiresInSeconds?: number;
         };
+        Pageable: {
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            sort?: string[];
+        };
+        EmployeePage: {
+            content?: components["schemas"]["EmployeeSummaryView"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
         CompanySummaryView: {
             id?: string;
             name?: string;
@@ -876,13 +914,6 @@ export interface components {
             employeeCount?: number;
             hasAdmin?: boolean;
             createdAt?: string;
-        };
-        Pageable: {
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            sort?: string[];
         };
         AuditLogView: {
             id?: string;
@@ -1245,7 +1276,11 @@ export interface operations {
     };
     list_1: {
         parameters: {
-            query?: never;
+            query: {
+                search?: string;
+                status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+                pageable: components["schemas"]["Pageable"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1258,7 +1293,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["EmployeeSummaryView"][];
+                    "*/*": components["schemas"]["EmployeePage"];
                 };
             };
         };
@@ -1292,7 +1327,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employeeCode: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -1574,7 +1609,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employeeCode: string;
+                id: string;
                 key: string;
             };
             cookie?: never;
@@ -1601,7 +1636,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employeeCode: string;
+                id: string;
                 documentId: string;
             };
             cookie?: never;
@@ -1840,6 +1875,28 @@ export interface operations {
         };
     };
     record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
+    lookup: {
         parameters: {
             query?: never;
             header?: never;

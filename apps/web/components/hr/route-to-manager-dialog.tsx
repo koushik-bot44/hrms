@@ -22,13 +22,13 @@ import {
 } from '@/components/ui/dialog';
 
 interface Props {
-  employeeCode: string;
+  employeeId: string;
   disabled: boolean;
   onRouted: (result: RouteToManagerResult) => void;
 }
 
 /** Confirm dialog for routing a fully-verified record to the team's Manager (§3.3). */
-export function RouteToManagerDialog({ employeeCode, disabled, onRouted }: Props) {
+export function RouteToManagerDialog({ employeeId, disabled, onRouted }: Props) {
   const [open, setOpen] = React.useState(false);
   const {
     register,
@@ -40,7 +40,7 @@ export function RouteToManagerDialog({ employeeCode, disabled, onRouted }: Props
     defaultValues: { note: '' },
   });
 
-  const mutation = useApiMutation((body: RouteToManagerInput) => routeToManager(employeeCode, body), {
+  const mutation = useApiMutation((body: RouteToManagerInput) => routeToManager(employeeId, body), {
     successMessage: (result) =>
       result.managerName
         ? `Routed to ${result.managerName} for approval`

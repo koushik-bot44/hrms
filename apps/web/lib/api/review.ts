@@ -6,39 +6,40 @@ import type {
 } from '@/lib/contract';
 import { apiFetch } from './client';
 
-/** §3.4 lookup: the employee's full record (sections + documents with presigned view URLs). */
-export function getEmployeeRecord(employeeCode: string, signal?: AbortSignal): Promise<EmployeeRecord> {
-  return apiFetch<EmployeeRecord>(`/employees/${encodeURIComponent(employeeCode)}`, { signal });
+/** Open an employee's record by INTERNAL id — the verification entry (pre-approval has no code). */
+export function getEmployeeRecord(id: string, signal?: AbortSignal): Promise<EmployeeRecord> {
+  return apiFetch<EmployeeRecord>(`/employees/${encodeURIComponent(id)}/record`, { signal });
 }
 
-export function reviewSection(
+/** §3.4 records lookup by employee ID (code) — resolves approved employees only. */
+export function lookupEmployeeByCode(
   employeeCode: string,
-  key: string,
-  body: ReviewInput,
+  signal?: AbortSignal,
 ): Promise<EmployeeRecord> {
+  return apiFetch<EmployeeRecord>(`/employees/lookup/${encodeURIComponent(employeeCode)}`, { signal });
+}
+
+export function reviewSection(id: string, key: string, body: ReviewInput): Promise<EmployeeRecord> {
   return apiFetch<EmployeeRecord>(
-    `/employees/${encodeURIComponent(employeeCode)}/sections/${encodeURIComponent(key)}`,
+    `/employees/${encodeURIComponent(id)}/sections/${encodeURIComponent(key)}`,
     { method: 'PATCH', body },
   );
 }
 
 export function reviewDocument(
-  employeeCode: string,
+  id: string,
   documentId: string,
   body: ReviewInput,
 ): Promise<EmployeeRecord> {
   return apiFetch<EmployeeRecord>(
-    `/employees/${encodeURIComponent(employeeCode)}/documents/${encodeURIComponent(documentId)}`,
+    `/employees/${encodeURIComponent(id)}/documents/${encodeURIComponent(documentId)}`,
     { method: 'PATCH', body },
   );
 }
 
-export function routeToManager(
-  employeeCode: string,
-  body: RouteToManagerInput,
-): Promise<RouteToManagerResult> {
+export function routeToManager(id: string, body: RouteToManagerInput): Promise<RouteToManagerResult> {
   return apiFetch<RouteToManagerResult>(
-    `/employees/${encodeURIComponent(employeeCode)}/route-to-manager`,
+    `/employees/${encodeURIComponent(id)}/route-to-manager`,
     { method: 'POST', body },
   );
 }

@@ -47,10 +47,17 @@ public final class ReviewDtos {
       String uploadedAt,
       String viewUrl) {}
 
-  /** The full employee record HR reviews; {@code reviewComplete} gates routing to the Manager. */
+  /**
+   * The full employee record HR reviews — the four intake fields + sections + documents.
+   * {@code reviewComplete} gates routing to the Manager; {@code employeeCode} is null until approval.
+   */
   public record EmployeeRecordView(
+      String id,
       String employeeCode,
+      String fullName,
       String email,
+      String designation,
+      String dateOfJoining,
       EmployeeStatus status,
       boolean reviewComplete,
       List<RecordSection> sections,
