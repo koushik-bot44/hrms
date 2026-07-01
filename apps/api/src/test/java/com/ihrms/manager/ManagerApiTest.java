@@ -1,6 +1,10 @@
 package com.ihrms.manager;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -27,6 +31,7 @@ import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.EmployeeCodes;
+import com.ihrms.storage.StorageService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +44,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -66,6 +72,9 @@ class ManagerApiTest {
   @Autowired JdbcTemplate jdbc;
   @Autowired ManagerService managerService;
 
+  // Approving now regenerates the onboarding PDFs, so storage is mocked (DB-only test).
+  @MockBean StorageService storage;
+
   private String companyA;
   private User hr1;
   private User manager1;
@@ -79,8 +88,8 @@ class ManagerApiTest {
   @BeforeEach
   void setup() {
     jdbc.execute(
-        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\",\"profile_sections\","
-            + "\"documents\",\"approval_requests\",\"notifications\",\"audit_logs\","
+        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\","
+            + "\"form1_personal\",\"form2_info\",\"form3_prev_employment\",\"documents\",\"signatures\",\"generated_documents\",\"approval_requests\",\"notifications\",\"audit_logs\","
             + "\"employee_code_sequences\" RESTART IDENTITY CASCADE");
     companyA = company("AAA");
     hr1 = user(companyA, UserRole.HR, "hr1@a.test");
@@ -113,6 +122,10 @@ class ManagerApiTest {
     notification.setType(NotificationType.APPROVAL_REQUESTED);
     notification.setEmployeeId(employee.getId());
     notifications.save(notification);
+
+    when(storage.buildKey(anyString(), anyString(), anyString(), anyString()))
+        .thenReturn("companies/x/employees/e/generated/obj");
+    when(storage.presignedGetUrl(any(), anyInt())).thenReturn("http://storage.local/get?sig=test");
   }
 
   @Test
@@ -282,7 +295,7 @@ class ManagerApiTest {
     assertThat(body.get("employeeCode").isNull()).isTrue(); // viewed pre-approval -> no ID yet
     assertThat(body.get("fullName").asText()).isEqualTo("Evan Stone");
     assertThat(body.get("email").asText()).isEqualTo("evan@personal.test");
-    assertThat(body.get("sections")).isEmpty();
+    assertThat(body.get("form1").isNull()).isTrue(); // no forms filled in this fixture
     assertThat(body.get("documents")).isEmpty();
     // A sensitive read -> audited.
     assertThat(auditLogs.findByAction("EMPLOYEE_RECORD_VIEWED")).isNotEmpty();

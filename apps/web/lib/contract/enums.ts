@@ -24,13 +24,7 @@ export const EmployeeStatus = {
 } as const;
 export type EmployeeStatus = (typeof EmployeeStatus)[keyof typeof EmployeeStatus];
 
-export const SectionKey = {
-  PERSONAL: 'PERSONAL',
-  BACKGROUND: 'BACKGROUND',
-  GOVERNMENT: 'GOVERNMENT',
-} as const;
-export type SectionKey = (typeof SectionKey)[keyof typeof SectionKey];
-
+/** Status of each form (Form 1/2/3) and review item. */
 export const SectionStatus = {
   DRAFT: 'DRAFT',
   SUBMITTED: 'SUBMITTED',
@@ -39,14 +33,35 @@ export const SectionStatus = {
 } as const;
 export type SectionStatus = (typeof SectionStatus)[keyof typeof SectionStatus];
 
+/** Form 4 document slots. The per-employment slots carry a groupIndex (1..4). */
 export const DocumentType = {
-  EXPERIENCE_LETTER: 'EXPERIENCE_LETTER',
-  PAN: 'PAN',
+  SECONDARY: 'SECONDARY',
+  INTERMEDIATE: 'INTERMEDIATE',
+  DIPLOMA: 'DIPLOMA',
+  GRADUATION: 'GRADUATION',
+  POST_GRADUATION: 'POST_GRADUATION',
+  OFFER_OR_APPOINTMENT_LETTER: 'OFFER_OR_APPOINTMENT_LETTER',
+  HIKE_LETTER: 'HIKE_LETTER',
+  RELIEVING_LETTER: 'RELIEVING_LETTER',
   AADHAAR: 'AADHAAR',
-  BGV_DOCUMENT: 'BGV_DOCUMENT',
+  PAN: 'PAN',
+  VOTER_ID: 'VOTER_ID',
+  DRIVING_LICENCE: 'DRIVING_LICENCE',
+  PASSPORT: 'PASSPORT',
   OTHER: 'OTHER',
 } as const;
 export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
+
+/** The generated onboarding PDFs (one per form + a merged complete application). */
+export const GeneratedDocumentKind = {
+  FORM1: 'FORM1',
+  FORM2: 'FORM2',
+  FORM3: 'FORM3',
+  FORM4_MANIFEST: 'FORM4_MANIFEST',
+  MERGED: 'MERGED',
+} as const;
+export type GeneratedDocumentKind =
+  (typeof GeneratedDocumentKind)[keyof typeof GeneratedDocumentKind];
 
 export const DocumentStatus = {
   PENDING: 'PENDING',
@@ -79,10 +94,10 @@ export type NotificationType = (typeof NotificationType)[keyof typeof Notificati
 export const SHARED_ENUMS = {
   UserRole,
   EmployeeStatus,
-  SectionKey,
   SectionStatus,
   DocumentType,
   DocumentStatus,
+  GeneratedDocumentKind,
   ApprovalStatus,
   NotificationType,
 } as const;

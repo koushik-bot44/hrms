@@ -139,6 +139,13 @@ public class S3StorageBackend implements StorageBackend {
   }
 
   @Override
+  public void putObject(String key, byte[] bytes, String contentType) {
+    PutObjectRequest put =
+        PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build();
+    requireClient().putObject(put, software.amazon.awssdk.core.sync.RequestBody.fromBytes(bytes));
+  }
+
+  @Override
   public byte[] getObjectBytes(String key) {
     ResponseBytes<GetObjectResponse> bytes =
         requireClient().getObjectAsBytes(b -> b.bucket(bucket).key(key));

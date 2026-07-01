@@ -5,22 +5,16 @@ import com.ihrms.audit.AuditService;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
 import com.ihrms.domain.enums.ApprovalStatus;
-import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.NotificationType;
-import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.model.ApprovalRequest;
 import com.ihrms.domain.model.Company;
-import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Notification;
-import com.ihrms.domain.model.ProfileSection;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
 import com.ihrms.domain.repository.CompanyRepository;
-import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.NotificationRepository;
-import com.ihrms.domain.repository.ProfileSectionRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.EmployeeCodeService;
 import com.ihrms.domain.support.EmployeeCodes;
@@ -28,10 +22,9 @@ import com.ihrms.manager.dto.ManagerDtos.ApprovalView;
 import com.ihrms.manager.dto.ManagerDtos.NotificationFeed;
 import com.ihrms.manager.dto.ManagerDtos.NotificationView;
 import com.ihrms.manager.dto.ManagerDtos.RejectApprovalRequest;
+import com.ihrms.onboarding.PdfService;
+import com.ihrms.review.EmployeeRecordAssembler;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
-import com.ihrms.review.dto.ReviewDtos.RecordDocument;
-import com.ihrms.review.dto.ReviewDtos.RecordSection;
-import com.ihrms.storage.StorageService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -41,25 +34,22 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Manager inbox (ARCHITECTURE.md §2/§3.3): the Manager's own notifications + the pending approvals
- * routed to their team. Approving an employee is the final step in v1. Everything is scoped to the
- * acting Manager (recipientUserId / managerUserId == self — the §6 tenancy filter); decisions are
- * audited and notify the originating HR.
+ * Manager inbox (§2/§3.3): the Manager's own notifications + the pending approvals routed to their
+ * team. Approving an employee is the final step in v1 — it MINTS the unique employee ID (§5) and
+ * regenerates the onboarding PDFs so the ID appears on them. Everything is scoped to the acting
+ * Manager; decisions are audited and notify the originating HR.
  */
 @Service
 public class ManagerService {
-
-  private static final int VIEW_TTL_SECONDS = 60; // presigned GET (short-lived, audited download)
 
   private final NotificationRepository notifications;
   private final ApprovalRequestRepository approvals;
   private final EmployeeRepository employees;
   private final UserRepository users;
   private final CompanyRepository companies;
-  private final ProfileSectionRepository sections;
-  private final DocumentRepository documents;
   private final EmployeeCodeService codes;
-  private final StorageService storage;
+  private final PdfService pdf;
+  private final EmployeeRecordAssembler assembler;
   private final MailService mail;
   private final AuditService audit;
 
@@ -69,10 +59,9 @@ public class ManagerService {
       EmployeeRepository employees,
       UserRepository users,
       CompanyRepository companies,
-      ProfileSectionRepository sections,
-      DocumentRepository documents,
       EmployeeCodeService codes,
-      StorageService storage,
+      PdfService pdf,
+      EmployeeRecordAssembler assembler,
       MailService mail,
       AuditService audit) {
     this.notifications = notifications;
@@ -80,10 +69,9 @@ public class ManagerService {
     this.employees = employees;
     this.users = users;
     this.companies = companies;
-    this.sections = sections;
-    this.documents = documents;
     this.codes = codes;
-    this.storage = storage;
+    this.pdf = pdf;
+    this.assembler = assembler;
     this.mail = mail;
     this.audit = audit;
   }
@@ -137,9 +125,9 @@ public class ManagerService {
   }
 
   /**
-   * The employee record behind one of the Manager's approvals (sections + documents with short-lived
-   * view URLs) so they can review what HR verified before deciding. Scoped to the Manager's own
-   * approvals (404 otherwise); a sensitive read, so it's audited.
+   * The employee record behind one of the Manager's approvals (the four forms + uploads + generated
+   * PDFs, sensitive values masked) so they can review what HR verified before deciding. Scoped to the
+   * Manager's own approvals (404 otherwise); a sensitive read, so it's audited.
    */
   public EmployeeRecordView recordForApproval(IhrmsPrincipal.User manager, String approvalId) {
     ApprovalRequest approval =
@@ -157,7 +145,7 @@ public class ManagerService {
         employee.getId(),
         Map.<String, Object>of("email", employee.getEmail(), "approvalRequestId", approval.getId()),
         null);
-    return buildRecord(employee);
+    return assembler.build(employee);
   }
 
   @Transactional
@@ -177,6 +165,9 @@ public class ManagerService {
     }
     employee.setStatus(EmployeeStatus.APPROVED);
     employees.save(employee);
+
+    // Regenerate the PDFs so the freshly-minted employee ID is stamped onto them.
+    pdf.generateForEmployee(employee);
 
     notifyHr(approval, NotificationType.EMPLOYEE_APPROVED);
     mail.sendEmployeeWelcome(employee.getEmail(), employee.getFullName(), employee.getEmployeeCode());
@@ -285,51 +276,6 @@ public class ManagerService {
         employee == null ? null : employee.getDesignation(),
         employee == null ? null : employee.getStatus(),
         hrName);
-  }
-
-  private EmployeeRecordView buildRecord(Employee employee) {
-    List<ProfileSection> secs = sections.findByEmployeeIdOrderByKeyAsc(employee.getId());
-    List<Document> docs =
-        documents.findByEmployeeIdOrderByUploadedAtDesc(employee.getId()).stream()
-            .filter(d -> d.getStatus() != DocumentStatus.PENDING)
-            .toList();
-    boolean complete =
-        employee.getStatus() == EmployeeStatus.SUBMITTED
-            && !secs.isEmpty()
-            && secs.stream().allMatch(s -> s.getStatus() == SectionStatus.VERIFIED)
-            && docs.stream().allMatch(d -> d.getStatus() == DocumentStatus.VERIFIED);
-    return new EmployeeRecordView(
-        employee.getId(),
-        employee.getEmployeeCode(),
-        employee.getFullName(),
-        employee.getEmail(),
-        employee.getDesignation(),
-        employee.getDateOfJoining() == null ? null : employee.getDateOfJoining().toString(),
-        employee.getStatus(),
-        complete,
-        secs.stream().map(ManagerService::recordSection).toList(),
-        docs.stream().map(this::recordDocument).toList());
-  }
-
-  private static RecordSection recordSection(ProfileSection s) {
-    return new RecordSection(
-        s.getKey(),
-        s.getData() == null ? Map.of() : s.getData(),
-        s.getStatus(),
-        s.getUpdatedAt().toString());
-  }
-
-  private RecordDocument recordDocument(Document d) {
-    return new RecordDocument(
-        d.getId(),
-        d.getSectionKey(),
-        d.getDocType(),
-        d.getFileName(),
-        d.getMimeType(),
-        d.getSha256(),
-        d.getStatus(),
-        d.getUploadedAt().toString(),
-        storage.presignedGetUrl(d.getStorageKey(), VIEW_TTL_SECONDS));
   }
 
   private ResponseStatusException notFound(String message) {

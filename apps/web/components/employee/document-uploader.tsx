@@ -6,11 +6,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ExternalLink, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import {
-  MAX_DOCUMENTS_PER_TYPE,
+  DOCUMENT_TYPE_LABELS,
+  MAX_DOCUMENTS_PER_SLOT,
   MAX_UPLOAD_BYTES,
   type DocumentDto,
   type DocumentType,
-  type SectionKey,
 } from '@/lib/contract';
 import { deleteDocument, getDocumentViewUrl, uploadDocument } from '@/lib/api/onboarding';
 import { ApiError } from '@/lib/api/client';
@@ -19,23 +19,18 @@ import { StatusBadge } from '@/components/status-badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 
-export const DOC_TYPE_LABELS: Record<DocumentType, string> = {
-  EXPERIENCE_LETTER: 'Experience letter',
-  PAN: 'PAN card',
-  AADHAAR: 'Aadhaar',
-  BGV_DOCUMENT: 'Background verification',
-  OTHER: 'Other document',
-};
-
+/** One Form 4 upload slot (docType + optional employment groupIndex 1..4). */
 export function DocumentUploader({
-  sectionKey,
   docType,
+  groupIndex = null,
+  label,
   required,
   documents,
   disabled,
 }: {
-  sectionKey: SectionKey;
   docType: DocumentType;
+  groupIndex?: number | null;
+  label?: string;
   required?: boolean;
   documents: DocumentDto[];
   disabled?: boolean;
@@ -43,8 +38,10 @@ export function DocumentUploader({
   const queryClient = useQueryClient();
   const [progress, setProgress] = React.useState<number | null>(null);
   const [removingId, setRemovingId] = React.useState<string | null>(null);
-  const mine = documents.filter((d) => d.sectionKey === sectionKey && d.docType === docType);
-  const limitReached = mine.length >= MAX_DOCUMENTS_PER_TYPE;
+  const mine = documents.filter(
+    (d) => d.docType === docType && (d.groupIndex ?? null) === groupIndex,
+  );
+  const limitReached = mine.length >= MAX_DOCUMENTS_PER_SLOT;
 
   const onDrop = React.useCallback(
     async (accepted: File[], rejections: FileRejection[]) => {
@@ -56,7 +53,7 @@ export function DocumentUploader({
       if (!file) return;
       setProgress(0);
       try {
-        await uploadDocument(file, sectionKey, docType, setProgress);
+        await uploadDocument(file, docType, groupIndex, setProgress);
         toast.success(`${file.name} uploaded`);
         await queryClient.invalidateQueries({ queryKey: ['onboarding'] });
       } catch (error) {
@@ -65,7 +62,7 @@ export function DocumentUploader({
         setProgress(null);
       }
     },
-    [sectionKey, docType, queryClient],
+    [docType, groupIndex, queryClient],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -101,10 +98,10 @@ export function DocumentUploader({
   return (
     <div className="space-y-2">
       <span className="flex items-center gap-2 text-sm font-medium">
-        {DOC_TYPE_LABELS[docType]}
+        {label ?? DOCUMENT_TYPE_LABELS[docType]}
         {required ? <span className="text-destructive">*</span> : null}
         <span className="text-xs font-normal text-muted-foreground">
-          {mine.length}/{MAX_DOCUMENTS_PER_TYPE}
+          {mine.length}/{MAX_DOCUMENTS_PER_SLOT}
         </span>
       </span>
 
@@ -112,7 +109,7 @@ export function DocumentUploader({
         <div
           {...getRootProps()}
           className={cn(
-            'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed px-4 py-6 text-center text-sm transition-colors',
+            'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed px-4 py-5 text-center text-sm transition-colors',
             isDragActive ? 'border-primary bg-primary/5' : 'hover:border-primary/50',
             progress !== null && 'pointer-events-none opacity-70',
           )}
@@ -132,9 +129,7 @@ export function DocumentUploader({
               <span className="text-muted-foreground">
                 Drag &amp; drop or <span className="font-medium text-primary">browse</span>
               </span>
-              <span className="text-xs text-muted-foreground">
-                PDF, PNG or JPEG · max 10MB · up to {MAX_DOCUMENTS_PER_TYPE} files (e.g. front &amp; back)
-              </span>
+              <span className="text-xs text-muted-foreground">PDF, PNG or JPEG · max 10MB</span>
             </>
           )}
         </div>
@@ -142,7 +137,7 @@ export function DocumentUploader({
 
       {!disabled && limitReached ? (
         <p className="rounded-md border border-dashed px-3 py-2 text-center text-xs text-muted-foreground">
-          Maximum of {MAX_DOCUMENTS_PER_TYPE} files reached — remove one to upload a different file.
+          Maximum of {MAX_DOCUMENTS_PER_SLOT} files reached — remove one to upload a different file.
         </p>
       ) : null}
 
@@ -159,13 +154,7 @@ export function DocumentUploader({
               </span>
               <span className="flex shrink-0 items-center gap-2">
                 <StatusBadge status={doc.status} />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => view(doc.id)}
-                  aria-label="View document"
-                >
+                <Button type="button" variant="ghost" size="icon" onClick={() => view(doc.id)} aria-label="View document">
                   <ExternalLink className="size-4" />
                 </Button>
                 {!disabled ? (

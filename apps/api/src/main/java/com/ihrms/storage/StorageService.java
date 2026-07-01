@@ -48,6 +48,11 @@ public class StorageService {
     return backend.presignedGetUrl(key, expiresInSeconds);
   }
 
+  /** Server-side write of bytes (for generated PDFs + the captured signature image). */
+  public void putObject(String key, byte[] bytes, String contentType) {
+    backend.putObject(key, bytes, contentType);
+  }
+
   /** Server-side read of the stored bytes (for hashing). */
   public byte[] getObjectBytes(String key) {
     return backend.getObjectBytes(key);

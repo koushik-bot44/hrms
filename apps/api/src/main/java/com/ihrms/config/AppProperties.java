@@ -19,6 +19,7 @@ public record AppProperties(
     String refreshTokenTtl,
     String refreshCookieName,
     int otpTtl,
+    String fieldEncKey,
     Mail mail,
     S3 s3,
     Storage storage) {

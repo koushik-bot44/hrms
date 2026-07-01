@@ -1,33 +1,52 @@
 'use client';
 
-import { CheckCircle2, ExternalLink, FileText, XCircle } from 'lucide-react';
-import type { EmployeeRecord, RouteToManagerResult } from '@/lib/contract';
+import * as React from 'react';
+import { CheckCircle2, Eye, ExternalLink, FileText, XCircle } from 'lucide-react';
+import type {
+  EmployeeRecord,
+  Form1View,
+  Form2View,
+  Form3EntryView,
+  RevealedSensitive,
+  RouteToManagerResult,
+  SectionStatus,
+} from '@/lib/contract';
+import { DOCUMENT_TYPE_LABELS } from '@/lib/contract';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
 import { RouteToManagerDialog } from '@/components/hr/route-to-manager-dialog';
 
-export type ItemKind = 'section' | 'document';
-
-export function humanize(key: string): string {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
-    .replace(/^./, (c) => c.toUpperCase());
-}
+export type ItemKind = 'form' | 'document';
 
 interface RecordViewProps {
   record: EmployeeRecord;
   editable: boolean;
   busy?: boolean;
+  revealed?: RevealedSensitive | null;
+  onReveal?: () => void;
   onVerify?: (kind: ItemKind, id: string) => void;
   onReject?: (kind: ItemKind, id: string, label: string) => void;
   onRouted?: (result: RouteToManagerResult) => void;
 }
 
-/** The employee record (intake fields + sections + documents). Read-only unless editable + handlers. */
-export function RecordView({ record, editable, busy = false, onVerify, onReject, onRouted }: RecordViewProps) {
+/** The employee record: the four forms + Form 4 uploads + generated PDFs, sensitive values masked. */
+export function RecordView({
+  record,
+  editable,
+  busy = false,
+  revealed = null,
+  onReveal,
+  onVerify,
+  onReject,
+  onRouted,
+}: RecordViewProps) {
   const canAct = editable && Boolean(onVerify) && Boolean(onReject);
+  const f1 = revealed?.form1 ?? record.form1;
+  const f2 = revealed?.form2 ?? record.form2;
+  const f3 = revealed ? revealed.form3 : record.form3;
+  const f3Status = record.form3[0]?.status;
+
   return (
     <div className="space-y-5">
       <Card>
@@ -42,80 +61,88 @@ export function RecordView({ record, editable, busy = false, onVerify, onReject,
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {record.sensitiveRevealable && onReveal ? (
+              <Button type="button" variant="outline" size="sm" onClick={onReveal} disabled={Boolean(revealed)}>
+                <Eye className="size-4" />
+                {revealed ? 'Revealed' : 'Reveal sensitive'}
+              </Button>
+            ) : null}
             <StatusBadge status={record.status} />
             {editable && onRouted ? (
-              <RouteToManagerDialog
-                employeeId={record.id}
-                disabled={!record.reviewComplete}
-                onRouted={onRouted}
-              />
+              <RouteToManagerDialog employeeId={record.id} disabled={!record.reviewComplete} onRouted={onRouted} />
             ) : null}
           </div>
         </CardHeader>
         {editable && !record.reviewComplete ? (
           <CardContent className="pt-0 text-sm text-muted-foreground">
-            Verify every section and document to enable routing to the Manager.
+            Verify every form and document to enable routing to the Manager.
+          </CardContent>
+        ) : null}
+        {revealed ? (
+          <CardContent className="pt-0 text-xs text-muted-foreground">
+            Sensitive fields are shown in the clear — this reveal was recorded in the audit trail.
           </CardContent>
         ) : null}
       </Card>
 
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-muted-foreground">Sections</h3>
-        {record.sections.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No sections submitted.</p>
+      <FormCard
+        title="Form 1 — Personal Details"
+        status={f1?.status}
+        canAct={canAct}
+        busy={busy}
+        onVerify={() => onVerify?.('form', 'FORM1')}
+        onReject={() => onReject?.('form', 'FORM1', 'Form 1')}
+      >
+        {f1 ? <Form1Body form1={f1} /> : <Empty />}
+      </FormCard>
+
+      <FormCard
+        title="Form 2 — Employee Info"
+        status={f2?.status}
+        canAct={canAct}
+        busy={busy}
+        onVerify={() => onVerify?.('form', 'FORM2')}
+        onReject={() => onReject?.('form', 'FORM2', 'Form 2')}
+      >
+        {f2 ? <Form2Body form2={f2} /> : <Empty />}
+      </FormCard>
+
+      <FormCard
+        title="Form 3 — Previous Employment"
+        status={f3Status}
+        canAct={canAct && record.form3.length > 0}
+        busy={busy}
+        onVerify={() => onVerify?.('form', 'FORM3')}
+        onReject={() => onReject?.('form', 'FORM3', 'Form 3')}
+      >
+        {f3.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No previous employment declared.</p>
         ) : (
-          record.sections.map((s) => (
-            <Card key={s.key}>
-              <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-                <CardTitle className="text-base">{humanize(s.key)}</CardTitle>
-                <div className="flex items-center gap-2">
-                  <StatusBadge status={s.status} />
-                  {canAct ? (
-                    <ItemActions
-                      busy={busy}
-                      onVerify={() => onVerify?.('section', s.key)}
-                      onReject={() => onReject?.('section', s.key, humanize(s.key))}
-                    />
-                  ) : null}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {Object.keys(s.data).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No data entered.</p>
-                ) : (
-                  <dl className="divide-y divide-border">
-                    {Object.entries(s.data).map(([k, v]) => (
-                      <div key={k} className="grid grid-cols-3 gap-2 py-1.5 text-sm">
-                        <dt className="text-muted-foreground">{humanize(k)}</dt>
-                        <dd className="col-span-2 break-words">
-                          {v === null || v === '' || typeof v === 'object' ? '—' : String(v)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-              </CardContent>
-            </Card>
-          ))
+          <div className="space-y-3">
+            {f3.map((e, i) => (
+              <div key={e.id ?? i} className="rounded-md border p-3">
+                <p className="mb-2 text-sm font-semibold">Employer {i + 1}</p>
+                <Form3Body entry={e} />
+              </div>
+            ))}
+          </div>
         )}
-      </section>
+      </FormCard>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-muted-foreground">Documents</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground">Form 4 — Documents</h3>
         {record.documents.length === 0 ? (
           <p className="text-sm text-muted-foreground">No documents uploaded.</p>
         ) : (
           <div className="space-y-2">
             {record.documents.map((d) => (
-              <div
-                key={d.id}
-                className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3"
-              >
+              <div key={d.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
                 <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{d.fileName}</p>
                   <p className="text-xs text-muted-foreground">
-                    {humanize(d.docType)} · {humanize(d.sectionKey)}
+                    {DOCUMENT_TYPE_LABELS[d.docType]}
+                    {d.groupIndex ? ` · Employment ${d.groupIndex}` : ''}
                   </p>
                 </div>
                 <StatusBadge status={d.status} />
@@ -126,30 +153,186 @@ export function RecordView({ record, editable, busy = false, onVerify, onReject,
                   </Button>
                 </a>
                 {canAct ? (
-                  <ItemActions
-                    busy={busy}
-                    onVerify={() => onVerify?.('document', d.id)}
-                    onReject={() => onReject?.('document', d.id, d.fileName)}
-                  />
+                  <ItemActions busy={busy} onVerify={() => onVerify?.('document', d.id)} onReject={() => onReject?.('document', d.id, d.fileName)} />
                 ) : null}
               </div>
             ))}
           </div>
         )}
       </section>
+
+      {record.generatedDocuments.length > 0 ? (
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground">Generated PDFs</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {record.generatedDocuments.map((g) => (
+              <div key={g.id} className="flex items-center gap-3 rounded-md border p-3">
+                <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{g.fileName}</span>
+                <a href={g.viewUrl} target="_blank" rel="noreferrer">
+                  <Button type="button" variant="outline" size="sm">
+                    <ExternalLink />
+                    Open
+                  </Button>
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
 
-function ItemActions({
+function FormCard({
+  title,
+  status,
+  canAct,
   busy,
   onVerify,
   onReject,
+  children,
 }: {
+  title: string;
+  status?: SectionStatus;
+  canAct: boolean;
   busy: boolean;
   onVerify: () => void;
   onReject: () => void;
+  children: React.ReactNode;
 }) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <div className="flex items-center gap-2">
+          {status ? <StatusBadge status={status} /> : null}
+          {canAct ? <ItemActions busy={busy} onVerify={onVerify} onReject={onReject} /> : null}
+        </div>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
+const F1_FIELDS: Array<[keyof Form1View, string]> = [
+  ['name', 'Name'], ['dateOfBirth', 'Date of birth'], ['email', 'Email'], ['mobile', 'Mobile'],
+  ['designation', 'Designation'], ['offeredCtc', 'Offered CTC'], ['maritalStatus', 'Marital status'],
+  ['bloodGroup', 'Blood group'], ['city', 'City'], ['currentAddress', 'Current address'],
+  ['permanentAddress', 'Permanent address'], ['closestRelativeName', 'Closest relative'],
+  ['closestRelativePhone', 'Relative phone'], ['relationship', 'Relationship'], ['declaration', 'Declaration'],
+];
+
+function Form1Body({ form1 }: { form1: Form1View }) {
+  return (
+    <div className="space-y-4">
+      <Dl entries={F1_FIELDS.map(([k, label]) => [label, form1[k] as string | null | undefined])} />
+      <MiniTable
+        title="Educational Qualifications"
+        cols={['Qualification', 'University', 'Year', '%']}
+        rows={(form1.educationalQualifications ?? []).map((e) => [e.qualification, e.university, e.yearOfPassing, e.percentage])}
+      />
+      <MiniTable
+        title="Working Experience"
+        cols={['Organization', 'Period', 'Designation', 'Salary/CTC', 'Reason']}
+        rows={(form1.workingExperiences ?? []).map((w) => [w.organization, w.period, w.designation, w.salaryCtc, w.reasonForLeaving])}
+      />
+      <MiniTable
+        title="Family Details"
+        cols={['Name', 'Age', 'Relation', 'Occupation']}
+        rows={(form1.familyDetails ?? []).map((f) => [f.name, f.age, f.relation, f.occupation])}
+      />
+      <MiniTable
+        title="Character References"
+        cols={['Name', 'Address', 'Phone']}
+        rows={(form1.characterReferences ?? []).map((r) => [r.name, r.address, r.phone])}
+      />
+    </div>
+  );
+}
+
+const F2_FIELDS: Array<[keyof Form2View, string]> = [
+  ['fullName', 'Full name'], ['fatherName', "Father's name"], ['employeeId', 'Employee ID'],
+  ['sparkId', 'Spark ID'], ['dateOfBirth', 'Date of birth'], ['dateOfJoining', 'Date of joining'],
+  ['bloodGroup', 'Blood group'], ['mobile', 'Mobile'], ['alternateNumber', 'Alternate number'],
+  ['officialEmail', 'Official email'], ['personalEmail', 'Personal email'], ['designation', 'Designation'],
+  ['documentSubmitted', 'Documents submitted'], ['vehicleNo2W4W', 'Vehicle no'], ['panNumber', 'PAN number'],
+  ['axisAccountNumber', 'Axis account'], ['currentAddress', 'Current address'], ['permanentAddress', 'Permanent address'],
+];
+
+function Form2Body({ form2 }: { form2: Form2View }) {
+  return <Dl entries={F2_FIELDS.map(([k, label]) => [label, form2[k] as string | null | undefined])} />;
+}
+
+const F3_FIELDS: Array<[keyof Form3EntryView, string]> = [
+  ['companyName', 'Company'], ['companyAddress', 'Address'], ['dateOfJoining', 'Joined'],
+  ['dateOfRelieving', 'Relieved'], ['designation', 'Designation'], ['lastDrawnSalary', 'Last drawn salary'],
+  ['jobType', 'Job type'], ['reasonForLeaving', 'Reason for leaving'], ['reportingTo', 'Reporting to'],
+  ['roContact', 'RO contact'], ['hrNameContact', 'HR name / contact'],
+];
+
+function Form3Body({ entry }: { entry: Form3EntryView }) {
+  return <Dl entries={F3_FIELDS.map(([k, label]) => [label, entry[k] as string | null | undefined])} />;
+}
+
+function Dl({ entries }: { entries: Array<[string, string | null | undefined]> }) {
+  const shown = entries.filter(([, v]) => v != null && v !== '');
+  if (shown.length === 0) return <Empty />;
+  return (
+    <dl className="divide-y divide-border">
+      {shown.map(([label, v]) => (
+        <div key={label} className="grid grid-cols-3 gap-2 py-1.5 text-sm">
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd className="col-span-2 break-words">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function MiniTable({
+  title,
+  cols,
+  rows,
+}: {
+  title: string;
+  cols: string[];
+  rows: Array<Array<string | null | undefined>>;
+}) {
+  const filled = rows.filter((r) => r.some((c) => c != null && c !== ''));
+  if (filled.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <h5 className="text-xs font-semibold text-muted-foreground">{title}</h5>
+      <div className="overflow-x-auto rounded-md border">
+        <table className="w-full text-xs">
+          <thead className="bg-muted/50">
+            <tr>
+              {cols.map((c) => (
+                <th key={c} className="px-2 py-1 text-left font-medium">{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filled.map((r, i) => (
+              <tr key={i} className="border-t">
+                {r.map((c, ci) => (
+                  <td key={ci} className="px-2 py-1">{c ?? '—'}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Empty() {
+  return <p className="text-sm text-muted-foreground">Not provided.</p>;
+}
+
+function ItemActions({ busy, onVerify, onReject }: { busy: boolean; onVerify: () => void; onReject: () => void }) {
   return (
     <div className="flex items-center gap-1.5">
       <Button type="button" variant="success" size="sm" disabled={busy} onClick={onVerify}>

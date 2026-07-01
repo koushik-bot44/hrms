@@ -86,22 +86,40 @@ export type EmployeePage = Omit<Required<Schemas['EmployeePage']>, 'content'> & 
   content: EmployeeSummary[];
 };
 
-// --- Employee onboarding (§3.6) -------------------------------------------
+// --- Employee onboarding — the four-form stepper (§3.2) --------------------
 
-export type ProfileSectionDto = Omit<Required<Schemas['ProfileSectionView']>, 'data'> & {
-  data: Record<string, unknown>;
+/** The four form views come from the OpenAPI schema; fields may be null while drafting. */
+export type Form1View = Schemas['Form1View'];
+export type Form2View = Schemas['Form2View'];
+export type Form3EntryView = Schemas['Form3EntryView'];
+export type EducationalQualification = Schemas['EducationalQualification'];
+export type WorkingExperience = Schemas['WorkingExperience'];
+export type FamilyDetail = Schemas['FamilyDetail'];
+export type CharacterReference = Schemas['CharacterReference'];
+export type SignatureView = Required<Schemas['SignatureView']>;
+
+export type DocumentDto = Omit<Required<Schemas['DocumentView']>, 'sha256' | 'groupIndex'> & {
+  sha256: string | null;
+  groupIndex: number | null;
 };
 
-export type DocumentDto = Omit<Required<Schemas['DocumentView']>, 'sha256'> & {
+export type GeneratedDocumentView = Omit<Required<Schemas['GeneratedDocumentView']>, 'sha256'> & {
   sha256: string | null;
 };
 
 export type OnboardingDashboard = Omit<
   Required<Schemas['OnboardingDashboard']>,
-  'sections' | 'documents'
+  'employeeCode' | 'fullName' | 'designation' | 'form1' | 'form2' | 'form3' | 'documents' | 'signature' | 'generatedDocuments'
 > & {
-  sections: ProfileSectionDto[];
+  employeeCode: string | null;
+  fullName: string | null;
+  designation: string | null;
+  form1: Form1View | null;
+  form2: Form2View | null;
+  form3: Form3EntryView[];
   documents: DocumentDto[];
+  signature: SignatureView | null;
+  generatedDocuments: GeneratedDocumentView[];
 };
 
 export type PresignedUpload = Required<Schemas['PresignedUpload']>;
@@ -110,30 +128,45 @@ export type PresignedView = Required<Schemas['PresignedView']>;
 
 // --- HR verification & routing (§3.3/§3.4) --------------------------------
 
-export type RecordSection = Omit<Required<Schemas['RecordSection']>, 'data'> & {
-  data: Record<string, unknown>;
+export type RecordDocument = Omit<Required<Schemas['RecordDocument']>, 'sha256' | 'groupIndex'> & {
+  sha256: string | null;
+  groupIndex: number | null;
 };
 
-export type RecordDocument = Omit<Required<Schemas['RecordDocument']>, 'sha256'> & {
+export type RecordGeneratedDocument = Omit<Required<Schemas['RecordGeneratedDocument']>, 'sha256'> & {
   sha256: string | null;
 };
 
 export type EmployeeRecord = Omit<
   Required<Schemas['EmployeeRecordView']>,
-  'sections' | 'documents' | 'employeeCode' | 'dateOfJoining'
+  'employeeCode' | 'dateOfJoining' | 'form1' | 'form2' | 'form3' | 'documents' | 'generatedDocuments'
 > & {
   // employeeCode is null until approval (§5); dateOfJoining may be absent on legacy rows.
   employeeCode: string | null;
   dateOfJoining: string | null;
-  sections: RecordSection[];
+  form1: Form1View | null;
+  form2: Form2View | null;
+  form3: Form3EntryView[];
   documents: RecordDocument[];
+  generatedDocuments: RecordGeneratedDocument[];
+};
+
+/** Plaintext sensitive values returned by the explicit, audited reveal action (§6). */
+export type RevealedSensitive = Omit<
+  Required<Schemas['RevealedSensitive']>,
+  'form1' | 'form2' | 'form3'
+> & {
+  form1: Form1View | null;
+  form2: Form2View | null;
+  form3: Form3EntryView[];
 };
 
 export type RouteToManagerResult = Omit<
   Required<Schemas['RouteToManagerResult']>,
-  'managerName'
+  'managerName' | 'employeeCode'
 > & {
   managerName: string | null;
+  employeeCode: string | null;
 };
 
 // --- Manager inbox (§2/§3.3) ----------------------------------------------

@@ -17,6 +17,9 @@ public interface StorageBackend {
   /** A short-lived URL the client GETs to view/download the stored file. */
   String presignedGetUrl(String key, int expiresInSeconds);
 
+  /** Server-side write of bytes (for generated PDFs + the captured signature image). */
+  void putObject(String key, byte[] bytes, String contentType);
+
   /** Server-side read of the stored bytes (for hashing on confirm). */
   byte[] getObjectBytes(String key);
 

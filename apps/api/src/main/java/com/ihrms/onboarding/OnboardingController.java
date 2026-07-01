@@ -3,13 +3,20 @@ package com.ihrms.onboarding;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentUploadRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentView;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form1Request;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form1View;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form2Request;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form3EntryView;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form3Request;
 import com.ihrms.onboarding.dto.OnboardingDtos.OnboardingDashboard;
 import com.ihrms.onboarding.dto.OnboardingDtos.PresignedUpload;
 import com.ihrms.onboarding.dto.OnboardingDtos.PresignedView;
-import com.ihrms.onboarding.dto.OnboardingDtos.ProfileSectionView;
-import com.ihrms.onboarding.dto.OnboardingDtos.SaveSectionRequest;
+import com.ihrms.onboarding.dto.OnboardingDtos.SignatureRequest;
+import com.ihrms.onboarding.dto.OnboardingDtos.SignatureView;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Employee self-service onboarding (contract §3.6). EMPLOYEE-only; everything is own-record. */
+/** Employee self-service onboarding — the four-form stepper (§3.2). EMPLOYEE-only; own-record. */
 @RestController
 @RequestMapping("/me/onboarding")
 @PreAuthorize("hasRole('EMPLOYEE')")
@@ -40,13 +47,28 @@ public class OnboardingController {
     return onboarding.dashboard(emp);
   }
 
-  @PutMapping("/sections/{key}")
-  public ProfileSectionView saveSection(
-      @PathVariable String key,
-      @Valid @RequestBody SaveSectionRequest body,
+  @PutMapping("/form1")
+  public Form1View saveForm1(
+      @Valid @RequestBody Form1Request body,
       @AuthenticationPrincipal IhrmsPrincipal.Employee emp,
       HttpServletRequest request) {
-    return onboarding.saveSection(emp, key, body, request.getRemoteAddr());
+    return onboarding.saveForm1(emp, body, request.getRemoteAddr());
+  }
+
+  @PutMapping("/form2")
+  public Form2View saveForm2(
+      @Valid @RequestBody Form2Request body,
+      @AuthenticationPrincipal IhrmsPrincipal.Employee emp,
+      HttpServletRequest request) {
+    return onboarding.saveForm2(emp, body, request.getRemoteAddr());
+  }
+
+  @PutMapping("/form3")
+  public List<Form3EntryView> saveForm3(
+      @Valid @RequestBody Form3Request body,
+      @AuthenticationPrincipal IhrmsPrincipal.Employee emp,
+      HttpServletRequest request) {
+    return onboarding.saveForm3(emp, body, request.getRemoteAddr());
   }
 
   @PostMapping("/documents")
@@ -81,6 +103,22 @@ public class OnboardingController {
       @AuthenticationPrincipal IhrmsPrincipal.Employee emp,
       HttpServletRequest request) {
     return onboarding.deleteDocument(emp, id, request.getRemoteAddr());
+  }
+
+  @PutMapping("/signature")
+  public SignatureView saveSignature(
+      @Valid @RequestBody SignatureRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.Employee emp,
+      HttpServletRequest request) {
+    return onboarding.saveSignature(emp, body, request.getRemoteAddr());
+  }
+
+  @GetMapping("/generated/{id}/url")
+  public PresignedView generatedUrl(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.Employee emp,
+      HttpServletRequest request) {
+    return onboarding.generatedViewUrl(emp, id, request.getRemoteAddr());
   }
 
   @PostMapping("/submit")

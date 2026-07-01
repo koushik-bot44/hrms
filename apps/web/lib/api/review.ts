@@ -1,5 +1,6 @@
 import type {
   EmployeeRecord,
+  RevealedSensitive,
   ReviewInput,
   RouteToManagerInput,
   RouteToManagerResult,
@@ -19,9 +20,17 @@ export function lookupEmployeeByCode(
   return apiFetch<EmployeeRecord>(`/employees/lookup/${encodeURIComponent(employeeCode)}`, { signal });
 }
 
-export function reviewSection(id: string, key: string, body: ReviewInput): Promise<EmployeeRecord> {
+/** Reveal the plaintext sensitive values — an explicit, audited action (§6). */
+export function revealSensitive(id: string): Promise<RevealedSensitive> {
+  return apiFetch<RevealedSensitive>(`/employees/${encodeURIComponent(id)}/reveal`, {
+    method: 'POST',
+  });
+}
+
+/** Verify or reject a whole form (FORM1 / FORM2 / FORM3). */
+export function reviewForm(id: string, form: string, body: ReviewInput): Promise<EmployeeRecord> {
   return apiFetch<EmployeeRecord>(
-    `/employees/${encodeURIComponent(id)}/sections/${encodeURIComponent(key)}`,
+    `/employees/${encodeURIComponent(id)}/forms/${encodeURIComponent(form)}`,
     { method: 'PATCH', body },
   );
 }

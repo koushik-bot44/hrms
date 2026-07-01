@@ -10,9 +10,10 @@ import {
   RejectReasonSchema,
   type EmployeeRecord,
   type RejectReasonInput,
+  type RevealedSensitive,
   type ReviewDecision,
 } from '@/lib/contract';
-import { getEmployeeRecord, reviewDocument, reviewSection } from '@/lib/api/review';
+import { getEmployeeRecord, reviewDocument, reviewForm, revealSensitive } from '@/lib/api/review';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,29 +33,32 @@ const recordKey = (id: string) => ['hr-record', id] as const;
 
 /** Recompute the routing gate locally so the Route button reacts to optimistic updates. */
 function patchRecord(rec: EmployeeRecord, v: ReviewVars): EmployeeRecord {
-  const sections =
-    v.kind === 'section'
-      ? rec.sections.map((s) => (s.key === v.id ? { ...s, status: v.decision } : s))
-      : rec.sections;
-  const documents =
-    v.kind === 'document'
-      ? rec.documents.map((d) => (d.id === v.id ? { ...d, status: v.decision } : d))
-      : rec.documents;
+  let { form1, form2, form3, documents } = rec;
+  if (v.kind === 'form') {
+    if (v.id === 'FORM1' && form1) form1 = { ...form1, status: v.decision };
+    if (v.id === 'FORM2' && form2) form2 = { ...form2, status: v.decision };
+    if (v.id === 'FORM3') form3 = form3.map((e) => ({ ...e, status: v.decision }));
+  } else {
+    documents = documents.map((d) => (d.id === v.id ? { ...d, status: v.decision } : d));
+  }
   const reviewComplete =
     rec.status === 'SUBMITTED' &&
-    sections.length > 0 &&
-    sections.every((s) => s.status === 'VERIFIED') &&
+    !!form1 &&
+    form1.status === 'VERIFIED' &&
+    !!form2 &&
+    form2.status === 'VERIFIED' &&
+    form3.every((e) => e.status === 'VERIFIED') &&
+    documents.length > 0 &&
     documents.every((d) => d.status === 'VERIFIED');
-  return { ...rec, sections, documents, reviewComplete };
+  return { ...rec, form1, form2, form3, documents, reviewComplete };
 }
 
-/** Verify/reject an employee's record by INTERNAL id, then route to the Manager (§3.3). */
+/** Verify/reject an employee's forms + documents by INTERNAL id, then route to the Manager (§3.3). */
 export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [rejecting, setRejecting] = React.useState<{ kind: ItemKind; id: string; label: string } | null>(
-    null,
-  );
+  const [rejecting, setRejecting] = React.useState<{ kind: ItemKind; id: string; label: string } | null>(null);
+  const [revealed, setRevealed] = React.useState<RevealedSensitive | null>(null);
 
   const recordQuery = useApiQuery(
     recordKey(employeeId),
@@ -64,14 +68,12 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
 
   const reviewMutation = useApiMutation(
     (v: ReviewVars) =>
-      v.kind === 'section'
-        ? reviewSection(employeeId, v.id, { decision: v.decision, reason: v.reason })
+      v.kind === 'form'
+        ? reviewForm(employeeId, v.id, { decision: v.decision, reason: v.reason })
         : reviewDocument(employeeId, v.id, { decision: v.decision, reason: v.reason }),
     {
       successMessage: (_r, v) =>
-        `${v.kind === 'section' ? 'Section' : 'Document'} ${
-          v.decision === 'VERIFIED' ? 'verified' : 'rejected'
-        }`,
+        `${v.kind === 'form' ? 'Form' : 'Document'} ${v.decision === 'VERIFIED' ? 'verified' : 'rejected'}`,
       onMutate: async (v) => {
         const key = recordKey(employeeId);
         await queryClient.cancelQueries({ queryKey: key });
@@ -86,6 +88,11 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
       onSuccess: (rec) => queryClient.setQueryData(recordKey(employeeId), rec),
     },
   );
+
+  const revealMutation = useApiMutation(() => revealSensitive(employeeId), {
+    successMessage: 'Sensitive fields revealed (audited)',
+    onSuccess: (data) => setRevealed(data),
+  });
 
   const record = recordQuery.data;
   const editable = record?.status === 'SUBMITTED';
@@ -124,6 +131,8 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
         record={record}
         editable={Boolean(editable)}
         busy={reviewMutation.isPending}
+        revealed={revealed}
+        onReveal={() => revealMutation.mutate()}
         onVerify={verify}
         onReject={(kind, id, label) => setRejecting({ kind, id, label })}
         onRouted={() => router.push('/hr/employees')}

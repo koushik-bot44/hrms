@@ -64,13 +64,20 @@ HR's team** — that is the path that connects an employee to their approver.
    **no ID** (there isn't one yet).
 3. **Employee** logs in with **full name + email → OTP** (the OTP to that email is the security
    factor) and lands on their **dashboard**.
-4. Employee fills **tabbed/sectioned forms** and uploads documents:
-   - **Personal details**
-   - **Background details** (uploads — e.g. previous-company experience letters)
-   - **Government details** (uploads — e.g. PAN card)
-   - …(extensible — new sections can be added)
-5. Every field value and uploaded file is stored **under that employee's record**.
-6. Employee **submits** for verification.
+4. Employee completes a **guided four-form stepper** under their own record:
+   - **Form 1 — Personal Details** (identity, addresses, character references, education, work
+     experience, family, declaration)
+   - **Form 2 — Employee Info** (employment + government/bank details; `employeeId` is read-only and
+     blank until approval)
+   - **Form 3 — Previous Employment** (one block per prior employer — **repeatable**)
+   - **Form 4 — Documents** (a grouped upload checklist: educational, per-employment, identity proofs,
+     other)
+5. The employee **draws or types one e-signature** and **submits**. The system then **generates PDFs** —
+   one per form plus one **merged complete application** — branded with the **joining company**, the
+   signature stamped into Forms 1 & 2; these are stored under the record and **regenerated whenever a
+   form is edited and re-submitted** (and `employeeId` is stamped in once approval mints it).
+6. Every field value, uploaded file, the signature, and the generated PDFs are stored **under that
+   employee's record**; submission routes to HR for verification.
 
 ### 3.3 Verification & approval
 1. **HR** opens the employee's record (by ID), reviews each section/document, marks items
@@ -108,14 +115,34 @@ indicative. **Schema is additive-only thereafter.**
 - **Team** — `id`, `companyId`, `name`, `hrUserId` (→ User), `managerUserId` (→ User).
   Holding both FKs enforces the "exactly one HR + one Manager" rule.
 
-### Employee record
-- **ProfileSection** — `id`, `employeeId`, `key` (SectionKey: PERSONAL | BACKGROUND | GOVERNMENT | …),
-  `data` (Json — the structured field values for that tab), `status` (SectionStatus), `updatedAt`.
-  One row per section per employee; extensible by adding new SectionKey values.
-- **Document** _(uploads)_ — `id`, `employeeId`, `sectionKey`, `docType` (DocumentType),
-  `fileName`, `storageKey` (object-storage key — never exposed raw), `mimeType`, `sha256?`,
-  `status` (DocumentStatus: UPLOADED | VERIFIED | REJECTED), `uploadedAt`. Always stored **under the
-  employee record**.
+### Employee record (the four onboarding forms)
+- **Form1Personal** — Personal Details: `name`, `dob`, `email`, `mobile`, `designation`,
+  `offeredCtc` [SENSITIVE], `currentAddress`, `permanentAddress`, `maritalStatus`, `bloodGroup`,
+  `closestRelativeName`, `closestRelativePhone`, `city`, `relationship`, `declaration`; + child rows:
+  **EducationalQualification[]** (qualification/university/yearOfPassing/percentage),
+  **WorkingExperience[]** (organization/period/designation/`salaryCtc` [SENSITIVE]/reasonForLeaving),
+  **FamilyDetail[]** (name/age/relation/occupation), **CharacterReference[]** (name/address/phone — min 2).
+- **Form2Info** — Employee Info: `fullName`, `fatherName`, `employeeId` [SYSTEM/READONLY — blank until
+  approval], `dob`, `dateOfJoining`, `bloodGroup`, `mobile`, `alternateNumber`, `officialEmail`,
+  `personalEmail`, `designation`, `sparkId` [HR/ADMIN-set], `documentSubmitted`, `vehicleNo2W4W`,
+  `panNumber` [SENSITIVE], `axisAccountNumber` [SENSITIVE], `currentAddress`, `permanentAddress`.
+- **Form3PreviousEmployment** _(repeatable — one row per prior employer)_ — `companyName` (the employee's
+  previous employer — employee-entered), `companyAddress`, `dateOfJoining`, `dateOfRelieving`,
+  `designation`, `lastDrawnSalary` [SENSITIVE], `jobType`, `reasonForLeaving`, `reportingTo`,
+  `roContact`, `hrNameContact`.
+- **Document** _(Form 4 uploads)_ — `id`, `employeeId`, `docType` (DocumentType — the Form-4 slots),
+  `groupIndex?` (1–4 for the per-employment groups), `fileName`, `storageKey` (never exposed raw),
+  `mimeType`, `sha256?`, `status`, `uploadedAt`. Reached only via short-lived presigned URLs.
+- **Signature** — `id`, `employeeId`, the drawn/typed e-signature (image `storageKey`), `signedAt`.
+  Captured once at final submit and stamped into Forms 1 & 2 and the merged PDF.
+- **GeneratedDocument** _(the produced PDFs)_ — `id`, `employeeId`, `kind`
+  (FORM1 | FORM2 | FORM3 | FORM4_MANIFEST | MERGED), `storageKey`, `sha256`, `generatedAt`.
+  Regenerated on every edit-and-resubmit; re-stamped with `employeeId` on approval.
+
+Each form carries a `status` (DRAFT | SUBMITTED | VERIFIED | REJECTED). SENSITIVE fields are encrypted at
+rest and masked in HR views (reveal is an explicit **audited** action — §6). `employeeId` is
+**system-assigned on Manager approval** and never employee-editable; `sparkId` is HR/admin-set. The
+generated PDFs' header/branding is the employee's **joining company** (resolved from `companyId`).
 
 ### Verification & approval
 - **ApprovalRequest** — `id`, `employeeId`, `hrUserId`, `managerUserId`, `teamId`,
@@ -131,10 +158,12 @@ indicative. **Schema is additive-only thereafter.**
 ### Enums (defined in the shared package — single source of truth)
 - **UserRole**: `SUPER_ADMIN`, `COMPANY_ADMIN`, `HR`, `MANAGER`
 - **EmployeeStatus**: `INVITED`, `IN_PROGRESS`, `SUBMITTED`, `HR_VERIFIED`, `APPROVED`, `REJECTED`
-- **SectionKey**: `PERSONAL`, `BACKGROUND`, `GOVERNMENT` _(extensible)_
-- **SectionStatus**: `DRAFT`, `SUBMITTED`, `VERIFIED`, `REJECTED`
-- **DocumentType**: `EXPERIENCE_LETTER`, `PAN`, `AADHAAR`, `BGV_DOCUMENT`, `OTHER` _(extensible)_
-- **DocumentStatus**: `UPLOADED`, `VERIFIED`, `REJECTED`
+- **SectionStatus** _(status of each form + review item)_: `DRAFT`, `SUBMITTED`, `VERIFIED`, `REJECTED`
+- **DocumentType** _(Form 4 slots)_: `SECONDARY`, `INTERMEDIATE`, `DIPLOMA`, `GRADUATION`,
+  `POST_GRADUATION`, `OFFER_OR_APPOINTMENT_LETTER`, `HIKE_LETTER`, `RELIEVING_LETTER` _(per-employment,
+  with `groupIndex` 1–4)_, `AADHAAR`, `PAN`, `VOTER_ID`, `DRIVING_LICENCE`, `PASSPORT`, `OTHER`
+- **DocumentStatus**: `PENDING`, `UPLOADED`, `VERIFIED`, `REJECTED`
+- **GeneratedDocumentKind**: `FORM1`, `FORM2`, `FORM3`, `FORM4_MANIFEST`, `MERGED`
 - **ApprovalStatus**: `PENDING`, `APPROVED`, `REJECTED`
 - **NotificationType**: `EMPLOYEE_ONBOARDED`, `EMPLOYEE_SUBMITTED`, `APPROVAL_REQUESTED`,
   `EMPLOYEE_APPROVED`, `EMPLOYEE_REJECTED`
@@ -179,6 +208,11 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
 - **Uploads:** object storage (S3-compatible) accessed **only via short-lived presigned URLs** —
   never public paths or raw storage keys returned to clients.
 - **Document integrity:** store `sha256` of each upload.
+- **Field-level encryption (PII/financial):** `offeredCtc`, `workingExperience.salaryCtc`,
+  `form3.lastDrawnSalary`, `panNumber`, `axisAccountNumber` are **encrypted at rest** (AES-GCM, key
+  from `FIELD_ENC_KEY`) so a DB dump never exposes them; they are **masked by default** in HR views,
+  and a **reveal is an explicit, audited action** (`SENSITIVE_FIELD_REVEALED`). The generated PDFs
+  that embed these values are themselves sensitive — presigned + audited on view.
 - **Transport/headers:** helmet, strict CORS allowlist, validation on every input.
 - **Tenancy isolation:** every company-scoped query is filtered by `companyId`; no cross-company
   reads. This is the most important invariant in the system.

@@ -57,8 +57,8 @@ class DocumentDbStorageRoundTripTest {
   @BeforeEach
   void setup() {
     jdbc.execute(
-        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\",\"profile_sections\","
-            + "\"documents\",\"document_blobs\",\"approval_requests\",\"notifications\","
+        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\","
+            + "\"form1_personal\",\"form2_info\",\"form3_prev_employment\",\"documents\",\"signatures\",\"generated_documents\",\"document_blobs\",\"approval_requests\",\"notifications\","
             + "\"audit_logs\",\"employee_code_sequences\" RESTART IDENTITY CASCADE");
     Company c = new Company();
     c.setName("Acme Inc");

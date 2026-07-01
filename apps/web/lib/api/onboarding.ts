@@ -4,11 +4,17 @@ import {
   type AllowedUploadMimeType,
   type DocumentDto,
   type DocumentType,
+  type Form1Values,
+  type Form1View,
+  type Form2Values,
+  type Form2View,
+  type Form3EntryView,
+  type Form3Values,
   type OnboardingDashboard,
   type PresignedUpload,
   type PresignedView,
-  type ProfileSectionDto,
-  type SectionKey,
+  type SignatureValues,
+  type SignatureView,
 } from '@/lib/contract';
 import { ApiError, apiFetch } from './client';
 
@@ -16,18 +22,30 @@ export function getDashboard(signal?: AbortSignal): Promise<OnboardingDashboard>
   return apiFetch<OnboardingDashboard>('/me/onboarding', { signal });
 }
 
-export function saveSection(key: SectionKey, data: Record<string, unknown>): Promise<ProfileSectionDto> {
-  return apiFetch<ProfileSectionDto>(`/me/onboarding/sections/${key}`, {
-    method: 'PUT',
-    body: { data },
-  });
+export function saveForm1(body: Form1Values): Promise<Form1View> {
+  return apiFetch<Form1View>('/me/onboarding/form1', { method: 'PUT', body });
+}
+
+export function saveForm2(body: Form2Values): Promise<Form2View> {
+  return apiFetch<Form2View>('/me/onboarding/form2', { method: 'PUT', body });
+}
+
+export function saveForm3(body: Form3Values): Promise<Form3EntryView[]> {
+  return apiFetch<Form3EntryView[]>('/me/onboarding/form3', { method: 'PUT', body });
+}
+
+export function saveSignature(body: SignatureValues): Promise<SignatureView> {
+  return apiFetch<SignatureView>('/me/onboarding/signature', { method: 'PUT', body });
 }
 
 export function getDocumentViewUrl(id: string): Promise<PresignedView> {
   return apiFetch<PresignedView>(`/me/onboarding/documents/${id}/url`);
 }
 
-/** Remove one of the employee's own documents (allowed while the record is editable). */
+export function getGeneratedViewUrl(id: string): Promise<PresignedView> {
+  return apiFetch<PresignedView>(`/me/onboarding/generated/${id}/url`);
+}
+
 export function deleteDocument(id: string): Promise<OnboardingDashboard> {
   return apiFetch<OnboardingDashboard>(`/me/onboarding/documents/${id}`, { method: 'DELETE' });
 }
@@ -41,13 +59,14 @@ function isAllowedMime(type: string): type is AllowedUploadMimeType {
 }
 
 /**
- * Full document upload: request a presigned PUT, upload the file directly to storage
- * (with progress), then confirm so the server hashes it. Validates type/size first.
+ * Full Form 4 upload: request a presigned PUT, upload the file directly to storage (with progress),
+ * then confirm so the server hashes it. {@code groupIndex} (1..4) is required for the per-employment
+ * slots. Validates type/size first.
  */
 export async function uploadDocument(
   file: File,
-  sectionKey: SectionKey,
   docType: DocumentType,
+  groupIndex: number | null,
   onProgress?: (percent: number) => void,
 ): Promise<DocumentDto> {
   if (!isAllowedMime(file.type)) {
@@ -60,8 +79,8 @@ export async function uploadDocument(
   const presign = await apiFetch<PresignedUpload>('/me/onboarding/documents', {
     method: 'POST',
     body: {
-      sectionKey,
       docType,
+      ...(groupIndex != null ? { groupIndex } : {}),
       fileName: file.name,
       mimeType: file.type,
       sizeBytes: file.size,

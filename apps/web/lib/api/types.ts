@@ -36,23 +36,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/storage/blobs/{token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["download"];
-        put: operations["upload"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/me/onboarding/sections/{key}": {
+    "/me/onboarding/signature": {
         parameters: {
             query?: never;
             header?: never;
@@ -60,7 +44,55 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["saveSection"];
+        put: operations["saveSignature"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/onboarding/form3": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveForm3"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/onboarding/form2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveForm2"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/onboarding/form1": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveForm1"];
         post?: never;
         delete?: never;
         options?: never;
@@ -228,6 +260,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/{id}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reveal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies": {
         parameters: {
             query?: never;
@@ -356,7 +404,7 @@ export interface paths {
         patch: operations["update"];
         trace?: never;
     };
-    "/employees/{id}/sections/{key}": {
+    "/employees/{id}/forms/{form}": {
         parameters: {
             query?: never;
             header?: never;
@@ -369,7 +417,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch: operations["reviewSection"];
+        patch: operations["reviewForm"];
         trace?: never;
     };
     "/employees/{id}/documents/{documentId}": {
@@ -428,6 +476,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/onboarding/generated/{id}/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["generatedUrl"];
         put?: never;
         post?: never;
         delete?: never;
@@ -643,17 +707,152 @@ export interface components {
             role?: "SUPER_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER";
             status?: string;
         };
-        SaveSectionRequest: {
-            data: {
-                [key: string]: Record<string, never>;
-            };
+        SignatureRequest: {
+            imageDataUrl: string;
+            type: string;
         };
-        ProfileSectionView: {
+        SignatureView: {
+            type?: string;
+            signedAt?: string;
+        };
+        Form3Entry: {
+            companyName?: string;
+            companyAddress?: string;
+            dateOfJoining?: string;
+            dateOfRelieving?: string;
+            designation?: string;
+            lastDrawnSalary?: string;
+            jobType?: string;
+            reasonForLeaving?: string;
+            reportingTo?: string;
+            roContact?: string;
+            hrNameContact?: string;
+        };
+        Form3Request: {
+            entries?: components["schemas"]["Form3Entry"][];
+        };
+        Form3EntryView: {
+            id?: string;
+            companyName?: string;
+            companyAddress?: string;
+            dateOfJoining?: string;
+            dateOfRelieving?: string;
+            designation?: string;
+            lastDrawnSalary?: string;
+            jobType?: string;
+            reasonForLeaving?: string;
+            reportingTo?: string;
+            roContact?: string;
+            hrNameContact?: string;
             /** @enum {string} */
-            key?: "PERSONAL" | "BACKGROUND" | "GOVERNMENT";
-            data?: {
-                [key: string]: Record<string, never>;
-            };
+            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REJECTED";
+        };
+        Form2Request: {
+            fullName?: string;
+            fatherName?: string;
+            dateOfBirth?: string;
+            dateOfJoining?: string;
+            bloodGroup?: string;
+            mobile?: string;
+            alternateNumber?: string;
+            officialEmail?: string;
+            personalEmail?: string;
+            designation?: string;
+            documentSubmitted?: string;
+            vehicleNo2W4W?: string;
+            panNumber?: string;
+            axisAccountNumber?: string;
+            currentAddress?: string;
+            permanentAddress?: string;
+        };
+        Form2View: {
+            fullName?: string;
+            fatherName?: string;
+            employeeId?: string;
+            dateOfBirth?: string;
+            dateOfJoining?: string;
+            bloodGroup?: string;
+            mobile?: string;
+            alternateNumber?: string;
+            officialEmail?: string;
+            personalEmail?: string;
+            designation?: string;
+            sparkId?: string;
+            documentSubmitted?: string;
+            vehicleNo2W4W?: string;
+            panNumber?: string;
+            axisAccountNumber?: string;
+            currentAddress?: string;
+            permanentAddress?: string;
+            /** @enum {string} */
+            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REJECTED";
+            updatedAt?: string;
+        };
+        CharacterReference: {
+            name?: string;
+            address?: string;
+            phone?: string;
+        };
+        EducationalQualification: {
+            qualification?: string;
+            university?: string;
+            yearOfPassing?: string;
+            percentage?: string;
+        };
+        FamilyDetail: {
+            name?: string;
+            age?: string;
+            relation?: string;
+            occupation?: string;
+        };
+        Form1Request: {
+            name?: string;
+            dateOfBirth?: string;
+            email?: string;
+            mobile?: string;
+            designation?: string;
+            offeredCtc?: string;
+            currentAddress?: string;
+            permanentAddress?: string;
+            maritalStatus?: string;
+            bloodGroup?: string;
+            closestRelativeName?: string;
+            closestRelativePhone?: string;
+            city?: string;
+            relationship?: string;
+            declaration?: string;
+            educationalQualifications?: components["schemas"]["EducationalQualification"][];
+            workingExperiences?: components["schemas"]["WorkingExperience"][];
+            familyDetails?: components["schemas"]["FamilyDetail"][];
+            characterReferences?: components["schemas"]["CharacterReference"][];
+        };
+        WorkingExperience: {
+            organization?: string;
+            period?: string;
+            designation?: string;
+            salaryCtc?: string;
+            reasonForLeaving?: string;
+        };
+        Form1View: {
+            name?: string;
+            dateOfBirth?: string;
+            email?: string;
+            mobile?: string;
+            designation?: string;
+            offeredCtc?: string;
+            currentAddress?: string;
+            permanentAddress?: string;
+            maritalStatus?: string;
+            bloodGroup?: string;
+            closestRelativeName?: string;
+            closestRelativePhone?: string;
+            city?: string;
+            relationship?: string;
+            declaration?: string;
+            educationalQualifications?: components["schemas"]["EducationalQualification"][];
+            workingExperiences?: components["schemas"]["WorkingExperience"][];
+            familyDetails?: components["schemas"]["FamilyDetail"][];
+            characterReferences?: components["schemas"]["CharacterReference"][];
             /** @enum {string} */
             status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REJECTED";
             updatedAt?: string;
@@ -664,9 +863,9 @@ export interface components {
         DocumentView: {
             id?: string;
             /** @enum {string} */
-            sectionKey?: "PERSONAL" | "BACKGROUND" | "GOVERNMENT";
-            /** @enum {string} */
-            docType?: "EXPERIENCE_LETTER" | "PAN" | "AADHAAR" | "BGV_DOCUMENT" | "OTHER";
+            docType?: "SECONDARY" | "INTERMEDIATE" | "DIPLOMA" | "GRADUATION" | "POST_GRADUATION" | "OFFER_OR_APPOINTMENT_LETTER" | "HIKE_LETTER" | "RELIEVING_LETTER" | "AADHAAR" | "PAN" | "VOTER_ID" | "DRIVING_LICENCE" | "PASSPORT" | "OTHER";
+            /** Format: int32 */
+            groupIndex?: number;
             fileName?: string;
             mimeType?: string;
             sha256?: string;
@@ -674,19 +873,33 @@ export interface components {
             status?: "PENDING" | "UPLOADED" | "VERIFIED" | "REJECTED";
             uploadedAt?: string;
         };
+        GeneratedDocumentView: {
+            id?: string;
+            /** @enum {string} */
+            kind?: "FORM1" | "FORM2" | "FORM3" | "FORM4_MANIFEST" | "MERGED";
+            fileName?: string;
+            sha256?: string;
+            generatedAt?: string;
+        };
         OnboardingDashboard: {
             employeeCode?: string;
             email?: string;
+            fullName?: string;
+            designation?: string;
             /** @enum {string} */
             status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
-            sections?: components["schemas"]["ProfileSectionView"][];
+            form1?: components["schemas"]["Form1View"];
+            form2?: components["schemas"]["Form2View"];
+            form3?: components["schemas"]["Form3EntryView"][];
             documents?: components["schemas"]["DocumentView"][];
+            signature?: components["schemas"]["SignatureView"];
+            generatedDocuments?: components["schemas"]["GeneratedDocumentView"][];
         };
         DocumentUploadRequest: {
             /** @enum {string} */
-            sectionKey: "PERSONAL" | "BACKGROUND" | "GOVERNMENT";
-            /** @enum {string} */
-            docType: "EXPERIENCE_LETTER" | "PAN" | "AADHAAR" | "BGV_DOCUMENT" | "OTHER";
+            docType: "SECONDARY" | "INTERMEDIATE" | "DIPLOMA" | "GRADUATION" | "POST_GRADUATION" | "OFFER_OR_APPOINTMENT_LETTER" | "HIKE_LETTER" | "RELIEVING_LETTER" | "AADHAAR" | "PAN" | "VOTER_ID" | "DRIVING_LICENCE" | "PASSPORT" | "OTHER";
+            /** Format: int32 */
+            groupIndex?: number;
             fileName: string;
             mimeType: string;
             /** Format: int64 */
@@ -767,6 +980,11 @@ export interface components {
             approvalRequestId?: string;
             managerName?: string;
         };
+        RevealedSensitive: {
+            form1?: components["schemas"]["Form1View"];
+            form2?: components["schemas"]["Form2View"];
+            form3?: components["schemas"]["Form3EntryView"][];
+        };
         CreateCompanyRequest: {
             name: string;
             code: string;
@@ -843,15 +1061,19 @@ export interface components {
             /** @enum {string} */
             status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             reviewComplete?: boolean;
-            sections?: components["schemas"]["RecordSection"][];
+            sensitiveRevealable?: boolean;
+            form1?: components["schemas"]["Form1View"];
+            form2?: components["schemas"]["Form2View"];
+            form3?: components["schemas"]["Form3EntryView"][];
             documents?: components["schemas"]["RecordDocument"][];
+            generatedDocuments?: components["schemas"]["RecordGeneratedDocument"][];
         };
         RecordDocument: {
             id?: string;
             /** @enum {string} */
-            sectionKey?: "PERSONAL" | "BACKGROUND" | "GOVERNMENT";
-            /** @enum {string} */
-            docType?: "EXPERIENCE_LETTER" | "PAN" | "AADHAAR" | "BGV_DOCUMENT" | "OTHER";
+            docType?: "SECONDARY" | "INTERMEDIATE" | "DIPLOMA" | "GRADUATION" | "POST_GRADUATION" | "OFFER_OR_APPOINTMENT_LETTER" | "HIKE_LETTER" | "RELIEVING_LETTER" | "AADHAAR" | "PAN" | "VOTER_ID" | "DRIVING_LICENCE" | "PASSPORT" | "OTHER";
+            /** Format: int32 */
+            groupIndex?: number;
             fileName?: string;
             mimeType?: string;
             sha256?: string;
@@ -860,15 +1082,14 @@ export interface components {
             uploadedAt?: string;
             viewUrl?: string;
         };
-        RecordSection: {
+        RecordGeneratedDocument: {
+            id?: string;
             /** @enum {string} */
-            key?: "PERSONAL" | "BACKGROUND" | "GOVERNMENT";
-            data?: {
-                [key: string]: Record<string, never>;
-            };
-            /** @enum {string} */
-            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REJECTED";
-            updatedAt?: string;
+            kind?: "FORM1" | "FORM2" | "FORM3" | "FORM4_MANIFEST" | "MERGED";
+            fileName?: string;
+            sha256?: string;
+            generatedAt?: string;
+            viewUrl?: string;
         };
         UpdateCompanyRequest: {
             name?: string;
@@ -1005,64 +1226,16 @@ export interface operations {
             };
         };
     };
-    download: {
+    saveSignature: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": string;
-                };
-            };
-        };
-    };
-    upload: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": string;
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    saveSection: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                key: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SaveSectionRequest"];
+                "application/json": components["schemas"]["SignatureRequest"];
             };
         };
         responses: {
@@ -1072,7 +1245,79 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ProfileSectionView"];
+                    "*/*": components["schemas"]["SignatureView"];
+                };
+            };
+        };
+    };
+    saveForm3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Form3Request"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Form3EntryView"][];
+                };
+            };
+        };
+    };
+    saveForm2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Form2Request"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Form2View"];
+                };
+            };
+        };
+    };
+    saveForm1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Form1Request"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Form1View"];
                 };
             };
         };
@@ -1351,6 +1596,28 @@ export interface operations {
             };
         };
     };
+    reveal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RevealedSensitive"];
+                };
+            };
+        };
+    };
     list_2: {
         parameters: {
             query?: never;
@@ -1607,13 +1874,13 @@ export interface operations {
             };
         };
     };
-    reviewSection: {
+    reviewForm: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 id: string;
-                key: string;
+                form: string;
             };
             cookie?: never;
         };
@@ -1747,6 +2014,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["OnboardingDashboard"];
+                };
+            };
+        };
+    };
+    generatedUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedView"];
                 };
             };
         };

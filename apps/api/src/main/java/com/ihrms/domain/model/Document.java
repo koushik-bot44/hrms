@@ -2,7 +2,6 @@ package com.ihrms.domain.model;
 
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.DocumentType;
-import com.ihrms.domain.enums.SectionKey;
 import com.ihrms.domain.support.CuidId;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -18,7 +17,11 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** Uploaded file under an employee record (table {@code documents}); storageKey never exposed. */
+/**
+ * A Form 4 uploaded file under an employee record (table {@code documents}). {@code docType} is the
+ * slot; {@code groupIndex} (1..4) distinguishes the per-employment groups (offer/hike/relieving),
+ * otherwise null. The raw {@code storageKey} is never exposed to clients (§6).
+ */
 @Entity
 @Table(name = "documents")
 @Getter
@@ -36,13 +39,12 @@ public class Document {
 
   @Enumerated(EnumType.STRING)
   @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-  @Column(name = "sectionKey", nullable = false)
-  private SectionKey sectionKey;
-
-  @Enumerated(EnumType.STRING)
-  @JdbcTypeCode(SqlTypes.NAMED_ENUM)
   @Column(name = "docType", nullable = false)
   private DocumentType docType;
+
+  /** 1..4 for the per-employment document groups; null for single-slot documents. */
+  @Column(name = "groupIndex")
+  private Integer groupIndex;
 
   @Column(name = "fileName", nullable = false)
   private String fileName;
@@ -59,7 +61,7 @@ public class Document {
   @Enumerated(EnumType.STRING)
   @JdbcTypeCode(SqlTypes.NAMED_ENUM)
   @Column(name = "status", nullable = false)
-  private DocumentStatus status = DocumentStatus.UPLOADED;
+  private DocumentStatus status = DocumentStatus.PENDING;
 
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)

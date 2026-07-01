@@ -8,29 +8,30 @@ import com.ihrms.domain.enums.ApprovalStatus;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.NotificationType;
-import com.ihrms.domain.enums.SectionKey;
 import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.model.ApprovalRequest;
 import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.Form1Personal;
+import com.ihrms.domain.model.Form2Info;
+import com.ihrms.domain.model.Form3PrevEmployment;
 import com.ihrms.domain.model.Notification;
-import com.ihrms.domain.model.ProfileSection;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
 import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.repository.Form1PersonalRepository;
+import com.ihrms.domain.repository.Form2InfoRepository;
+import com.ihrms.domain.repository.Form3PrevEmploymentRepository;
 import com.ihrms.domain.repository.NotificationRepository;
-import com.ihrms.domain.repository.ProfileSectionRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
-import com.ihrms.review.dto.ReviewDtos.RecordDocument;
-import com.ihrms.review.dto.ReviewDtos.RecordSection;
+import com.ihrms.review.dto.ReviewDtos.RevealedSensitive;
 import com.ihrms.review.dto.ReviewDtos.ReviewRequest;
 import com.ihrms.review.dto.ReviewDtos.RouteToManagerRequest;
 import com.ihrms.review.dto.ReviewDtos.RouteToManagerResult;
-import com.ihrms.storage.StorageService;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,18 +41,19 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HR verification & routing (ARCHITECTURE.md §3.3/§3.4). HR looks up their own onboarded employee
- * by code, reviews each section/document (verify/reject), then routes the record to the Manager on
- * their team. Scope is centralized via {@link AuthorizationService}; reads + actions are audited and
- * partitioned by companyId; documents are reached only through short-lived presigned GET URLs.
+ * HR verification & routing (§3.3/§3.4). HR opens their own onboarded employee's record (the four
+ * forms with sensitive values masked, the Form 4 uploads, and the generated PDFs), verifies/rejects
+ * each form and document, optionally reveals sensitive values (an explicit, audited action), then
+ * routes the completed record to the Manager on their team. Scope is centralized via
+ * {@link AuthorizationService}; reads + actions are audited and partitioned by companyId.
  */
 @Service
 public class ReviewService {
 
-  private static final int VIEW_TTL_SECONDS = 60; // presigned GET (short-lived, audited download)
-
   private final EmployeeRepository employees;
-  private final ProfileSectionRepository sections;
+  private final Form1PersonalRepository form1s;
+  private final Form2InfoRepository form2s;
+  private final Form3PrevEmploymentRepository form3s;
   private final DocumentRepository documents;
   private final ApprovalRequestRepository approvals;
   private final NotificationRepository notifications;
@@ -59,11 +61,13 @@ public class ReviewService {
   private final UserRepository users;
   private final AuthorizationService authz;
   private final AuditService audit;
-  private final StorageService storage;
+  private final EmployeeRecordAssembler assembler;
 
   public ReviewService(
       EmployeeRepository employees,
-      ProfileSectionRepository sections,
+      Form1PersonalRepository form1s,
+      Form2InfoRepository form2s,
+      Form3PrevEmploymentRepository form3s,
       DocumentRepository documents,
       ApprovalRequestRepository approvals,
       NotificationRepository notifications,
@@ -71,9 +75,11 @@ public class ReviewService {
       UserRepository users,
       AuthorizationService authz,
       AuditService audit,
-      StorageService storage) {
+      EmployeeRecordAssembler assembler) {
     this.employees = employees;
-    this.sections = sections;
+    this.form1s = form1s;
+    this.form2s = form2s;
+    this.form3s = form3s;
     this.documents = documents;
     this.approvals = approvals;
     this.notifications = notifications;
@@ -81,7 +87,7 @@ public class ReviewService {
     this.users = users;
     this.authz = authz;
     this.audit = audit;
-    this.storage = storage;
+    this.assembler = assembler;
   }
 
   /** Open a record by INTERNAL id — the verification entry (pre-approval employees have no code). */
@@ -89,10 +95,7 @@ public class ReviewService {
     return viewRecord(actor, loadOwnById(actor, employeeId), ip);
   }
 
-  /**
-   * §3.4 records lookup by employee code (post-approval only — only approved employees have a code,
-   * so a code miss is naturally not-found). Read-only; scoped to the acting HR; the view is audited.
-   */
+  /** §3.4 records lookup by employee code (post-approval only). Read-only; audited. */
   public EmployeeRecordView lookupByCode(IhrmsPrincipal.User actor, String employeeCode, String ip) {
     return viewRecord(actor, loadOwnByCode(actor, employeeCode), ip);
   }
@@ -105,30 +108,61 @@ public class ReviewService {
         employee.getId(),
         Map.<String, Object>of("email", employee.getEmail()),
         ip);
-    return record(employee);
+    return assembler.build(employee);
   }
 
-  public EmployeeRecordView reviewSection(
-      IhrmsPrincipal.User actor, String employeeId, String keyParam, ReviewRequest req, String ip) {
+  /** Reveal the plaintext sensitive values — an explicit, audited action (§6). */
+  public RevealedSensitive reveal(IhrmsPrincipal.User actor, String employeeId, String ip) {
     Employee employee = loadOwnById(actor, employeeId);
-    assertReviewable(employee);
-    SectionKey key = parseKey(keyParam);
-    ProfileSection section =
-        sections
-            .findByEmployeeIdAndKey(employee.getId(), key)
-            .orElseThrow(() -> notFound("Section not found"));
-
-    section.setStatus(SectionStatus.valueOf(req.decision()));
-    sections.save(section);
-
     audit.record(
         AuditActor.from(actor),
-        "SECTION_REVIEWED",
-        "ProfileSection",
-        section.getId(),
-        reviewMeta("key", key.name(), req),
+        "SENSITIVE_FIELD_REVEALED",
+        "Employee",
+        employee.getId(),
+        Map.<String, Object>of("email", employee.getEmail()),
         ip);
-    return record(employee);
+    return assembler.reveal(employee);
+  }
+
+  /** Verify or reject a whole form (FORM1 / FORM2 / FORM3). */
+  public EmployeeRecordView reviewForm(
+      IhrmsPrincipal.User actor, String employeeId, String formParam, ReviewRequest req, String ip) {
+    Employee employee = loadOwnById(actor, employeeId);
+    assertReviewable(employee);
+    SectionStatus decision = SectionStatus.valueOf(req.decision());
+    String form = formParam == null ? "" : formParam.toUpperCase();
+
+    switch (form) {
+      case "FORM1" -> {
+        Form1Personal f1 =
+            form1s.findByEmployeeId(employee.getId()).orElseThrow(() -> notFound("Form 1 not found"));
+        f1.setStatus(decision);
+        form1s.save(f1);
+        audit.record(
+            AuditActor.from(actor), "FORM_REVIEWED", "Form1Personal", f1.getId(),
+            reviewMeta("form", "FORM1", req), ip);
+      }
+      case "FORM2" -> {
+        Form2Info f2 =
+            form2s.findByEmployeeId(employee.getId()).orElseThrow(() -> notFound("Form 2 not found"));
+        f2.setStatus(decision);
+        form2s.save(f2);
+        audit.record(
+            AuditActor.from(actor), "FORM_REVIEWED", "Form2Info", f2.getId(),
+            reviewMeta("form", "FORM2", req), ip);
+      }
+      case "FORM3" -> {
+        List<Form3PrevEmployment> rows =
+            form3s.findByEmployeeIdOrderByOrderIndexAsc(employee.getId());
+        rows.forEach(r -> r.setStatus(decision));
+        form3s.saveAll(rows);
+        audit.record(
+            AuditActor.from(actor), "FORM_REVIEWED", "Employee", employee.getId(),
+            reviewMeta("form", "FORM3", req), ip);
+      }
+      default -> throw badRequest("Unknown form \"" + formParam + "\"");
+    }
+    return assembler.build(employee);
   }
 
   public EmployeeRecordView reviewDocument(
@@ -144,13 +178,9 @@ public class ReviewService {
     documents.save(doc);
 
     audit.record(
-        AuditActor.from(actor),
-        "DOCUMENT_REVIEWED",
-        "Document",
-        doc.getId(),
-        reviewMeta("docType", doc.getDocType().name(), req),
-        ip);
-    return record(employee);
+        AuditActor.from(actor), "DOCUMENT_REVIEWED", "Document", doc.getId(),
+        reviewMeta("docType", doc.getDocType().name(), req), ip);
+    return assembler.build(employee);
   }
 
   /** §3.3 step 2: route the completed review to the Manager on the HR's team. */
@@ -160,17 +190,11 @@ public class ReviewService {
     Employee employee = loadOwnById(actor, employeeId);
     assertReviewable(employee);
 
-    List<ProfileSection> mySections = sections.findByEmployeeId(employee.getId());
-    List<Document> myDocuments =
-        documents.findByEmployeeId(employee.getId()).stream()
-            .filter(d -> d.getStatus() != DocumentStatus.PENDING)
-            .toList();
-    if (!isReviewComplete(employee, mySections, myDocuments)) {
+    if (!assembler.reviewComplete(employee)) {
       throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "Verify every section and document before routing for approval");
+          HttpStatus.BAD_REQUEST, "Verify every form and document before routing for approval");
     }
 
-    // The approver is the Manager on the acting HR's team (§2).
     Team team =
         teams
             .findByCompanyIdAndHrUserId(actor.companyId(), actor.userId())
@@ -216,62 +240,11 @@ public class ReviewService {
 
   // --- internals ------------------------------------------------------------
 
-  private EmployeeRecordView record(Employee employee) {
-    List<ProfileSection> secs = sections.findByEmployeeIdOrderByKeyAsc(employee.getId());
-    List<Document> docs =
-        documents.findByEmployeeIdOrderByUploadedAtDesc(employee.getId()).stream()
-            .filter(d -> d.getStatus() != DocumentStatus.PENDING)
-            .toList();
-    boolean complete = isReviewComplete(employee, secs, docs);
-    return new EmployeeRecordView(
-        employee.getId(),
-        employee.getEmployeeCode(),
-        employee.getFullName(),
-        employee.getEmail(),
-        employee.getDesignation(),
-        employee.getDateOfJoining() == null ? null : employee.getDateOfJoining().toString(),
-        employee.getStatus(),
-        complete,
-        secs.stream().map(ReviewService::sectionView).toList(),
-        docs.stream().map(this::documentView).toList());
-  }
-
-  private boolean isReviewComplete(
-      Employee employee, List<ProfileSection> secs, List<Document> docs) {
-    return employee.getStatus() == EmployeeStatus.SUBMITTED
-        && !secs.isEmpty()
-        && secs.stream().allMatch(s -> s.getStatus() == SectionStatus.VERIFIED)
-        && docs.stream().allMatch(d -> d.getStatus() == DocumentStatus.VERIFIED);
-  }
-
-  private static RecordSection sectionView(ProfileSection s) {
-    return new RecordSection(
-        s.getKey(),
-        s.getData() == null ? Map.of() : s.getData(),
-        s.getStatus(),
-        s.getUpdatedAt().toString());
-  }
-
-  private RecordDocument documentView(Document d) {
-    return new RecordDocument(
-        d.getId(),
-        d.getSectionKey(),
-        d.getDocType(),
-        d.getFileName(),
-        d.getMimeType(),
-        d.getSha256(),
-        d.getStatus(),
-        d.getUploadedAt().toString(),
-        storage.presignedGetUrl(d.getStorageKey(), VIEW_TTL_SECONDS));
-  }
-
-  /** Resolve by INTERNAL id and confirm it is the acting HR's own (404 otherwise — no leak). */
   private Employee loadOwnById(IhrmsPrincipal.User actor, String employeeId) {
     return assertOwn(
         actor, employees.findById(employeeId).orElseThrow(() -> notFound("Employee not found")));
   }
 
-  /** Resolve by employee code (post-approval lookup); same own-scope guard. */
   private Employee loadOwnByCode(IhrmsPrincipal.User actor, String employeeCode) {
     return assertOwn(
         actor,
@@ -295,14 +268,6 @@ public class ReviewService {
     if (employee.getStatus() != EmployeeStatus.SUBMITTED) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "Employee is not awaiting review (status " + employee.getStatus() + ")");
-    }
-  }
-
-  private SectionKey parseKey(String keyParam) {
-    try {
-      return SectionKey.valueOf(keyParam);
-    } catch (IllegalArgumentException e) {
-      throw badRequest("Unknown section \"" + keyParam + "\"");
     }
   }
 

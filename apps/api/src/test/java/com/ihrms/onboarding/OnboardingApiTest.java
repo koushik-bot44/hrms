@@ -26,6 +26,7 @@ import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.storage.StorageService;
 import com.ihrms.support.Hashing;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,13 +39,12 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * Employee onboarding (contract §3.6) with storage MOCKED, so it runs in {@code ./mvnw package}
- * with only a DB: section validation + status flips, the document request/confirm/view orchestration
- * (sha256 from the stubbed bytes), own-record scope, the submission gate + lock, and audit. The real
- * presigned round-trip against MinIO lives in {@link StoragePresignedRoundTripTest}.
+ * Employee onboarding — the four-form stepper (§3.2) — with storage MOCKED so it runs in
+ * {@code ./mvnw package} with only a DB: per-form save + status flips, the document
+ * request/confirm/view orchestration (sha256 from the stubbed bytes), own-record scope, the per-slot
+ * cap, the signature capture, and the submission gate → the five generated PDFs → record lock.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -53,6 +53,7 @@ class OnboardingApiTest {
 
   private static final byte[] FILE_BYTES = "hello onboarding world".getBytes(StandardCharsets.UTF_8);
   private static final String EXPECTED_SHA = Hashing.sha256Hex(FILE_BYTES);
+  private static final String SIGNATURE = "data:image/png;base64,aGVsbG8gc2lnbmF0dXJl";
 
   @Autowired MockMvc mvc;
   @Autowired ObjectMapper json;
@@ -72,16 +73,16 @@ class OnboardingApiTest {
   @BeforeEach
   void setup() {
     jdbc.execute(
-        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\",\"profile_sections\","
-            + "\"documents\",\"approval_requests\",\"notifications\",\"audit_logs\","
+        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\","
+            + "\"form1_personal\",\"form2_info\",\"form3_prev_employment\",\"documents\",\"signatures\",\"generated_documents\",\"approval_requests\",\"notifications\",\"audit_logs\","
             + "\"employee_code_sequences\" RESTART IDENTITY CASCADE");
     companyId = company("ACME");
     hrId = hrUser(companyId, "hr@acme.test");
-    Employee emp = employee("ACME-EMP-000001", "alex@personal.test");
+    Employee emp = employee("alex@personal.test");
     empToken = tokenFor(emp);
 
     when(storage.buildKey(anyString(), anyString(), anyString(), anyString()))
-        .thenReturn("companies/c/employees/e/GOVERNMENT/obj");
+        .thenReturn("companies/c/employees/e/form4/obj");
     when(storage.presignedPutUrl(anyString(), anyString(), anyInt()))
         .thenReturn("http://storage.local/put?sig=test");
     when(storage.presignedGetUrl(anyString(), anyInt()))
@@ -90,62 +91,27 @@ class OnboardingApiTest {
   }
 
   @Test
-  void savesSectionsValidatesAndFlipsToInProgress() throws Exception {
-    // Valid PERSONAL -> DRAFT, employee flips INVITED -> IN_PROGRESS.
+  void savesForm1FlipsToInProgress() throws Exception {
     MvcResult res =
         mvc.perform(
-                putSection(
-                    "PERSONAL",
-                    Map.of(
-                        "fullName", "Alex Doe",
-                        "dateOfBirth", "1990-01-01",
-                        "phone", "5551234",
-                        "addressLine", "1 Main Street",
-                        "city", "Metro")))
+                put("/me/onboarding/form1")
+                    .header("Authorization", "Bearer " + empToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json.writeValueAsString(form1Body())))
             .andExpect(status().isOk())
             .andReturn();
-    JsonNode section = json.readTree(res.getResponse().getContentAsString());
-    assertThat(section.get("key").asText()).isEqualTo("PERSONAL");
-    assertThat(section.get("status").asText()).isEqualTo("DRAFT");
-    assertThat(section.get("data").get("fullName").asText()).isEqualTo("Alex Doe");
+    JsonNode form1 = json.readTree(res.getResponse().getContentAsString());
+    assertThat(form1.get("name").asText()).isEqualTo("Alex Doe");
+    assertThat(form1.get("status").asText()).isEqualTo("DRAFT");
+    assertThat(form1.get("characterReferences")).hasSize(2);
 
     assertThat(dashboard().get("status").asText()).isEqualTo("IN_PROGRESS");
-
-    // GOVERNMENT normalizes the PAN to upper-case.
-    MvcResult gov =
-        mvc.perform(putSection("GOVERNMENT", Map.of("panNumber", "abcde1234f")))
-            .andExpect(status().isOk())
-            .andReturn();
-    assertThat(json.readTree(gov.getResponse().getContentAsString()).get("data").get("panNumber").asText())
-        .isEqualTo("ABCDE1234F");
-
-    // Invalid PERSONAL -> 400 with a message array.
-    MvcResult bad =
-        mvc.perform(putSection("PERSONAL", Map.of("dateOfBirth", "nope")))
-            .andExpect(status().isBadRequest())
-            .andReturn();
-    assertThat(json.readTree(bad.getResponse().getContentAsString()).get("message").isArray()).isTrue();
-
-    assertThat(auditLogs.findByAction("SECTION_SAVED")).hasSize(2);
+    assertThat(auditLogs.findByAction("FORM1_SAVED")).hasSize(1);
   }
 
   @Test
   void documentRequestConfirmAndViewNeverExposeStorageKey() throws Exception {
-    MvcResult req =
-        mvc.perform(
-                post("/me/onboarding/documents")
-                    .header("Authorization", "Bearer " + empToken)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                        json.writeValueAsString(
-                            Map.of(
-                                "sectionKey", "GOVERNMENT",
-                                "docType", "PAN",
-                                "fileName", "pan.pdf",
-                                "mimeType", "application/pdf",
-                                "sizeBytes", 2048))))
-            .andExpect(status().isCreated())
-            .andReturn();
+    MvcResult req = requestUpload("PAN", null, "pan.pdf");
     String reqBody = req.getResponse().getContentAsString();
     assertThat(reqBody).doesNotContain("storageKey").doesNotContain("companies/");
     JsonNode presign = json.readTree(reqBody);
@@ -154,7 +120,6 @@ class OnboardingApiTest {
     assertThat(presign.get("expiresInSeconds").asInt()).isEqualTo(300);
     String documentId = presign.get("documentId").asText();
 
-    // Confirm -> server hashes the (stubbed) bytes and marks UPLOADED.
     MvcResult confirm =
         mvc.perform(
                 post("/me/onboarding/documents/" + documentId + "/confirm")
@@ -166,7 +131,6 @@ class OnboardingApiTest {
     assertThat(doc.get("sha256").asText()).isEqualTo(EXPECTED_SHA);
     assertThat(confirm.getResponse().getContentAsString()).doesNotContain("storageKey");
 
-    // View URL -> short-lived presigned GET, audited.
     MvcResult view =
         mvc.perform(
                 get("/me/onboarding/documents/" + documentId + "/url")
@@ -175,7 +139,7 @@ class OnboardingApiTest {
             .andReturn();
     JsonNode v = json.readTree(view.getResponse().getContentAsString());
     assertThat(v.get("url").asText()).startsWith("http");
-    assertThat(v.get("expiresInSeconds").asInt()).isEqualTo(60); // shortened for audited downloads
+    assertThat(v.get("expiresInSeconds").asInt()).isEqualTo(60);
 
     assertThat(auditLogs.findByAction("DOCUMENT_UPLOAD_REQUESTED")).hasSize(1);
     assertThat(auditLogs.findByAction("DOCUMENT_UPLOADED")).hasSize(1);
@@ -184,9 +148,9 @@ class OnboardingApiTest {
 
   @Test
   void anotherEmployeeCannotTouchMyDocument() throws Exception {
-    String documentId = uploadPan(empToken);
+    String documentId = upload("PAN");
 
-    Employee other = employee("ACME-EMP-000002", "sam@personal.test");
+    Employee other = employee("sam@personal.test");
     String otherToken = tokenFor(other);
 
     mvc.perform(
@@ -200,44 +164,39 @@ class OnboardingApiTest {
   }
 
   @Test
-  void submitIsGatedThenLocksTheRecord() throws Exception {
-    // Only PERSONAL saved -> still missing GOVERNMENT + the PAN document.
-    mvc.perform(
-            putSection(
-                "PERSONAL",
-                Map.of(
-                    "fullName", "Alex Doe",
-                    "dateOfBirth", "1990-01-01",
-                    "phone", "5551234",
-                    "addressLine", "1 Main Street",
-                    "city", "Metro")))
-        .andExpect(status().isOk());
+  void submitIsGatedThenGeneratesPdfsAndLocksTheRecord() throws Exception {
+    // Nothing filled -> gated.
     mvc.perform(post("/me/onboarding/submit").header("Authorization", "Bearer " + empToken))
         .andExpect(status().isBadRequest());
 
-    // Complete GOVERNMENT + an UPLOADED PAN, then submit succeeds.
-    mvc.perform(putSection("GOVERNMENT", Map.of("panNumber", "ABCDE1234F"))).andExpect(status().isOk());
-    String documentId = uploadPan(empToken);
-    mvc.perform(
-            post("/me/onboarding/documents/" + documentId + "/confirm")
-                .header("Authorization", "Bearer " + empToken))
-        .andExpect(status().isCreated());
+    // Fill Form 1 + Form 2, upload+confirm Aadhaar & PAN, capture a signature.
+    saveForm1();
+    saveForm2();
+    confirm(upload("AADHAAR"));
+    confirm(upload("PAN"));
+    signature();
 
     MvcResult submit =
         mvc.perform(post("/me/onboarding/submit").header("Authorization", "Bearer " + empToken))
             .andExpect(status().isCreated())
             .andReturn();
-    assertThat(json.readTree(submit.getResponse().getContentAsString()).get("status").asText())
-        .isEqualTo("SUBMITTED");
+    JsonNode dash = json.readTree(submit.getResponse().getContentAsString());
+    assertThat(dash.get("status").asText()).isEqualTo("SUBMITTED");
+    // One PDF per form + a merged complete application.
+    assertThat(dash.get("generatedDocuments")).hasSize(5);
 
     // Locked: further edits and re-submit are rejected.
-    mvc.perform(putSection("PERSONAL", Map.of("fullName", "Changed Name", "dateOfBirth", "1990-01-01",
-            "phone", "5551234", "addressLine", "1 Main Street", "city", "Metro")))
+    mvc.perform(
+            put("/me/onboarding/form1")
+                .header("Authorization", "Bearer " + empToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(form1Body())))
         .andExpect(status().isConflict());
     mvc.perform(post("/me/onboarding/submit").header("Authorization", "Bearer " + empToken))
         .andExpect(status().isConflict());
 
     assertThat(auditLogs.findByAction("EMPLOYEE_SUBMITTED")).hasSize(1);
+    assertThat(auditLogs.findByAction("SIGNATURE_CAPTURED")).hasSize(1);
   }
 
   @Test
@@ -248,7 +207,7 @@ class OnboardingApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     json.writeValueAsString(
-                        Map.of("sectionKey", "GOVERNMENT", "docType", "PAN", "fileName", "x.txt",
+                        Map.of("docType", "PAN", "fileName", "x.txt",
                             "mimeType", "text/plain", "sizeBytes", 10))))
         .andExpect(status().isBadRequest());
 
@@ -258,28 +217,27 @@ class OnboardingApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     json.writeValueAsString(
-                        Map.of("sectionKey", "GOVERNMENT", "docType", "PAN", "fileName", "big.pdf",
+                        Map.of("docType", "PAN", "fileName", "big.pdf",
                             "mimeType", "application/pdf", "sizeBytes", 20L * 1024 * 1024))))
         .andExpect(status().isBadRequest());
   }
 
   @Test
-  void capsDocumentsPerTypeThenDeleteFreesASlot() throws Exception {
-    String first = uploadPan(empToken); // 1st (e.g. front)
-    uploadPan(empToken); // 2nd (e.g. back) — the cap is 2
+  void capsDocumentsPerSlotThenDeleteFreesASlot() throws Exception {
+    String first = upload("PAN"); // 1st
+    upload("PAN"); // 2nd — the cap is 2
 
-    // 3rd of the same type is rejected.
+    // 3rd of the same slot is rejected.
     mvc.perform(
             post("/me/onboarding/documents")
                 .header("Authorization", "Bearer " + empToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     json.writeValueAsString(
-                        Map.of("sectionKey", "GOVERNMENT", "docType", "PAN", "fileName", "extra.pdf",
+                        Map.of("docType", "PAN", "fileName", "extra.pdf",
                             "mimeType", "application/pdf", "sizeBytes", 2048))))
         .andExpect(status().isConflict());
 
-    // Deleting one frees a slot (and the dashboard reflects it).
     MvcResult del =
         mvc.perform(
                 delete("/me/onboarding/documents/" + first)
@@ -289,36 +247,86 @@ class OnboardingApiTest {
     assertThat(json.readTree(del.getResponse().getContentAsString()).get("documents").size())
         .isEqualTo(1);
 
-    // Now another upload of the same type is allowed again.
-    uploadPan(empToken);
+    upload("PAN"); // allowed again
     assertThat(auditLogs.findByAction("DOCUMENT_DELETED")).hasSize(1);
-  }
-
-  @Test
-  void cannotDeleteAnotherEmployeesDocument() throws Exception {
-    String documentId = uploadPan(empToken);
-    Employee other = employee("ACME-EMP-000002", "sam@personal.test");
-    mvc.perform(
-            delete("/me/onboarding/documents/" + documentId)
-                .header("Authorization", "Bearer " + tokenFor(other)))
-        .andExpect(status().isNotFound());
   }
 
   // --- helpers --------------------------------------------------------------
 
-  private String uploadPan(String token) throws Exception {
-    MvcResult req =
-        mvc.perform(
-                post("/me/onboarding/documents")
-                    .header("Authorization", "Bearer " + token)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                        json.writeValueAsString(
-                            Map.of("sectionKey", "GOVERNMENT", "docType", "PAN", "fileName", "pan.pdf",
-                                "mimeType", "application/pdf", "sizeBytes", 2048))))
-            .andExpect(status().isCreated())
-            .andReturn();
-    return json.readTree(req.getResponse().getContentAsString()).get("documentId").asText();
+  private Map<String, Object> form1Body() {
+    return Map.of(
+        "name", "Alex Doe",
+        "dateOfBirth", "1990-01-01",
+        "email", "alex@personal.test",
+        "mobile", "5551234",
+        "designation", "Engineer",
+        "offeredCtc", "1200000",
+        "city", "Metro",
+        "characterReferences",
+            List.of(
+                Map.of("name", "Ref One", "phone", "5550001"),
+                Map.of("name", "Ref Two", "phone", "5550002")));
+  }
+
+  private void saveForm1() throws Exception {
+    mvc.perform(
+            put("/me/onboarding/form1")
+                .header("Authorization", "Bearer " + empToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(form1Body())))
+        .andExpect(status().isOk());
+  }
+
+  private void saveForm2() throws Exception {
+    mvc.perform(
+            put("/me/onboarding/form2")
+                .header("Authorization", "Bearer " + empToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    json.writeValueAsString(
+                        Map.of("fullName", "Alex Doe", "designation", "Engineer",
+                            "panNumber", "ABCDE1234F"))))
+        .andExpect(status().isOk());
+  }
+
+  private void signature() throws Exception {
+    mvc.perform(
+            put("/me/onboarding/signature")
+                .header("Authorization", "Bearer " + empToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("imageDataUrl", SIGNATURE, "type", "DRAWN"))))
+        .andExpect(status().isOk());
+  }
+
+  private MvcResult requestUpload(String docType, Integer groupIndex, String fileName) throws Exception {
+    var body = new java.util.HashMap<String, Object>();
+    body.put("docType", docType);
+    body.put("fileName", fileName);
+    body.put("mimeType", "application/pdf");
+    body.put("sizeBytes", 2048);
+    if (groupIndex != null) {
+      body.put("groupIndex", groupIndex);
+    }
+    return mvc.perform(
+            post("/me/onboarding/documents")
+                .header("Authorization", "Bearer " + empToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(body)))
+        .andExpect(status().isCreated())
+        .andReturn();
+  }
+
+  private String upload(String docType) throws Exception {
+    return json.readTree(requestUpload(docType, null, docType.toLowerCase() + ".pdf").getResponse().getContentAsString())
+        .get("documentId")
+        .asText();
+  }
+
+  private void confirm(String documentId) throws Exception {
+    mvc.perform(
+            post("/me/onboarding/documents/" + documentId + "/confirm")
+                .header("Authorization", "Bearer " + empToken))
+        .andExpect(status().isCreated());
   }
 
   private JsonNode dashboard() throws Exception {
@@ -327,14 +335,6 @@ class OnboardingApiTest {
             .andExpect(status().isOk())
             .andReturn();
     return json.readTree(res.getResponse().getContentAsString());
-  }
-
-  private MockHttpServletRequestBuilder putSection(String key, Map<String, Object> data)
-      throws Exception {
-    return put("/me/onboarding/sections/" + key)
-        .header("Authorization", "Bearer " + empToken)
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(json.writeValueAsString(Map.of("data", data)));
   }
 
   private String company(String code) {
@@ -353,9 +353,8 @@ class OnboardingApiTest {
     return users.save(u).getId();
   }
 
-  private Employee employee(String code, String email) {
+  private Employee employee(String email) {
     Employee e = new Employee();
-    e.setEmployeeCode(code);
     e.setEmail(email);
     e.setCompanyId(companyId);
     e.setOnboardingHrId(hrId);

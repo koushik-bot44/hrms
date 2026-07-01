@@ -16,13 +16,13 @@ import com.ihrms.auth.TokenService;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.DocumentType;
 import com.ihrms.domain.enums.EmployeeStatus;
-import com.ihrms.domain.enums.SectionKey;
 import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
-import com.ihrms.domain.model.ProfileSection;
+import com.ihrms.domain.model.Form1Personal;
+import com.ihrms.domain.model.Form2Info;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
@@ -30,8 +30,9 @@ import com.ihrms.domain.repository.AuditLogRepository;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.repository.Form1PersonalRepository;
+import com.ihrms.domain.repository.Form2InfoRepository;
 import com.ihrms.domain.repository.NotificationRepository;
-import com.ihrms.domain.repository.ProfileSectionRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.storage.StorageService;
@@ -50,11 +51,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * HR verification & routing (contract §3.3/§3.4), storage MOCKED so it runs in {@code ./mvnw package}
- * with only a DB: the verification entry + actions key off the INTERNAL id (pre-approval employees
- * have no code); own-scope (cross-HR/cross-company denied); verify/reject persists; routing creates
- * the ApprovalRequest + Manager Notification and sets HR_VERIFIED; audit; and {@code /lookup/{code}}
- * resolves approved employees only.
+ * HR verification & routing (contract §3.3/§3.4) over the four-form model, storage MOCKED so it runs
+ * in {@code ./mvnw package} with only a DB: the verification entry keys off the INTERNAL id; own-scope
+ * (cross-HR/cross-company denied); verify each form + document; sensitive values are masked and the
+ * reveal is audited; routing creates the ApprovalRequest + Manager Notification and sets HR_VERIFIED.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -68,7 +68,8 @@ class ReviewApiTest {
   @Autowired UserRepository users;
   @Autowired TeamRepository teams;
   @Autowired EmployeeRepository employees;
-  @Autowired ProfileSectionRepository sections;
+  @Autowired Form1PersonalRepository form1s;
+  @Autowired Form2InfoRepository form2s;
   @Autowired DocumentRepository documents;
   @Autowired ApprovalRequestRepository approvals;
   @Autowired NotificationRepository notifications;
@@ -81,13 +82,13 @@ class ReviewApiTest {
   private User hr1;
   private User manager1;
   private String hr1Token;
-  private Employee emp; // onboarded by hr1, SUBMITTED, NO code, 2 sections + 1 PAN doc
+  private Employee emp; // onboarded by hr1, SUBMITTED, NO code, form1 + form2 + 1 PAN doc
 
   @BeforeEach
   void setup() {
     jdbc.execute(
-        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\",\"profile_sections\","
-            + "\"documents\",\"approval_requests\",\"notifications\",\"audit_logs\","
+        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\","
+            + "\"form1_personal\",\"form2_info\",\"form3_prev_employment\",\"documents\",\"signatures\",\"generated_documents\",\"approval_requests\",\"notifications\",\"audit_logs\","
             + "\"employee_code_sequences\" RESTART IDENTITY CASCADE");
     companyA = company("AAA");
     hr1 = user(companyA, UserRole.HR, "hr1@acme.test");
@@ -112,7 +113,11 @@ class ReviewApiTest {
     assertThat(body.get("dateOfJoining").asText()).isEqualTo("2026-07-01");
     assertThat(body.get("status").asText()).isEqualTo("SUBMITTED");
     assertThat(body.get("reviewComplete").asBoolean()).isFalse();
-    assertThat(body.get("sections")).hasSize(2);
+    assertThat(body.get("form1").get("name").asText()).isEqualTo("Evan Stone");
+    assertThat(body.get("form2").get("fullName").asText()).isEqualTo("Evan Stone");
+    // Sensitive values are MASKED in the default view (§6).
+    assertThat(body.get("form1").get("offeredCtc").asText()).isEqualTo("********");
+    assertThat(body.get("form2").get("panNumber").asText()).isEqualTo("********");
     assertThat(body.get("documents")).hasSize(1);
     assertThat(body.get("documents").get(0).get("viewUrl").asText()).startsWith("http");
     assertThat(res.getResponse().getContentAsString()).doesNotContain("storageKey");
@@ -131,6 +136,18 @@ class ReviewApiTest {
   }
 
   @Test
+  void revealingSensitiveValuesReturnsPlaintextAndIsAudited() throws Exception {
+    MvcResult res =
+        mvc.perform(post("/employees/" + emp.getId() + "/reveal").header("Authorization", "Bearer " + hr1Token))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode body = json.readTree(res.getResponse().getContentAsString());
+    assertThat(body.get("form1").get("offeredCtc").asText()).isEqualTo("1500000");
+    assertThat(body.get("form2").get("panNumber").asText()).isEqualTo("ABCDE1234F");
+    assertThat(auditLogs.findByAction("SENSITIVE_FIELD_REVEALED")).hasSize(1);
+  }
+
+  @Test
   void lookupByCodeFindsApprovedOnly() throws Exception {
     Employee approved = approvedEmployee(hr1.getId(), "AAA-EMP-000007");
     MvcResult res =
@@ -142,7 +159,6 @@ class ReviewApiTest {
     assertThat(body.get("employeeCode").asText()).isEqualTo("AAA-EMP-000007");
     assertThat(body.get("status").asText()).isEqualTo("APPROVED");
 
-    // A pre-approval / unknown code is not found (the submitted emp has no code, so isn't findable here).
     mvc.perform(get("/employees/lookup/AAA-EMP-999999").header("Authorization", "Bearer " + hr1Token))
         .andExpect(status().isNotFound());
   }
@@ -156,15 +172,14 @@ class ReviewApiTest {
             .header("Authorization", "Bearer " + hr1Token))
         .andExpect(status().isBadRequest());
 
-    review("sections/PERSONAL", "VERIFIED", null);
-    review("sections/GOVERNMENT", "VERIFIED", null);
+    reviewForm("FORM1", "VERIFIED", null);
+    reviewForm("FORM2", "VERIFIED", null);
     MvcResult afterDoc = reviewDoc(docId, "VERIFIED", null);
     assertThat(json.readTree(afterDoc.getResponse().getContentAsString()).get("reviewComplete").asBoolean())
         .isTrue();
-    assertThat(auditLogs.findByAction("SECTION_REVIEWED")).hasSize(2);
+    assertThat(auditLogs.findByAction("FORM_REVIEWED")).hasSize(2);
     assertThat(auditLogs.findByAction("DOCUMENT_REVIEWED")).hasSize(1);
 
-    // Route to the team's Manager.
     MvcResult routed =
         mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
                 .header("Authorization", "Bearer " + hr1Token)
@@ -176,7 +191,6 @@ class ReviewApiTest {
     assertThat(result.get("status").asText()).isEqualTo("HR_VERIFIED");
     assertThat(result.get("managerName").asText()).isEqualTo("mgr1@acme.test");
 
-    // ApprovalRequest -> the team's Manager; Notification -> the Manager's inbox; employee HR_VERIFIED.
     assertThat(approvals.findByEmployeeId(emp.getId()))
         .singleElement()
         .satisfies(a -> {
@@ -194,7 +208,7 @@ class ReviewApiTest {
         .satisfies(r -> assertThat(r.getCompanyId()).isEqualTo(companyA));
 
     // Locked after routing: review + re-route are rejected.
-    mvc.perform(patch("/employees/" + emp.getId() + "/sections/PERSONAL")
+    mvc.perform(patch("/employees/" + emp.getId() + "/forms/FORM1")
             .header("Authorization", "Bearer " + hr1Token)
             .contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(Map.of("decision", "VERIFIED"))))
@@ -207,8 +221,8 @@ class ReviewApiTest {
   @Test
   void rejectingADocumentRecordsTheReasonAndBlocksRouting() throws Exception {
     String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
-    review("sections/PERSONAL", "VERIFIED", null);
-    review("sections/GOVERNMENT", "VERIFIED", null);
+    reviewForm("FORM1", "VERIFIED", null);
+    reviewForm("FORM2", "VERIFIED", null);
     MvcResult rejected = reviewDoc(docId, "REJECTED", "Scan is blurry");
     assertThat(json.readTree(rejected.getResponse().getContentAsString()).get("reviewComplete").asBoolean())
         .isFalse();
@@ -224,9 +238,9 @@ class ReviewApiTest {
 
   // --- helpers --------------------------------------------------------------
 
-  private void review(String pathSuffix, String decision, String reason) throws Exception {
+  private void reviewForm(String form, String decision, String reason) throws Exception {
     var body = reason == null ? Map.of("decision", decision) : Map.of("decision", decision, "reason", reason);
-    mvc.perform(patch("/employees/" + emp.getId() + "/" + pathSuffix)
+    mvc.perform(patch("/employees/" + emp.getId() + "/forms/" + form)
             .header("Authorization", "Bearer " + hr1Token)
             .contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(body)))
@@ -280,15 +294,25 @@ class ReviewApiTest {
     // no employeeCode — allocated on approval (§5)
     employees.save(e);
 
-    section(e.getId(), SectionKey.PERSONAL, Map.of("fullName", "Evan Stone"));
-    section(e.getId(), SectionKey.GOVERNMENT, Map.of("panNumber", "ABCDE1234F"));
+    Form1Personal f1 = new Form1Personal();
+    f1.setEmployeeId(e.getId());
+    f1.setData(Map.of("name", "Evan Stone"));
+    f1.setOfferedCtc("1500000"); // sensitive — encrypted at rest, masked in the record view
+    f1.setStatus(SectionStatus.SUBMITTED);
+    form1s.save(f1);
+
+    Form2Info f2 = new Form2Info();
+    f2.setEmployeeId(e.getId());
+    f2.setData(Map.of("fullName", "Evan Stone"));
+    f2.setPanNumber("ABCDE1234F"); // sensitive
+    f2.setStatus(SectionStatus.SUBMITTED);
+    form2s.save(f2);
 
     Document d = new Document();
     d.setEmployeeId(e.getId());
-    d.setSectionKey(SectionKey.GOVERNMENT);
     d.setDocType(DocumentType.PAN);
     d.setFileName("pan.pdf");
-    d.setStorageKey("companies/x/employees/" + e.getId() + "/GOVERNMENT/pan.pdf");
+    d.setStorageKey("companies/x/employees/" + e.getId() + "/form4/pan.pdf");
     d.setMimeType("application/pdf");
     d.setSha256("deadbeef");
     d.setStatus(DocumentStatus.UPLOADED);
@@ -306,15 +330,6 @@ class ReviewApiTest {
     e.setOnboardingHrId(hrId);
     e.setStatus(EmployeeStatus.APPROVED);
     return employees.save(e);
-  }
-
-  private void section(String employeeId, SectionKey key, Map<String, Object> data) {
-    ProfileSection s = new ProfileSection();
-    s.setEmployeeId(employeeId);
-    s.setKey(key);
-    s.setData(data);
-    s.setStatus(SectionStatus.SUBMITTED);
-    sections.save(s);
   }
 
   private String tokenFor(User u) {

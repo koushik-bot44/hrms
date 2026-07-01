@@ -2,6 +2,7 @@ package com.ihrms.review;
 
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
+import com.ihrms.review.dto.ReviewDtos.RevealedSensitive;
 import com.ihrms.review.dto.ReviewDtos.ReviewRequest;
 import com.ihrms.review.dto.ReviewDtos.RouteToManagerRequest;
 import com.ihrms.review.dto.ReviewDtos.RouteToManagerResult;
@@ -20,10 +21,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * HR verification & routing workspace (contract §3.3/§3.4). HR-only (URL rule + @PreAuthorize); every
- * operation is scoped to the acting HR's own onboarded employees. The verification entry + actions key
- * off the INTERNAL employee id (pre-approval employees have no code); {@code /lookup/{code}} is the
- * §3.4 post-approval records lookup by employee ID (only approved employees have a code).
+ * HR verification & routing workspace (§3.3/§3.4). HR-only; every operation is scoped to the acting
+ * HR's own onboarded employees. Verification keys off the INTERNAL employee id;
+ * {@code /lookup/{code}} is the §3.4 post-approval records lookup by employee ID.
  */
 @RestController
 @RequestMapping("/employees")
@@ -52,14 +52,23 @@ public class ReviewController {
     return review.lookupByCode(actor, employeeCode, request.getRemoteAddr());
   }
 
-  @PatchMapping("/{id}/sections/{key}")
-  public EmployeeRecordView reviewSection(
+  /** Explicit, audited reveal of the masked sensitive values (§6). */
+  @PostMapping("/{id}/reveal")
+  public RevealedSensitive reveal(
       @PathVariable String id,
-      @PathVariable String key,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return review.reveal(actor, id, request.getRemoteAddr());
+  }
+
+  @PatchMapping("/{id}/forms/{form}")
+  public EmployeeRecordView reviewForm(
+      @PathVariable String id,
+      @PathVariable String form,
       @Valid @RequestBody ReviewRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return review.reviewSection(actor, id, key, body, request.getRemoteAddr());
+    return review.reviewForm(actor, id, form, body, request.getRemoteAddr());
   }
 
   @PatchMapping("/{id}/documents/{documentId}")

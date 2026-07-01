@@ -45,6 +45,11 @@ public class DbStorageBackend implements StorageBackend {
   }
 
   @Override
+  public void putObject(String key, byte[] bytes, String contentType) {
+    blobs.save(key, bytes, contentType);
+  }
+
+  @Override
   public byte[] getObjectBytes(String key) {
     return blobs
         .find(key)

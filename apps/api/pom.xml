@@ -100,6 +100,12 @@
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
       <version>${springdoc.version}</version>
     </dependency>
+    <!-- Pure-Java PDF generation (LGPL/MPL, no native deps) for the generated onboarding forms. -->
+    <dependency>
+      <groupId>com.github.librepdf</groupId>
+      <artifactId>openpdf</artifactId>
+      <version>2.0.3</version>
+    </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>

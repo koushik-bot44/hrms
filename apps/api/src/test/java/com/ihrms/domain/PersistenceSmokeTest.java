@@ -6,15 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.DocumentType;
 import com.ihrms.domain.enums.NotificationType;
-import com.ihrms.domain.enums.SectionKey;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.ApprovalRequest;
 import com.ihrms.domain.model.AuditLog;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.Form1Personal;
 import com.ihrms.domain.model.Notification;
-import com.ihrms.domain.model.ProfileSection;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
@@ -22,8 +21,8 @@ import com.ihrms.domain.repository.AuditLogRepository;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.repository.Form1PersonalRepository;
 import com.ihrms.domain.repository.NotificationRepository;
-import com.ihrms.domain.repository.ProfileSectionRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.EmployeeCodeService;
@@ -43,8 +42,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Persistence smoke test against a real local Postgres (gated on {@code IHRMS_TEST_DB}).
- * Verifies: every aggregate persists + reads; the atomic per-company code sequence; and
- * that AuditLog rows cannot be updated or deleted.
+ * Verifies: every aggregate persists + reads (incl. the Form 1 record + a Form 4 document); the
+ * atomic per-company code sequence; and that AuditLog rows cannot be updated or deleted.
  */
 @SpringBootTest
 @EnabledIfEnvironmentVariable(named = "IHRMS_TEST_DB", matches = ".+")
@@ -54,7 +53,7 @@ class PersistenceSmokeTest {
   @Autowired CompanyRepository companies;
   @Autowired TeamRepository teams;
   @Autowired EmployeeRepository employees;
-  @Autowired ProfileSectionRepository sections;
+  @Autowired Form1PersonalRepository form1s;
   @Autowired DocumentRepository documents;
   @Autowired ApprovalRequestRepository approvals;
   @Autowired NotificationRepository notifications;
@@ -65,8 +64,8 @@ class PersistenceSmokeTest {
   @BeforeEach
   void clean() {
     jdbc.execute(
-        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\",\"profile_sections\","
-            + "\"documents\",\"approval_requests\",\"notifications\",\"audit_logs\","
+        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\","
+            + "\"form1_personal\",\"form2_info\",\"form3_prev_employment\",\"documents\",\"signatures\",\"generated_documents\",\"approval_requests\",\"notifications\",\"audit_logs\","
             + "\"employee_code_sequences\" RESTART IDENTITY CASCADE");
   }
 
@@ -96,19 +95,19 @@ class PersistenceSmokeTest {
     employee.setOnboardingHrId(hr.getId());
     employees.save(employee);
 
-    ProfileSection section = new ProfileSection();
-    section.setEmployeeId(employee.getId());
-    section.setKey(SectionKey.PERSONAL);
-    section.setData(Map.of("fullName", "Alex Doe", "city", "Metro"));
-    sections.save(section);
+    Form1Personal form1 = new Form1Personal();
+    form1.setEmployeeId(employee.getId());
+    form1.setData(Map.of("name", "Alex Doe", "city", "Metro"));
+    form1.setOfferedCtc("1200000"); // encrypted at rest by the converter
+    form1s.save(form1);
 
     Document document = new Document();
     document.setEmployeeId(employee.getId());
-    document.setSectionKey(SectionKey.GOVERNMENT);
     document.setDocType(DocumentType.PAN);
     document.setFileName("pan.pdf");
     document.setStorageKey("companies/x/employees/y/pan.pdf");
     document.setMimeType("application/pdf");
+    document.setStatus(DocumentStatus.UPLOADED);
     documents.save(document);
 
     ApprovalRequest approval = new ApprovalRequest();
@@ -137,8 +136,13 @@ class PersistenceSmokeTest {
     assertThat(users.findByEmail("hr@acme.test")).get().extracting(User::getRole).isEqualTo(UserRole.HR);
     assertThat(employees.findByEmployeeCode("ACME-EMP-000001")).isPresent();
     assertThat(teams.findById(team.getId())).get().extracting(Team::getHrUserId).isEqualTo(hr.getId());
-    ProfileSection readSection = sections.findByEmployeeIdAndKey(employee.getId(), SectionKey.PERSONAL).orElseThrow();
-    assertThat(readSection.getData()).containsEntry("fullName", "Alex Doe");
+    Form1Personal readForm1 = form1s.findByEmployeeId(employee.getId()).orElseThrow();
+    assertThat(readForm1.getData()).containsEntry("name", "Alex Doe");
+    // The sensitive column round-trips in the clear through the converter, but is ciphertext at rest.
+    assertThat(readForm1.getOfferedCtc()).isEqualTo("1200000");
+    assertThat(jdbc.queryForObject(
+            "SELECT \"offeredCtc\" FROM \"form1_personal\" WHERE \"id\"=?", String.class, readForm1.getId()))
+        .startsWith("enc:v1:");
     assertThat(documents.findByEmployeeId(employee.getId())).singleElement().extracting(Document::getStatus).isEqualTo(DocumentStatus.UPLOADED);
     assertThat(approvals.findByManagerUserId(manager.getId())).hasSize(1);
     assertThat(notifications.findByRecipientUserId(manager.getId())).hasSize(1);
