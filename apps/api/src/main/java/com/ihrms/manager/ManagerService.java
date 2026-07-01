@@ -28,6 +28,8 @@ import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +49,8 @@ public class ManagerService {
   private final EmployeeRepository employees;
   private final UserRepository users;
   private final CompanyRepository companies;
+  private static final Logger log = LoggerFactory.getLogger(ManagerService.class);
+
   private final EmployeeCodeService codes;
   private final PdfService pdf;
   private final EmployeeRecordAssembler assembler;
@@ -166,9 +170,6 @@ public class ManagerService {
     employee.setStatus(EmployeeStatus.APPROVED);
     employees.save(employee);
 
-    // Regenerate the PDFs so the freshly-minted employee ID is stamped onto them.
-    pdf.generateForEmployee(employee);
-
     notifyHr(approval, NotificationType.EMPLOYEE_APPROVED);
     mail.sendEmployeeWelcome(employee.getEmail(), employee.getFullName(), employee.getEmployeeCode());
 
@@ -181,6 +182,22 @@ public class ManagerService {
             "approvalRequestId", approval.getId(), "employeeCode", employee.getEmployeeCode()),
         null);
     return approvalView(approval);
+  }
+
+  /**
+   * Regenerate the employee's PDFs after an approval has committed, so the freshly-minted ID is
+   * stamped on them. Best-effort: called by the controller AFTER {@link #approve} returns (post-commit),
+   * so a storage/rendering failure is logged but can never fail or roll back the approval itself.
+   */
+  public void regeneratePdfsForApproval(IhrmsPrincipal.User manager, String approvalId) {
+    try {
+      approvals
+          .findByIdAndManagerUserId(approvalId, manager.userId())
+          .flatMap(a -> employees.findById(a.getEmployeeId()))
+          .ifPresent(pdf::generateForEmployee);
+    } catch (Exception e) {
+      log.error("Post-approval PDF generation failed for approval {} (non-fatal)", approvalId, e);
+    }
   }
 
   /** Allocate the next unique employee code for the employee's company (atomic, collision-safe, §5). */

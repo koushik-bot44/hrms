@@ -25,7 +25,6 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Generates the onboarding PDFs (§3.2) with OpenPDF: one per form (Form 1 Personal, Form 2 Info,
@@ -71,8 +70,10 @@ public class PdfService {
   /**
    * (Re)generate all five PDFs for an employee and replace any previously generated set. Called at
    * submit and again when Manager approval mints the employee ID (so it appears on the PDFs).
+   *
+   * <p>Not {@code @Transactional}: it runs from a post-commit event listener (best-effort), where each
+   * repository write is its own transaction — so it can never fail or roll back the submission/approval.
    */
-  @Transactional
   public void generateForEmployee(Employee employee) {
     String companyName =
         companies.findById(employee.getCompanyId()).map(Company::getName).orElse("Company");

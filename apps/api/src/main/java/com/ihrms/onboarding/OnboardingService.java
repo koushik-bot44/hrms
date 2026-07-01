@@ -336,10 +336,21 @@ public class OnboardingService {
     employee.setStatus(EmployeeStatus.SUBMITTED);
     employees.save(employee);
 
-    pdf.generateForEmployee(employee);
-
     audit(emp, "EMPLOYEE_SUBMITTED", "Employee", emp.employeeId(), null, ip);
     return dashboardOf(employee);
+  }
+
+  /**
+   * (Re)generate the employee's PDFs — called by the controller AFTER {@link #submit} commits
+   * (post-commit, best-effort), so a storage/rendering failure is logged but never fails or rolls
+   * back the submission.
+   */
+  public void regeneratePdfsQuietly(IhrmsPrincipal.Employee emp) {
+    try {
+      employees.findById(emp.employeeId()).ifPresent(pdf::generateForEmployee);
+    } catch (Exception e) {
+      log.error("Onboarding PDF generation failed for employee {} (non-fatal)", emp.employeeId(), e);
+    }
   }
 
   public PresignedView generatedViewUrl(IhrmsPrincipal.Employee emp, String generatedId, String ip) {

@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * {@code bytea} JDBC type-code mismatch that would otherwise break startup. Only active in db mode.
  */
 @Component
-@ConditionalOnProperty(name = "app.storage.driver", havingValue = "db")
+@ConditionalOnProperty(name = "app.storage.driver", havingValue = "db", matchIfMissing = true)
 public class DocumentBlobStore {
 
   private final JdbcTemplate jdbc;

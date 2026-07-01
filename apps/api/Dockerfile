@@ -13,4 +13,5 @@ WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 # Railway injects PORT; Spring reads it via server.port=${PORT:8080}.
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+# Headless: OpenPDF generates the onboarding PDFs server-side (no display on the runtime image).
+ENTRYPOINT ["java", "-Djava.awt.headless=true", "-jar", "/app/app.jar"]

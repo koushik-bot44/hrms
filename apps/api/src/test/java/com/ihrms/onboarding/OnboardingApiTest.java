@@ -182,8 +182,9 @@ class OnboardingApiTest {
             .andReturn();
     JsonNode dash = json.readTree(submit.getResponse().getContentAsString());
     assertThat(dash.get("status").asText()).isEqualTo("SUBMITTED");
-    // One PDF per form + a merged complete application.
-    assertThat(dash.get("generatedDocuments")).hasSize(5);
+    // The PDFs (one per form + a merged complete application) are generated just after the submit
+    // commits, so the dashboard reflects them on the next read.
+    assertThat(dashboard().get("generatedDocuments")).hasSize(5);
 
     // Locked: further edits and re-submit are rejected.
     mvc.perform(

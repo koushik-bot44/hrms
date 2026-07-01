@@ -760,7 +760,8 @@ function SignStep({
 
   const submit = useApiMutation(() => submitOnboarding(), {
     successMessage: 'Submitted for verification',
-    onSuccess: (d) => queryClient.setQueryData(['onboarding'], d),
+    // The generated PDFs are produced just after the submit commits, so refetch to display them.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['onboarding'] }),
   });
 
   return (

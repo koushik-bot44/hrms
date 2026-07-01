@@ -125,6 +125,9 @@ public class OnboardingController {
   @ResponseStatus(HttpStatus.CREATED)
   public OnboardingDashboard submit(
       @AuthenticationPrincipal IhrmsPrincipal.Employee emp, HttpServletRequest request) {
-    return onboarding.submit(emp, request.getRemoteAddr());
+    onboarding.submit(emp, request.getRemoteAddr());
+    // Post-commit + best-effort: generate the PDFs, then return the dashboard reflecting them.
+    onboarding.regeneratePdfsQuietly(emp);
+    return onboarding.dashboard(emp);
   }
 }

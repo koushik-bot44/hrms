@@ -67,7 +67,11 @@ public class ManagerController {
   @PostMapping("/approvals/{id}/approve")
   public ApprovalView approve(
       @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
-    return manager.approve(actor, id);
+    ApprovalView view = manager.approve(actor, id);
+    // Post-commit + best-effort: (re)generate the PDFs with the minted ID; a failure here must not
+    // undo the approval that already committed above.
+    manager.regeneratePdfsForApproval(actor, id);
+    return view;
   }
 
   @PostMapping("/approvals/{id}/reject")

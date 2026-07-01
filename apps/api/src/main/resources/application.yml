@@ -93,8 +93,8 @@ app:
     secret-access-key: ${S3_SECRET_ACCESS_KEY:}
     force-path-style: ${S3_FORCE_PATH_STYLE:false}
   storage:
-    # 's3' (default; uses the S3_* block above) or 'db' (store bytes in Postgres, no bucket needed).
-    driver: ${STORAGE_DRIVER:s3}
+    # 'db' (default; store bytes in Postgres, no bucket needed) or 's3' (uses the S3_* block above).
+    driver: ${STORAGE_DRIVER:db}
     # Absolute base URL of THIS API for db-storage blob links; blank = derive from the request.
     public-base-url: ${STORAGE_PUBLIC_URL:}
     # Max accepted upload size for the db blob endpoint (bytes); matches the 10 MiB request cap.

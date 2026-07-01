@@ -31,7 +31,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
  * {@code S3_*} is unset the app still boots and uploads fail with 503 until configured.
  */
 @Component
-@ConditionalOnProperty(name = "app.storage.driver", havingValue = "s3", matchIfMissing = true)
+@ConditionalOnProperty(name = "app.storage.driver", havingValue = "s3")
 public class S3StorageBackend implements StorageBackend {
 
   private static final Logger log = LoggerFactory.getLogger(S3StorageBackend.class);

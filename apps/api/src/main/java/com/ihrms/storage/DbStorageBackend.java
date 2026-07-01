@@ -16,7 +16,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
  * (honouring {@code X-Forwarded-*} via {@code server.forward-headers-strategy}).
  */
 @Component
-@ConditionalOnProperty(name = "app.storage.driver", havingValue = "db")
+@ConditionalOnProperty(name = "app.storage.driver", havingValue = "db", matchIfMissing = true)
 public class DbStorageBackend implements StorageBackend {
 
   private final DocumentBlobStore blobs;
