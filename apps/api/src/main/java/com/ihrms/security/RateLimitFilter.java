@@ -17,11 +17,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Per-IP rate limit on the public auth endpoints ({@code /auth/**}) to blunt brute-force /
- * credential-stuffing (§6 hardening). A fixed window of {@value #LIMIT} requests per
- * {@value #WINDOW_MS} ms per client IP; over the limit returns 429 with the error envelope.
- * In-memory + per-instance (sufficient for the single-instance v1 deployment). Runs before the
- * security chain.
+ * Per-IP rate limit on the unauthenticated public endpoints — the auth endpoints ({@code /auth/**},
+ * including OTP request/verify) and the db-storage blob endpoint ({@code /storage/blobs/**}) — to
+ * blunt brute-force / credential-stuffing and file-token abuse (§6 hardening). A fixed window of
+ * {@value #LIMIT} requests per {@value #WINDOW_MS} ms per client IP; over the limit returns 429 with
+ * the error envelope. In-memory + per-instance (sufficient for the single-instance v1 deployment).
+ * Runs before the security chain.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -42,7 +43,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
-    return !request.getRequestURI().startsWith("/auth/");
+    String uri = request.getRequestURI();
+    return !(uri.startsWith("/auth/") || uri.startsWith("/storage/blobs/"));
   }
 
   @Override
