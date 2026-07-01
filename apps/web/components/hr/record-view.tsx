@@ -62,9 +62,16 @@ export function RecordView({
           </div>
           <div className="flex items-center gap-3">
             {record.sensitiveRevealable && onReveal ? (
-              <Button type="button" variant="outline" size="sm" onClick={onReveal} disabled={Boolean(revealed)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onReveal}
+                disabled={Boolean(revealed)}
+                title="Revealing masked fields is recorded in the audit trail"
+              >
                 <Eye className="size-4" />
-                {revealed ? 'Revealed' : 'Reveal sensitive'}
+                {revealed ? 'Revealed' : 'Reveal (audited)'}
               </Button>
             ) : null}
             <StatusBadge status={record.status} />

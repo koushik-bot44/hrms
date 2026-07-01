@@ -111,6 +111,7 @@ export function EmployeeQueue() {
                 <th className="px-3 py-2 font-medium">Name</th>
                 <th className="px-3 py-2 font-medium">Email</th>
                 <th className="px-3 py-2 font-medium">Designation</th>
+                <th className="px-3 py-2 font-medium">Joining</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2" />
               </tr>
@@ -121,6 +122,7 @@ export function EmployeeQueue() {
                   <td className="px-3 py-2 font-medium">{e.fullName ?? '—'}</td>
                   <td className="px-3 py-2 text-muted-foreground">{e.email}</td>
                   <td className="px-3 py-2 text-muted-foreground">{e.designation ?? '—'}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{e.dateOfJoining ?? '—'}</td>
                   <td className="px-3 py-2">
                     <StatusBadge status={e.status} />
                   </td>
