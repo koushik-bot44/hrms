@@ -126,13 +126,22 @@ class CompaniesApiTest {
     String devPassword = body.get("devPassword").asText();
     assertThat(devPassword).isNotBlank();
 
-    // The provisioned admin can log in and is a COMPANY_ADMIN scoped to the company.
-    MvcResult login =
+    // The provisioned admin can sign in (unified OTP: name + email) and is a COMPANY_ADMIN
+    // scoped to the company.
+    MvcResult otpRes =
         mvc.perform(
-                post("/auth/login")
+                post("/auth/request-otp")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(json.writeValueAsString(
-                        Map.of("email", "ada@acme.test", "password", devPassword))))
+                        Map.of("fullName", "Ada Admin", "email", "ada@acme.test"))))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String otp = json.readTree(otpRes.getResponse().getContentAsString()).get("devOtp").asText();
+    MvcResult login =
+        mvc.perform(
+                post("/auth/verify-otp")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json.writeValueAsString(Map.of("email", "ada@acme.test", "otp", otp))))
             .andExpect(status().isCreated())
             .andReturn();
     JsonNode session = json.readTree(login.getResponse().getContentAsString()).get("session");

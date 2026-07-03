@@ -3,22 +3,17 @@ import {
   OtpRequestResultSchema,
   SessionSchema,
   type AuthResult,
-  type EmployeeOtpRequestInput,
-  type EmployeeOtpVerifyInput,
+  type OtpRequestInput,
   type OtpRequestResult,
+  type OtpVerifyInput,
   type Session,
-  type StaffLoginInput,
 } from '@/lib/contract';
 import { apiFetch } from './client';
 
-/** Auth API calls. `skipAuth` keeps these off the access-token/refresh path. */
+/** Unified auth API calls (§6). `skipAuth` keeps these off the access-token/refresh path. */
 
-export function loginStaff(body: StaffLoginInput): Promise<AuthResult> {
-  return apiFetch('/auth/login', { method: 'POST', body, schema: AuthResultSchema, skipAuth: true });
-}
-
-export function requestEmployeeOtp(body: EmployeeOtpRequestInput): Promise<OtpRequestResult> {
-  return apiFetch('/auth/employee/request-otp', {
+export function requestOtp(body: OtpRequestInput): Promise<OtpRequestResult> {
+  return apiFetch('/auth/request-otp', {
     method: 'POST',
     body,
     schema: OtpRequestResultSchema,
@@ -26,8 +21,8 @@ export function requestEmployeeOtp(body: EmployeeOtpRequestInput): Promise<OtpRe
   });
 }
 
-export function verifyEmployeeOtp(body: EmployeeOtpVerifyInput): Promise<AuthResult> {
-  return apiFetch('/auth/employee/verify-otp', {
+export function verifyOtp(body: OtpVerifyInput): Promise<AuthResult> {
+  return apiFetch('/auth/verify-otp', {
     method: 'POST',
     body,
     schema: AuthResultSchema,

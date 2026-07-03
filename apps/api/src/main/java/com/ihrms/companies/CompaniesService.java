@@ -2,6 +2,7 @@ package com.ihrms.companies;
 
 import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
+import com.ihrms.auth.AccountEmails;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
 import com.ihrms.companies.dto.CompanyDtos.CompanyAdminView;
@@ -46,6 +47,7 @@ public class CompaniesService {
   private final AuditService audit;
   private final MailService mail;
   private final PasswordEncoder encoder;
+  private final AccountEmails accountEmails;
   private final Environment env;
 
   public CompaniesService(
@@ -56,6 +58,7 @@ public class CompaniesService {
       AuditService audit,
       MailService mail,
       PasswordEncoder encoder,
+      AccountEmails accountEmails,
       Environment env) {
     this.companies = companies;
     this.users = users;
@@ -64,6 +67,7 @@ public class CompaniesService {
     this.audit = audit;
     this.mail = mail;
     this.encoder = encoder;
+    this.accountEmails = accountEmails;
     this.env = env;
   }
 
@@ -121,6 +125,7 @@ public class CompaniesService {
     }
 
     String email = input.email().trim().toLowerCase();
+    accountEmails.assertAvailableForStaff(email); // unique across staff + employees (§6)
     String tempPassword = TempPasswords.generate();
     User user = new User();
     user.setEmail(email);

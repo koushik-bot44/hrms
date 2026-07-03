@@ -30,13 +30,13 @@ class HardeningTest {
 
   @Test
   void authEndpointsAreRateLimitedPerIp() throws Exception {
-    // A dedicated client IP gets its own budget; the first request is a normal 401, and once the
-    // per-minute limit is exceeded the endpoint returns 429.
-    String body = json.writeValueAsString(Map.of("email", "nobody@x.test", "password", "Password1"));
+    // A dedicated client IP gets its own budget; the first request is a normal 201 (generic OTP
+    // response), and once the per-minute limit is exceeded the endpoint returns 429.
+    String body = json.writeValueAsString(Map.of("fullName", "Nobody At All", "email", "nobody@x.test"));
 
     int first =
         mvc.perform(
-                post("/auth/login")
+                post("/auth/request-otp")
                     .with(remoteAddr("10.20.30.40"))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body))
@@ -49,7 +49,7 @@ class HardeningTest {
     for (int i = 0; i < 65; i++) {
       last =
           mvc.perform(
-                  post("/auth/login")
+                  post("/auth/request-otp")
                       .with(remoteAddr("10.20.30.40"))
                       .contentType(MediaType.APPLICATION_JSON)
                       .content(body))

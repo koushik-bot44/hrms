@@ -17,7 +17,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
-/** Staff/operator account (table {@code users}). Auth = email + password (§6). */
+/** Staff/operator account (table {@code users}). Auth = full name + email + OTP (§6). */
 @Entity
 @Table(name = "users")
 @Getter
@@ -47,8 +47,16 @@ public class User {
   @Column(name = "teamId")
   private String teamId; // home team for HR/Manager
 
+  /** Retained but dormant (break-glass); the login factor is now the emailed OTP below (§6). */
   @Column(name = "passwordHash")
   private String passwordHash;
+
+  @Column(name = "otpHash")
+  private String otpHash;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "otpExpiresAt")
+  private Instant otpExpiresAt;
 
   @Column(name = "status", nullable = false)
   private String status = "ACTIVE";

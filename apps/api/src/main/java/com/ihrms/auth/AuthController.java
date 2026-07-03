@@ -4,11 +4,10 @@ import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditInterceptor;
 import com.ihrms.auth.AuthService.IssuedSession;
 import com.ihrms.auth.dto.AuthDtos.AuthResult;
-import com.ihrms.auth.dto.AuthDtos.EmployeeOtpRequest;
-import com.ihrms.auth.dto.AuthDtos.EmployeeOtpVerifyRequest;
 import com.ihrms.auth.dto.AuthDtos.OkResponse;
+import com.ihrms.auth.dto.AuthDtos.OtpRequest;
 import com.ihrms.auth.dto.AuthDtos.OtpRequestResult;
-import com.ihrms.auth.dto.AuthDtos.StaffLoginRequest;
+import com.ihrms.auth.dto.AuthDtos.OtpVerifyRequest;
 import com.ihrms.auth.dto.SessionView;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -41,28 +40,21 @@ public class AuthController {
     this.cookies = cookies;
   }
 
-  @PostMapping("/login")
+  /** Unified start: full name + email -> OTP (staff or employee). Enumeration-safe generic result. */
+  @PostMapping("/request-otp")
   @ResponseStatus(HttpStatus.CREATED)
-  public AuthResult login(
-      @Valid @RequestBody StaffLoginRequest body,
-      HttpServletRequest request,
-      HttpServletResponse response) {
-    return complete(auth.loginStaff(body), request, response);
+  public OtpRequestResult requestOtp(@Valid @RequestBody OtpRequest body) {
+    return auth.requestOtp(body);
   }
 
-  @PostMapping("/employee/request-otp")
-  @ResponseStatus(HttpStatus.CREATED)
-  public OtpRequestResult requestOtp(@Valid @RequestBody EmployeeOtpRequest body) {
-    return auth.requestEmployeeOtp(body);
-  }
-
-  @PostMapping("/employee/verify-otp")
+  /** Unified verify: email + code -> session (principal type + role + scope from the account). */
+  @PostMapping("/verify-otp")
   @ResponseStatus(HttpStatus.CREATED)
   public AuthResult verifyOtp(
-      @Valid @RequestBody EmployeeOtpVerifyRequest body,
+      @Valid @RequestBody OtpVerifyRequest body,
       HttpServletRequest request,
       HttpServletResponse response) {
-    return complete(auth.verifyEmployeeOtp(body), request, response);
+    return complete(auth.verifyOtp(body), request, response);
   }
 
   @PostMapping("/refresh")

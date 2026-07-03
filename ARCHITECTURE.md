@@ -196,15 +196,23 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
     notifications/approvals.
   - Employee → only their own record.
   - Centralise these relationship checks; do not scatter them across handlers.
-- **Authentication**
-  - **Employee:** **full name + email → OTP** (no password; no ID at login). The single-use,
-    time-boxed **OTP sent to the email is the security factor**; email is the globally-unique handle
-    and the full name is matched against the record. OTP issuance is **rate-limited** and
-    **enumeration-safe** (a generic "if a match exists, a code was sent" response).
-  - **Staff (User):** email + password (hashed with a strong KDF, e.g. argon2/bcrypt) in v1;
-    structured so SSO can drop in later. _[decision point: confirm staff auth method.]_
+- **Authentication (unified — everyone signs in the same way).** **All** principals — staff
+  (Super Admin, Company Admin, HR, Manager) **and** employees — use one entry point: **full name +
+  email → OTP** (no passwords anywhere).
+  - `email` is the login handle and must be **unique across both the User and Employee tables** (a
+    creation-time guard rejects an email already used by the other), so the email resolves to exactly
+    one account. The provided full name is matched against that account (case-insensitive, trimmed).
+  - The single-use, time-boxed **OTP sent to the email is the security factor**. Issuance is
+    **rate-limited** and **enumeration-safe** — a generic "if an account matches, a code was sent"
+    response regardless of whether the email/name matched.
+  - Verify (`email` + code) issues the session; its **principal type + role + scope come from the
+    resolved account** (a User's role + companyId + teamId, or EMPLOYEE own-record), and the response
+    carries the role so the web routes to that role's area.
   - Session: short-lived access token + httpOnly refresh cookie on the API domain; CORS with
     credentials for the web origin.
+  - The `User.passwordHash` column is retained but **dormant** (break-glass / additive-only). Note
+    that the highest-privilege accounts now rest on **single-factor email-OTP**; adding TOTP (e.g. for
+    SUPER_ADMIN) or SSO is a future option.
 - **Uploads:** object storage (S3-compatible) accessed **only via short-lived presigned URLs** —
   never public paths or raw storage keys returned to clients.
 - **Document integrity:** store `sha256` of each upload.

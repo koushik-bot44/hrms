@@ -2,6 +2,7 @@ package com.ihrms.employees;
 
 import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
+import com.ihrms.auth.AccountEmails;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
 import com.ihrms.config.AppProperties;
@@ -42,6 +43,7 @@ public class EmployeesService {
   private final CompanyRepository companies;
   private final AuditService audit;
   private final MailService mail;
+  private final AccountEmails accountEmails;
   private final AppProperties props;
 
   public EmployeesService(
@@ -49,11 +51,13 @@ public class EmployeesService {
       CompanyRepository companies,
       AuditService audit,
       MailService mail,
+      AccountEmails accountEmails,
       AppProperties props) {
     this.employees = employees;
     this.companies = companies;
     this.audit = audit;
     this.mail = mail;
+    this.accountEmails = accountEmails;
     this.props = props;
   }
 
@@ -66,6 +70,7 @@ public class EmployeesService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "No company in scope"));
 
     String email = input.email().trim().toLowerCase();
+    accountEmails.assertAvailableForEmployee(email); // unique across staff + employees (§6)
     String fullName = input.fullName().trim();
     String designation = input.designation().trim();
 

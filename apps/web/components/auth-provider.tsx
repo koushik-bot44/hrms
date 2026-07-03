@@ -3,19 +3,17 @@
 import * as React from 'react';
 import { toast } from 'sonner';
 import type {
-  EmployeeOtpRequestInput,
-  EmployeeOtpVerifyInput,
+  OtpRequestInput,
   OtpRequestResult,
+  OtpVerifyInput,
   Session,
-  StaffLoginInput,
 } from '@/lib/contract';
 import { setAuthHooks } from '@/lib/api/client';
 import {
-  loginStaff as apiLoginStaff,
   logout as apiLogout,
   refreshSession,
-  requestEmployeeOtp as apiRequestOtp,
-  verifyEmployeeOtp as apiVerifyOtp,
+  requestOtp as apiRequestOtp,
+  verifyOtp as apiVerifyOtp,
 } from '@/lib/api/auth';
 import type { AuthResult } from '@/lib/contract';
 
@@ -24,9 +22,8 @@ type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 interface AuthContextValue {
   session: Session | null;
   status: AuthStatus;
-  loginStaff: (input: StaffLoginInput) => Promise<Session>;
-  requestEmployeeOtp: (input: EmployeeOtpRequestInput) => Promise<OtpRequestResult>;
-  verifyEmployeeOtp: (input: EmployeeOtpVerifyInput) => Promise<Session>;
+  requestOtp: (input: OtpRequestInput) => Promise<OtpRequestResult>;
+  verifyOtp: (input: OtpVerifyInput) => Promise<Session>;
   logout: () => Promise<void>;
 }
 
@@ -95,17 +92,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void doRefresh();
   }, [doRefresh]);
 
-  const loginStaff = React.useCallback(
-    async (input: StaffLoginInput) => {
-      const result = await apiLoginStaff(input);
-      applyAuth(result);
-      return result.session;
-    },
-    [applyAuth],
-  );
-
-  const verifyEmployeeOtp = React.useCallback(
-    async (input: EmployeeOtpVerifyInput) => {
+  const verifyOtp = React.useCallback(
+    async (input: OtpVerifyInput) => {
       const result = await apiVerifyOtp(input);
       applyAuth(result);
       return result.session;
@@ -113,10 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuth],
   );
 
-  const requestEmployeeOtp = React.useCallback(
-    (input: EmployeeOtpRequestInput) => apiRequestOtp(input),
-    [],
-  );
+  const requestOtp = React.useCallback((input: OtpRequestInput) => apiRequestOtp(input), []);
 
   const logout = React.useCallback(async () => {
     try {
@@ -127,8 +112,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearAuth]);
 
   const value = React.useMemo<AuthContextValue>(
-    () => ({ session, status, loginStaff, requestEmployeeOtp, verifyEmployeeOtp, logout }),
-    [session, status, loginStaff, requestEmployeeOtp, verifyEmployeeOtp, logout],
+    () => ({ session, status, requestOtp, verifyOtp, logout }),
+    [session, status, requestOtp, verifyOtp, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

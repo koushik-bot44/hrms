@@ -2,35 +2,29 @@ import { z } from 'zod';
 import { UserRole } from '../enums';
 
 /**
- * Auth contracts (ARCHITECTURE.md §6) — shared by api (validation) and web (forms).
- * Staff log in with email + password; employees with full name + email -> OTP (the OTP to the
- * email is the security factor). The employee ID is not a login handle.
+ * Auth contracts (ARCHITECTURE.md §6) — shared by api (validation) and web (forms). Unified sign-in:
+ * EVERYONE (staff and employees) authenticates with full name + email -> OTP (the OTP emailed is the
+ * security factor). No passwords; the employee ID is not a login handle.
  */
 
 // ---------------------------------------------------------------------------
 // Requests
 // ---------------------------------------------------------------------------
 
-export const StaffLoginSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
-  password: z.string().min(8, 'At least 8 characters'),
-});
-export type StaffLoginInput = z.infer<typeof StaffLoginSchema>;
-
-export const EmployeeOtpRequestSchema = z.object({
+export const OtpRequestSchema = z.object({
   fullName: z.string().trim().min(2, 'Enter your full name').max(120),
   email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
 });
-export type EmployeeOtpRequestInput = z.infer<typeof EmployeeOtpRequestSchema>;
+export type OtpRequestInput = z.infer<typeof OtpRequestSchema>;
 
-export const EmployeeOtpVerifySchema = z.object({
+export const OtpVerifySchema = z.object({
   email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
   otp: z
     .string()
     .trim()
     .regex(/^\d{6}$/, 'Enter the 6-digit code'),
 });
-export type EmployeeOtpVerifyInput = z.infer<typeof EmployeeOtpVerifySchema>;
+export type OtpVerifyInput = z.infer<typeof OtpVerifySchema>;
 
 // ---------------------------------------------------------------------------
 // Responses
@@ -58,14 +52,14 @@ export const SessionSchema = z.discriminatedUnion('type', [
 ]);
 export type Session = z.infer<typeof SessionSchema>;
 
-/** Returned by /auth/login, /auth/employee/verify-otp and /auth/refresh. */
+/** Returned by /auth/verify-otp and /auth/refresh. */
 export const AuthResultSchema = z.object({
   accessToken: z.string(),
   session: SessionSchema,
 });
 export type AuthResult = z.infer<typeof AuthResultSchema>;
 
-/** Returned by /auth/employee/request-otp. `devOtp` is present only in non-production. */
+/** Returned by /auth/request-otp. `devOtp` is present only in non-production. */
 export const OtpRequestResultSchema = z.object({
   sent: z.boolean(),
   expiresInSeconds: z.number().int().positive(),

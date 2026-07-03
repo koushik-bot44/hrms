@@ -12,9 +12,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
- * Idempotently seeds the dev SUPER_ADMIN so staff login works locally (mirrors the archived
- * prisma seed). Never runs under the {@code prod} profile — production provisions real
- * credentials out of band.
+ * Idempotently seeds the dev SUPER_ADMIN so sign-in works locally. Auth is now unified OTP (§6): the
+ * admin signs in with the seeded full name ("Super Admin") + email, and the OTP is dev-logged (no
+ * password). A dormant break-glass {@code passwordHash} is still set but is not a login path. Never
+ * runs under the {@code prod} profile — production provisions accounts out of band.
  */
 @Component
 @Profile("!prod")

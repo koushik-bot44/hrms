@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/storage/blobs/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["download"];
+        put: operations["upload"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding/signature": {
         parameters: {
             query?: never;
@@ -308,6 +324,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/verify-otp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["verifyOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/request-otp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["requestOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/refresh": {
         parameters: {
             query?: never;
@@ -334,54 +382,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["logout"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["login"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/employee/verify-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["verifyOtp"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/employee/request-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["requestOtp"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1017,23 +1017,16 @@ export interface components {
             admin?: components["schemas"]["CompanyAdminView"];
             devPassword?: string;
         };
+        OtpVerifyRequest: {
+            email: string;
+            otp: string;
+        };
         AuthResult: {
             accessToken?: string;
             session?: components["schemas"]["SessionView"];
         };
         SessionView: Record<string, never>;
-        OkResponse: {
-            ok?: boolean;
-        };
-        StaffLoginRequest: {
-            email: string;
-            password: string;
-        };
-        EmployeeOtpVerifyRequest: {
-            email: string;
-            otp: string;
-        };
-        EmployeeOtpRequest: {
+        OtpRequest: {
             fullName: string;
             email: string;
         };
@@ -1042,6 +1035,9 @@ export interface components {
             /** Format: int32 */
             expiresInSeconds?: number;
             devOtp?: string;
+        };
+        OkResponse: {
+            ok?: boolean;
         };
         UpdateTeamRequest: {
             name: string;
@@ -1223,6 +1219,52 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["AssignMemberResult"];
                 };
+            };
+        };
+    };
+    download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    upload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": string;
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1688,6 +1730,54 @@ export interface operations {
             };
         };
     };
+    verifyOtp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuthResult"];
+                };
+            };
+        };
+    };
+    requestOtp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OtpRequestResult"];
+                };
+            };
+        };
+    };
     refresh: {
         parameters: {
             query?: never;
@@ -1726,78 +1816,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["OkResponse"];
-                };
-            };
-        };
-    };
-    login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StaffLoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["AuthResult"];
-                };
-            };
-        };
-    };
-    verifyOtp: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EmployeeOtpVerifyRequest"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["AuthResult"];
-                };
-            };
-        };
-    };
-    requestOtp: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EmployeeOtpRequest"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["OtpRequestResult"];
                 };
             };
         };

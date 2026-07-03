@@ -2,6 +2,7 @@ package com.ihrms.teams;
 
 import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
+import com.ihrms.auth.AccountEmails;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
 import com.ihrms.domain.enums.UserRole;
@@ -44,6 +45,7 @@ public class TeamsService {
   private final AuditService audit;
   private final MailService mail;
   private final PasswordEncoder encoder;
+  private final AccountEmails accountEmails;
   private final Environment env;
 
   public TeamsService(
@@ -53,6 +55,7 @@ public class TeamsService {
       AuditService audit,
       MailService mail,
       PasswordEncoder encoder,
+      AccountEmails accountEmails,
       Environment env) {
     this.teams = teams;
     this.users = users;
@@ -60,6 +63,7 @@ public class TeamsService {
     this.audit = audit;
     this.mail = mail;
     this.encoder = encoder;
+    this.accountEmails = accountEmails;
     this.env = env;
   }
 
@@ -148,6 +152,7 @@ public class TeamsService {
         throw badRequest("Provide a userId or a name and email");
       }
       String email = input.email().trim().toLowerCase();
+      accountEmails.assertAvailableForStaff(email); // unique across staff + employees (§6)
       String tempPassword = TempPasswords.generate();
       User created = new User();
       created.setName(input.name().trim());
