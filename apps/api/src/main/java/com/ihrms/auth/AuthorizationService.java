@@ -1,6 +1,7 @@
 package com.ihrms.auth;
 
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import java.util.Objects;
@@ -27,12 +28,18 @@ public class AuthorizationService {
   public record EmployeeScope(
       String id, String companyId, String onboardingHrId, String employeeCode) {}
 
+  /** Company status marking an archived (soft-deleted) company. */
+  private static final String DELETED = "DELETED";
+
   private final EmployeeRepository employees;
   private final TeamRepository teams;
+  private final CompanyRepository companies;
 
-  public AuthorizationService(EmployeeRepository employees, TeamRepository teams) {
+  public AuthorizationService(
+      EmployeeRepository employees, TeamRepository teams, CompanyRepository companies) {
     this.employees = employees;
     this.teams = teams;
+    this.companies = companies;
   }
 
   /** The companyId a principal is locked to, or null for SUPER_ADMIN (all companies). */
@@ -42,6 +49,22 @@ public class AuthorizationService {
     }
     IhrmsPrincipal.User u = (IhrmsPrincipal.User) principal;
     return u.role() == com.ihrms.domain.enums.UserRole.SUPER_ADMIN ? null : u.companyId();
+  }
+
+  /** True if {@code companyId} is a DELETED (archived) company. Null (e.g. SUPER_ADMIN) is never. */
+  public boolean isCompanyDeleted(String companyId) {
+    if (companyId == null) {
+      return false;
+    }
+    return companies.findById(companyId).map(c -> DELETED.equals(c.getStatus())).orElse(false);
+  }
+
+  /**
+   * The archived-company denial gate (§6): true when the principal belongs to a DELETED company. The
+   * Super Admin (null companyId) is never denied — no self-lockout.
+   */
+  public boolean isPrincipalCompanyDeleted(IhrmsPrincipal principal) {
+    return isCompanyDeleted(tenantCompanyId(principal));
   }
 
   /** Throw 403 unless the principal may act within {@code companyId}. */

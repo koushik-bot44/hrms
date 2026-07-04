@@ -13,12 +13,14 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -44,8 +46,9 @@ public class CompaniesController {
   }
 
   @GetMapping
-  public List<CompanySummaryView> list() {
-    return companies.list();
+  public List<CompanySummaryView> list(
+      @RequestParam(name = "deleted", defaultValue = "false") boolean deleted) {
+    return companies.list(deleted);
   }
 
   @GetMapping("/{id}")
@@ -70,5 +73,22 @@ public class CompaniesController {
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     return companies.provisionAdmin(id, body, actor, request.getRemoteAddr());
+  }
+
+  /** Archive a company (reversible soft-delete). Its principals immediately lose access (§2/§6). */
+  @DeleteMapping("/{id}")
+  public CompanyDetailView delete(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return companies.delete(id, actor, request.getRemoteAddr());
+  }
+
+  @PostMapping("/{id}/restore")
+  public CompanyDetailView restore(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return companies.restore(id, actor, request.getRemoteAddr());
   }
 }

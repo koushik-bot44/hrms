@@ -33,8 +33,18 @@ public class Company {
   @Column(name = "code", nullable = false)
   private String code;
 
+  /** {@code ACTIVE} | {@code SUSPENDED} | {@code DELETED} (archived; free text, not a domain enum). */
   @Column(name = "status", nullable = false)
   private String status = "ACTIVE";
+
+  /** Set when archived (soft-delete), cleared on restore. */
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "deletedAt")
+  private Instant deletedAt;
+
+  /** The Super Admin who archived it (→ users.id); null when active. */
+  @Column(name = "deletedByUserId")
+  private String deletedByUserId;
 
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)

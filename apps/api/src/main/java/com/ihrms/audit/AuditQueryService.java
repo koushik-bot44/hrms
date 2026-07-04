@@ -85,7 +85,8 @@ public class AuditQueryService {
         page.getNumber(),
         page.getSize(),
         page.getTotalElements(),
-        page.getTotalPages());
+        page.getTotalPages(),
+        authz.isCompanyDeleted(companyId)); // still viewable, flagged as archived (§7)
   }
 
   /** SUPER_ADMIN picks any company (required); COMPANY_ADMIN is forced to their own (cross -> 403). */

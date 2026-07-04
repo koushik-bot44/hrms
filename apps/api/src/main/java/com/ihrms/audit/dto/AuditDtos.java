@@ -22,7 +22,15 @@ public final class AuditDtos {
       String ipAddress,
       String createdAt) {}
 
-  /** A page of audit rows for one company (Super Admin views each company separately). */
+  /**
+   * A page of audit rows for one company (Super Admin views each company separately).
+   * {@code companyDeleted} flags that the selected company has been archived (its trail is retained).
+   */
   public record AuditPage(
-      List<AuditLogView> content, int page, int size, long totalElements, int totalPages) {}
+      List<AuditLogView> content,
+      int page,
+      int size,
+      long totalElements,
+      int totalPages,
+      boolean companyDeleted) {}
 }

@@ -10,7 +10,8 @@ import { COMPANY_CODE_REGEX } from '../ids';
  * values are constrained here with a zod enum — NOT added to SHARED_ENUMS.
  */
 
-export const CompanyStatusValues = ['ACTIVE', 'SUSPENDED'] as const;
+// DELETED is the archived (soft-delete) state — reached via the delete endpoint, not update.
+export const CompanyStatusValues = ['ACTIVE', 'SUSPENDED', 'DELETED'] as const;
 export const CompanyStatusSchema = z.enum(CompanyStatusValues);
 export type CompanyStatus = z.infer<typeof CompanyStatusSchema>;
 
@@ -30,7 +31,8 @@ export type CreateCompanyInput = z.infer<typeof CreateCompanySchema>;
 export const UpdateCompanySchema = z
   .object({
     name: z.string().trim().min(2, 'Name is required').max(120, 'Name is too long').optional(),
-    status: CompanyStatusSchema.optional(),
+    // Archival/restore is via the delete/restore endpoints, not update.
+    status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
   })
   .refine((value) => value.name !== undefined || value.status !== undefined, {
     message: 'Provide a name or a status to update',

@@ -1,5 +1,6 @@
 package com.ihrms.security;
 
+import com.ihrms.auth.AuthorizationService;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.TokenService;
 import jakarta.servlet.FilterChain;
@@ -23,9 +24,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private final TokenService tokens;
+  private final AuthorizationService authz;
 
-  public JwtAuthenticationFilter(TokenService tokens) {
+  public JwtAuthenticationFilter(TokenService tokens, AuthorizationService authz) {
     this.tokens = tokens;
+    this.authz = authz;
   }
 
   @Override
@@ -36,8 +39,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     if (header != null && header.startsWith("Bearer ")) {
       try {
         IhrmsPrincipal principal = tokens.verifyAccess(header.substring(7));
-        SecurityContextHolder.getContext()
-            .setAuthentication(new IhrmsAuthentication(principal, authorities(principal)));
+        // Archived-company denial (§6): a principal under a DELETED company is rejected on every
+        // request, so already-issued tokens stop working. SUPER_ADMIN (null companyId) passes.
+        if (authz.isPrincipalCompanyDeleted(principal)) {
+          SecurityContextHolder.clearContext();
+        } else {
+          SecurityContextHolder.getContext()
+              .setAuthentication(new IhrmsAuthentication(principal, authorities(principal)));
+        }
       } catch (RuntimeException invalid) {
         SecurityContextHolder.clearContext();
       }

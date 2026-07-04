@@ -40,6 +40,7 @@ public class AuthService {
   private final MailService mail;
   private final AppProperties props;
   private final Environment env;
+  private final AuthorizationService authz;
 
   public AuthService(
       UserRepository users,
@@ -48,7 +49,8 @@ public class AuthService {
       TokenService tokens,
       MailService mail,
       AppProperties props,
-      Environment env) {
+      Environment env,
+      AuthorizationService authz) {
     this.users = users;
     this.employees = employees;
     this.encoder = encoder;
@@ -56,6 +58,7 @@ public class AuthService {
     this.mail = mail;
     this.props = props;
     this.env = env;
+    this.authz = authz;
   }
 
   // --- Start: full name + email -> OTP (staff OR employee) ------------------
@@ -71,7 +74,10 @@ public class AuthService {
     // same generic response so neither email nor name can be enumerated.
     User user = users.findByEmail(email).orElse(null);
     if (user != null) {
-      if ("ACTIVE".equals(user.getStatus()) && nameMatches(user.getName(), fullName)) {
+      // Also denied (silently) when the staff account's company is archived (§6).
+      if ("ACTIVE".equals(user.getStatus())
+          && nameMatches(user.getName(), fullName)
+          && !authz.isCompanyDeleted(user.getCompanyId())) {
         String otp = issueOtp(email);
         user.setOtpHash(encoder.encode(otp));
         user.setOtpExpiresAt(Instant.now().plusSeconds(ttl));
@@ -80,7 +86,9 @@ public class AuthService {
       }
     } else {
       Employee employee = employees.findByEmail(email).orElse(null);
-      if (employee != null && nameMatches(employee.getFullName(), fullName)) {
+      if (employee != null
+          && nameMatches(employee.getFullName(), fullName)
+          && !authz.isCompanyDeleted(employee.getCompanyId())) {
         String otp = issueOtp(email);
         employee.setOtpHash(encoder.encode(otp));
         employee.setOtpExpiresAt(Instant.now().plusSeconds(ttl));
@@ -105,7 +113,8 @@ public class AuthService {
 
     User user = users.findByEmail(email).orElse(null);
     if (user != null) {
-      if (!"ACTIVE".equals(user.getStatus())) {
+      // Generic denial (anti-enumeration) for a deactivated account or an archived company (§6).
+      if (!"ACTIVE".equals(user.getStatus()) || authz.isCompanyDeleted(user.getCompanyId())) {
         throw unauthorized("Invalid or expired code");
       }
       assertOtpValid(user.getOtpHash(), user.getOtpExpiresAt(), req.otp());
@@ -116,7 +125,7 @@ public class AuthService {
     }
 
     Employee employee = employees.findByEmail(email).orElse(null);
-    if (employee == null) {
+    if (employee == null || authz.isCompanyDeleted(employee.getCompanyId())) {
       throw unauthorized("Invalid or expired code");
     }
     assertOtpValid(employee.getOtpHash(), employee.getOtpExpiresAt(), req.otp());
@@ -157,13 +166,15 @@ public class AuthService {
   private IhrmsPrincipal reloadPrincipal(RefreshClaims claims) {
     if ("USER".equals(claims.actor())) {
       User user = users.findById(claims.subject()).orElse(null);
-      if (user == null || !"ACTIVE".equals(user.getStatus())) {
+      if (user == null
+          || !"ACTIVE".equals(user.getStatus())
+          || authz.isCompanyDeleted(user.getCompanyId())) {
         throw unauthorized("Session no longer valid");
       }
       return Principals.of(user);
     }
     Employee employee = employees.findById(claims.subject()).orElse(null);
-    if (employee == null) {
+    if (employee == null || authz.isCompanyDeleted(employee.getCompanyId())) {
       throw unauthorized("Session no longer valid");
     }
     return Principals.of(employee);

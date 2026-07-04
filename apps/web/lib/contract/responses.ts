@@ -18,12 +18,17 @@ type Schemas = components['schemas'];
 
 export type CompanyAdmin = Required<Schemas['CompanyAdminView']>;
 
-export type CompanySummary = Omit<Required<Schemas['CompanySummaryView']>, 'status'> & {
+export type CompanySummary = Omit<Required<Schemas['CompanySummaryView']>, 'status' | 'deletedAt'> & {
   status: CompanyStatus;
+  deletedAt: string | null; // set only when archived
 };
 
-export type CompanyDetail = Omit<Required<Schemas['CompanyDetailView']>, 'status' | 'admin'> & {
+export type CompanyDetail = Omit<
+  Required<Schemas['CompanyDetailView']>,
+  'status' | 'admin' | 'deletedAt'
+> & {
   status: CompanyStatus;
+  deletedAt: string | null;
   admin: CompanyAdmin | null;
 };
 

@@ -12,6 +12,21 @@ export function listCompanies(signal?: AbortSignal): Promise<CompanySummary[]> {
   return apiFetch<CompanySummary[]>('/companies', { signal });
 }
 
+/** Archived (soft-deleted) companies (Super Admin). */
+export function listDeletedCompanies(signal?: AbortSignal): Promise<CompanySummary[]> {
+  return apiFetch<CompanySummary[]>('/companies?deleted=true', { signal });
+}
+
+/** Archive a company (reversible). Its people immediately lose access. */
+export function deleteCompany(id: string): Promise<CompanyDetail> {
+  return apiFetch<CompanyDetail>(`/companies/${id}`, { method: 'DELETE' });
+}
+
+/** Restore an archived company back to active. */
+export function restoreCompany(id: string): Promise<CompanyDetail> {
+  return apiFetch<CompanyDetail>(`/companies/${id}/restore`, { method: 'POST' });
+}
+
 export function getCompany(id: string, signal?: AbortSignal): Promise<CompanyDetail> {
   return apiFetch<CompanyDetail>(`/companies/${id}`, { signal });
 }

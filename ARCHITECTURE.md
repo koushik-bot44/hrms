@@ -35,11 +35,19 @@ Super Admin
 
 | Role | Scope | Can do |
 |------|-------|--------|
-| **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; view **all** companies' audit logs (separated per company). |
+| **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **archive (soft-delete) a company and restore it**; view **all** companies' audit logs (separated per company), including archived companies'. |
 | **Company Admin** | One company | Create teams and assign the team's HR and Manager (one each); view **own company's** audit logs. |
 | **HR** | Own team / own onboarded employees | Trigger onboarding (email + unique ID); look up an employee by ID and see all their forms/documents; verify documents; route the approval request to the team's Manager. |
 | **Manager** | Own team | Workspace inbox/notifications (who was onboarded, who was verified, pending approvals); **approve** verified employees. Approval is the **final step** _[parked: post-approval actions]_. |
 | **Employee** | Own record only | Authenticate with **unique ID + email/OTP**; fill tabbed forms and upload documents under their own record. |
+
+**Company archival (soft-delete):** Super Admin can **delete a company as a reversible archive** — it
+disappears from all active lists and operations, and **every principal under it (Company Admin, HR,
+Managers, employees) immediately loses access**: OTP login is denied and any already-issued access
+token stops working. It is **never a physical purge** — child rows, uploaded documents, and the
+company's **audit trail are all retained**, and Super Admin can still view the archived company's
+history. A **restore** returns it to active and its people can sign in again. The **Super Admin is
+never affected** (they belong to no company).
 
 **Team rule:** exactly one HR and one Manager per team. Approvals stay **within the team**.
 
@@ -111,7 +119,8 @@ indicative. **Schema is additive-only thereafter.**
 
 ### Organisation
 - **Company** — `id`, `name`, `code` (short mnemonic, e.g. `ACME`; used in the employee ID),
-  `status`, `createdAt`.
+  `status` (`ACTIVE` | `SUSPENDED` | `DELETED`), `deletedAt?` + `deletedByUserId?` (→ User) — set
+  when archived (soft-delete), cleared on restore, `createdAt`.
 - **Team** — `id`, `companyId`, `name`, `hrUserId` (→ User), `managerUserId` (→ User).
   Holding both FKs enforces the "exactly one HR + one Manager" rule.
 
@@ -196,6 +205,11 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
     notifications/approvals.
   - Employee → only their own record.
   - Centralise these relationship checks; do not scatter them across handlers.
+  - **Archived-company denial:** a principal whose `companyId` refers to a **DELETED** company is
+    denied on **every** request (so already-issued access tokens stop working) and at OTP login. The
+    check lives in the same centralized gate. **Guard:** deny only when the principal *has* a
+    `companyId` **and** that company is deleted — the **Super Admin has a null `companyId` and is
+    never denied** (no self-lockout).
 - **Authentication (unified — everyone signs in the same way).** **All** principals — staff
   (Super Admin, Company Admin, HR, Manager) **and** employees — use one entry point: **full name +
   email → OTP** (no passwords anywhere).
@@ -233,6 +247,9 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
 - Logs are **partitioned per company** via `companyId` so Super Admin can view each company's trail
   separately and Company Admin sees only their own.
 - **Append-only:** no code path updates or deletes an `AuditLog` row (enforce at the data layer).
+- **Retained across company archival:** deleting (archiving) a company never removes its audit rows.
+  Super Admin can still **select an archived company** in the explorer (shown flagged as deleted) and
+  read its retained trail; the archival itself is recorded (`COMPANY_DELETED` / `COMPANY_RESTORED`).
 - Implemented as a global API interceptor for mutations, plus explicit log writes for sensitive
   reads (e.g. viewing/downloading an employee's documents).
 

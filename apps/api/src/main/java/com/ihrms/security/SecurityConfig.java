@@ -29,6 +29,7 @@ public class SecurityConfig {
   public SecurityFilterChain filterChain(
       HttpSecurity http,
       TokenService tokens,
+      com.ihrms.auth.AuthorizationService authz,
       RestAuthenticationEntryPoint entryPoint,
       RestAccessDeniedHandler accessDeniedHandler)
       throws Exception {
@@ -86,7 +87,7 @@ public class SecurityConfig {
         .exceptionHandling(
             e -> e.authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDeniedHandler))
         .addFilterBefore(
-            new JwtAuthenticationFilter(tokens), UsernamePasswordAuthenticationFilter.class);
+            new JwtAuthenticationFilter(tokens, authz), UsernamePasswordAuthenticationFilter.class);
     return http.build();
   }
 

@@ -39,7 +39,8 @@ public final class CompanyDtos {
       long teamCount,
       long employeeCount,
       boolean hasAdmin,
-      String createdAt) {}
+      String createdAt,
+      String deletedAt) {}
 
   /** {@code CompanyDetail = CompanySummary & { admin }}. */
   public record CompanyDetailView(
@@ -51,6 +52,7 @@ public final class CompanyDtos {
       long employeeCount,
       boolean hasAdmin,
       String createdAt,
+      String deletedAt,
       CompanyAdminView admin) {}
 
   /** {@code devPassword} omitted (not null) in production. */

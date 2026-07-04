@@ -21,6 +21,7 @@ import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.EmployeeCodes;
 import com.ihrms.support.TempPasswords;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +40,9 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 public class CompaniesService {
+
+  private static final String ACTIVE = "ACTIVE";
+  private static final String DELETED = "DELETED";
 
   private final CompanyRepository companies;
   private final UserRepository users;
@@ -86,11 +90,43 @@ public class CompaniesService {
     return detail(company.getId());
   }
 
-  public List<CompanySummaryView> list() {
-    return companies.findAllByOrderByCreatedAtDesc().stream().map(this::summary).toList();
+  /** Active companies by default; {@code deletedOnly} lists archived ones (§2). */
+  public List<CompanySummaryView> list(boolean deletedOnly) {
+    return companies.findAllByOrderByCreatedAtDesc().stream()
+        .filter(c -> deletedOnly == DELETED.equals(c.getStatus()))
+        .map(this::summary)
+        .toList();
   }
 
   public CompanyDetailView getDetail(String id) {
+    return detail(id);
+  }
+
+  /** Archive a company (soft-delete): reversible, retains all data + audit (§2/§7). Idempotent. */
+  public CompanyDetailView delete(String id, IhrmsPrincipal.User actor, String ip) {
+    Company company = companies.findById(id).orElseThrow(() -> notFound("Company not found"));
+    if (!DELETED.equals(company.getStatus())) {
+      company.setStatus(DELETED);
+      company.setDeletedAt(Instant.now());
+      company.setDeletedByUserId(actor.userId());
+      companies.save(company);
+      audit(actor, id, "COMPANY_DELETED", "Company", id,
+          Map.of("name", company.getName(), "code", company.getCode()), ip);
+    }
+    return detail(id);
+  }
+
+  /** Restore an archived company back to active; its principals can sign in again (§2). Idempotent. */
+  public CompanyDetailView restore(String id, IhrmsPrincipal.User actor, String ip) {
+    Company company = companies.findById(id).orElseThrow(() -> notFound("Company not found"));
+    if (DELETED.equals(company.getStatus())) {
+      company.setStatus(ACTIVE);
+      company.setDeletedAt(null);
+      company.setDeletedByUserId(null);
+      companies.save(company);
+      audit(actor, id, "COMPANY_RESTORED", "Company", id,
+          Map.of("name", company.getName(), "code", company.getCode()), ip);
+    }
     return detail(id);
   }
 
@@ -101,6 +137,7 @@ public class CompaniesService {
           HttpStatus.BAD_REQUEST, "Provide a name or a status to update");
     }
     Company company = companies.findById(id).orElseThrow(() -> notFound("Company not found"));
+    assertNotArchived(company);
     Map<String, Object> meta = new LinkedHashMap<>();
     if (input.name() != null) {
       company.setName(input.name().trim());
@@ -118,6 +155,7 @@ public class CompaniesService {
   public ProvisionAdminResult provisionAdmin(
       String id, ProvisionAdminRequest input, IhrmsPrincipal.User actor, String ip) {
     Company company = companies.findById(id).orElseThrow(() -> notFound("Company not found"));
+    assertNotArchived(company);
 
     // One Company Admin per company (§2).
     if (users.existsByCompanyIdAndRole(id, UserRole.COMPANY_ADMIN)) {
@@ -164,6 +202,7 @@ public class CompaniesService {
         employees.countByCompanyId(id),
         admin != null,
         company.getCreatedAt().toString(),
+        company.getDeletedAt() == null ? null : company.getDeletedAt().toString(),
         admin == null ? null : adminView(admin));
   }
 
@@ -177,7 +216,8 @@ public class CompaniesService {
         teams.countByCompanyId(id),
         employees.countByCompanyId(id),
         users.existsByCompanyIdAndRole(id, UserRole.COMPANY_ADMIN),
-        company.getCreatedAt().toString());
+        company.getCreatedAt().toString(),
+        company.getDeletedAt() == null ? null : company.getDeletedAt().toString());
   }
 
   private CompanyAdminView adminView(User user) {
@@ -190,6 +230,13 @@ public class CompaniesService {
   }
 
   // --- helpers --------------------------------------------------------------
+
+  /** Block active operations on an archived company (§2); restore it first. */
+  private void assertNotArchived(Company company) {
+    if (DELETED.equals(company.getStatus())) {
+      throw conflict("This company is archived — restore it first");
+    }
+  }
 
   /** Upper-case + validate the employee-ID mnemonic (§5); a bad code is a 400. */
   private String normalizeCode(String raw) {

@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ChevronLeft, ChevronRight, ScrollText, X } from 'lucide-react';
-import type { AuditLogEntry } from '@/lib/contract';
-import { listCompanies } from '@/lib/api/companies';
+import { Archive, ChevronLeft, ChevronRight, ScrollText, X } from 'lucide-react';
+import type { AuditLogEntry, CompanySummary } from '@/lib/contract';
+import { listCompanies, listDeletedCompanies } from '@/lib/api/companies';
 import { getAuditLogs } from '@/lib/api/audit';
 import { useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
@@ -69,6 +69,14 @@ export function AuditExplorer({ scope }: { scope: 'super' | 'company' }) {
   const [page, setPage] = React.useState(0);
 
   const companiesQuery = useApiQuery(['companies'], listCompanies, { enabled: scope === 'super' });
+  // Archived companies stay selectable so their retained trail can still be audited (§7).
+  const deletedQuery = useApiQuery(['companies', 'deleted'], listDeletedCompanies, {
+    enabled: scope === 'super',
+  });
+  const companyOptions: CompanySummary[] = [
+    ...(companiesQuery.data ?? []),
+    ...(deletedQuery.data ?? []),
+  ];
 
   const ready = scope === 'company' || Boolean(companyId);
   const auditQuery = useApiQuery(
@@ -120,12 +128,19 @@ export function AuditExplorer({ scope }: { scope: 'super' | 'company' }) {
             className={cn(SELECT_CLASS, 'w-full max-w-sm')}
           >
             <option value="">Select a company…</option>
-            {companiesQuery.data?.map((c) => (
+            {companyOptions.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name} ({c.code})
+                {c.name} ({c.code}){c.status === 'DELETED' ? ' — archived' : ''}
               </option>
             ))}
           </select>
+        </div>
+      ) : null}
+
+      {ready && data?.companyDeleted ? (
+        <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm">
+          <Archive className="size-4 shrink-0 text-amber-600" aria-hidden />
+          This company is archived — its audit trail is retained and shown here (read-only).
         </div>
       ) : null}
 

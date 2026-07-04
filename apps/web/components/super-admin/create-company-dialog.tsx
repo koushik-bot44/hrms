@@ -55,6 +55,7 @@ export function CreateCompanyDialog() {
         employeeCount: 0,
         hasAdmin: false,
         createdAt: new Date().toISOString(),
+        deletedAt: null,
       };
       queryClient.setQueryData<CompanySummary[]>(COMPANIES_KEY, (old) =>
         old ? [optimistic, ...old] : [optimistic],
