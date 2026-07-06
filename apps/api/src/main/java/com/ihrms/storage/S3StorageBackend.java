@@ -16,8 +16,16 @@ import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import software.amazon.awssdk.services.s3.model.Delete;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -155,6 +163,32 @@ public class S3StorageBackend implements StorageBackend {
   @Override
   public void delete(String key) {
     requireClient().deleteObject(b -> b.bucket(bucket).key(key));
+  }
+
+  /** Batched DeleteObjects (S3 allows up to 1000 keys per call); returns the keys that failed. */
+  @Override
+  public List<String> deleteObjects(Collection<String> keys) {
+    List<String> unique = new ArrayList<>(new LinkedHashSet<>(keys));
+    List<String> failed = new ArrayList<>();
+    for (int from = 0; from < unique.size(); from += 1000) {
+      List<ObjectIdentifier> chunk =
+          unique.subList(from, Math.min(from + 1000, unique.size())).stream()
+              .map(k -> ObjectIdentifier.builder().key(k).build())
+              .toList();
+      try {
+        DeleteObjectsResponse resp =
+            requireClient()
+                .deleteObjects(
+                    DeleteObjectsRequest.builder()
+                        .bucket(bucket)
+                        .delete(Delete.builder().objects(chunk).build())
+                        .build());
+        resp.errors().forEach(err -> failed.add(err.key()));
+      } catch (RuntimeException e) {
+        chunk.forEach(o -> failed.add(o.key())); // whole chunk failed
+      }
+    }
+    return failed;
   }
 
   private S3Client requireClient() {

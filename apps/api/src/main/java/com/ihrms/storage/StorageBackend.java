@@ -1,5 +1,9 @@
 package com.ihrms.storage;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
 /**
  * Pluggable storage backend behind {@link StorageService}. One implementation is active per
  * deployment, chosen by {@code app.storage.driver}: {@code s3} (object storage, default) or
@@ -25,4 +29,21 @@ public interface StorageBackend {
 
   /** Remove the stored object (best-effort; used when an employee deletes a document). */
   void delete(String key);
+
+  /**
+   * Best-effort bulk delete of many objects (used when a company is purged). Returns the keys that
+   * could NOT be removed so the caller can log the orphans. The default deletes one at a time,
+   * isolating per-key failures; {@link S3StorageBackend} overrides it with a batched request.
+   */
+  default List<String> deleteObjects(Collection<String> keys) {
+    List<String> failed = new ArrayList<>();
+    for (String key : keys) {
+      try {
+        delete(key);
+      } catch (RuntimeException e) {
+        failed.add(key);
+      }
+    }
+    return failed;
+  }
 }

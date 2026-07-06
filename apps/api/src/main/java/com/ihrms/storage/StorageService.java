@@ -1,6 +1,10 @@
 package com.ihrms.storage;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -11,6 +15,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class StorageService {
+
+  private static final Logger log = LoggerFactory.getLogger(StorageService.class);
 
   private final StorageBackend backend;
 
@@ -61,5 +67,25 @@ public class StorageService {
   /** Remove the stored object (used when an employee deletes a document). */
   public void delete(String key) {
     backend.delete(key);
+  }
+
+  /**
+   * Best-effort bulk delete of stored objects (used post-commit when a company is purged). Never
+   * throws: any objects that could not be removed are logged as orphans for later cleanup.
+   */
+  public void deleteQuietly(Collection<String> keys) {
+    if (keys == null || keys.isEmpty()) {
+      return;
+    }
+    try {
+      List<String> failed = backend.deleteObjects(keys);
+      if (!failed.isEmpty()) {
+        log.warn(
+            "Storage purge: {} of {} object(s) could not be deleted and are orphaned: {}",
+            failed.size(), keys.size(), failed);
+      }
+    } catch (RuntimeException e) {
+      log.error("Storage purge failed for {} object(s); they are orphaned", keys.size(), e);
+    }
   }
 }

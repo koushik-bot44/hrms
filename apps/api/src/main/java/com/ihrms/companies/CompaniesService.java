@@ -54,6 +54,7 @@ public class CompaniesService {
   private final AccountEmails accountEmails;
   private final Environment env;
   private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+  private final org.springframework.context.ApplicationEventPublisher events;
 
   public CompaniesService(
       CompanyRepository companies,
@@ -65,7 +66,8 @@ public class CompaniesService {
       PasswordEncoder encoder,
       AccountEmails accountEmails,
       Environment env,
-      org.springframework.jdbc.core.JdbcTemplate jdbc) {
+      org.springframework.jdbc.core.JdbcTemplate jdbc,
+      org.springframework.context.ApplicationEventPublisher events) {
     this.companies = companies;
     this.users = users;
     this.teams = teams;
@@ -76,6 +78,7 @@ public class CompaniesService {
     this.accountEmails = accountEmails;
     this.env = env;
     this.jdbc = jdbc;
+    this.events = events;
   }
 
   public CompanyDetailView create(CreateCompanyRequest input, IhrmsPrincipal.User actor, String ip) {
@@ -147,6 +150,15 @@ public class CompaniesService {
     String name = company.getName();
     String code = company.getCode();
 
+    // Collect every stored object key for this company BEFORE deleting the rows that reference them,
+    // so the actual bytes (S3 objects / db blobs) can be removed AFTER this transaction commits.
+    java.util.List<String> storageKeys =
+        jdbc.queryForList(
+            "SELECT \"storageKey\" FROM \"documents\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
+                + " UNION SELECT \"storageKey\" FROM \"signatures\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
+                + " UNION SELECT \"storageKey\" FROM \"generated_documents\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)",
+            String.class, id, id, id);
+
     // 1) Stored blob bytes (db storage) for uploaded docs + signatures + generated PDFs.
     jdbc.update(
         "DELETE FROM \"document_blobs\" WHERE \"storageKey\" IN ("
@@ -199,6 +211,11 @@ public class CompaniesService {
         id,
         Map.of("name", name, "code", code),
         ip);
+
+    // Delete the actual stored objects (S3/db) only AFTER this transaction commits — best-effort, so
+    // a storage hiccup can never undo the (already-committed) purge (handled by the AFTER_COMMIT
+    // listener; see CompanyPurgeStorageCleanup).
+    events.publishEvent(new CompanyPurgedEvent(id, storageKeys));
     return new PurgeCompanyResult(id, name, code);
   }
 
