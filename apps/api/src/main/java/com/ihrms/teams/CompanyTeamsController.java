@@ -28,88 +28,88 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Team management (contract §3.4). COMPANY_ADMIN-only, scoped to the admin's company. */
+/**
+ * SUPER_ADMIN team management for ANY company (ARCHITECTURE.md §2). Delegates to the SAME
+ * {@link TeamsService} used by COMPANY_ADMIN — the only difference is the companyId comes from the
+ * path (a Super Admin can act cross-company) instead of the actor. The one-HR-one-Manager rule and
+ * cross-company rejection are enforced in the service; actions are audited under the target company.
+ */
 @RestController
-@RequestMapping("/teams")
-@PreAuthorize("hasRole('COMPANY_ADMIN')")
-public class TeamsController {
+@RequestMapping("/companies/{companyId}/teams")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
+public class CompanyTeamsController {
 
   private final TeamsService teams;
 
-  public TeamsController(TeamsService teams) {
+  public CompanyTeamsController(TeamsService teams) {
     this.teams = teams;
+  }
+
+  @GetMapping
+  public List<TeamSummaryView> list(@PathVariable String companyId) {
+    return teams.list(companyId);
   }
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   public TeamDetailView create(
+      @PathVariable String companyId,
       @Valid @RequestBody CreateTeamRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return teams.create(scope(actor), body, actor, request.getRemoteAddr());
-  }
-
-  @GetMapping
-  public List<TeamSummaryView> list(@AuthenticationPrincipal IhrmsPrincipal.User actor) {
-    return teams.list(scope(actor));
+    return teams.create(companyId, body, actor, request.getRemoteAddr());
   }
 
   // Declared before '/{id}' so the literal path is not captured by the dynamic segment.
   @GetMapping("/assignable-users")
   public List<TeamMemberView> assignable(
-      @RequestParam(name = "role", required = false) String role,
-      @AuthenticationPrincipal IhrmsPrincipal.User actor) {
-    return teams.assignableUsers(scope(actor), role);
+      @PathVariable String companyId,
+      @RequestParam(name = "role", required = false) String role) {
+    return teams.assignableUsers(companyId, role);
   }
 
   @GetMapping("/{id}")
-  public TeamDetailView get(
-      @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
-    return teams.getDetail(scope(actor), id);
+  public TeamDetailView get(@PathVariable String companyId, @PathVariable String id) {
+    return teams.getDetail(companyId, id);
   }
 
   @PatchMapping("/{id}")
   public TeamDetailView update(
+      @PathVariable String companyId,
       @PathVariable String id,
       @Valid @RequestBody UpdateTeamRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return teams.update(scope(actor), id, body, actor, request.getRemoteAddr());
+    return teams.update(companyId, id, body, actor, request.getRemoteAddr());
   }
 
   @DeleteMapping("/{id}")
   public Map<String, Boolean> remove(
+      @PathVariable String companyId,
       @PathVariable String id,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    teams.remove(scope(actor), id, actor, request.getRemoteAddr());
+    teams.remove(companyId, id, actor, request.getRemoteAddr());
     return Map.of("ok", true);
   }
 
   @PutMapping("/{id}/hr")
   public AssignMemberResult assignHr(
+      @PathVariable String companyId,
       @PathVariable String id,
       @RequestBody AssignMemberRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return teams.assign(scope(actor), id, UserRole.HR, body, actor, request.getRemoteAddr());
+    return teams.assign(companyId, id, UserRole.HR, body, actor, request.getRemoteAddr());
   }
 
   @PutMapping("/{id}/manager")
   public AssignMemberResult assignManager(
+      @PathVariable String companyId,
       @PathVariable String id,
       @RequestBody AssignMemberRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return teams.assign(scope(actor), id, UserRole.MANAGER, body, actor, request.getRemoteAddr());
-  }
-
-  /** A COMPANY_ADMIN is always locked to their own company. */
-  private static String scope(IhrmsPrincipal.User actor) {
-    if (actor.companyId() == null) {
-      throw new org.springframework.web.server.ResponseStatusException(
-          HttpStatus.FORBIDDEN, "No company in scope");
-    }
-    return actor.companyId();
+    return teams.assign(companyId, id, UserRole.MANAGER, body, actor, request.getRemoteAddr());
   }
 }

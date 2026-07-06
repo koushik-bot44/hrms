@@ -26,6 +26,20 @@ public final class EmployeeDtos {
           String designation,
       @NotNull(message = "Date of joining is required") LocalDate dateOfJoining) {}
 
+  /**
+   * SUPER_ADMIN onboards into a chosen company (companyId is the path) by selecting a {@code teamId};
+   * the employee attaches to that team's HR (§2). Same employee fields as the HR form.
+   */
+  public record SuperAdminOnboardRequest(
+      @NotBlank(message = "Team is required") String teamId,
+      @NotBlank(message = "Full name is required") @Size(max = 120, message = "Full name is too long")
+          String fullName,
+      @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
+      @NotBlank(message = "Designation is required")
+          @Size(max = 120, message = "Designation is too long")
+          String designation,
+      @NotNull(message = "Date of joining is required") LocalDate dateOfJoining) {}
+
   /** {@code employeeCode} is null until the employee is approved (§5). */
   public record EmployeeSummaryView(
       String id,

@@ -66,37 +66,35 @@ public class TeamsService {
     this.env = env;
   }
 
-  public TeamDetailView create(CreateTeamRequest input, IhrmsPrincipal.User actor, String ip) {
-    String companyId = companyOf(actor);
+  public TeamDetailView create(
+      String companyId, CreateTeamRequest input, IhrmsPrincipal.User actor, String ip) {
     Team team = new Team();
     team.setName(input.name().trim());
     team.setCompanyId(companyId);
     teams.save(team);
-    audit(actor, "TEAM_CREATED", team.getId(), Map.of("name", team.getName()), ip);
+    audit(actor, companyId, "TEAM_CREATED", team.getId(), Map.of("name", team.getName()), ip);
     return detail(team);
   }
 
-  public List<TeamSummaryView> list(IhrmsPrincipal.User actor) {
-    String companyId = companyOf(actor);
+  public List<TeamSummaryView> list(String companyId) {
     return teams.findByCompanyIdOrderByCreatedAtDesc(companyId).stream().map(this::summary).toList();
   }
 
-  public TeamDetailView getDetail(String id, IhrmsPrincipal.User actor) {
-    return detail(requireTeam(id, companyOf(actor)));
+  public TeamDetailView getDetail(String companyId, String id) {
+    return detail(requireTeam(id, companyId));
   }
 
   public TeamDetailView update(
-      String id, UpdateTeamRequest input, IhrmsPrincipal.User actor, String ip) {
-    Team team = requireTeam(id, companyOf(actor));
+      String companyId, String id, UpdateTeamRequest input, IhrmsPrincipal.User actor, String ip) {
+    Team team = requireTeam(id, companyId);
     team.setName(input.name().trim());
     teams.save(team);
-    audit(actor, "TEAM_UPDATED", id, Map.of("name", team.getName()), ip);
+    audit(actor, companyId, "TEAM_UPDATED", id, Map.of("name", team.getName()), ip);
     return detail(team);
   }
 
   @Transactional
-  public void remove(String id, IhrmsPrincipal.User actor, String ip) {
-    String companyId = companyOf(actor);
+  public void remove(String companyId, String id, IhrmsPrincipal.User actor, String ip) {
     Team team = requireTeam(id, companyId);
     if (approvals.countByTeamId(id) > 0) {
       throw conflict("Team has approval history and cannot be deleted");
@@ -107,11 +105,10 @@ public class TeamsService {
       users.save(member);
     }
     teams.delete(team);
-    audit(actor, "TEAM_DELETED", id, Map.of(), ip);
+    audit(actor, companyId, "TEAM_DELETED", id, Map.of(), ip);
   }
 
-  public List<TeamMemberView> assignableUsers(IhrmsPrincipal.User actor, String role) {
-    String companyId = companyOf(actor);
+  public List<TeamMemberView> assignableUsers(String companyId, String role) {
     UserRole parsed = parseTeamRole(role);
     return users
         .findByCompanyIdAndRoleAndTeamIdIsNullOrderByNameAsc(companyId, parsed)
@@ -123,8 +120,12 @@ public class TeamsService {
   /** Assign the HR or Manager slot by selecting an existing user or creating a new one. */
   @Transactional
   public AssignMemberResult assign(
-      String id, UserRole role, AssignMemberRequest input, IhrmsPrincipal.User actor, String ip) {
-    String companyId = companyOf(actor);
+      String companyId,
+      String id,
+      UserRole role,
+      AssignMemberRequest input,
+      IhrmsPrincipal.User actor,
+      String ip) {
     Team team = requireTeam(id, companyId);
 
     boolean isHr = role == UserRole.HR;
@@ -202,6 +203,7 @@ public class TeamsService {
 
     audit(
         actor,
+        companyId,
         isHr ? "TEAM_HR_ASSIGNED" : "TEAM_MANAGER_ASSIGNED",
         id,
         Map.of("userId", userId, "role", role.name()),
@@ -253,13 +255,6 @@ public class TeamsService {
     return teams.findByIdAndCompanyId(id, companyId).orElseThrow(() -> notFound("Team not found"));
   }
 
-  private String companyOf(IhrmsPrincipal.User actor) {
-    if (actor.companyId() == null) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No company in scope");
-    }
-    return actor.companyId();
-  }
-
   private UserRole parseTeamRole(String role) {
     if (UserRole.HR.name().equals(role)) {
       return UserRole.HR;
@@ -271,8 +266,14 @@ public class TeamsService {
   }
 
   private void audit(
-      IhrmsPrincipal.User actor, String action, String teamId, Map<String, Object> metadata, String ip) {
-    audit.record(AuditActor.from(actor), action, "Team", teamId, metadata, ip);
+      IhrmsPrincipal.User actor,
+      String companyId,
+      String action,
+      String teamId,
+      Map<String, Object> metadata,
+      String ip) {
+    // Partition under the TARGET company (SUPER_ADMIN actor has no company of its own).
+    audit.record(new AuditActor("USER", actor.userId(), companyId), action, "Team", teamId, metadata, ip);
   }
 
   private static boolean isBlank(String s) {

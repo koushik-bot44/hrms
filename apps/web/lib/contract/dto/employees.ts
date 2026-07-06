@@ -14,3 +14,14 @@ export const OnboardEmployeeSchema = z.object({
   dateOfJoining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Select a date of joining'),
 });
 export type OnboardEmployeeInput = z.infer<typeof OnboardEmployeeSchema>;
+
+/**
+ * SUPER_ADMIN onboarding form (§2): pick company → team (which determines the HR) → employee fields.
+ * `companyId` addresses the endpoint (`/companies/{companyId}/employees`); `teamId` + the four fields
+ * are the body.
+ */
+export const SuperAdminOnboardSchema = OnboardEmployeeSchema.extend({
+  companyId: z.string().min(1, 'Select a company'),
+  teamId: z.string().min(1, 'Select a team'),
+});
+export type SuperAdminOnboardInput = z.infer<typeof SuperAdminOnboardSchema>;

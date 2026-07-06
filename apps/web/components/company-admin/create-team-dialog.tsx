@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { CreateTeamSchema, type CreateTeamInput, type TeamSummary } from '@/lib/contract';
-import { createTeam } from '@/lib/api/teams';
+import { createTeam, teamsKey } from '@/lib/api/teams';
 import { useApiMutation } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,15 +19,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 
-const TEAMS_KEY = ['teams'] as const;
-
 interface OptimisticContext {
   prev?: TeamSummary[];
 }
 
-export function CreateTeamDialog() {
+/** COMPANY_ADMIN creates in its own company; SUPER_ADMIN passes a `companyId` to create in any. */
+export function CreateTeamDialog({ companyId }: { companyId?: string }) {
   const [open, setOpen] = React.useState(false);
   const queryClient = useQueryClient();
+  const TEAMS_KEY = teamsKey(companyId);
 
   const {
     register,
@@ -39,7 +39,7 @@ export function CreateTeamDialog() {
     defaultValues: { name: '' },
   });
 
-  const mutation = useApiMutation((body: CreateTeamInput) => createTeam(body), {
+  const mutation = useApiMutation((body: CreateTeamInput) => createTeam(body, companyId), {
     successMessage: (team) => `Team “${team.name}” created`,
     onMutate: async (vars): Promise<OptimisticContext> => {
       await queryClient.cancelQueries({ queryKey: TEAMS_KEY });

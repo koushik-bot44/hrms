@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ArrowLeft, Users } from 'lucide-react';
 import type { TeamMember, TeamRole } from '@/lib/contract';
-import { getTeam } from '@/lib/api/teams';
+import { getTeam, teamKey } from '@/lib/api/teams';
 import { useApiQuery } from '@/lib/api/hooks';
 import { PageHeader } from '@/components/page-header';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
@@ -15,17 +15,22 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-export default function TeamDetailPage({ params }: { params: { teamId: string } }) {
-  const id = params.teamId;
-  const { data, isLoading, isError, error } = useApiQuery(['team', id], (signal) =>
-    getTeam(id, undefined, signal),
+/** Super Admin team detail for ANY company — mirrors the Company Admin view, scoped by companyId. */
+export default function SuperAdminTeamDetailPage({
+  params,
+}: {
+  params: { companyId: string; teamId: string };
+}) {
+  const { companyId, teamId } = params;
+  const { data, isLoading, isError, error } = useApiQuery(teamKey(teamId, companyId), (signal) =>
+    getTeam(teamId, companyId, signal),
   );
 
   const backLink = (
     <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit text-muted-foreground">
-      <Link href="/company-admin">
+      <Link href={`/super-admin/companies/${companyId}`}>
         <ArrowLeft className="size-4" />
-        Teams
+        Company
       </Link>
     </Button>
   );
@@ -53,7 +58,7 @@ export default function TeamDetailPage({ params }: { params: { teamId: string } 
           description={error?.message ?? 'It may have been removed.'}
           action={
             <Button asChild size="sm">
-              <Link href="/company-admin">Back to teams</Link>
+              <Link href={`/super-admin/companies/${companyId}`}>Back to company</Link>
             </Button>
           }
         />
@@ -72,14 +77,20 @@ export default function TeamDetailPage({ params }: { params: { teamId: string } 
         actions={
           <div className="flex items-center gap-2">
             <TeamStatusBadge complete={complete} />
-            <DeleteTeamDialog teamId={data.id} teamName={data.name} />
+            <DeleteTeamDialog teamId={data.id} teamName={data.name} companyId={companyId} />
           </div>
         }
       />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <SlotCard title="HR" role="HR" member={data.hr} teamId={data.id} />
-        <SlotCard title="Manager" role="MANAGER" member={data.manager} teamId={data.id} />
+        <SlotCard title="HR" role="HR" member={data.hr} teamId={data.id} companyId={companyId} />
+        <SlotCard
+          title="Manager"
+          role="MANAGER"
+          member={data.manager}
+          teamId={data.id}
+          companyId={companyId}
+        />
       </div>
 
       <Card>
@@ -113,17 +124,21 @@ function SlotCard({
   role,
   member,
   teamId,
+  companyId,
 }: {
   title: string;
   role: TeamRole;
   member: TeamMember | null;
   teamId: string;
+  companyId: string;
 }) {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">{title}</CardTitle>
-        {member ? <AssignMemberDialog teamId={teamId} role={role} label="Change" /> : null}
+        {member ? (
+          <AssignMemberDialog teamId={teamId} role={role} label="Change" companyId={companyId} />
+        ) : null}
       </CardHeader>
       <CardContent>
         {member ? (
@@ -134,7 +149,12 @@ function SlotCard({
         ) : (
           <div className="flex flex-col items-start gap-3">
             <p className="text-sm text-muted-foreground">No {title} assigned yet.</p>
-            <AssignMemberDialog teamId={teamId} role={role} label={`Assign ${title}`} />
+            <AssignMemberDialog
+              teamId={teamId}
+              role={role}
+              label={`Assign ${title}`}
+              companyId={companyId}
+            />
           </div>
         )}
       </CardContent>

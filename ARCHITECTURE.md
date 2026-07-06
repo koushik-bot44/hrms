@@ -35,7 +35,7 @@ Super Admin
 
 | Role | Scope | Can do |
 |------|-------|--------|
-| **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **archive (soft-delete) a company and restore it**; view **all** companies' audit logs (separated per company), including archived companies'. |
+| **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **archive (soft-delete) a company and restore it**; **manage teams in any company** (create / rename / reassign HR + Manager) and **onboard employees into any company** (selecting company → team → HR); view **all** companies' audit logs (separated per company), including archived companies'. |
 | **Company Admin** | One company | Create teams and assign the team's HR and Manager (one each); view **own company's** audit logs. |
 | **HR** | Own team / own onboarded employees | Trigger onboarding (email + unique ID); look up an employee by ID and see all their forms/documents; verify documents; route the approval request to the team's Manager. |
 | **Manager** | Own team | Workspace inbox/notifications (who was onboarded, who was verified, pending approvals); **approve** verified employees. Approval is the **final step** _[parked: post-approval actions]_. |
@@ -50,6 +50,16 @@ history. A **restore** returns it to active and its people can sign in again. Th
 never affected** (they belong to no company).
 
 **Team rule:** exactly one HR and one Manager per team. Approvals stay **within the team**.
+
+**Super Admin cross-company operations.** Team management and onboarding are normally the Company
+Admin's and HR's jobs; the **Super Admin can do both in any company** by selecting the target company
+explicitly (Company Admin stays locked to its own). Team ops reuse the same one-HR-one-Manager rule
+and are audited under the **target** company. When the Super Admin onboards, they pick **company →
+team → HR** — the employee attaches to that **team's HR** (`onboardingHrId`, exactly as if that HR had
+onboarded them; there is no direct team field, so **the HR is determined by the selected team**, which
+has exactly one). Everything downstream is **unchanged**: the employee is `INVITED` with no ID, gets
+the same selection email + `/employee/login` link, appears in **that HR's** queue, is verified by that
+HR, and approved by **that team's Manager** (who mints the unique ID).
 
 **Employee ↔ team linkage:** an Employee is tied to a **Company** and their **onboarding HR**
 (no direct team field in v1). The approving Manager is therefore **the Manager on the onboarding

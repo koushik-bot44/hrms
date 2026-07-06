@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
-import { deleteTeam } from '@/lib/api/teams';
+import { deleteTeam, teamsKey } from '@/lib/api/teams';
 import { useApiMutation } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,17 +16,26 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 
-export function DeleteTeamDialog({ teamId, teamName }: { teamId: string; teamName: string }) {
+export function DeleteTeamDialog({
+  teamId,
+  teamName,
+  companyId,
+}: {
+  teamId: string;
+  teamName: string;
+  /** SUPER_ADMIN cross-company; omit for COMPANY_ADMIN. */
+  companyId?: string;
+}) {
   const [open, setOpen] = React.useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const mutation = useApiMutation(() => deleteTeam(teamId), {
+  const mutation = useApiMutation(() => deleteTeam(teamId, companyId), {
     successMessage: `Team “${teamName}” deleted`,
     onSuccess: () => {
       setOpen(false);
-      void queryClient.invalidateQueries({ queryKey: ['teams'] });
-      router.replace('/company-admin');
+      void queryClient.invalidateQueries({ queryKey: teamsKey(companyId) });
+      router.replace(companyId ? `/super-admin/companies/${companyId}` : '/company-admin');
     },
   });
 

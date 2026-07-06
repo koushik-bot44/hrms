@@ -87,7 +87,9 @@ const columns: ColumnDef<TeamSummary>[] = [
 ];
 
 export default function TeamsPage() {
-  const { data, isLoading, isError, error } = useApiQuery(['teams'], listTeams);
+  const { data, isLoading, isError, error } = useApiQuery(['teams'], (signal) =>
+    listTeams(undefined, signal),
+  );
 
   return (
     <div className="space-y-6">

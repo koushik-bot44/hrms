@@ -9,13 +9,16 @@ import com.ihrms.config.AppProperties;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.Team;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
-import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.employees.dto.EmployeeDtos.EmployeePage;
 import com.ihrms.employees.dto.EmployeeDtos.EmployeeSummaryView;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeRequest;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeResult;
+import com.ihrms.employees.dto.EmployeeDtos.SuperAdminOnboardRequest;
+import java.time.LocalDate;
 import jakarta.persistence.criteria.Predicate;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +44,7 @@ public class EmployeesService {
 
   private final EmployeeRepository employees;
   private final CompanyRepository companies;
+  private final TeamRepository teams;
   private final AuditService audit;
   private final MailService mail;
   private final AccountEmails accountEmails;
@@ -49,38 +53,91 @@ public class EmployeesService {
   public EmployeesService(
       EmployeeRepository employees,
       CompanyRepository companies,
+      TeamRepository teams,
       AuditService audit,
       MailService mail,
       AccountEmails accountEmails,
       AppProperties props) {
     this.employees = employees;
     this.companies = companies;
+    this.teams = teams;
     this.audit = audit;
     this.mail = mail;
     this.accountEmails = accountEmails;
     this.props = props;
   }
 
+  /** HR onboards into their own company, attaching the employee to themselves as the onboarding HR. */
   public OnboardEmployeeResult onboard(
       OnboardEmployeeRequest input, IhrmsPrincipal.User actor, String ip) {
-    String companyId = companyOf(actor);
+    return createAndInvite(
+        companyOf(actor),
+        actor.userId(),
+        input.fullName(),
+        input.email(),
+        input.designation(),
+        input.dateOfJoining(),
+        actor,
+        ip);
+  }
+
+  /**
+   * SUPER_ADMIN onboards into a chosen company by selecting a team (§2): the employee attaches to that
+   * team's HR exactly as if the HR had onboarded them. The team must belong to the given company and
+   * have an HR assigned; everything downstream (verification by that HR, approval by that team's
+   * Manager) is unchanged.
+   */
+  public OnboardEmployeeResult onboardForCompany(
+      String companyId, SuperAdminOnboardRequest input, IhrmsPrincipal.User actor, String ip) {
+    Team team =
+        teams
+            .findByIdAndCompanyId(input.teamId(), companyId)
+            .orElseThrow(
+                () ->
+                    new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "That team does not belong to the selected company"));
+    if (team.getHrUserId() == null) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "The selected team has no HR assigned yet");
+    }
+    return createAndInvite(
+        companyId,
+        team.getHrUserId(),
+        input.fullName(),
+        input.email(),
+        input.designation(),
+        input.dateOfJoining(),
+        actor,
+        ip);
+  }
+
+  /** Shared onboarding: create the INVITED employee, send the selection email, audit. */
+  private OnboardEmployeeResult createAndInvite(
+      String companyId,
+      String onboardingHrId,
+      String rawFullName,
+      String rawEmail,
+      String rawDesignation,
+      LocalDate dateOfJoining,
+      IhrmsPrincipal.User actor,
+      String ip) {
     Company company =
         companies
             .findById(companyId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "No company in scope"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
 
-    String email = input.email().trim().toLowerCase();
+    String email = rawEmail.trim().toLowerCase();
     accountEmails.assertAvailableForEmployee(email); // unique across staff + employees (§6)
-    String fullName = input.fullName().trim();
-    String designation = input.designation().trim();
+    String fullName = rawFullName.trim();
+    String designation = rawDesignation.trim();
 
     Employee employee = new Employee();
     employee.setFullName(fullName);
     employee.setEmail(email);
     employee.setDesignation(designation);
-    employee.setDateOfJoining(input.dateOfJoining());
+    employee.setDateOfJoining(dateOfJoining);
     employee.setCompanyId(companyId);
-    employee.setOnboardingHrId(actor.userId());
+    employee.setOnboardingHrId(onboardingHrId);
     employee.setStatus(EmployeeStatus.INVITED);
     try {
       // Flush inside the try so the global-unique-email violation surfaces here as a 409.
@@ -96,8 +153,9 @@ public class EmployeesService {
             + URLEncoder.encode(email, StandardCharsets.UTF_8);
     mail.sendEmployeeSelection(email, fullName, designation, company.getName(), loginUrl);
 
+    // Partition the audit under the TARGET company (a SUPER_ADMIN actor has no company of its own).
     audit.record(
-        AuditActor.from(actor),
+        new AuditActor("USER", actor.userId(), companyId),
         "EMPLOYEE_ONBOARDED",
         "Employee",
         employee.getId(),

@@ -3,6 +3,7 @@ import type {
   EmployeeStatus,
   OnboardEmployeeInput,
   OnboardEmployeeResult,
+  SuperAdminOnboardInput,
 } from '@/lib/contract';
 import { apiFetch } from './client';
 
@@ -28,4 +29,15 @@ export function getEmployeeQueue(
 
 export function onboardEmployee(body: OnboardEmployeeInput): Promise<OnboardEmployeeResult> {
   return apiFetch<OnboardEmployeeResult>('/employees', { method: 'POST', body });
+}
+
+/** SUPER_ADMIN onboards into a chosen company by selecting a team (its HR is resolved server-side). */
+export function onboardForCompany(
+  companyId: string,
+  body: Omit<SuperAdminOnboardInput, 'companyId'>,
+): Promise<OnboardEmployeeResult> {
+  return apiFetch<OnboardEmployeeResult>(`/companies/${companyId}/employees`, {
+    method: 'POST',
+    body,
+  });
 }

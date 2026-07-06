@@ -11,7 +11,13 @@ import {
   type AssignNewMemberInput,
   type TeamRole,
 } from '@/lib/contract';
-import { assignTeamMember, getAssignableUsers } from '@/lib/api/teams';
+import {
+  assignTeamMember,
+  assignableKey,
+  getAssignableUsers,
+  teamKey,
+  teamsKey,
+} from '@/lib/api/teams';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { generatePassword } from '@/lib/auth/password';
 import { CredentialNotice } from '@/components/staff-credential-notice';
@@ -34,10 +40,13 @@ export function AssignMemberDialog({
   teamId,
   role,
   label,
+  companyId,
 }: {
   teamId: string;
   role: TeamRole;
   label: string;
+  /** SUPER_ADMIN cross-company; omit for COMPANY_ADMIN (own company). */
+  companyId?: string;
 }) {
   const roleLabel = role === 'HR' ? 'HR' : 'Manager';
   const [open, setOpen] = React.useState(false);
@@ -53,19 +62,19 @@ export function AssignMemberDialog({
   });
 
   const assignable = useApiQuery(
-    ['assignable', role],
-    (signal) => getAssignableUsers(role, signal),
+    assignableKey(role, companyId),
+    (signal) => getAssignableUsers(role, companyId, signal),
     { enabled: open && mode === 'existing' },
   );
 
   const mutation = useApiMutation(
-    (body: AssignMemberInput) => assignTeamMember(teamId, role, body),
+    (body: AssignMemberInput) => assignTeamMember(teamId, role, body, companyId),
     {
       successMessage: `${roleLabel} assigned`,
       onSuccess: (_result, variables) => {
-        void queryClient.invalidateQueries({ queryKey: ['team', teamId] });
-        void queryClient.invalidateQueries({ queryKey: ['teams'] });
-        void queryClient.invalidateQueries({ queryKey: ['assignable', role] });
+        void queryClient.invalidateQueries({ queryKey: teamKey(teamId, companyId) });
+        void queryClient.invalidateQueries({ queryKey: teamsKey(companyId) });
+        void queryClient.invalidateQueries({ queryKey: assignableKey(role, companyId) });
         setUserId('');
         // A newly-created person has an initial password to hand over; keep the dialog open to show
         // it. Attaching an existing user just closes.
