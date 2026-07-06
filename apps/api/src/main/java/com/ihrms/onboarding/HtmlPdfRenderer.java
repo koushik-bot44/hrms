@@ -33,10 +33,12 @@ public class HtmlPdfRenderer {
     XRLog.setLoggerImpl(new Slf4jLogger());
   }
 
-  private static final String FONT_PATH = "/fonts/LiberationSans-Regular.ttf";
+  private static final String REGULAR_FONT_PATH = "/fonts/LiberationSans-Regular.ttf";
+  private static final String BOLD_FONT_PATH = "/fonts/LiberationSans-Bold.ttf";
 
   private final TemplateEngine engine;
   private final byte[] fontBytes;
+  private final byte[] boldFontBytes;
 
   public HtmlPdfRenderer() {
     ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
@@ -50,7 +52,8 @@ public class HtmlPdfRenderer {
     TemplateEngine te = new TemplateEngine();
     te.setTemplateResolver(resolver);
     this.engine = te;
-    this.fontBytes = loadFontBytes();
+    this.fontBytes = loadFontBytes(REGULAR_FONT_PATH);
+    this.boldFontBytes = loadFontBytes(BOLD_FONT_PATH);
   }
 
   /** Bind {@code model} into {@code templateName} (e.g. "form1") and render it to a PDF. */
@@ -90,24 +93,25 @@ public class HtmlPdfRenderer {
   }
 
   /**
-   * Register the bundled TTF under the template font-family names, for both normal and bold weights
-   * (only a Regular face is bundled, so bold reuses it — the layout is unaffected).
+   * Register the bundled TTFs under the template font-family names: the Regular face for normal
+   * weight and the Bold face for bold weight, so {@code font-weight:bold} in the templates (titles,
+   * table headers) renders as true bold rather than synthetic/regular.
    */
   private void registerFonts(PdfRendererBuilder builder) {
     for (String family : List.of("Helvetica", "Arial")) {
       builder.useFont(() -> new ByteArrayInputStream(fontBytes), family, 400, FontStyle.NORMAL, true);
-      builder.useFont(() -> new ByteArrayInputStream(fontBytes), family, 700, FontStyle.NORMAL, true);
+      builder.useFont(() -> new ByteArrayInputStream(boldFontBytes), family, 700, FontStyle.NORMAL, true);
     }
   }
 
-  private static byte[] loadFontBytes() {
-    try (InputStream in = HtmlPdfRenderer.class.getResourceAsStream(FONT_PATH)) {
+  private static byte[] loadFontBytes(String path) {
+    try (InputStream in = HtmlPdfRenderer.class.getResourceAsStream(path)) {
       if (in == null) {
-        throw new IllegalStateException("Bundled PDF font not found on classpath: " + FONT_PATH);
+        throw new IllegalStateException("Bundled PDF font not found on classpath: " + path);
       }
       return in.readAllBytes();
     } catch (IOException e) {
-      throw new IllegalStateException("Could not load bundled PDF font", e);
+      throw new IllegalStateException("Could not load bundled PDF font " + path, e);
     }
   }
 }
