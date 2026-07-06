@@ -105,17 +105,18 @@ class TeamsApiTest {
 
     MvcResult hrRes =
         mvc.perform(asAdminA(put("/teams/" + teamId + "/hr"),
-                Map.of("name", "Holly HR", "email", "holly@a.test")))
+                Map.of("name", "Holly HR", "email", "holly@a.test", "password", "HollyHR@1")))
             .andExpect(status().isOk())
             .andReturn();
     JsonNode hrBody = json.readTree(hrRes.getResponse().getContentAsString());
     assertThat(hrBody.get("team").get("hr").get("email").asText()).isEqualTo("holly@a.test");
     assertThat(hrBody.get("team").get("hr").get("role").asText()).isEqualTo("HR");
-    assertThat(hrBody.get("devPassword").asText()).isNotBlank();
+    // The initial password is echoed in dev (it is what the admin set).
+    assertThat(hrBody.get("devPassword").asText()).isEqualTo("HollyHR@1");
 
     MvcResult mgrRes =
         mvc.perform(asAdminA(put("/teams/" + teamId + "/manager"),
-                Map.of("name", "Max Manager", "email", "max@a.test")))
+                Map.of("name", "Max Manager", "email", "max@a.test", "password", "MaxMgr@1")))
             .andExpect(status().isOk())
             .andReturn();
     JsonNode mgrBody = json.readTree(mgrRes.getResponse().getContentAsString());
@@ -210,7 +211,8 @@ class TeamsApiTest {
   // --- fixtures -------------------------------------------------------------
 
   private MvcResult assignNewHr(String teamId, String email) throws Exception {
-    return mvc.perform(asAdminA(put("/teams/" + teamId + "/hr"), Map.of("name", "HR " + email, "email", email)))
+    return mvc.perform(asAdminA(put("/teams/" + teamId + "/hr"),
+            Map.of("name", "HR " + email, "email", email, "password", "NewStaff@1")))
         .andExpect(status().isOk())
         .andReturn();
   }

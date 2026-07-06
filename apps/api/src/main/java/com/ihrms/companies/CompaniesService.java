@@ -20,7 +20,6 @@ import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.EmployeeCodes;
-import com.ihrms.support.TempPasswords;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -164,13 +163,13 @@ public class CompaniesService {
 
     String email = input.email().trim().toLowerCase();
     accountEmails.assertAvailableForStaff(email); // unique across staff + employees (§6)
-    String tempPassword = TempPasswords.generate();
+    String password = input.password(); // admin-set initial staff password (§6)
     User user = new User();
     user.setEmail(email);
     user.setName(input.name().trim());
     user.setRole(UserRole.COMPANY_ADMIN);
     user.setCompanyId(id);
-    user.setPasswordHash(encoder.encode(tempPassword));
+    user.setPasswordHash(encoder.encode(password));
     user.setStatus("ACTIVE");
     try {
       users.save(user);
@@ -178,11 +177,12 @@ public class CompaniesService {
       throw conflict("Email \"" + email + "\" is already in use");
     }
 
-    mail.sendCompanyAdminInvite(email, company.getName(), tempPassword);
+    mail.sendCompanyAdminInvite(email, company.getName(), password);
     audit(actor, id, "COMPANY_ADMIN_PROVISIONED", "User", user.getId(),
         Map.of("email", email), ip);
 
-    return new ProvisionAdminResult(adminView(user), isProd() ? null : tempPassword);
+    // Echo the initial password (dev only) — the provisioning admin already knows it (they set it).
+    return new ProvisionAdminResult(adminView(user), isProd() ? null : password);
   }
 
   // --- mapping --------------------------------------------------------------

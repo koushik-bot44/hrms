@@ -45,6 +45,8 @@ import org.springframework.web.server.ResponseStatusException;
 @EnabledIfEnvironmentVariable(named = "IHRMS_TEST_DB", matches = ".+")
 class CompanySoftDeleteTest {
 
+  private static final String STAFF_PW = "Passw0rd!";
+
   @Autowired MockMvc mvc;
   @Autowired ObjectMapper json;
   @Autowired TokenService tokens;
@@ -53,6 +55,7 @@ class CompanySoftDeleteTest {
   @Autowired EmployeeRepository employees;
   @Autowired AuditLogRepository auditLogs;
   @Autowired AccountEmails accountEmails;
+  @Autowired org.springframework.security.crypto.password.PasswordEncoder encoder;
   @Autowired JdbcTemplate jdbc;
 
   private String superToken;
@@ -128,9 +131,10 @@ class CompanySoftDeleteTest {
   void principalsOfDeletedCompanyAreDeniedLoginAndExistingTokensRejected() throws Exception {
     archive();
 
-    // OTP login is denied (generic response, no devOtp) for staff + employee of the archived company.
-    assertThat(requestOtp("Cara Admin", "ca@acme.test").has("devOtp")).isFalse();
-    assertThat(requestOtp("Hana HR", "hr@acme.test").has("devOtp")).isFalse();
+    // Staff password login is denied (generic) for an archived company; employee OTP is denied too
+    // (generic response, no devOtp).
+    login("ca@acme.test", STAFF_PW).andExpect(status().isUnauthorized());
+    login("hr@acme.test", STAFF_PW).andExpect(status().isUnauthorized());
     assertThat(requestOtp("Eve Employee", "eve@personal.test").has("devOtp")).isFalse();
 
     // Already-issued access tokens stop working on the very next request.
@@ -174,7 +178,7 @@ class CompanySoftDeleteTest {
     assertThat(auditLogs.findByAction("COMPANY_RESTORED")).hasSize(1);
 
     // Login works again, and the previously-rejected token is accepted again.
-    assertThat(requestOtp("Cara Admin", "ca@acme.test").get("devOtp").asText()).hasSize(6);
+    login("ca@acme.test", STAFF_PW).andExpect(status().isCreated());
     mvc.perform(get("/auth/me").header("Authorization", "Bearer " + adminToken)).andExpect(status().isOk());
     assertThat(activeCompanyIds()).contains(company.getId());
   }
@@ -192,7 +196,8 @@ class CompanySoftDeleteTest {
             post("/companies/" + company.getId() + "/admin")
                 .header("Authorization", "Bearer " + superToken)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("name", "New Admin", "email", "new@acme.test"))))
+                .content(json.writeValueAsString(
+                    Map.of("name", "New Admin", "email", "new@acme.test", "password", "NewAdmin@1"))))
         .andExpect(status().isConflict());
 
     // The archived company's emails remain reserved (clean restore, no collisions): the staff email
@@ -246,8 +251,17 @@ class CompanySoftDeleteTest {
     u.setName(name);
     u.setRole(role);
     u.setCompanyId(companyId);
+    u.setPasswordHash(encoder.encode(STAFF_PW)); // staff sign in with email + password (§6)
     u.setStatus("ACTIVE");
     return users.save(u);
+  }
+
+  private org.springframework.test.web.servlet.ResultActions login(String email, String password)
+      throws Exception {
+    return mvc.perform(
+        post("/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("email", email, "password", password))));
   }
 
   private String tokenFor(User u) {

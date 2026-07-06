@@ -3,9 +3,10 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LogOut, Menu, ShieldCheck, UserRound } from 'lucide-react';
+import { KeyRound, LogOut, Menu, ShieldCheck, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth-provider';
+import { ChangePasswordDialog } from '@/components/change-password-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -87,6 +88,8 @@ function Brand({ roleLabel }: { roleLabel: string }) {
 function UserMenu({ roleLabel }: { roleLabel: string }) {
   const { session, logout } = useAuth();
   const router = useRouter();
+  const [changingPassword, setChangingPassword] = React.useState(false);
+  const isStaff = session?.type === 'USER';
 
   const displayName =
     session?.type === 'USER'
@@ -97,34 +100,46 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
   const subtitle = session?.type === 'USER' ? session.email : session?.email;
 
   const onSignOut = async () => {
+    const wasEmployee = session?.type === 'EMPLOYEE';
     await logout();
-    router.replace('/login');
+    router.replace(wasEmployee ? '/employee/login' : '/login');
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2">
-          <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
-            <UserRound className="size-4" />
-          </span>
-          <span className="hidden max-w-[12rem] truncate text-sm sm:inline">{displayName}</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="flex flex-col">
-          <span className="truncate">{displayName}</span>
-          {subtitle ? (
-            <span className="text-xs font-normal text-muted-foreground">{subtitle}</span>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" className="gap-2">
+            <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <UserRound className="size-4" />
+            </span>
+            <span className="hidden max-w-[12rem] truncate text-sm sm:inline">{displayName}</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuLabel className="flex flex-col">
+            <span className="truncate">{displayName}</span>
+            {subtitle ? (
+              <span className="text-xs font-normal text-muted-foreground">{subtitle}</span>
+            ) : null}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {isStaff ? (
+            <DropdownMenuItem onSelect={() => setChangingPassword(true)}>
+              <KeyRound className="size-4" />
+              Change password
+            </DropdownMenuItem>
           ) : null}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void onSignOut()}>
-          <LogOut className="size-4" />
-          Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuItem onSelect={() => void onSignOut()}>
+            <LogOut className="size-4" />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {isStaff ? (
+        <ChangePasswordDialog open={changingPassword} onOpenChange={setChangingPassword} />
+      ) : null}
+    </>
   );
 }
 

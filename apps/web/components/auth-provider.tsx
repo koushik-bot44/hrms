@@ -3,13 +3,17 @@
 import * as React from 'react';
 import { toast } from 'sonner';
 import type {
+  ChangePasswordInput,
   OtpRequestInput,
   OtpRequestResult,
   OtpVerifyInput,
   Session,
+  StaffLoginInput,
 } from '@/lib/contract';
 import { setAuthHooks } from '@/lib/api/client';
 import {
+  changePassword as apiChangePassword,
+  loginStaff as apiLoginStaff,
   logout as apiLogout,
   refreshSession,
   requestOtp as apiRequestOtp,
@@ -22,6 +26,11 @@ type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 interface AuthContextValue {
   session: Session | null;
   status: AuthStatus;
+  /** Staff sign-in (email + password). */
+  login: (input: StaffLoginInput) => Promise<Session>;
+  /** Staff self-service password change. */
+  changePassword: (input: ChangePasswordInput) => Promise<void>;
+  /** Employee sign-in start (full name + email -> OTP). */
   requestOtp: (input: OtpRequestInput) => Promise<OtpRequestResult>;
   verifyOtp: (input: OtpVerifyInput) => Promise<Session>;
   logout: () => Promise<void>;
@@ -92,6 +101,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void doRefresh();
   }, [doRefresh]);
 
+  const login = React.useCallback(
+    async (input: StaffLoginInput) => {
+      const result = await apiLoginStaff(input);
+      applyAuth(result);
+      return result.session;
+    },
+    [applyAuth],
+  );
+
+  const changePassword = React.useCallback(
+    (input: ChangePasswordInput) => apiChangePassword(input).then(() => undefined),
+    [],
+  );
+
   const verifyOtp = React.useCallback(
     async (input: OtpVerifyInput) => {
       const result = await apiVerifyOtp(input);
@@ -112,8 +135,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearAuth]);
 
   const value = React.useMemo<AuthContextValue>(
-    () => ({ session, status, requestOtp, verifyOtp, logout }),
-    [session, status, requestOtp, verifyOtp, logout],
+    () => ({ session, status, login, changePassword, requestOtp, verifyOtp, logout }),
+    [session, status, login, changePassword, requestOtp, verifyOtp, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

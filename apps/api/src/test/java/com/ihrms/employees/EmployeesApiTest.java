@@ -89,7 +89,7 @@ class EmployeesApiTest {
     MvcResult second =
         mvc.perform(asHr("Sam Roe", "sam@personal.test")).andExpect(status().isCreated()).andReturn();
     assertThat(json.readTree(second.getResponse().getContentAsString()).get("loginUrl").asText())
-        .contains("/login");
+        .contains("/employee/login");
 
     // GET lists both, newest first.
     JsonNode arr =

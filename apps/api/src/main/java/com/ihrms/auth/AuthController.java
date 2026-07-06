@@ -4,10 +4,12 @@ import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditInterceptor;
 import com.ihrms.auth.AuthService.IssuedSession;
 import com.ihrms.auth.dto.AuthDtos.AuthResult;
+import com.ihrms.auth.dto.AuthDtos.ChangePasswordRequest;
 import com.ihrms.auth.dto.AuthDtos.OkResponse;
 import com.ihrms.auth.dto.AuthDtos.OtpRequest;
 import com.ihrms.auth.dto.AuthDtos.OtpRequestResult;
 import com.ihrms.auth.dto.AuthDtos.OtpVerifyRequest;
+import com.ihrms.auth.dto.AuthDtos.StaffLoginRequest;
 import com.ihrms.auth.dto.SessionView;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Auth endpoints (contract §3.2). POST -> 201, GET -> 200. The refresh token is delivered
@@ -40,14 +43,38 @@ public class AuthController {
     this.cookies = cookies;
   }
 
-  /** Unified start: full name + email -> OTP (staff or employee). Enumeration-safe generic result. */
+  /** Staff sign-in: email + password -> session (resolves a User only; generic denial otherwise). */
+  @PostMapping("/login")
+  @ResponseStatus(HttpStatus.CREATED)
+  public AuthResult login(
+      @Valid @RequestBody StaffLoginRequest body,
+      HttpServletRequest request,
+      HttpServletResponse response) {
+    return complete(auth.loginStaff(body), request, response);
+  }
+
+  /** Staff self-service password change (authenticated). Employees have no password. */
+  @PostMapping("/change-password")
+  @ResponseStatus(HttpStatus.CREATED)
+  public OkResponse changePassword(
+      @Valid @RequestBody ChangePasswordRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal principal,
+      HttpServletRequest request) {
+    if (!(principal instanceof IhrmsPrincipal.User user)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only staff accounts have a password");
+    }
+    auth.changePassword(user, body, request.getRemoteAddr());
+    return new OkResponse(true);
+  }
+
+  /** Employee sign-in start: full name + email -> OTP. Enumeration-safe generic result. */
   @PostMapping("/request-otp")
   @ResponseStatus(HttpStatus.CREATED)
   public OtpRequestResult requestOtp(@Valid @RequestBody OtpRequest body) {
     return auth.requestOtp(body);
   }
 
-  /** Unified verify: email + code -> session (principal type + role + scope from the account). */
+  /** Employee verify: email + code -> session (principal type + role + scope from the account). */
   @PostMapping("/verify-otp")
   @ResponseStatus(HttpStatus.CREATED)
   public AuthResult verifyOtp(

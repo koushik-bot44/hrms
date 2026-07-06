@@ -1,16 +1,21 @@
 package com.ihrms.auth;
 
+import com.ihrms.audit.AuditActor;
+import com.ihrms.audit.AuditService;
 import com.ihrms.auth.TokenService.RefreshClaims;
 import com.ihrms.auth.dto.AuthDtos.AuthResult;
+import com.ihrms.auth.dto.AuthDtos.ChangePasswordRequest;
 import com.ihrms.auth.dto.AuthDtos.OtpRequest;
 import com.ihrms.auth.dto.AuthDtos.OtpRequestResult;
 import com.ihrms.auth.dto.AuthDtos.OtpVerifyRequest;
+import com.ihrms.auth.dto.AuthDtos.StaffLoginRequest;
 import com.ihrms.config.AppProperties;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.UserRepository;
 import java.time.Instant;
+import java.util.Map;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpStatus;
@@ -19,13 +24,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Unified authentication (§6). EVERYONE — staff (User) and employees — signs in with full name +
- * email → OTP; there are no passwords. The email resolves a single account across the User and
- * Employee tables (kept unambiguous by a creation-time uniqueness guard, {@link AccountEmails}); the
- * full name is matched against it; a single-use, time-boxed OTP is emailed. Requests are
- * enumeration-safe (a generic response either way) and rate-limited (RateLimitFilter on /auth/**).
- * Verify issues the session with the resolved account's principal type + role + scope. Refresh
- * reloads the principal from the DB so role/company/deactivation changes take effect.
+ * Authentication (§6). Two audiences, each resolving against ONE table so they never cross over:
+ * <b>staff</b> (User) sign in with email + password ({@link #loginStaff}); <b>employees</b> sign in
+ * with full name + email → OTP ({@link #requestOtp}/{@link #verifyOtp}). Both apply the deleted-company
+ * denial, are enumeration-safe (a generic response either way), and are rate-limited (RateLimitFilter
+ * on /auth/**). Passwords are hashed with the app's {@link PasswordEncoder} (BCrypt) and are
+ * self-service changeable ({@link #changePassword}). Refresh reloads the principal from the DB so
+ * role/company/deactivation changes take effect.
  */
 @Service
 public class AuthService {
@@ -41,6 +46,7 @@ public class AuthService {
   private final AppProperties props;
   private final Environment env;
   private final AuthorizationService authz;
+  private final AuditService audit;
 
   public AuthService(
       UserRepository users,
@@ -50,7 +56,8 @@ public class AuthService {
       MailService mail,
       AppProperties props,
       Environment env,
-      AuthorizationService authz) {
+      AuthorizationService authz,
+      AuditService audit) {
     this.users = users;
     this.employees = employees;
     this.encoder = encoder;
@@ -59,9 +66,38 @@ public class AuthService {
     this.props = props;
     this.env = env;
     this.authz = authz;
+    this.audit = audit;
   }
 
-  // --- Start: full name + email -> OTP (staff OR employee) ------------------
+  // --- Staff: email + password (User only) ----------------------------------
+
+  /** Resolve a User by email and verify the password. Employee/unknown email → generic denial. */
+  public IssuedSession loginStaff(StaffLoginRequest req) {
+    User user = users.findByEmail(req.email().trim().toLowerCase()).orElse(null);
+    if (user == null
+        || user.getPasswordHash() == null
+        || !"ACTIVE".equals(user.getStatus())
+        || authz.isCompanyDeleted(user.getCompanyId())
+        || !encoder.matches(req.password(), user.getPasswordHash())) {
+      throw unauthorized("Invalid email or password");
+    }
+    return issue(Principals.of(user));
+  }
+
+  /** Staff self-service password change: verify current, rehash, audit PASSWORD_CHANGED. */
+  public void changePassword(IhrmsPrincipal.User actor, ChangePasswordRequest req, String ip) {
+    User user =
+        users.findById(actor.userId()).orElseThrow(() -> unauthorized("Session no longer valid"));
+    if (user.getPasswordHash() == null
+        || !encoder.matches(req.currentPassword(), user.getPasswordHash())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is incorrect");
+    }
+    user.setPasswordHash(encoder.encode(req.newPassword()));
+    users.save(user);
+    audit.record(AuditActor.from(actor), "PASSWORD_CHANGED", "User", user.getId(), Map.of(), ip);
+  }
+
+  // --- Employee: full name + email -> OTP (Employee only) -------------------
 
   public OtpRequestResult requestOtp(OtpRequest req) {
     int ttl = props.otpTtl();
@@ -69,32 +105,18 @@ public class AuthService {
     String fullName = req.fullName().trim();
     String devOtp = null;
 
-    // Resolve the single account for this email (User first, then Employee — the uniqueness guard
-    // guarantees at most one). Issue only when the full name matches; otherwise fall through to the
-    // same generic response so neither email nor name can be enumerated.
-    User user = users.findByEmail(email).orElse(null);
-    if (user != null) {
-      // Also denied (silently) when the staff account's company is archived (§6).
-      if ("ACTIVE".equals(user.getStatus())
-          && nameMatches(user.getName(), fullName)
-          && !authz.isCompanyDeleted(user.getCompanyId())) {
-        String otp = issueOtp(email);
-        user.setOtpHash(encoder.encode(otp));
-        user.setOtpExpiresAt(Instant.now().plusSeconds(ttl));
-        users.save(user);
-        devOtp = isProd() ? null : otp;
-      }
-    } else {
-      Employee employee = employees.findByEmail(email).orElse(null);
-      if (employee != null
-          && nameMatches(employee.getFullName(), fullName)
-          && !authz.isCompanyDeleted(employee.getCompanyId())) {
-        String otp = issueOtp(email);
-        employee.setOtpHash(encoder.encode(otp));
-        employee.setOtpExpiresAt(Instant.now().plusSeconds(ttl));
-        employees.save(employee);
-        devOtp = isProd() ? null : otp;
-      }
+    // Resolve an Employee by email (staff use email+password, not OTP). Issue only when the
+    // HR-entered full name matches and the company is not archived; otherwise fall through to the
+    // same generic response so neither email nor name can be enumerated (§6).
+    Employee employee = employees.findByEmail(email).orElse(null);
+    if (employee != null
+        && nameMatches(employee.getFullName(), fullName)
+        && !authz.isCompanyDeleted(employee.getCompanyId())) {
+      String otp = issueOtp(email);
+      employee.setOtpHash(encoder.encode(otp));
+      employee.setOtpExpiresAt(Instant.now().plusSeconds(ttl));
+      employees.save(employee);
+      devOtp = isProd() ? null : otp;
     }
     return new OtpRequestResult(true, ttl, devOtp);
   }
@@ -111,19 +133,7 @@ public class AuthService {
   public IssuedSession verifyOtp(OtpVerifyRequest req) {
     String email = req.email().trim().toLowerCase();
 
-    User user = users.findByEmail(email).orElse(null);
-    if (user != null) {
-      // Generic denial (anti-enumeration) for a deactivated account or an archived company (§6).
-      if (!"ACTIVE".equals(user.getStatus()) || authz.isCompanyDeleted(user.getCompanyId())) {
-        throw unauthorized("Invalid or expired code");
-      }
-      assertOtpValid(user.getOtpHash(), user.getOtpExpiresAt(), req.otp());
-      user.setOtpHash(null); // single-use
-      user.setOtpExpiresAt(null);
-      users.save(user);
-      return issue(Principals.of(user));
-    }
-
+    // Employee only — a staff email resolves nothing here (generic denial).
     Employee employee = employees.findByEmail(email).orElse(null);
     if (employee == null || authz.isCompanyDeleted(employee.getCompanyId())) {
       throw unauthorized("Invalid or expired code");

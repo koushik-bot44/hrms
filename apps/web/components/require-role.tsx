@@ -26,28 +26,30 @@ function isAllowed(session: Session, roles?: UserRole[], actor?: Session['type']
 }
 
 /**
- * Client-side route protection (Phase-3 guard seam). Unauthenticated users go to
- * /login; authenticated-but-out-of-scope users are bounced to their own area. The
- * server still enforces §6 — this is for UX, not security.
+ * Client-side route protection (Phase-3 guard seam). Unauthenticated users go to the sign-in for
+ * their audience (§6): the employee area sends them to /employee/login, everything else to /login.
+ * Authenticated-but-out-of-scope users are bounced to their own area. The server still enforces §6 —
+ * this is for UX, not security.
  */
 export function RequireRole({ roles, actor, children }: RequireRoleProps) {
   const { session, status } = useAuth();
   const router = useRouter();
 
   const allowed = session ? isAllowed(session, roles, actor) : false;
+  const signInPath = actor === 'EMPLOYEE' ? '/employee/login' : '/login';
 
   React.useEffect(() => {
     if (status === 'loading') {
       return;
     }
     if (status === 'unauthenticated' || !session) {
-      router.replace('/login');
+      router.replace(signInPath);
       return;
     }
     if (!allowed) {
       router.replace(homePathForSession(session));
     }
-  }, [status, session, allowed, router]);
+  }, [status, session, allowed, router, signInPath]);
 
   if (status !== 'authenticated' || !session || !allowed) {
     return (

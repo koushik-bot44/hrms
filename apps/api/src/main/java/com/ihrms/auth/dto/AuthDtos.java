@@ -4,21 +4,39 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 /**
- * Auth request/response DTOs. Unified sign-in (§6): everyone — staff and employees — starts with
- * full name + email → OTP, then verifies email + code. No passwords.
+ * Auth request/response DTOs (§6). Two audiences: <b>staff</b> sign in with email + password
+ * ({@link StaffLoginRequest}) at {@code /login}; <b>employees</b> sign in with full name + email →
+ * OTP ({@link OtpRequest}/{@link OtpVerifyRequest}) at {@code /employee/login}. Staff passwords are
+ * self-service changeable ({@link ChangePasswordRequest}).
  */
 public final class AuthDtos {
 
+  /** Minimum password length wherever a staff password is set (provisioning + change-password). */
+  public static final int MIN_PASSWORD_LENGTH = 8;
+
   private AuthDtos() {}
 
-  /** Start login: full name + email → OTP to the email (the security factor). */
+  /** Staff sign-in: email + password → session (resolves a User only). */
+  public record StaffLoginRequest(
+      @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
+      @NotBlank(message = "Password is required") String password) {}
+
+  /** Staff self-service password change (authenticated). */
+  public record ChangePasswordRequest(
+      @NotBlank(message = "Your current password is required") String currentPassword,
+      @NotBlank(message = "A new password is required")
+          @Size(min = MIN_PASSWORD_LENGTH, message = "Use at least 8 characters")
+          String newPassword) {}
+
+  /** Employee sign-in start: full name + email → OTP to the email (the security factor). */
   public record OtpRequest(
       @NotBlank(message = "Full name is required") String fullName,
       @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email) {}
 
-  /** Verify: email + the 6-digit OTP → session. */
+  /** Employee verify: email + the 6-digit OTP → session. */
   public record OtpVerifyRequest(
       @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
       @NotBlank @Pattern(regexp = "\\d{6}", message = "Enter the 6-digit code") String otp) {}

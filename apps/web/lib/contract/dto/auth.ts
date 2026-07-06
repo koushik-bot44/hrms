@@ -2,15 +2,34 @@ import { z } from 'zod';
 import { UserRole } from '../enums';
 
 /**
- * Auth contracts (ARCHITECTURE.md §6) — shared by api (validation) and web (forms). Unified sign-in:
- * EVERYONE (staff and employees) authenticates with full name + email -> OTP (the OTP emailed is the
- * security factor). No passwords; the employee ID is not a login handle.
+ * Auth contracts (ARCHITECTURE.md §6) — shared by api (validation) and web (forms). Two audiences:
+ * STAFF sign in with email + password ({@link StaffLoginSchema}) at /login; EMPLOYEES sign in with
+ * full name + email -> OTP ({@link OtpRequestSchema}/{@link OtpVerifySchema}) at /employee/login.
+ * Staff passwords are self-service changeable ({@link ChangePasswordSchema}).
  */
+
+/** Minimum staff-password length (mirrors the API). */
+export const MIN_PASSWORD_LENGTH = 8;
 
 // ---------------------------------------------------------------------------
 // Requests
 // ---------------------------------------------------------------------------
 
+/** Staff sign-in: email + password. */
+export const StaffLoginSchema = z.object({
+  email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
+  password: z.string().min(1, 'Password is required'),
+});
+export type StaffLoginInput = z.infer<typeof StaffLoginSchema>;
+
+/** Staff self-service password change. */
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Your current password is required'),
+  newPassword: z.string().min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters`),
+});
+export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
+
+/** Employee sign-in start: full name + email -> OTP. */
 export const OtpRequestSchema = z.object({
   fullName: z.string().trim().min(2, 'Enter your full name').max(120),
   email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),

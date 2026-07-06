@@ -117,31 +117,23 @@ class CompaniesApiTest {
 
     MvcResult res =
         mvc.perform(asSuper(post("/companies/" + id + "/admin"),
-                Map.of("name", "Ada Admin", "email", "ada@acme.test")))
+                Map.of("name", "Ada Admin", "email", "ada@acme.test", "password", "AdaAdmin@1")))
             .andExpect(status().isCreated())
             .andReturn();
     JsonNode body = json.readTree(res.getResponse().getContentAsString());
     assertThat(body.get("admin").get("email").asText()).isEqualTo("ada@acme.test");
     assertThat(body.get("admin").get("status").asText()).isEqualTo("ACTIVE");
-    String devPassword = body.get("devPassword").asText();
-    assertThat(devPassword).isNotBlank();
+    // The initial password is echoed in dev (the admin who set it already knows it).
+    assertThat(body.get("devPassword").asText()).isEqualTo("AdaAdmin@1");
 
-    // The provisioned admin can sign in (unified OTP: name + email) and is a COMPANY_ADMIN
-    // scoped to the company.
-    MvcResult otpRes =
-        mvc.perform(
-                post("/auth/request-otp")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(json.writeValueAsString(
-                        Map.of("fullName", "Ada Admin", "email", "ada@acme.test"))))
-            .andExpect(status().isCreated())
-            .andReturn();
-    String otp = json.readTree(otpRes.getResponse().getContentAsString()).get("devOtp").asText();
+    // The provisioned admin can sign in with email + password and is a COMPANY_ADMIN scoped to
+    // the company.
     MvcResult login =
         mvc.perform(
-                post("/auth/verify-otp")
+                post("/auth/login")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(json.writeValueAsString(Map.of("email", "ada@acme.test", "otp", otp))))
+                    .content(json.writeValueAsString(
+                        Map.of("email", "ada@acme.test", "password", "AdaAdmin@1"))))
             .andExpect(status().isCreated())
             .andReturn();
     JsonNode session = json.readTree(login.getResponse().getContentAsString()).get("session");
@@ -158,7 +150,7 @@ class CompaniesApiTest {
 
     // Second admin (any email) rejected — one admin per company.
     mvc.perform(asSuper(post("/companies/" + id + "/admin"),
-            Map.of("name", "Bob", "email", "bob@acme.test")))
+            Map.of("name", "Bob", "email", "bob@acme.test", "password", "BobAdmin@1")))
         .andExpect(status().isConflict());
   }
 

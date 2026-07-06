@@ -210,23 +210,34 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
     check lives in the same centralized gate. **Guard:** deny only when the principal *has* a
     `companyId` **and** that company is deleted — the **Super Admin has a null `companyId` and is
     never denied** (no self-lockout).
-- **Authentication (unified — everyone signs in the same way).** **All** principals — staff
-  (Super Admin, Company Admin, HR, Manager) **and** employees — use one entry point: **full name +
-  email → OTP** (no passwords anywhere).
-  - `email` is the login handle and must be **unique across both the User and Employee tables** (a
-    creation-time guard rejects an email already used by the other), so the email resolves to exactly
-    one account. The provided full name is matched against that account (case-insensitive, trimmed).
-  - The single-use, time-boxed **OTP sent to the email is the security factor**. Issuance is
-    **rate-limited** and **enumeration-safe** — a generic "if an account matches, a code was sent"
-    response regardless of whether the email/name matched.
-  - Verify (`email` + code) issues the session; its **principal type + role + scope come from the
-    resolved account** (a User's role + companyId + teamId, or EMPLOYEE own-record), and the response
-    carries the role so the web routes to that role's area.
+- **Authentication (two audiences, two entry points).** Staff and employees are distinct principals
+  with distinct sign-in methods; each entry point resolves against **only one** table so the two can
+  never cross over.
+  - **Staff (Super Admin, Company Admin, HR, Manager) — email + password, at `/login`.** `POST
+    /auth/login {email, password}` resolves a **User by email** (an employee email or an unknown email
+    gets the same generic denial), verifies the password (hashed with the app's `PasswordEncoder` —
+    BCrypt today; argon2 is a drop-in swap), and issues the session. **No OTP for any staff role.**
+    - The password is **set at provisioning** (see below) and is **self-service changeable** while
+      logged in: `POST /auth/change-password {currentPassword, newPassword}` (verify current → rehash
+      → audit `PASSWORD_CHANGED`). A minimum length of **8** is enforced everywhere a password is set.
+    - **Forgot-password** (email reset link) is **deferred until SMTP** is wired.
+  - **Employees — full name + email → email-OTP, at `/employee/login`.** `POST /auth/request-otp`
+    resolves an **Employee by email** (unique across both tables via the creation-time guard) and, only
+    when the HR-entered full name matches (case-insensitive, trimmed), emails a single-use, time-boxed
+    OTP; `POST /auth/verify-otp {email, code}` issues the session. The OTP to the email is the security
+    factor. The **HR onboarding invitation email links to `/employee/login?email=…`**.
+  - **Both paths** are **rate-limited** (RateLimitFilter on `/auth/**`) and **enumeration-safe** (a
+    generic response either way), and both apply the **archived-company denial** (a principal whose
+    company is DELETED is refused at login and on every request).
+  - Verify/login issues the session; its **principal type + role + scope come from the resolved
+    account** (a User's role + companyId + teamId, or EMPLOYEE own-record), and the response carries the
+    role so the web routes to that role's area.
   - Session: short-lived access token + httpOnly refresh cookie on the API domain; CORS with
     credentials for the web origin.
-  - The `User.passwordHash` column is retained but **dormant** (break-glass / additive-only). Note
-    that the highest-privilege accounts now rest on **single-factor email-OTP**; adding TOTP (e.g. for
-    SUPER_ADMIN) or SSO is a future option.
+  - `email` is the login handle and is **unique across both the User and Employee tables** (a
+    creation-time guard rejects an email already used by the other). The dormant `users.otpHash` /
+    `users.otpExpiresAt` columns are **retained but unused** (staff no longer use OTP; additive-only —
+    never dropped). Adding TOTP (e.g. for SUPER_ADMIN) or SSO is a future option.
 - **Uploads:** object storage (S3-compatible) accessed **only via short-lived presigned URLs** —
   never public paths or raw storage keys returned to clients.
 - **Document integrity:** store `sha256` of each upload.

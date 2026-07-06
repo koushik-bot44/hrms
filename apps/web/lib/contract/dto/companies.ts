@@ -42,5 +42,7 @@ export type UpdateCompanyInput = z.infer<typeof UpdateCompanySchema>;
 export const ProvisionCompanyAdminSchema = z.object({
   name: z.string().trim().min(2, 'Name is required').max(120, 'Name is too long'),
   email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
+  // Staff sign in with email + password (§6): the admin sets an initial password (min 8).
+  password: z.string().min(8, 'Use at least 8 characters'),
 });
 export type ProvisionCompanyAdminInput = z.infer<typeof ProvisionCompanyAdminSchema>;

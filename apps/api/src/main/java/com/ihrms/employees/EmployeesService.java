@@ -92,7 +92,7 @@ public class EmployeesService {
 
     String loginUrl =
         props.webAppUrl().replaceAll("/+$", "")
-            + "/login?email="
+            + "/employee/login?email="
             + URLEncoder.encode(email, StandardCharsets.UTF_8);
     mail.sendEmployeeSelection(email, fullName, designation, company.getName(), loginUrl);
 

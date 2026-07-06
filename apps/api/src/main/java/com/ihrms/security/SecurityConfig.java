@@ -48,6 +48,7 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(
                         HttpMethod.POST,
+                        "/auth/login",
                         "/auth/request-otp",
                         "/auth/verify-otp",
                         "/auth/refresh",

@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { ArrowLeft, ShieldCheck } from 'lucide-react';
-import { OtpRequestSchema, OtpVerifySchema, type OtpRequestInput } from '@/lib/contract';
+import { ShieldCheck } from 'lucide-react';
+import { StaffLoginSchema, type StaffLoginInput } from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
 import { ApiError } from '@/lib/api/client';
@@ -26,10 +26,7 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError && error.message ? error.message : fallback;
 }
 
-const OtpOnlySchema = OtpVerifySchema.pick({ otp: true });
-type OtpOnlyInput = { otp: string };
-
-/** One sign-in for everyone (§6): full name + email → OTP → session, routed by role. */
+/** Staff sign-in (§6): email + password → session, routed by role. Employees sign in elsewhere. */
 export default function LoginPage() {
   const auth = useAuth();
   const router = useRouter();
@@ -48,17 +45,18 @@ export default function LoginPage() {
           <div className="mb-1 flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <ShieldCheck className="size-5" />
           </div>
-          <CardTitle className="text-lg">Sign in to IHRMS</CardTitle>
-          <CardDescription>
-            Enter your name and email and we&apos;ll send you a one-time code.
-          </CardDescription>
+          <CardTitle className="text-lg">Staff sign-in</CardTitle>
+          <CardDescription>Sign in to IHRMS with your email and password.</CardDescription>
         </CardHeader>
         <CardContent>
-          <SignInForm />
+          <StaffSignInForm />
         </CardContent>
         <CardFooter className="justify-center">
-          <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
-            ← Back to home
+          <Link
+            href="/employee/login"
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Onboarding employee? Sign in here
           </Link>
         </CardFooter>
       </Card>
@@ -66,132 +64,49 @@ export default function LoginPage() {
   );
 }
 
-function SignInForm() {
+function StaffSignInForm() {
   const auth = useAuth();
   const router = useRouter();
-  const [step, setStep] = React.useState<'request' | 'verify'>('request');
-  const [email, setEmail] = React.useState('');
-  const [devOtp, setDevOtp] = React.useState<string | undefined>(undefined);
-
-  const requestForm = useForm<OtpRequestInput>({
-    resolver: zodResolver(OtpRequestSchema),
-    defaultValues: { fullName: '', email: '' },
+  const form = useForm<StaffLoginInput>({
+    resolver: zodResolver(StaffLoginSchema),
+    defaultValues: { email: '', password: '' },
   });
 
-  const verifyForm = useForm<OtpOnlyInput>({
-    resolver: zodResolver(OtpOnlySchema),
-    defaultValues: { otp: '' },
-  });
-
-  // A selection/invite email may link here with ?email=… — prefill it.
-  React.useEffect(() => {
-    const prefill = new URLSearchParams(window.location.search).get('email');
-    if (prefill) requestForm.setValue('email', prefill);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const onRequest = requestForm.handleSubmit(async (values) => {
+  const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const result = await auth.requestOtp(values);
-      setEmail(values.email);
-      setDevOtp(result.devOtp);
-      setStep('verify');
-      toast.success('If an account matches, a 6-digit code is on its way to your email.');
-    } catch (error) {
-      toast.error(errorMessage(error, 'Could not send a code'));
-    }
-  });
-
-  const resend = async () => {
-    try {
-      const result = await auth.requestOtp(requestForm.getValues());
-      setDevOtp(result.devOtp);
-      toast.success('A new code is on its way.');
-    } catch (error) {
-      toast.error(errorMessage(error, 'Could not resend the code'));
-    }
-  };
-
-  const onVerify = verifyForm.handleSubmit(async ({ otp }) => {
-    try {
-      const session = await auth.verifyOtp({ email, otp });
+      const session = await auth.login(values);
       toast.success('Signed in');
       router.replace(homePathForSession(session));
     } catch (error) {
-      toast.error(errorMessage(error, 'Invalid or expired code'));
+      toast.error(errorMessage(error, 'Invalid email or password'));
     }
   });
 
-  if (step === 'request') {
-    return (
-      <form onSubmit={onRequest} className="space-y-4" noValidate>
-        <Field id="signin-name" label="Full name" error={requestForm.formState.errors.fullName?.message}>
-          <Input
-            id="signin-name"
-            autoComplete="name"
-            placeholder="Alex Doe"
-            aria-invalid={Boolean(requestForm.formState.errors.fullName)}
-            {...requestForm.register('fullName')}
-          />
-        </Field>
-        <Field id="signin-email" label="Email" error={requestForm.formState.errors.email?.message}>
-          <Input
-            id="signin-email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            aria-invalid={Boolean(requestForm.formState.errors.email)}
-            {...requestForm.register('email')}
-          />
-        </Field>
-        <Button type="submit" className="w-full" disabled={requestForm.formState.isSubmitting}>
-          {requestForm.formState.isSubmitting ? 'Sending…' : 'Send code'}
-        </Button>
-      </form>
-    );
-  }
-
   return (
-    <form onSubmit={onVerify} className="space-y-4" noValidate>
-      <p className="text-sm text-muted-foreground">
-        Enter the 6-digit code sent to <span className="font-medium text-foreground">{email}</span>.
-      </p>
-      {devOtp ? (
-        <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-          Dev code (no email configured): <span className="font-mono font-medium">{devOtp}</span>
-        </p>
-      ) : null}
-      <Field id="signin-otp" label="6-digit code" error={verifyForm.formState.errors.otp?.message}>
+    <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      <Field id="staff-email" label="Email" error={form.formState.errors.email?.message}>
         <Input
-          id="signin-otp"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={6}
-          placeholder="000000"
-          aria-invalid={Boolean(verifyForm.formState.errors.otp)}
-          {...verifyForm.register('otp')}
+          id="staff-email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@company.com"
+          aria-invalid={Boolean(form.formState.errors.email)}
+          {...form.register('email')}
         />
       </Field>
-      <Button type="submit" className="w-full" disabled={verifyForm.formState.isSubmitting}>
-        {verifyForm.formState.isSubmitting ? 'Verifying…' : 'Verify & sign in'}
+      <Field id="staff-password" label="Password" error={form.formState.errors.password?.message}>
+        <Input
+          id="staff-password"
+          type="password"
+          autoComplete="current-password"
+          placeholder="••••••••"
+          aria-invalid={Boolean(form.formState.errors.password)}
+          {...form.register('password')}
+        />
+      </Field>
+      <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+        {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
       </Button>
-      <div className="flex items-center justify-between">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setStep('request');
-            verifyForm.reset();
-          }}
-        >
-          <ArrowLeft className="size-4" />
-          Change details
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={resend}>
-          Resend code
-        </Button>
-      </div>
     </form>
   );
 }

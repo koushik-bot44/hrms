@@ -12,10 +12,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
- * Idempotently seeds the dev SUPER_ADMIN so sign-in works locally. Auth is now unified OTP (§6): the
- * admin signs in with the seeded full name ("Super Admin") + email, and the OTP is dev-logged (no
- * password). A dormant break-glass {@code passwordHash} is still set but is not a login path. Never
- * runs under the {@code prod} profile — production provisions accounts out of band.
+ * Idempotently seeds the dev SUPER_ADMIN so sign-in works locally. Staff sign in with email +
+ * password (§6): the admin uses the seeded email + password (both dev-logged below). Never runs under
+ * the {@code prod} profile — production provisions accounts out of band.
+ *
+ * <p>Note: any staff created during the OTP era have no usable password and must be re-provisioned
+ * (or re-seeded) before they can sign in with email + password.
  */
 @Component
 @Profile("!prod")
@@ -52,6 +54,6 @@ public class DataSeeder implements CommandLineRunner {
     admin.setPasswordHash(encoder.encode(password));
     admin.setStatus("ACTIVE");
     users.save(admin);
-    log.info("Seeded SUPER_ADMIN {}", email);
+    log.warn("[DEV SEED] SUPER_ADMIN sign-in -> {} / {}  (email + password at /login)", email, password);
   }
 }

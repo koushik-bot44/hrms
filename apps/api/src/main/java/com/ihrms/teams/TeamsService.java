@@ -11,7 +11,6 @@ import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
-import com.ihrms.support.TempPasswords;
 import com.ihrms.teams.dto.TeamDtos.AssignMemberRequest;
 import com.ihrms.teams.dto.TeamDtos.AssignMemberResult;
 import com.ihrms.teams.dto.TeamDtos.CreateTeamRequest;
@@ -153,14 +152,18 @@ public class TeamsService {
       }
       String email = input.email().trim().toLowerCase();
       accountEmails.assertAvailableForStaff(email); // unique across staff + employees (§6)
-      String tempPassword = TempPasswords.generate();
+      // New staff sign in with email + password (§6): an initial password (min 8) is required.
+      String password = input.password();
+      if (isBlank(password) || password.trim().length() < 8) {
+        throw badRequest("An initial password of at least 8 characters is required");
+      }
       User created = new User();
       created.setName(input.name().trim());
       created.setEmail(email);
       created.setRole(role);
       created.setCompanyId(companyId);
       created.setTeamId(id);
-      created.setPasswordHash(encoder.encode(tempPassword));
+      created.setPasswordHash(encoder.encode(password));
       created.setStatus("ACTIVE");
       try {
         users.saveAndFlush(created);
@@ -168,8 +171,8 @@ public class TeamsService {
         throw conflict("Email \"" + email + "\" is already in use");
       }
       userId = created.getId();
-      mail.sendStaffInvite(email, role.name(), tempPassword);
-      devPassword = isProd() ? null : tempPassword;
+      mail.sendStaffInvite(email, role.name(), password);
+      devPassword = isProd() ? null : password;
     }
 
     if (otherUserId != null && otherUserId.equals(userId)) {

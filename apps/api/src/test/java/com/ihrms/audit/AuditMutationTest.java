@@ -18,22 +18,26 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * The audit spine (§7): every SUCCESSFUL mutating request writes one append-only AuditLog row with
- * the resolved actor; failed mutations are not audited. Exercised via the unified OTP sign-in — a
- * successful {@code /auth/verify-otp} resolves the USER actor.
+ * the resolved actor; failed mutations are not audited. Exercised via staff sign-in — a successful
+ * {@code /auth/login} resolves the USER actor.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @EnabledIfEnvironmentVariable(named = "IHRMS_TEST_DB", matches = ".+")
 class AuditMutationTest {
 
+  private static final String STAFF_PW = "Passw0rd!";
+
   @Autowired MockMvc mvc;
   @Autowired ObjectMapper json;
   @Autowired UserRepository users;
   @Autowired AuditLogRepository auditLogs;
+  @Autowired PasswordEncoder encoder;
   @Autowired JdbcTemplate jdbc;
 
   @BeforeEach
@@ -48,14 +52,13 @@ class AuditMutationTest {
   void successfulMutationWritesAuditRowWithActor() throws Exception {
     User admin = staff("Ada Admin", "admin@acme.test");
 
-    String otp = requestOtp("Ada Admin", "admin@acme.test");
     mvc.perform(
-            post("/auth/verify-otp")
+            post("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("email", "admin@acme.test", "otp", otp))))
+                .content(json.writeValueAsString(Map.of("email", "admin@acme.test", "password", STAFF_PW))))
         .andExpect(status().isCreated());
 
-    assertThat(auditLogs.findByAction("POST /auth/verify-otp"))
+    assertThat(auditLogs.findByAction("POST /auth/login"))
         .singleElement()
         .satisfies(
             row -> {
@@ -69,25 +72,14 @@ class AuditMutationTest {
   void failedMutationIsNotAudited() throws Exception {
     staff("Ada Admin", "admin@acme.test");
 
-    // Wrong code -> 401 -> not audited.
+    // Wrong password -> 401 -> not audited.
     mvc.perform(
-            post("/auth/verify-otp")
+            post("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("email", "admin@acme.test", "otp", "000000"))))
+                .content(json.writeValueAsString(Map.of("email", "admin@acme.test", "password", "wrong-password"))))
         .andExpect(status().isUnauthorized());
 
-    assertThat(auditLogs.findByAction("POST /auth/verify-otp")).isEmpty();
-  }
-
-  private String requestOtp(String fullName, String email) throws Exception {
-    var res =
-        mvc.perform(
-                post("/auth/request-otp")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(json.writeValueAsString(Map.of("fullName", fullName, "email", email))))
-            .andExpect(status().isCreated())
-            .andReturn();
-    return json.readTree(res.getResponse().getContentAsString()).get("devOtp").asText();
+    assertThat(auditLogs.findByAction("POST /auth/login")).isEmpty();
   }
 
   private User staff(String name, String email) {
@@ -95,7 +87,8 @@ class AuditMutationTest {
     u.setEmail(email);
     u.setName(name);
     u.setRole(UserRole.SUPER_ADMIN);
-    u.setStatus("ACTIVE"); // no password — sign-in is OTP-only
+    u.setPasswordHash(encoder.encode(STAFF_PW)); // staff sign in with email + password (§6)
+    u.setStatus("ACTIVE");
     return users.save(u);
   }
 }

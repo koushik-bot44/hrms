@@ -29,17 +29,22 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Unified sign-in (§6): EVERYONE — staff (any role) and employees — authenticates with full name +
- * email → OTP. Verifies the token + session shapes, the httpOnly refresh cookie, OTP single-use +
- * expiry, name-matching + enumeration-safety, refresh/me/logout, and the cross-table email guard.
+ * Two-audience sign-in (§6): <b>staff</b> (any role) authenticate with email + password at
+ * {@code /auth/login} (User only); <b>employees</b> authenticate with full name + email → OTP at
+ * {@code /auth/request-otp}+{@code /auth/verify-otp} (Employee only). Verifies token/session shapes,
+ * the httpOnly refresh cookie, cross-audience denial both ways, OTP single-use + expiry + name-match
+ * + enumeration-safety, self-service change-password, refresh/me/logout, and the cross-table guard.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @EnabledIfEnvironmentVariable(named = "IHRMS_TEST_DB", matches = ".+")
 class AuthFlowTest {
+
+  private static final String STAFF_PW = "Passw0rd!";
 
   @Autowired MockMvc mvc;
   @Autowired ObjectMapper json;
@@ -58,14 +63,13 @@ class AuthFlowTest {
             + "\"employee_code_sequences\" RESTART IDENTITY CASCADE");
   }
 
-  // --- Staff sign-in via OTP ------------------------------------------------
+  // --- Staff: email + password ----------------------------------------------
 
   @Test
-  void staffSignInViaOtpReturnsUserSessionAndHttpOnlyCookie() throws Exception {
+  void staffSignInWithPasswordReturnsUserSessionAndHttpOnlyCookie() throws Exception {
     User admin = staff("Ada Admin", "admin@acme.test", UserRole.SUPER_ADMIN, null);
 
-    String otp = requestOtp("Ada Admin", "admin@acme.test");
-    MvcResult res = verifyOtp("admin@acme.test", otp).andExpect(status().isCreated()).andReturn();
+    MvcResult res = login("admin@acme.test", STAFF_PW).andExpect(status().isCreated()).andReturn();
 
     JsonNode body = json.readTree(res.getResponse().getContentAsString());
     assertThat(body.get("accessToken").asText()).isNotBlank();
@@ -89,34 +93,70 @@ class AuthFlowTest {
   }
 
   @Test
-  void everyRoleSignsInViaOtpIntoTheirScope() throws Exception {
-    Company company = new Company();
-    company.setName("Acme Inc");
-    company.setCode("ACME");
-    companies.save(company);
-
+  void everyStaffRoleSignsInWithPasswordIntoTheirScope() throws Exception {
+    Company company = company("Acme Inc", "ACME");
     staff("Sam Super", "super@acme.test", UserRole.SUPER_ADMIN, null);
-    User ca = staff("Cara Admin", "ca@acme.test", UserRole.COMPANY_ADMIN, company.getId());
-    User hr = staff("Hana HR", "hr@acme.test", UserRole.HR, company.getId());
-    User mgr = staff("Max Manager", "mgr@acme.test", UserRole.MANAGER, company.getId());
-    Employee emp = employeeUnder(company.getId(), hr.getId(), "Eve Employee", "eve@personal.test");
+    staff("Cara Admin", "ca@acme.test", UserRole.COMPANY_ADMIN, company.getId());
+    staff("Hana HR", "hr@acme.test", UserRole.HR, company.getId());
+    staff("Max Manager", "mgr@acme.test", UserRole.MANAGER, company.getId());
 
-    assertRole("Sam Super", "super@acme.test", "USER", "SUPER_ADMIN");
-    assertRole("Cara Admin", "ca@acme.test", "USER", "COMPANY_ADMIN");
-    assertRole("Hana HR", "hr@acme.test", "USER", "HR");
-    assertRole("Max Manager", "mgr@acme.test", "USER", "MANAGER");
+    assertStaffRole("super@acme.test", "SUPER_ADMIN");
+    assertStaffRole("ca@acme.test", "COMPANY_ADMIN");
+    assertStaffRole("hr@acme.test", "HR");
+    assertStaffRole("mgr@acme.test", "MANAGER");
+  }
 
-    // Employee resolves to an EMPLOYEE session (its own-record scope), not a staff role.
-    JsonNode empSession = signIn("Eve Employee", "eve@personal.test");
-    assertThat(empSession.get("type").asText()).isEqualTo("EMPLOYEE");
-    assertThat(empSession.get("employeeId").asText()).isEqualTo(emp.getId());
-    assertThat(ca.getId()).isNotEqualTo(mgr.getId()); // (fixtures distinct)
+  @Test
+  void wrongPasswordAndUnknownEmailGetGenericDenial() throws Exception {
+    staff("Ada Admin", "admin@acme.test", UserRole.SUPER_ADMIN, null);
+    login("admin@acme.test", "wrong-password").andExpect(status().isUnauthorized());
+    login("nobody@acme.test", STAFF_PW).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void employeeCannotUseStaffPasswordLogin() throws Exception {
+    employeeFixture("ACME", "Eve Employee", "eve@personal.test");
+    // An employee email at the staff endpoint resolves no User -> generic denial.
+    login("eve@personal.test", STAFF_PW).andExpect(status().isUnauthorized());
+  }
+
+  // --- Change password (staff, authenticated) -------------------------------
+
+  @Test
+  void changePasswordRequiresCurrentAndTakesEffect() throws Exception {
+    staff("Hana HR", "hr@acme.test", UserRole.HR, company("Acme Inc", "ACME").getId());
+    String token =
+        json.readTree(login("hr@acme.test", STAFF_PW).andReturn().getResponse().getContentAsString())
+            .get("accessToken")
+            .asText();
+
+    // Wrong current password -> rejected, nothing changes.
+    changePassword(token, "not-my-password", "BrandNew@1").andExpect(status().isBadRequest());
+
+    // Correct current -> updated.
+    changePassword(token, STAFF_PW, "BrandNew@1").andExpect(status().isCreated());
+
+    // Old password no longer works; the new one does.
+    login("hr@acme.test", STAFF_PW).andExpect(status().isUnauthorized());
+    login("hr@acme.test", "BrandNew@1").andExpect(status().isCreated());
+
+    assertThat(auditActions()).contains("PASSWORD_CHANGED");
+  }
+
+  @Test
+  void changePasswordEnforcesMinLength() throws Exception {
+    staff("Ada Admin", "admin@acme.test", UserRole.SUPER_ADMIN, null);
+    String token =
+        json.readTree(login("admin@acme.test", STAFF_PW).andReturn().getResponse().getContentAsString())
+            .get("accessToken")
+            .asText();
+    changePassword(token, STAFF_PW, "short").andExpect(status().isBadRequest());
   }
 
   // --- Employee OTP: name-matched, enumeration-safe, single-use -------------
 
   @Test
-  void otpIsNameMatchedEnumerationSafeAndSingleUse() throws Exception {
+  void employeeOtpIsNameMatchedEnumerationSafeAndSingleUse() throws Exception {
     Employee employee = employeeFixture("ACME", "Alex Doe", "alex@personal.test");
 
     // Unknown email: generic shape, no devOtp leaked.
@@ -142,10 +182,10 @@ class AuthFlowTest {
   }
 
   @Test
-  void staffWrongNameDoesNotAuthenticate() throws Exception {
+  void staffCannotUseEmployeeOtp() throws Exception {
     staff("Real Name", "staff@acme.test", UserRole.HR, null);
-    // Right email, wrong name -> no code issued (generic response, no devOtp).
-    assertThat(requestOtpRaw("Wrong Name", "staff@acme.test").has("devOtp")).isFalse();
+    // A staff email at the employee endpoint resolves no Employee -> no code (generic response).
+    assertThat(requestOtpRaw("Real Name", "staff@acme.test").has("devOtp")).isFalse();
     // And a guessed code cannot verify.
     verifyOtp("staff@acme.test", "000000").andExpect(status().isUnauthorized());
   }
@@ -164,14 +204,10 @@ class AuthFlowTest {
 
   @Test
   void refreshRotatesSessionAndMeReturnsSession() throws Exception {
-    Company company = new Company();
-    company.setName("Acme Inc");
-    company.setCode("ACME");
-    companies.save(company);
+    Company company = company("Acme Inc", "ACME");
     staff("Hana HR", "hr@acme.test", UserRole.HR, company.getId());
 
-    String otp = requestOtp("Hana HR", "hr@acme.test");
-    MvcResult login = verifyOtp("hr@acme.test", otp).andExpect(status().isCreated()).andReturn();
+    MvcResult login = login("hr@acme.test", STAFF_PW).andExpect(status().isCreated()).andReturn();
     String accessToken = json.readTree(login.getResponse().getContentAsString()).get("accessToken").asText();
     String refreshToken = login.getResponse().getCookie("ihrms_refresh").getValue();
 
@@ -224,17 +260,27 @@ class AuthFlowTest {
 
   // --- helpers --------------------------------------------------------------
 
-  private void assertRole(String fullName, String email, String type, String role) throws Exception {
-    JsonNode session = signIn(fullName, email);
-    assertThat(session.get("type").asText()).isEqualTo(type);
+  private void assertStaffRole(String email, String role) throws Exception {
+    JsonNode session =
+        json.readTree(login(email, STAFF_PW).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString())
+            .get("session");
+    assertThat(session.get("type").asText()).isEqualTo("USER");
     assertThat(session.get("role").asText()).isEqualTo(role);
   }
 
-  /** Full round-trip: request-otp (grab devOtp) -> verify-otp -> the session node. */
-  private JsonNode signIn(String fullName, String email) throws Exception {
-    String otp = requestOtp(fullName, email);
-    MvcResult verified = verifyOtp(email, otp).andExpect(status().isCreated()).andReturn();
-    return json.readTree(verified.getResponse().getContentAsString()).get("session");
+  private ResultActions login(String email, String password) throws Exception {
+    return mvc.perform(
+        post("/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("email", email, "password", password))));
+  }
+
+  private ResultActions changePassword(String token, String current, String next) throws Exception {
+    return mvc.perform(
+        post("/auth/change-password")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("currentPassword", current, "newPassword", next))));
   }
 
   private JsonNode requestOtpRaw(String fullName, String email) throws Exception {
@@ -248,16 +294,18 @@ class AuthFlowTest {
     return json.readTree(res.getResponse().getContentAsString());
   }
 
-  private String requestOtp(String fullName, String email) throws Exception {
-    return requestOtpRaw(fullName, email).get("devOtp").asText();
-  }
-
-  private org.springframework.test.web.servlet.ResultActions verifyOtp(String email, String otp)
-      throws Exception {
+  private ResultActions verifyOtp(String email, String otp) throws Exception {
     return mvc.perform(
         post("/auth/verify-otp")
             .contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(Map.of("email", email, "otp", otp))));
+  }
+
+  private Company company(String name, String code) {
+    Company c = new Company();
+    c.setName(name);
+    c.setCode(code);
+    return companies.save(c);
   }
 
   private User staff(String name, String email, UserRole role, String companyId) {
@@ -266,7 +314,8 @@ class AuthFlowTest {
     u.setName(name);
     u.setRole(role);
     u.setCompanyId(companyId);
-    u.setStatus("ACTIVE"); // no password — sign-in is OTP-only
+    u.setPasswordHash(encoder.encode(STAFF_PW)); // staff sign in with email + password (§6)
+    u.setStatus("ACTIVE");
     return users.save(u);
   }
 
@@ -280,11 +329,12 @@ class AuthFlowTest {
   }
 
   private Employee employeeFixture(String companyCode, String fullName, String email) {
-    Company company = new Company();
-    company.setName(companyCode + " Inc");
-    company.setCode(companyCode);
-    companies.save(company);
+    Company company = company(companyCode + " Inc", companyCode);
     User hr = staff("HR " + companyCode, "hr-" + companyCode.toLowerCase() + "@acme.test", UserRole.HR, company.getId());
     return employeeUnder(company.getId(), hr.getId(), fullName, email);
+  }
+
+  private java.util.List<String> auditActions() {
+    return jdbc.queryForList("SELECT \"action\" FROM \"audit_logs\"", String.class);
   }
 }

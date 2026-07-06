@@ -26,7 +26,11 @@ public final class CompanyDtos {
   public record ProvisionAdminRequest(
       @NotBlank(message = "Name is required") @Size(min = 2, max = 120, message = "Name is too long")
           String name,
-      @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email) {}
+      @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
+      // The Company Admin's initial sign-in password (staff use email + password, §6).
+      @NotBlank(message = "An initial password is required")
+          @Size(min = 8, message = "Use at least 8 characters")
+          String password) {}
 
   public record CompanyAdminView(
       String id, String email, String name, String status, String createdAt) {}

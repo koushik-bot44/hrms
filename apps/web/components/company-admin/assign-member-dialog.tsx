@@ -4,7 +4,6 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
 import {
   AssignNewMemberSchema,
@@ -14,6 +13,8 @@ import {
 } from '@/lib/contract';
 import { assignTeamMember, getAssignableUsers } from '@/lib/api/teams';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
+import { generatePassword } from '@/lib/auth/password';
+import { CredentialNotice } from '@/components/staff-credential-notice';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -43,11 +44,12 @@ export function AssignMemberDialog({
   const [mode, setMode] = React.useState<'new' | 'existing'>('new');
   const [userId, setUserId] = React.useState('');
   const [existingError, setExistingError] = React.useState<string | undefined>(undefined);
+  const [created, setCreated] = React.useState<{ email: string; password: string } | null>(null);
   const queryClient = useQueryClient();
 
   const newForm = useForm<AssignNewMemberInput>({
     resolver: zodResolver(AssignNewMemberSchema),
-    defaultValues: { name: '', email: '' },
+    defaultValues: { name: '', email: '', password: '' },
   });
 
   const assignable = useApiQuery(
@@ -60,18 +62,18 @@ export function AssignMemberDialog({
     (body: AssignMemberInput) => assignTeamMember(teamId, role, body),
     {
       successMessage: `${roleLabel} assigned`,
-      onSuccess: (result) => {
-        setOpen(false);
-        newForm.reset();
-        setUserId('');
+      onSuccess: (_result, variables) => {
         void queryClient.invalidateQueries({ queryKey: ['team', teamId] });
         void queryClient.invalidateQueries({ queryKey: ['teams'] });
         void queryClient.invalidateQueries({ queryKey: ['assignable', role] });
-        if (result.devPassword) {
-          const email = role === 'HR' ? result.team.hr?.email : result.team.manager?.email;
-          toast.message('Temporary password (dev only)', {
-            description: `${email ?? ''} · ${result.devPassword}`,
-          });
+        setUserId('');
+        // A newly-created person has an initial password to hand over; keep the dialog open to show
+        // it. Attaching an existing user just closes.
+        if ('password' in variables && variables.password) {
+          setCreated({ email: variables.email, password: variables.password });
+          newForm.reset();
+        } else {
+          setOpen(false);
         }
       },
       onError: (error) => {
@@ -101,6 +103,7 @@ export function AssignMemberDialog({
           newForm.reset();
           setUserId('');
           setExistingError(undefined);
+          setCreated(null);
         }
       }}
     >
@@ -125,47 +128,97 @@ export function AssignMemberDialog({
           </TabsList>
 
           <TabsContent value="new">
-            <form onSubmit={submitNew} className="space-y-4" noValidate>
-              <div className="space-y-1.5">
-                <label htmlFor="member-name" className="text-sm font-medium">
-                  Name
-                </label>
-                <Input
-                  id="member-name"
-                  placeholder="Jordan Lee"
-                  aria-invalid={Boolean(newForm.formState.errors.name)}
-                  {...newForm.register('name')}
+            {created ? (
+              <div className="space-y-4">
+                <CredentialNotice
+                  title={`${roleLabel} assigned`}
+                  email={created.email}
+                  password={created.password}
+                  onDismiss={() => setCreated(null)}
                 />
-                {newForm.formState.errors.name ? (
-                  <p className="text-xs text-destructive">{newForm.formState.errors.name.message}</p>
-                ) : null}
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setCreated(null)}>
+                    Assign another
+                  </Button>
+                  <Button type="button" onClick={() => setOpen(false)}>
+                    Done
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <label htmlFor="member-email" className="text-sm font-medium">
-                  Email
-                </label>
-                <Input
-                  id="member-email"
-                  type="email"
-                  placeholder={`${role.toLowerCase()}@company.com`}
-                  aria-invalid={Boolean(newForm.formState.errors.email)}
-                  {...newForm.register('email')}
-                />
-                {newForm.formState.errors.email ? (
-                  <p className="text-xs text-destructive">
-                    {newForm.formState.errors.email.message}
-                  </p>
-                ) : null}
-                <p className="text-xs text-muted-foreground">
-                  Initial credentials are emailed (logged to the server in dev).
-                </p>
-              </div>
-              <div className="flex justify-end pt-1">
-                <Button type="submit" disabled={mutation.isPending}>
-                  {mutation.isPending ? 'Assigning…' : `Assign ${roleLabel}`}
-                </Button>
-              </div>
-            </form>
+            ) : (
+              <form onSubmit={submitNew} className="space-y-4" noValidate>
+                <div className="space-y-1.5">
+                  <label htmlFor="member-name" className="text-sm font-medium">
+                    Name
+                  </label>
+                  <Input
+                    id="member-name"
+                    placeholder="Jordan Lee"
+                    aria-invalid={Boolean(newForm.formState.errors.name)}
+                    {...newForm.register('name')}
+                  />
+                  {newForm.formState.errors.name ? (
+                    <p className="text-xs text-destructive">{newForm.formState.errors.name.message}</p>
+                  ) : null}
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="member-email" className="text-sm font-medium">
+                    Email
+                  </label>
+                  <Input
+                    id="member-email"
+                    type="email"
+                    placeholder={`${role.toLowerCase()}@company.com`}
+                    aria-invalid={Boolean(newForm.formState.errors.email)}
+                    {...newForm.register('email')}
+                  />
+                  {newForm.formState.errors.email ? (
+                    <p className="text-xs text-destructive">
+                      {newForm.formState.errors.email.message}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="member-password" className="text-sm font-medium">
+                      Initial password
+                    </label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        newForm.setValue('password', generatePassword(), { shouldValidate: true })
+                      }
+                    >
+                      Generate
+                    </Button>
+                  </div>
+                  <Input
+                    id="member-password"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="At least 8 characters"
+                    aria-invalid={Boolean(newForm.formState.errors.password)}
+                    {...newForm.register('password')}
+                  />
+                  {newForm.formState.errors.password ? (
+                    <p className="text-xs text-destructive">
+                      {newForm.formState.errors.password.message}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      They sign in with their email + this password and can change it later.
+                    </p>
+                  )}
+                </div>
+                <div className="flex justify-end pt-1">
+                  <Button type="submit" disabled={mutation.isPending}>
+                    {mutation.isPending ? 'Assigning…' : `Assign ${roleLabel}`}
+                  </Button>
+                </div>
+              </form>
+            )}
           </TabsContent>
 
           <TabsContent value="existing">
