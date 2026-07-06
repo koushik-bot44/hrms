@@ -67,7 +67,7 @@
  <tr><td colspan="6" style="padding-top:7px;">By my signature below, I Confirm that all the information above is true. Further, I give permission to contact the references above.</td></tr>
  <tr>
    <td class="l">Legal Signature:</td>
-   <td class="v sig" style="width:38%;"><img th:if="${signatureDataUri}" th:src="${signatureDataUri}" style="height:22px; width:auto;" alt=""/></td>
+   <td class="v sig" style="width:38%;"><img th:if="${signatureDataUri}" th:src="${signatureDataUri}" style="max-height:46px; max-width:170px; height:auto; width:auto;" alt=""/></td>
    <td class="l" style="padding-left:24px;">Date:</td><td class="v" colspan="3" th:text="${signedDate}">20/07/2026</td>
  </tr>
 </table>
@@ -104,7 +104,7 @@
      PLACE: <span class="uline" th:text="${place}">Hyderabad</span>
    </td>
    <td style="width:45%; text-align:center; vertical-align:bottom;" class="sig">
-     <img th:if="${signatureDataUri}" th:src="${signatureDataUri}" style="height:30px; width:auto;" alt=""/><br/>
+     <img th:if="${signatureDataUri}" th:src="${signatureDataUri}" style="max-height:60px; max-width:210px; height:auto; width:auto;" alt=""/><br/>
      Candidate Signature
    </td>
  </tr>
