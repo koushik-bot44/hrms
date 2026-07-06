@@ -55,6 +55,7 @@ export function ApprovalsInbox() {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: KEY });
       void queryClient.invalidateQueries({ queryKey: ['manager-approvals-history'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 
@@ -68,6 +69,7 @@ export function ApprovalsInbox() {
       onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: KEY });
       void queryClient.invalidateQueries({ queryKey: ['manager-approvals-history'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
     },
   );

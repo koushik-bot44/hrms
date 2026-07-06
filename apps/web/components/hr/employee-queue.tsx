@@ -40,6 +40,15 @@ export function EmployeeQueue() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Drill-down from the dashboard: ?status=SUBMITTED pre-filters the queue.
+  React.useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get('status');
+    if (s && (STATUSES as string[]).includes(s)) {
+      setStatus(s as EmployeeStatus);
+      setPage(0);
+    }
+  }, []);
+
   const query = useApiQuery(
     ['hr-employees', debounced, status, page],
     (signal) => getEmployeeQueue({ search: debounced, status, page, size: PAGE_SIZE }, signal),

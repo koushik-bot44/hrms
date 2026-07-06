@@ -17,6 +17,9 @@ public interface TeamRepository extends JpaRepository<Team, String> {
   /** The HR's own team (its Manager is the approver for that HR's onboarded employees, §2). */
   Optional<Team> findByCompanyIdAndHrUserId(String companyId, String hrUserId);
 
+  /** The teams a Manager runs (for team-scoped dashboard counts). */
+  List<Team> findByManagerUserId(String managerUserId);
+
   /** True iff this manager manages a team whose HR onboarded the employee (§6 manager scope). */
   boolean existsByCompanyIdAndManagerUserIdAndHrUserId(
       String companyId, String managerUserId, String hrUserId);

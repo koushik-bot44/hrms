@@ -644,6 +644,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -1139,6 +1155,35 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+        };
+        ActivityItem: {
+            at?: string;
+            actorName?: string;
+            action?: string;
+            subjectName?: string;
+            type?: string;
+            company?: string;
+        };
+        DashboardSummary: {
+            role?: string;
+            stats?: components["schemas"]["StatCard"][];
+            recentActivity?: components["schemas"]["ActivityItem"][];
+            employeeProgress?: components["schemas"]["EmployeeProgress"];
+        };
+        EmployeeProgress: {
+            /** Format: int32 */
+            formsCompleted?: number;
+            /** Format: int32 */
+            formsTotal?: number;
+            status?: string;
+            employeeId?: string;
+            nextAction?: string;
+        };
+        StatCard: {
+            key?: string;
+            label?: string;
+            /** Format: int64 */
+            value?: number;
         };
         CompanySummaryView: {
             id?: string;
@@ -2289,6 +2334,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
+    summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DashboardSummary"];
                 };
             };
         };

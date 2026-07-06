@@ -9,4 +9,9 @@ public interface CompanyRepository extends JpaRepository<Company, String> {
   Optional<Company> findByCode(String code);
 
   List<Company> findAllByOrderByCreatedAtDesc();
+
+  // --- Dashboard counts (status is a free string; DELETED = archived) ---
+  long countByStatus(String status);
+
+  long countByStatusNot(String status);
 }

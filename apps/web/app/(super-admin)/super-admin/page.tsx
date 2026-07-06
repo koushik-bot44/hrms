@@ -15,6 +15,7 @@ import { CreateCompanyDialog } from '@/components/super-admin/create-company-dia
 import { CompanyStatusBadge } from '@/components/super-admin/company-status-badge';
 import { DeleteCompanyDialog } from '@/components/super-admin/delete-company-dialog';
 import { RestoreCompanyDialog } from '@/components/super-admin/restore-company-dialog';
+import { RoleDashboard } from '@/components/dashboard/role-dashboard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,6 +32,13 @@ export default function CompaniesPage() {
   const [view, setView] = React.useState<View>('active');
   const [deleting, setDeleting] = React.useState<CompanySummary | null>(null);
   const [restoring, setRestoring] = React.useState<CompanySummary | null>(null);
+
+  // Drill-down from the dashboard: ?view=archived opens the Archived tab.
+  React.useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('view') === 'archived') {
+      setView('archived');
+    }
+  }, []);
 
   const active = useApiQuery(['companies'], listCompanies, { enabled: view === 'active' });
   const archived = useApiQuery(['companies', 'deleted'], listDeletedCompanies, {
@@ -122,6 +130,10 @@ export default function CompaniesPage() {
         description="Every company in the portal. Provision each company's admin, or archive one."
         actions={<CreateCompanyDialog />}
       />
+
+      <RoleDashboard />
+
+      <h2 className="text-sm font-semibold text-muted-foreground">Companies</h2>
 
       <div className="flex gap-2">
         <ViewTab active={view === 'active'} onClick={() => setView('active')} icon={Building2}>

@@ -135,7 +135,10 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
         onReveal={() => revealMutation.mutate()}
         onVerify={verify}
         onReject={(kind, id, label) => setRejecting({ kind, id, label })}
-        onRouted={() => router.push('/hr/employees')}
+        onRouted={() => {
+          void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+          router.push('/hr/employees');
+        }}
       />
       <RejectDialog
         open={Boolean(rejecting)}

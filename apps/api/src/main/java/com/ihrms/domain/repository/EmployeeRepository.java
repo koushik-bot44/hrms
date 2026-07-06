@@ -1,6 +1,8 @@
 package com.ihrms.domain.repository;
 
+import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.model.Employee;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -19,4 +21,26 @@ public interface EmployeeRepository
       String companyId, String onboardingHrId);
 
   long countByCompanyId(String companyId);
+
+  // --- Dashboard counts (scoped exactly like the list views; COUNT, not fetch-all) ---
+  long countByCompanyIdAndStatus(String companyId, EmployeeStatus status);
+
+  long countByOnboardingHrId(String onboardingHrId);
+
+  long countByOnboardingHrIdAndStatus(String onboardingHrId, EmployeeStatus status);
+
+  long countByOnboardingHrIdAndStatusIn(String onboardingHrId, Collection<EmployeeStatus> statuses);
+
+  long countByOnboardingHrIdIn(Collection<String> onboardingHrIds);
+
+  long countByOnboardingHrIdInAndStatus(Collection<String> onboardingHrIds, EmployeeStatus status);
+
+  // --- Dashboard activity (scoped recent records by updatedAt) ---
+  List<Employee> findTop10ByOrderByUpdatedAtDesc();
+
+  List<Employee> findTop10ByCompanyIdOrderByUpdatedAtDesc(String companyId);
+
+  List<Employee> findTop10ByOnboardingHrIdOrderByUpdatedAtDesc(String onboardingHrId);
+
+  List<Employee> findTop10ByOnboardingHrIdInOrderByUpdatedAtDesc(Collection<String> onboardingHrIds);
 }

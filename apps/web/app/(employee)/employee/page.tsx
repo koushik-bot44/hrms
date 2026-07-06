@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { OnboardingStepper } from '@/components/employee/onboarding-stepper';
 import { GeneratedDocuments } from '@/components/employee/generated-documents';
+import { OnboardingSummaryCard } from '@/components/employee/onboarding-summary-card';
 
 const EDITABLE_STATUSES = new Set(['INVITED', 'IN_PROGRESS', 'REJECTED']);
 
@@ -44,6 +45,8 @@ export default function EmployeeOnboardingPage() {
         description="Complete the four forms, upload your documents, sign, and submit for verification."
         actions={<StatusBadge status={data.status} />}
       />
+
+      <OnboardingSummaryCard />
 
       {!editable ? (
         <Card className="border-success/30 bg-success/5">

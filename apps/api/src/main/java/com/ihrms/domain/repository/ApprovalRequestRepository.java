@@ -23,4 +23,10 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
   List<ApprovalRequest> findByEmployeeId(String employeeId);
 
   long countByTeamId(String teamId);
+
+  // --- Dashboard counts ---
+  long countByManagerUserIdAndStatus(String managerUserId, ApprovalStatus status);
+
+  /** Portfolio-wide pending approvals (Super Admin summary). */
+  long countByStatus(ApprovalStatus status);
 }

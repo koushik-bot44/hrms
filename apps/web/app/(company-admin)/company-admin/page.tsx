@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/loading-skeleton';
 import { CreateTeamDialog } from '@/components/company-admin/create-team-dialog';
 import { TeamStatusBadge } from '@/components/company-admin/team-status-badge';
+import { RoleDashboard } from '@/components/dashboard/role-dashboard';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -91,10 +92,14 @@ export default function TeamsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Teams"
-        description="Create teams and assign one HR and one Manager to each."
+        title="Company workspace"
+        description="Your company at a glance — teams, onboarding progress, and recent activity."
         actions={<CreateTeamDialog />}
       />
+
+      <RoleDashboard />
+
+      <h2 className="text-sm font-semibold text-muted-foreground">Teams</h2>
 
       {isLoading ? (
         <TableSkeleton rows={5} cols={5} />

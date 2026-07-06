@@ -52,9 +52,10 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
       setResult(data);
       reset();
     },
-    // Refresh the HR queue (any filter/page).
+    // Refresh the HR queue (any filter/page) + the dashboard counts.
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 

@@ -217,3 +217,23 @@ export type AuditLogEntry = Omit<
 export type AuditLogPage = Omit<Required<Schemas['AuditPage']>, 'content'> & {
   content: AuditLogEntry[];
 };
+
+// --- Role dashboard (§2/§7/§9) --------------------------------------------
+
+export type StatCard = Required<Schemas['StatCard']>;
+
+/** {@code company} is present only for the Super Admin's portfolio feed. */
+export type ActivityItem = Schemas['ActivityItem'];
+
+export type EmployeeProgress = Omit<Required<Schemas['EmployeeProgress']>, 'employeeId'> & {
+  employeeId: string | null;
+};
+
+export type DashboardSummary = Omit<
+  Required<Schemas['DashboardSummary']>,
+  'stats' | 'recentActivity' | 'employeeProgress'
+> & {
+  stats: StatCard[];
+  recentActivity: ActivityItem[];
+  employeeProgress: EmployeeProgress | null;
+};
