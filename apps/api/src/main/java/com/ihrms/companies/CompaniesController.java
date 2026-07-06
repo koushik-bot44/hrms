@@ -6,6 +6,7 @@ import com.ihrms.companies.dto.CompanyDtos.CompanySummaryView;
 import com.ihrms.companies.dto.CompanyDtos.CreateCompanyRequest;
 import com.ihrms.companies.dto.CompanyDtos.ProvisionAdminRequest;
 import com.ihrms.companies.dto.CompanyDtos.ProvisionAdminResult;
+import com.ihrms.companies.dto.CompanyDtos.PurgeCompanyResult;
 import com.ihrms.companies.dto.CompanyDtos.UpdateCompanyRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -90,5 +91,17 @@ public class CompaniesController {
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     return companies.restore(id, actor, request.getRemoteAddr());
+  }
+
+  /**
+   * PERMANENTLY delete a company and ALL of its data. Irreversible — unlike {@link #delete} this is
+   * not a soft-delete and cannot be restored (§7). SUPER_ADMIN only.
+   */
+  @DeleteMapping("/{id}/purge")
+  public PurgeCompanyResult purge(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return companies.purge(id, actor, request.getRemoteAddr());
   }
 }

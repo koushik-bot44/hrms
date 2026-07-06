@@ -261,6 +261,13 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
 - **Retained across company archival:** deleting (archiving) a company never removes its audit rows.
   Super Admin can still **select an archived company** in the explorer (shown flagged as deleted) and
   read its retained trail; the archival itself is recorded (`COMPANY_DELETED` / `COMPANY_RESTORED`).
+- **The one exception — permanent purge.** A Super Admin may **permanently delete** a company
+  (`DELETE /companies/{id}/purge`): an irreversible hard-delete of the company and **all** its data —
+  staff, teams, employees, every onboarding record/document/signature/generated PDF, stored blob
+  bytes, approvals, notifications, and the company's own audit rows (the append-only guard is toggled
+  off only for that company's rows, inside the purge transaction). This is distinct from archival
+  (which is reversible and retains everything). A **portal-level `COMPANY_PURGED` trace** (no
+  `companyId`, so it is not swept up) survives, recording who purged what.
 - Implemented as a global API interceptor for mutations, plus explicit log writes for sensitive
   reads (e.g. viewing/downloading an employee's documents).
 

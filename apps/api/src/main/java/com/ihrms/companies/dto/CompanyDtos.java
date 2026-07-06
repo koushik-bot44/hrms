@@ -62,4 +62,7 @@ public final class CompanyDtos {
   /** {@code devPassword} omitted (not null) in production. */
   public record ProvisionAdminResult(
       CompanyAdminView admin, @JsonInclude(JsonInclude.Include.NON_NULL) String devPassword) {}
+
+  /** Result of a permanent purge — the company is gone; echoes what was removed. */
+  public record PurgeCompanyResult(String id, String name, String code) {}
 }

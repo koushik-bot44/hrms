@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Archive, Building2, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
+import { Archive, Building2, MoreHorizontal, RotateCcw, Trash2, XOctagon } from 'lucide-react';
 import type { CompanySummary } from '@/lib/contract';
 import { listCompanies, listDeletedCompanies } from '@/lib/api/companies';
 import { useApiQuery } from '@/lib/api/hooks';
@@ -15,6 +15,7 @@ import { CreateCompanyDialog } from '@/components/super-admin/create-company-dia
 import { CompanyStatusBadge } from '@/components/super-admin/company-status-badge';
 import { DeleteCompanyDialog } from '@/components/super-admin/delete-company-dialog';
 import { RestoreCompanyDialog } from '@/components/super-admin/restore-company-dialog';
+import { PurgeCompanyDialog } from '@/components/super-admin/purge-company-dialog';
 import { RoleDashboard } from '@/components/dashboard/role-dashboard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -32,6 +34,7 @@ export default function CompaniesPage() {
   const [view, setView] = React.useState<View>('active');
   const [deleting, setDeleting] = React.useState<CompanySummary | null>(null);
   const [restoring, setRestoring] = React.useState<CompanySummary | null>(null);
+  const [purging, setPurging] = React.useState<CompanySummary | null>(null);
 
   // Drill-down from the dashboard: ?view=archived opens the Archived tab.
   React.useEffect(() => {
@@ -114,6 +117,14 @@ export default function CompaniesPage() {
                     Restore company
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => setPurging(row.original)}
+                >
+                  <XOctagon className="size-4" />
+                  Permanently delete
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -176,6 +187,7 @@ export default function CompaniesPage() {
 
       <DeleteCompanyDialog company={deleting} onClose={() => setDeleting(null)} />
       <RestoreCompanyDialog company={restoring} onClose={() => setRestoring(null)} />
+      <PurgeCompanyDialog company={purging} onClose={() => setPurging(null)} />
     </div>
   );
 }

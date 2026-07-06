@@ -40,6 +40,8 @@ export type ProvisionCompanyAdminResult = Omit<
   devPassword?: string;
 };
 
+export type PurgeCompanyResult = Required<Schemas['PurgeCompanyResult']>;
+
 // --- Teams (§3.4) ----------------------------------------------------------
 
 export type TeamMember = Required<Schemas['TeamMemberView']>;

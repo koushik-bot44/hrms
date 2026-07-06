@@ -4,6 +4,7 @@ import type {
   CreateCompanyInput,
   ProvisionCompanyAdminInput,
   ProvisionCompanyAdminResult,
+  PurgeCompanyResult,
   UpdateCompanyInput,
 } from '@/lib/contract';
 import { apiFetch } from './client';
@@ -25,6 +26,11 @@ export function deleteCompany(id: string): Promise<CompanyDetail> {
 /** Restore an archived company back to active. */
 export function restoreCompany(id: string): Promise<CompanyDetail> {
   return apiFetch<CompanyDetail>(`/companies/${id}/restore`, { method: 'POST' });
+}
+
+/** PERMANENTLY delete a company and all its data. Irreversible — not a soft-delete. */
+export function purgeCompany(id: string): Promise<PurgeCompanyResult> {
+  return apiFetch<PurgeCompanyResult>(`/companies/${id}/purge`, { method: 'DELETE' });
 }
 
 export function getCompany(id: string, signal?: AbortSignal): Promise<CompanyDetail> {

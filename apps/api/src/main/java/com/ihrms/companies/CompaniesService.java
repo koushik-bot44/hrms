@@ -11,6 +11,7 @@ import com.ihrms.companies.dto.CompanyDtos.CompanySummaryView;
 import com.ihrms.companies.dto.CompanyDtos.CreateCompanyRequest;
 import com.ihrms.companies.dto.CompanyDtos.ProvisionAdminRequest;
 import com.ihrms.companies.dto.CompanyDtos.ProvisionAdminResult;
+import com.ihrms.companies.dto.CompanyDtos.PurgeCompanyResult;
 import com.ihrms.companies.dto.CompanyDtos.UpdateCompanyRequest;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
@@ -52,6 +53,7 @@ public class CompaniesService {
   private final PasswordEncoder encoder;
   private final AccountEmails accountEmails;
   private final Environment env;
+  private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
   public CompaniesService(
       CompanyRepository companies,
@@ -62,7 +64,8 @@ public class CompaniesService {
       MailService mail,
       PasswordEncoder encoder,
       AccountEmails accountEmails,
-      Environment env) {
+      Environment env,
+      org.springframework.jdbc.core.JdbcTemplate jdbc) {
     this.companies = companies;
     this.users = users;
     this.teams = teams;
@@ -72,6 +75,7 @@ public class CompaniesService {
     this.encoder = encoder;
     this.accountEmails = accountEmails;
     this.env = env;
+    this.jdbc = jdbc;
   }
 
   public CompanyDetailView create(CreateCompanyRequest input, IhrmsPrincipal.User actor, String ip) {
@@ -127,6 +131,75 @@ public class CompaniesService {
           Map.of("name", company.getName(), "code", company.getCode()), ip);
     }
     return detail(id);
+  }
+
+  /**
+   * PERMANENTLY delete a company and ALL of its data — staff, teams, employees, every onboarding
+   * form/document/signature/generated PDF, stored blob bytes, approvals, notifications, and the
+   * company's audit rows — then the company row. IRREVERSIBLE (this is the one hard-delete in the
+   * system; §7). Runs in one transaction in FK-safe order (all child FKs are {@code RESTRICT}); the
+   * append-only audit guard is toggled off only for this company's rows. A portal-level
+   * {@code COMPANY_PURGED} trace (no companyId) survives.
+   */
+  @org.springframework.transaction.annotation.Transactional
+  public PurgeCompanyResult purge(String id, IhrmsPrincipal.User actor, String ip) {
+    Company company = companies.findById(id).orElseThrow(() -> notFound("Company not found"));
+    String name = company.getName();
+    String code = company.getCode();
+
+    // 1) Stored blob bytes (db storage) for uploaded docs + signatures + generated PDFs.
+    jdbc.update(
+        "DELETE FROM \"document_blobs\" WHERE \"storageKey\" IN ("
+            + " SELECT \"storageKey\" FROM \"documents\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
+            + " UNION SELECT \"storageKey\" FROM \"signatures\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
+            + " UNION SELECT \"storageKey\" FROM \"generated_documents\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?))",
+        id, id, id);
+
+    // 2) Employee-record children.
+    String byEmployee = " WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)";
+    jdbc.update("DELETE FROM \"generated_documents\"" + byEmployee, id);
+    jdbc.update("DELETE FROM \"documents\"" + byEmployee, id);
+    jdbc.update("DELETE FROM \"signatures\"" + byEmployee, id);
+    jdbc.update("DELETE FROM \"form1_personal\"" + byEmployee, id);
+    jdbc.update("DELETE FROM \"form2_info\"" + byEmployee, id);
+    jdbc.update("DELETE FROM \"form3_prev_employment\"" + byEmployee, id);
+
+    // 3) Approvals + notifications (reference employees and/or company staff).
+    jdbc.update(
+        "DELETE FROM \"approval_requests\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
+            + " OR \"hrUserId\" IN (SELECT \"id\" FROM \"users\" WHERE \"companyId\" = ?)"
+            + " OR \"managerUserId\" IN (SELECT \"id\" FROM \"users\" WHERE \"companyId\" = ?)",
+        id, id, id);
+    jdbc.update(
+        "DELETE FROM \"notifications\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
+            + " OR \"recipientUserId\" IN (SELECT \"id\" FROM \"users\" WHERE \"companyId\" = ?)",
+        id, id);
+
+    // 4) Employees, per-company ID sequence, teams.
+    jdbc.update("DELETE FROM \"employees\" WHERE \"companyId\" = ?", id);
+    jdbc.update("DELETE FROM \"employee_code_sequences\" WHERE \"companyId\" = ?", id);
+    jdbc.update("DELETE FROM \"teams\" WHERE \"companyId\" = ?", id);
+
+    // 5) Staff users — before the company (users.companyId is SET NULL on company delete).
+    jdbc.update("DELETE FROM \"users\" WHERE \"companyId\" = ?", id);
+
+    // 6) The company's audit rows — audit_logs is append-only, so toggle the guard just here.
+    jdbc.execute("ALTER TABLE \"audit_logs\" DISABLE TRIGGER \"audit_logs_no_mutate\"");
+    jdbc.update("DELETE FROM \"audit_logs\" WHERE \"companyId\" = ?", id);
+    jdbc.execute("ALTER TABLE \"audit_logs\" ENABLE TRIGGER \"audit_logs_no_mutate\"");
+
+    // 7) The company itself.
+    jdbc.update("DELETE FROM \"companies\" WHERE \"id\" = ?", id);
+
+    // Portal-level trace (no companyId, so it is not swept up by the purge above).
+    audit.record(
+        new AuditActor("USER", actor.userId(), null),
+        "COMPANY_PURGED",
+        "Company",
+        id,
+        Map.of("name", name, "code", code),
+        ip);
+    return new PurgeCompanyResult(id, name, code);
   }
 
   public CompanyDetailView update(
