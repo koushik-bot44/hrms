@@ -65,7 +65,7 @@ export function RouteToManagerDialog({ employeeId, disabled, onRouted }: Props) 
       <DialogTrigger asChild>
         <Button size="sm" disabled={disabled}>
           <Send />
-          Route to Manager
+          Send for Manager approval
         </Button>
       </DialogTrigger>
       <DialogContent>
