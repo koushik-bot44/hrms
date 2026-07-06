@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"/>
+<html xmlns:th="http://www.thymeleaf.org"><head><meta charset="utf-8"/>
 <style>
   @page { size: A4; margin: 1.3cm 1.4cm; }
   body { font-family: "Helvetica","Arial",sans-serif; font-size: 10.5px; color:#000; }
@@ -19,6 +19,7 @@
   table.g td { height:19px; }
   .decl { font-size:9.5px; text-align:justify; }
   .sig svg { vertical-align:bottom; }
+  .sig img { vertical-align:bottom; }
   .uline { border-bottom:1px solid #000; padding:0 18px; }
 </style></head>
 <body>
@@ -26,7 +27,7 @@
 <!-- LETTERHEAD: left = JOINING company name; right = photo box -->
 <table style="width:100%; border-collapse:collapse; margin-bottom:4px;">
  <tr>
-   <td style="width:60%; vertical-align:middle;" class="brand">Acme Technologies<span class="sub">JOINING COMPANY</span></td>
+   <td style="width:60%; vertical-align:middle;" class="brand" th:text="${companyName}">Acme Technologies</td>
    <td style="width:40%; text-align:right; vertical-align:top;"><div class="photo" style="display:inline-block;">Affix<br/>Recent<br/>Photograph</div></td>
  </tr>
 </table>
@@ -35,39 +36,39 @@
 <!-- FIELDS -->
 <table class="f">
  <tr>
-   <td class="l">Name:</td><td class="v" style="width:34%;">Rahul Sharma</td>
-   <td class="l">D.O.B:</td><td class="v" style="width:17%;">12/05/1994</td>
-   <td class="l">Email Id:</td><td class="v">rahul.sharma@example.com</td>
+   <td class="l">Name:</td><td class="v" style="width:34%;" th:text="${name}">Rahul Sharma</td>
+   <td class="l">D.O.B:</td><td class="v" style="width:17%;" th:text="${dob}">12/05/1994</td>
+   <td class="l">Email Id:</td><td class="v" th:text="${email}">rahul.sharma@example.com</td>
  </tr>
  <tr>
-   <td class="l">Mobile No.:</td><td class="v" style="width:25%;">9876543210</td>
-   <td class="l">Designation:</td><td class="v" style="width:26%;">Software Engineer</td>
-   <td class="l">Offered CTC:</td><td class="v">Rs. 8,00,000</td>
+   <td class="l">Mobile No.:</td><td class="v" style="width:25%;" th:text="${mobile}">9876543210</td>
+   <td class="l">Designation:</td><td class="v" style="width:26%;" th:text="${designation}">Software Engineer</td>
+   <td class="l">Offered CTC:</td><td class="v" th:text="${offeredCtc}">Rs. 8,00,000</td>
  </tr>
- <tr><td class="l">Current Address:</td><td class="v" colspan="5">Flat 402, Green Meadows, Madhapur, Hyderabad - 500081</td></tr>
- <tr><td class="l">Permanent Address:</td><td class="v" colspan="5">H.No 12-3-45, Gandhi Nagar, Vijayawada - 520003</td></tr>
+ <tr><td class="l">Current Address:</td><td class="v" colspan="5" th:text="${currentAddress}">Flat 402, Green Meadows, Madhapur, Hyderabad - 500081</td></tr>
+ <tr><td class="l">Permanent Address:</td><td class="v" colspan="5" th:text="${permanentAddress}">H.No 12-3-45, Gandhi Nagar, Vijayawada - 520003</td></tr>
  <tr>
-   <td class="l">Marital Status:</td><td class="v" style="width:42%;">Single</td>
-   <td class="l">Blood Group:</td><td class="v" colspan="3">B+</td>
+   <td class="l">Marital Status:</td><td class="v" style="width:42%;" th:text="${maritalStatus}">Single</td>
+   <td class="l">Blood Group:</td><td class="v" colspan="3" th:text="${bloodGroup}">B+</td>
  </tr>
  <tr><td colspan="6" style="padding-top:7px;"><b>Character Reference:</b> (Include Name, Address, Phone No.)</td></tr>
  <tr>
-   <td class="l">1.</td><td class="v" style="width:49%;">Anil Kumar, Kukatpally, Hyderabad, 9000011111</td>
-   <td class="l">2.</td><td class="v" colspan="3">Sita Rao, Ameerpet, Hyderabad, 9000022222</td>
+   <td class="l">1.</td><td class="v" style="width:49%;" th:text="${ref1}">Anil Kumar, Kukatpally, Hyderabad, 9000011111</td>
+   <td class="l">2.</td><td class="v" colspan="3" th:text="${ref2}">Sita Rao, Ameerpet, Hyderabad, 9000022222</td>
  </tr>
  <tr>
-   <td class="l">Name of closest relative:</td><td class="v" style="width:38%;">Suresh Sharma</td>
-   <td class="l">Phone:</td><td class="v" colspan="3">9000033333</td>
+   <td class="l">Name of closest relative:</td><td class="v" style="width:38%;" th:text="${closestRelativeName}">Suresh Sharma</td>
+   <td class="l">Phone:</td><td class="v" colspan="3" th:text="${closestRelativePhone}">9000033333</td>
  </tr>
  <tr>
-   <td class="l">City:</td><td class="v" style="width:38%;">Hyderabad</td>
-   <td class="l">Relationship:</td><td class="v" colspan="3">Father</td>
+   <td class="l">City:</td><td class="v" style="width:38%;" th:text="${city}">Hyderabad</td>
+   <td class="l">Relationship:</td><td class="v" colspan="3" th:text="${relationship}">Father</td>
  </tr>
  <tr><td colspan="6" style="padding-top:7px;">By my signature below, I Confirm that all the information above is true. Further, I give permission to contact the references above.</td></tr>
  <tr>
    <td class="l">Legal Signature:</td>
-   <td class="v" style="width:38%;" class="sig"><svg width="92" height="26"><path d="M2,18 C10,3 17,25 25,13 S39,3 51,16 66,22 90,7" stroke="#123a8f" fill="none" stroke-width="1.4"/></svg></td>
-   <td class="l" style="padding-left:24px;">Date:</td><td class="v" colspan="3">20/07/2026</td>
+   <td class="v sig" style="width:38%;"><img th:if="${signatureDataUri}" th:src="${signatureDataUri}" style="height:22px; width:auto;" alt=""/></td>
+   <td class="l" style="padding-left:24px;">Date:</td><td class="v" colspan="3" th:text="${signedDate}">20/07/2026</td>
  </tr>
 </table>
 
@@ -75,39 +76,35 @@
 <div class="sec">EDUCATIONAL QUALIFICATION</div>
 <table class="g">
  <tr><th style="width:28%;">QUALIFICATION</th><th style="width:34%;">UNIVERSITY /COLLEGE</th><th style="width:20%;">YEAR OF PASSING</th><th>PERCENTAGE %</th></tr>
- <tr><td>B.Tech (CSE)</td><td>JNTU Hyderabad</td><td>2016</td><td>72%</td></tr>
- <tr><td>Intermediate (MPC)</td><td>Narayana Jr College</td><td>2012</td><td>85%</td></tr>
- <tr><td>SSC</td><td>St. Mary's High School</td><td>2010</td><td>9.2 GPA</td></tr>
+ <tr th:each="e : ${educations}"><td th:text="${e.qualification}">B.Tech (CSE)</td><td th:text="${e.university}">JNTU Hyderabad</td><td th:text="${e.yearOfPassing}">2016</td><td th:text="${e.percentage}">72%</td></tr>
 </table>
 
 <!-- WORKING EXPERIENCE (repeat <tr> per experience item) -->
 <div class="sec">WORKING EXPERIENCE</div>
 <table class="g">
  <tr><th>ORGANIZATION</th><th>PERIOD</th><th>DESIGNATION</th><th>SALARY(CTC)</th><th>REASON FOR LEAVING</th></tr>
- <tr><td>Infosys Ltd</td><td>2016 - 2019</td><td>Systems Engineer</td><td>4.5 LPA</td><td>Career growth</td></tr>
- <tr><td>TCS</td><td>2019 - 2022</td><td>Software Engineer</td><td>7.0 LPA</td><td>Better opportunity</td></tr>
+ <tr th:each="w : ${experiences}"><td th:text="${w.organization}">Infosys Ltd</td><td th:text="${w.period}">2016 - 2019</td><td th:text="${w.designation}">Systems Engineer</td><td th:text="${w.salaryCtc}">4.5 LPA</td><td th:text="${w.reasonForLeaving}">Career growth</td></tr>
 </table>
 
 <!-- FAMILY DETAILS (repeat <tr> per family member) -->
 <div class="sec">FAMILY DETAILS</div>
 <table class="g">
  <tr><th style="width:34%;">NAME</th><th style="width:12%;">AGE</th><th style="width:27%;">RELATION</th><th>OCCUPATION</th></tr>
- <tr><td>Suresh Sharma</td><td>55</td><td>Father</td><td>Business</td></tr>
- <tr><td>Lakshmi Sharma</td><td>50</td><td>Mother</td><td>Homemaker</td></tr>
+ <tr th:each="f : ${families}"><td th:text="${f.name}">Suresh Sharma</td><td th:text="${f.age}">55</td><td th:text="${f.relation}">Father</td><td th:text="${f.occupation}">Business</td></tr>
 </table>
 
 <!-- DECLARATION -->
 <div class="sec">DECLARATION</div>
-<div class="decl">I DECLARE THAT THE INFORMATION GIVEN, HEREIN ABOVE, IS TRUE &amp; CORRECT TO THE BEST OF MY KNOWLEDGE &amp; BELIEF &amp; NOTHING MATERIAL HAS BEEN CONCEALED. I UNDERSTAND THAT IF THE ABOVE INFORMATION IS FOUND FALSE OR INCORRECT, AT ANY TIME DURING MY EMPLOYMENT, MY SERVICE WILL BE TERMINATED FORTHWITH WITHOUT ANY NOTICE OR COMPENSATION.</div>
+<div class="decl" th:text="${declaration}">I DECLARE THAT THE INFORMATION GIVEN, HEREIN ABOVE, IS TRUE &amp; CORRECT TO THE BEST OF MY KNOWLEDGE &amp; BELIEF &amp; NOTHING MATERIAL HAS BEEN CONCEALED. I UNDERSTAND THAT IF THE ABOVE INFORMATION IS FOUND FALSE OR INCORRECT, AT ANY TIME DURING MY EMPLOYMENT, MY SERVICE WILL BE TERMINATED FORTHWITH WITHOUT ANY NOTICE OR COMPENSATION.</div>
 
 <table style="width:100%; margin-top:12px;">
  <tr>
    <td style="width:55%; vertical-align:bottom; line-height:2.4;">
-     DATE: <span class="uline">20/07/2026</span><br/>
-     PLACE: <span class="uline">Hyderabad</span>
+     DATE: <span class="uline" th:text="${signedDate}">20/07/2026</span><br/>
+     PLACE: <span class="uline" th:text="${place}">Hyderabad</span>
    </td>
-   <td style="width:45%; text-align:center; vertical-align:bottom;">
-     <svg width="110" height="30"><path d="M3,20 C12,4 20,28 30,14 S46,3 60,18 78,25 107,8" stroke="#123a8f" fill="none" stroke-width="1.5"/></svg><br/>
+   <td style="width:45%; text-align:center; vertical-align:bottom;" class="sig">
+     <img th:if="${signatureDataUri}" th:src="${signatureDataUri}" style="height:30px; width:auto;" alt=""/><br/>
      Candidate Signature
    </td>
  </tr>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"/>
+<html xmlns:th="http://www.thymeleaf.org"><head><meta charset="utf-8"/>
 <style>
   @page { size: A4; margin: 1.4cm 1.6cm; }
   body { font-family: "Helvetica","Arial",sans-serif; font-size: 11px; color:#000; }
@@ -16,30 +16,30 @@
 <body>
 
 <!-- LETTERHEAD: JOINING company name -->
-<div class="brand">Acme Technologies<span class="sub">JOINING COMPANY</span></div>
+<div class="brand" th:text="${companyName}">Acme Technologies</div>
 <div class="title">PREVIOUS EMPLOYMENT DETAILS</div>
 
 <!-- One table per previous employer (repeat this whole table via th:each) -->
-<table class="g3">
+<table class="g3" th:each="e : ${employers}">
  <tr><th style="width:42%;">FIELD</th><th>DESCRIPTION</th></tr>
- <tr><td class="k">Company Name</td><td>Infosys Ltd</td></tr>
- <tr><td class="k">Company Address</td><td>Electronic City, Phase 1, Bangalore - 560100</td></tr>
- <tr><td class="k">Date Of Joining</td><td>15/06/2016</td></tr>
- <tr><td class="k">Date Of Relieving</td><td>30/08/2019</td></tr>
- <tr><td class="k">Designation</td><td>Systems Engineer</td></tr>
- <tr><td class="k">Last Drawn Salary</td><td>Rs. 4,50,000</td></tr>
- <tr><td class="k">Job Type</td><td>Full-time (Permanent)</td></tr>
- <tr><td class="k">Reason For Leaving</td><td>Career growth</td></tr>
- <tr><td class="k">Reporting To</td><td>Ramesh Iyer (Project Manager)</td></tr>
- <tr><td class="k">Ro Contact No/Email ID</td><td>ramesh.iyer@infosys.com</td></tr>
- <tr><td class="k">HR name &amp; Contact info:<br/>(Phone no/Email id)</td><td>Priya Nair / 9000099999 / hr@infosys.com</td></tr>
+ <tr><td class="k">Company Name</td><td th:text="${e.companyName}">Infosys Ltd</td></tr>
+ <tr><td class="k">Company Address</td><td th:text="${e.companyAddress}">Electronic City, Phase 1, Bangalore - 560100</td></tr>
+ <tr><td class="k">Date Of Joining</td><td th:text="${e.dateOfJoining}">15/06/2016</td></tr>
+ <tr><td class="k">Date Of Relieving</td><td th:text="${e.dateOfRelieving}">30/08/2019</td></tr>
+ <tr><td class="k">Designation</td><td th:text="${e.designation}">Systems Engineer</td></tr>
+ <tr><td class="k">Last Drawn Salary</td><td th:text="${e.lastDrawnSalary}">Rs. 4,50,000</td></tr>
+ <tr><td class="k">Job Type</td><td th:text="${e.jobType}">Full-time (Permanent)</td></tr>
+ <tr><td class="k">Reason For Leaving</td><td th:text="${e.reasonForLeaving}">Career growth</td></tr>
+ <tr><td class="k">Reporting To</td><td th:text="${e.reportingTo}">Ramesh Iyer (Project Manager)</td></tr>
+ <tr><td class="k">Ro Contact No/Email ID</td><td th:text="${e.roContact}">ramesh.iyer@infosys.com</td></tr>
+ <tr><td class="k">HR name &amp; Contact info:<br/>(Phone no/Email id)</td><td th:text="${e.hrNameContact}">Priya Nair / 9000099999 / hr@infosys.com</td></tr>
 </table>
 
 <!-- FOOTER: JOINING company branding (name required; address/contact optional, from branding profile) -->
 <div class="foot">
- <span class="co">Acme Technologies</span><br/>
- 2A Maximus Building, 7th Floor, Raheja Mindspace, Hitech City, Madhapur, Hyderabad - 500081<br/>
- Phone No: 9100000000 &nbsp; Email Id: info@acme.com &nbsp; Website: www.acme.com
+ <span class="co" th:text="${companyName}">Acme Technologies</span>
+ <span th:if="${companyAddress}"><br/><span th:text="${companyAddress}">2A Maximus Building, 7th Floor, Raheja Mindspace, Hitech City, Madhapur, Hyderabad - 500081</span></span>
+ <span th:if="${companyContact}"><br/><span th:text="${companyContact}">Phone No: 9100000000 &#160; Email Id: info@acme.com &#160; Website: www.acme.com</span></span>
 </div>
 
 </body></html>

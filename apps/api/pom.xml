@@ -22,6 +22,7 @@
     <springdoc.version>2.6.0</springdoc.version>
     <jjwt.version>0.12.6</jjwt.version>
     <awssdk.version>2.28.16</awssdk.version>
+    <openhtmltopdf.version>1.0.10</openhtmltopdf.version>
   </properties>
 
   <dependencyManagement>
@@ -100,11 +101,29 @@
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
       <version>${springdoc.version}</version>
     </dependency>
-    <!-- Pure-Java PDF generation (LGPL/MPL, no native deps) for the generated onboarding forms. -->
+    <!-- Pure-Java PDF generation (LGPL/MPL, no native deps): OpenPDF still renders the Form 4
+         documents manifest. Forms 1/2/3 render HTML templates via openhtmltopdf (below). -->
     <dependency>
       <groupId>com.github.librepdf</groupId>
       <artifactId>openpdf</artifactId>
       <version>2.0.3</version>
+    </dependency>
+    <!-- HTML->PDF for the faithful Form 1/2/3 layouts (renders the Thymeleaf-bound templates).
+         Brings Apache PDFBox transitively, which also merges the five PDFs. -->
+    <dependency>
+      <groupId>com.openhtmltopdf</groupId>
+      <artifactId>openhtmltopdf-pdfbox</artifactId>
+      <version>${openhtmltopdf.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.openhtmltopdf</groupId>
+      <artifactId>openhtmltopdf-slf4j</artifactId>
+      <version>${openhtmltopdf.version}</version>
+    </dependency>
+    <!-- Template engine that binds the collected form data into the PDF HTML templates. -->
+    <dependency>
+      <groupId>org.thymeleaf</groupId>
+      <artifactId>thymeleaf</artifactId>
     </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>

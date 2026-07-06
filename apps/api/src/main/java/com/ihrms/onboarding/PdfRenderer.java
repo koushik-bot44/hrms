@@ -1,36 +1,26 @@
 package com.ihrms.onboarding;
 
-import com.ihrms.onboarding.dto.OnboardingDtos.CharacterReference;
-import com.ihrms.onboarding.dto.OnboardingDtos.EducationalQualification;
-import com.ihrms.onboarding.dto.OnboardingDtos.FamilyDetail;
-import com.ihrms.onboarding.dto.OnboardingDtos.Form1View;
-import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
-import com.ihrms.onboarding.dto.OnboardingDtos.Form3EntryView;
-import com.ihrms.onboarding.dto.OnboardingDtos.WorkingExperience;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
 import com.lowagie.text.FontFactory;
-import com.lowagie.text.Image;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
 import com.lowagie.text.Rectangle;
-import com.lowagie.text.pdf.PdfCopy;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
-import com.lowagie.text.pdf.PdfReader;
 import com.lowagie.text.pdf.PdfWriter;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 
 /**
- * Typeset renderer for the onboarding PDFs (OpenPDF). Each form is branded with the joining company
- * name; the system Employee ID is printed only when present (blank pre-approval); the captured
- * signature image is stamped into Forms 1 & 2. Kept separate from {@link PdfService} (which owns
- * data-loading + storage) so the layout is a pure function of the view data.
+ * Typeset renderer for the Form 4 documents manifest (OpenPDF). Forms 1/2/3 are rendered from their
+ * faithful HTML templates by {@link HtmlPdfRenderer}; the five PDFs are merged there via PDFBox. The
+ * manifest is branded with the joining company name and prints the system Employee ID only when
+ * present (blank pre-approval).
  */
 final class PdfRenderer {
 
@@ -43,162 +33,6 @@ final class PdfRenderer {
   private static final Color RULE = new Color(200, 200, 200);
 
   private PdfRenderer() {}
-
-  // --- Form 1 ---------------------------------------------------------------
-
-  static byte[] form1(String companyName, String employeeCode, Form1View v, byte[] signatureImage) {
-    Document doc = open();
-    ByteArrayOutputStream out = writer(doc);
-    header(doc, companyName, "Form 1 — Personal Details", employeeCode);
-    if (v == null) {
-      add(doc, new Paragraph("This form was not completed.", VALUE));
-      return close(doc, out);
-    }
-    PdfPTable kv = kvTable();
-    kv(kv, "Name", v.name());
-    kv(kv, "Date of Birth", v.dateOfBirth());
-    kv(kv, "Email", v.email());
-    kv(kv, "Mobile", v.mobile());
-    kv(kv, "Designation", v.designation());
-    kv(kv, "Offered CTC", v.offeredCtc());
-    kv(kv, "Marital Status", v.maritalStatus());
-    kv(kv, "Blood Group", v.bloodGroup());
-    kv(kv, "City", v.city());
-    kv(kv, "Current Address", v.currentAddress());
-    kv(kv, "Permanent Address", v.permanentAddress());
-    kv(kv, "Closest Relative", v.closestRelativeName());
-    kv(kv, "Relative Phone", v.closestRelativePhone());
-    kv(kv, "Relationship", v.relationship());
-    add(doc, kv);
-
-    List<EducationalQualification> edu = v.educationalQualifications();
-    if (edu != null && !edu.isEmpty()) {
-      section(doc, "Educational Qualifications");
-      PdfPTable t = grid(new String[] {"Qualification", "University", "Year", "%"}, new float[] {34, 34, 16, 16});
-      for (EducationalQualification e : edu) {
-        cell(t, e.qualification());
-        cell(t, e.university());
-        cell(t, e.yearOfPassing());
-        cell(t, e.percentage());
-      }
-      add(doc, t);
-    }
-
-    List<WorkingExperience> work = v.workingExperiences();
-    if (work != null && !work.isEmpty()) {
-      section(doc, "Working Experience");
-      PdfPTable t =
-          grid(
-              new String[] {"Organization", "Period", "Designation", "Salary/CTC", "Reason for Leaving"},
-              new float[] {26, 16, 20, 16, 22});
-      for (WorkingExperience w : work) {
-        cell(t, w.organization());
-        cell(t, w.period());
-        cell(t, w.designation());
-        cell(t, w.salaryCtc());
-        cell(t, w.reasonForLeaving());
-      }
-      add(doc, t);
-    }
-
-    List<FamilyDetail> fam = v.familyDetails();
-    if (fam != null && !fam.isEmpty()) {
-      section(doc, "Family Details");
-      PdfPTable t = grid(new String[] {"Name", "Age", "Relation", "Occupation"}, new float[] {34, 12, 24, 30});
-      for (FamilyDetail f : fam) {
-        cell(t, f.name());
-        cell(t, f.age());
-        cell(t, f.relation());
-        cell(t, f.occupation());
-      }
-      add(doc, t);
-    }
-
-    List<CharacterReference> refs = v.characterReferences();
-    if (refs != null && !refs.isEmpty()) {
-      section(doc, "Character References");
-      PdfPTable t = grid(new String[] {"Name", "Address", "Phone"}, new float[] {30, 46, 24});
-      for (CharacterReference r : refs) {
-        cell(t, r.name());
-        cell(t, r.address());
-        cell(t, r.phone());
-      }
-      add(doc, t);
-    }
-
-    if (v.declaration() != null && !v.declaration().isBlank()) {
-      section(doc, "Declaration");
-      add(doc, new Paragraph(v.declaration(), VALUE));
-    }
-
-    signatureBlock(doc, "Candidate Signature", signatureImage, v.updatedAt());
-    return close(doc, out);
-  }
-
-  // --- Form 2 ---------------------------------------------------------------
-
-  static byte[] form2(String companyName, String employeeCode, Form2View v, byte[] signatureImage) {
-    Document doc = open();
-    ByteArrayOutputStream out = writer(doc);
-    header(doc, companyName, "Form 2 — Employee Info", employeeCode);
-    if (v == null) {
-      add(doc, new Paragraph("This form was not completed.", VALUE));
-      return close(doc, out);
-    }
-    PdfPTable kv = kvTable();
-    kv(kv, "Full Name", v.fullName());
-    kv(kv, "Father's Name", v.fatherName());
-    kv(kv, "Employee ID", employeeCode); // system-assigned; blank until approval
-    kv(kv, "Spark ID", v.sparkId());
-    kv(kv, "Date of Birth", v.dateOfBirth());
-    kv(kv, "Date of Joining", v.dateOfJoining());
-    kv(kv, "Blood Group", v.bloodGroup());
-    kv(kv, "Mobile", v.mobile());
-    kv(kv, "Alternate Number", v.alternateNumber());
-    kv(kv, "Official Email", v.officialEmail());
-    kv(kv, "Personal Email", v.personalEmail());
-    kv(kv, "Designation", v.designation());
-    kv(kv, "Documents Submitted", v.documentSubmitted());
-    kv(kv, "Vehicle No (2W/4W)", v.vehicleNo2W4W());
-    kv(kv, "PAN Number", v.panNumber());
-    kv(kv, "Axis Account Number", v.axisAccountNumber());
-    kv(kv, "Current Address", v.currentAddress());
-    kv(kv, "Permanent Address", v.permanentAddress());
-    add(doc, kv);
-
-    signatureBlock(doc, "Candidate Signature", signatureImage, v.updatedAt());
-    return close(doc, out);
-  }
-
-  // --- Form 3 ---------------------------------------------------------------
-
-  static byte[] form3(String companyName, String employeeCode, List<Form3EntryView> entries) {
-    Document doc = open();
-    ByteArrayOutputStream out = writer(doc);
-    header(doc, companyName, "Form 3 — Previous Employment", employeeCode);
-    if (entries == null || entries.isEmpty()) {
-      add(doc, new Paragraph("No previous employment declared.", VALUE));
-      return close(doc, out);
-    }
-    int i = 1;
-    for (Form3EntryView e : entries) {
-      section(doc, "Employer " + i++);
-      PdfPTable kv = kvTable();
-      kv(kv, "Company Name", e.companyName());
-      kv(kv, "Company Address", e.companyAddress());
-      kv(kv, "Date of Joining", e.dateOfJoining());
-      kv(kv, "Date of Relieving", e.dateOfRelieving());
-      kv(kv, "Designation", e.designation());
-      kv(kv, "Last Drawn Salary", e.lastDrawnSalary());
-      kv(kv, "Job Type", e.jobType());
-      kv(kv, "Reason for Leaving", e.reasonForLeaving());
-      kv(kv, "Reporting To", e.reportingTo());
-      kv(kv, "RO Contact", e.roContact());
-      kv(kv, "HR Name / Contact", e.hrNameContact());
-      add(doc, kv);
-    }
-    return close(doc, out);
-  }
 
   // --- Form 4 manifest ------------------------------------------------------
 
@@ -220,33 +54,6 @@ final class PdfRenderer {
     }
     add(doc, t);
     return close(doc, out);
-  }
-
-  // --- merge ----------------------------------------------------------------
-
-  static byte[] merge(List<byte[]> pdfs) {
-    Document doc = new Document();
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    try {
-      PdfCopy copy = new PdfCopy(doc, out);
-      doc.open();
-      for (byte[] pdf : pdfs) {
-        PdfReader reader = new PdfReader(pdf);
-        int pages = reader.getNumberOfPages();
-        for (int i = 1; i <= pages; i++) {
-          copy.addPage(copy.getImportedPage(reader, i));
-        }
-        copy.freeReader(reader);
-        reader.close();
-      }
-    } catch (Exception e) {
-      throw new IllegalStateException("PDF merge failed", e);
-    } finally {
-      if (doc.isOpen()) {
-        doc.close();
-      }
-    }
-    return out.toByteArray();
   }
 
   // --- primitives -----------------------------------------------------------
@@ -286,32 +93,6 @@ final class PdfRenderer {
     add(doc, rule());
   }
 
-  private static void section(Document doc, String title) {
-    Paragraph p = new Paragraph(title, HEADING);
-    p.setSpacingBefore(10);
-    p.setSpacingAfter(2);
-    add(doc, p);
-  }
-
-  private static PdfPTable kvTable() {
-    PdfPTable t = new PdfPTable(2);
-    t.setWidthPercentage(100);
-    setWidths(t, new float[] {32, 68});
-    t.setSpacingBefore(6);
-    return t;
-  }
-
-  private static void kv(PdfPTable t, String label, String value) {
-    PdfPCell l = new PdfPCell(new Phrase(label, LABEL));
-    l.setBorder(Rectangle.NO_BORDER);
-    l.setPaddingBottom(3);
-    t.addCell(l);
-    PdfPCell val = new PdfPCell(new Phrase(value == null ? "" : value, VALUE));
-    val.setBorder(Rectangle.NO_BORDER);
-    val.setPaddingBottom(3);
-    t.addCell(val);
-  }
-
   private static PdfPTable grid(String[] headers, float[] widths) {
     PdfPTable t = new PdfPTable(headers.length);
     t.setWidthPercentage(100);
@@ -330,35 +111,6 @@ final class PdfRenderer {
     PdfPCell c = new PdfPCell(new Phrase(value == null ? "" : value, VALUE));
     c.setPadding(3);
     t.addCell(c);
-  }
-
-  private static void signatureBlock(Document doc, String label, byte[] signatureImage, String dateText) {
-    add(doc, rule());
-    PdfPTable t = new PdfPTable(2);
-    t.setWidthPercentage(100);
-    setWidths(t, new float[] {62, 38});
-    t.setSpacingBefore(16);
-    PdfPCell sig = new PdfPCell();
-    sig.setBorder(Rectangle.NO_BORDER);
-    sig.addElement(new Phrase(label, LABEL));
-    if (signatureImage != null) {
-      try {
-        Image img = Image.getInstance(signatureImage);
-        img.scaleToFit(170, 64);
-        sig.addElement(img);
-      } catch (Exception e) {
-        sig.addElement(new Phrase("(signature on file)", VALUE));
-      }
-    } else {
-      sig.addElement(new Phrase("________________________", VALUE));
-    }
-    t.addCell(sig);
-    PdfPCell date = new PdfPCell();
-    date.setBorder(Rectangle.NO_BORDER);
-    date.addElement(new Phrase("Date", LABEL));
-    date.addElement(new Phrase(dateText == null ? "" : dateText, VALUE));
-    t.addCell(date);
-    add(doc, t);
   }
 
   private static PdfPTable rule() {
