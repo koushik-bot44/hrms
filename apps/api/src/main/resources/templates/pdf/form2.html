@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<style>
+  @page { size: A4; margin: 1.4cm 1.6cm; }
+  body { font-family: "Helvetica","Arial",sans-serif; font-size: 11px; color:#000; }
+  .brand { text-align:center; font-size:19px; font-weight:bold; }
+  .brand .sub { display:block; font-size:8px; font-weight:normal; letter-spacing:2px; color:#333; margin-top:2px; }
+  table.kv { width:100%; border-collapse:collapse; margin-top:16px; }
+  table.kv td { border:1px solid #000; padding:7px 10px; font-size:11px; }
+  table.kv td.k { font-weight:bold; width:38%; }
+  table.kv td.a { height:34px; vertical-align:top; }
+  .uline { border-bottom:1px solid #000; padding:0 22px; }
+</style></head>
+<body>
+
+<!-- LETTERHEAD: JOINING company name -->
+<div class="brand">Acme Technologies<span class="sub">JOINING COMPANY</span></div>
+
+<!-- 18 label/value rows, in this exact order -->
+<table class="kv">
+ <tr><td class="k">Full Name</td><td>Rahul Sharma</td></tr>
+ <tr><td class="k">Father Name</td><td>Suresh Sharma</td></tr>
+ <tr><td class="k">Employee ID</td><td>ACME-EMP-000123</td></tr>
+ <tr><td class="k">Date of Birth</td><td>12/05/1994</td></tr>
+ <tr><td class="k">Date of Joining</td><td>01/08/2026</td></tr>
+ <tr><td class="k">Blood Group</td><td>B+</td></tr>
+ <tr><td class="k">Mobile No</td><td>9876543210</td></tr>
+ <tr><td class="k">Alternate Number</td><td>9876500000</td></tr>
+ <tr><td class="k">Official Email ID</td><td>rahul.sharma@acme.com</td></tr>
+ <tr><td class="k">Personnel E-Mail ID</td><td>rahul.sharma@example.com</td></tr>
+ <tr><td class="k">Designation</td><td>Software Engineer</td></tr>
+ <tr><td class="k">Spark ID</td><td>SPRK-4471</td></tr>
+ <tr><td class="k">Document Submitted</td><td>Aadhaar, PAN, Degree Certificate</td></tr>
+ <tr><td class="k">Vehicle No(2W/4W)</td><td>TS09AB1234</td></tr>
+ <tr><td class="k">Pan Number</td><td>ABCDE1234F</td></tr>
+ <tr><td class="k">Axis account number</td><td>918010012345678</td></tr>
+ <tr><td class="k">Current Address</td><td class="a">Flat 402, Green Meadows, Madhapur, Hyderabad - 500081</td></tr>
+ <tr><td class="k">Permanent address</td><td class="a">H.No 12-3-45, Gandhi Nagar, Vijayawada - 520003</td></tr>
+</table>
+
+<table style="width:100%; margin-top:22px;">
+ <tr>
+   <td style="width:50%; vertical-align:bottom;">Date: <span class="uline">01/08/2026</span></td>
+   <td style="width:50%; text-align:center; vertical-align:bottom;">
+     <svg width="110" height="30"><path d="M3,20 C12,4 20,28 30,14 S46,3 60,18 78,25 107,8" stroke="#123a8f" fill="none" stroke-width="1.5"/></svg><br/>
+     Candidate Signature:
+   </td>
+ </tr>
+</table>
+
+</body></html>

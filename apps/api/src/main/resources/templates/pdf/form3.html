@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<style>
+  @page { size: A4; margin: 1.4cm 1.6cm; }
+  body { font-family: "Helvetica","Arial",sans-serif; font-size: 11px; color:#000; }
+  .brand { text-align:center; font-size:19px; font-weight:bold; }
+  .brand .sub { display:block; font-size:8px; font-weight:normal; letter-spacing:2px; color:#333; margin-top:2px; }
+  .title { text-align:center; font-size:13px; font-weight:bold; text-decoration:underline; margin-top:10px; }
+  table.g3 { width:100%; border-collapse:collapse; margin-top:14px; }
+  table.g3 th { background:#333; color:#fff; border:1px solid #000; padding:8px 10px; font-size:11px; text-align:center; }
+  table.g3 td { border:1px solid #000; padding:9px 10px; font-size:11px; }
+  table.g3 td.k { font-weight:bold; width:42%; }
+  .foot { text-align:center; margin-top:34px; font-size:10px; }
+  .foot .co { font-weight:bold; font-size:11px; }
+</style></head>
+<body>
+
+<!-- LETTERHEAD: JOINING company name -->
+<div class="brand">Acme Technologies<span class="sub">JOINING COMPANY</span></div>
+<div class="title">PREVIOUS EMPLOYMENT DETAILS</div>
+
+<!-- One table per previous employer (repeat this whole table via th:each) -->
+<table class="g3">
+ <tr><th style="width:42%;">FIELD</th><th>DESCRIPTION</th></tr>
+ <tr><td class="k">Company Name</td><td>Infosys Ltd</td></tr>
+ <tr><td class="k">Company Address</td><td>Electronic City, Phase 1, Bangalore - 560100</td></tr>
+ <tr><td class="k">Date Of Joining</td><td>15/06/2016</td></tr>
+ <tr><td class="k">Date Of Relieving</td><td>30/08/2019</td></tr>
+ <tr><td class="k">Designation</td><td>Systems Engineer</td></tr>
+ <tr><td class="k">Last Drawn Salary</td><td>Rs. 4,50,000</td></tr>
+ <tr><td class="k">Job Type</td><td>Full-time (Permanent)</td></tr>
+ <tr><td class="k">Reason For Leaving</td><td>Career growth</td></tr>
+ <tr><td class="k">Reporting To</td><td>Ramesh Iyer (Project Manager)</td></tr>
+ <tr><td class="k">Ro Contact No/Email ID</td><td>ramesh.iyer@infosys.com</td></tr>
+ <tr><td class="k">HR name &amp; Contact info:<br/>(Phone no/Email id)</td><td>Priya Nair / 9000099999 / hr@infosys.com</td></tr>
+</table>
+
+<!-- FOOTER: JOINING company branding (name required; address/contact optional, from branding profile) -->
+<div class="foot">
+ <span class="co">Acme Technologies</span><br/>
+ 2A Maximus Building, 7th Floor, Raheja Mindspace, Hitech City, Madhapur, Hyderabad - 500081<br/>
+ Phone No: 9100000000 &nbsp; Email Id: info@acme.com &nbsp; Website: www.acme.com
+</div>
+
+</body></html>
