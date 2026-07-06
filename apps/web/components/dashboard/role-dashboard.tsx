@@ -26,19 +26,27 @@ const DRILL: Record<string, string> = {
   'manager.unreadNotifications': '/manager/notifications',
 };
 
-/** Live, role-scoped dashboard: stat cards (clickable → filtered lists) + a recent-activity feed. */
-export function RoleDashboard() {
+/**
+ * Live, role-scoped dashboard: stat cards (clickable → filtered lists) + a recent-activity feed.
+ * `show` renders only one section so a page can place them apart (e.g. stats above a list, activity
+ * below it); both instances share the one deduped `['dashboard']` query.
+ */
+export function RoleDashboard({ show = 'all' }: { show?: 'all' | 'stats' | 'activity' }) {
   const query = useApiQuery(['dashboard'], getDashboardSummary, { refetchOnWindowFocus: true });
+  const wantStats = show !== 'activity';
+  const wantActivity = show !== 'stats';
 
   if (query.isLoading) {
     return (
       <div className="space-y-6">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full" />
-          ))}
-        </div>
-        <Skeleton className="h-40 w-full" />
+        {wantStats ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 w-full" />
+            ))}
+          </div>
+        ) : null}
+        {wantActivity ? <Skeleton className="h-40 w-full" /> : null}
       </div>
     );
   }
@@ -57,7 +65,7 @@ export function RoleDashboard() {
 
   return (
     <div className="space-y-6">
-      {stats.length > 0 ? (
+      {wantStats && stats.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((s) => (
             <StatCardView key={s.key} card={s} href={DRILL[s.key]} />
@@ -65,22 +73,24 @@ export function RoleDashboard() {
         </div>
       ) : null}
 
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-muted-foreground">Recent activity</h3>
-        {recentActivity.length === 0 ? (
-          <EmptyState
-            icon={Activity}
-            title="No recent activity"
-            description="Onboarding events and verification updates will appear here."
-          />
-        ) : (
-          <ul className="divide-y divide-border rounded-md border">
-            {recentActivity.map((item, i) => (
-              <ActivityRow key={i} item={item} />
-            ))}
-          </ul>
-        )}
-      </section>
+      {wantActivity ? (
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground">Recent activity</h3>
+          {recentActivity.length === 0 ? (
+            <EmptyState
+              icon={Activity}
+              title="No recent activity"
+              description="Onboarding events and verification updates will appear here."
+            />
+          ) : (
+            <ul className="divide-y divide-border rounded-md border">
+              {recentActivity.map((item, i) => (
+                <ActivityRow key={i} item={item} />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }

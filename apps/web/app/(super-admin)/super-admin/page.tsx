@@ -131,7 +131,7 @@ export default function CompaniesPage() {
         actions={<CreateCompanyDialog />}
       />
 
-      <RoleDashboard />
+      <RoleDashboard show="stats" />
 
       <h2 className="text-sm font-semibold text-muted-foreground">Companies</h2>
 
@@ -171,6 +171,8 @@ export default function CompaniesPage() {
           }
         />
       )}
+
+      <RoleDashboard show="activity" />
 
       <DeleteCompanyDialog company={deleting} onClose={() => setDeleting(null)} />
       <RestoreCompanyDialog company={restoring} onClose={() => setRestoring(null)} />
