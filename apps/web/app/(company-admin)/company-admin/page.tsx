@@ -99,7 +99,7 @@ export default function TeamsPage() {
 
       <RoleDashboard />
 
-      <h2 className="text-sm font-semibold text-muted-foreground">Teams</h2>
+      <h2 id="teams" className="scroll-mt-24 text-sm font-semibold text-muted-foreground">Teams</h2>
 
       {isLoading ? (
         <TableSkeleton rows={5} cols={5} />

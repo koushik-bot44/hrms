@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 const DRILL: Record<string, string> = {
   'super.companiesActive': '/super-admin',
   'super.companiesArchived': '/super-admin?view=archived',
-  'ca.teams': '/company-admin',
+  'ca.teams': '/company-admin#teams',
   'hr.onboarded': '/hr/employees',
   'hr.inProgress': '/hr/employees?status=IN_PROGRESS',
   'hr.pendingVerification': '/hr/employees?status=SUBMITTED',

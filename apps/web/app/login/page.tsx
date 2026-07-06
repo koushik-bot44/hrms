@@ -45,7 +45,7 @@ export default function LoginPage() {
           <div className="mb-1 flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <ShieldCheck className="size-5" />
           </div>
-          <CardTitle className="text-lg">Staff sign-in</CardTitle>
+          <CardTitle className="text-lg">Sign in</CardTitle>
           <CardDescription>Sign in to IHRMS with your email and password.</CardDescription>
         </CardHeader>
         <CardContent>
