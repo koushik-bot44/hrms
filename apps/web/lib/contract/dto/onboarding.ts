@@ -100,6 +100,16 @@ export const CharacterReferenceSchema = z.object({
   phone: optional(30),
 });
 
+/**
+ * The fixed employee declaration. It is not free-text: the employee affirms it via a checkbox,
+ * which stores this exact string in Form 1's `declaration` (rendered verbatim into the PDF).
+ */
+export const DECLARATION_TEXT =
+  'I DECLARE THAT THE INFORMATION GIVEN, HEREIN ABOVE, IS TRUE & CORRECT TO THE BEST OF MY ' +
+  'KNOWLEDGE & BELIEF & NOTHING MATERIAL HAS BEEN CONCEALED. I UNDERSTAND THAT IF THE ABOVE ' +
+  'INFORMATION IS FOUND FALSE OR INCORRECT, AT ANY TIME DURING MY EMPLOYMENT, MY SERVICE WILL BE ' +
+  'TERMINATED FORTHWITH WITHOUT ANY NOTICE OR COMPENSATION.';
+
 export const Form1Schema = z.object({
   name: z.string().trim().min(2, 'Name is required').max(150),
   dateOfBirth: dateish,
@@ -201,6 +211,9 @@ export function evaluateOnboarding(
   } else {
     const refs = (form1.characterReferences ?? []).filter((r) => r.name && r.name.trim().length > 0);
     if (refs.length < 2) missing.push('Form 1 — add at least two character references');
+    if (!form1.declaration || form1.declaration.trim().length === 0) {
+      missing.push('Form 1 — confirm the declaration');
+    }
   }
   if (!form2 || !form2.fullName) missing.push('Complete Form 2 — Employee Info');
   for (const req of REQUIRED_DOC_TYPES) {

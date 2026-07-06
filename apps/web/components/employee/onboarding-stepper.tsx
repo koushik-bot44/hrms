@@ -9,6 +9,7 @@ import {
   EDUCATION_SLOTS,
   EMPLOYMENT_GROUPS,
   EMPLOYMENT_SLOTS,
+  DECLARATION_TEXT,
   Form1Schema,
   Form2Schema,
   Form3Schema,
@@ -223,10 +224,11 @@ function Form1Step({
   onSaved: () => void;
   onNext: () => void;
 }) {
-  const { register, control, handleSubmit, formState } = useForm<Form1Values>({
+  const { register, control, handleSubmit, watch, setValue, formState } = useForm<Form1Values>({
     resolver: zodResolver(Form1Schema),
     defaultValues: form1Defaults(form1),
   });
+  const declarationAccepted = (watch('declaration') ?? '').trim().length > 0;
   const errors = formState.errors;
   const edu = useFieldArray({ control, name: 'educationalQualifications' });
   const work = useFieldArray({ control, name: 'workingExperiences' });
@@ -335,14 +337,27 @@ function Form1Step({
             register={register}
           />
 
-          <Field label="Declaration">
-            <textarea
-              rows={3}
-              {...register('declaration')}
-              disabled={disabled}
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </Field>
+          <div className="space-y-2">
+            <span className="text-sm font-medium">Declaration</span>
+            <p className="rounded-md border border-input bg-muted/30 p-3 text-sm leading-relaxed text-muted-foreground">
+              {DECLARATION_TEXT}
+            </p>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 shrink-0 rounded border-input accent-primary"
+                checked={declarationAccepted}
+                disabled={disabled}
+                onChange={(e) =>
+                  setValue('declaration', e.target.checked ? DECLARATION_TEXT : '', {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+              />
+              <span>I have read and confirm the declaration above.</span>
+            </label>
+          </div>
 
           <StepActions saving={save.isPending} />
         </CardContent>

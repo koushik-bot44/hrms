@@ -227,13 +227,21 @@ const F1_FIELDS: Array<[keyof Form1View, string]> = [
   ['designation', 'Designation'], ['offeredCtc', 'Offered CTC'], ['maritalStatus', 'Marital status'],
   ['bloodGroup', 'Blood group'], ['city', 'City'], ['currentAddress', 'Current address'],
   ['permanentAddress', 'Permanent address'], ['closestRelativeName', 'Closest relative'],
-  ['closestRelativePhone', 'Relative phone'], ['relationship', 'Relationship'], ['declaration', 'Declaration'],
+  ['closestRelativePhone', 'Relative phone'], ['relationship', 'Relationship'],
 ];
 
 function Form1Body({ form1 }: { form1: Form1View }) {
   return (
     <div className="space-y-4">
-      <Dl entries={F1_FIELDS.map(([k, label]) => [label, form1[k] as string | null | undefined])} />
+      <Dl
+        entries={[
+          ...F1_FIELDS.map(
+            ([k, label]): [string, string | null | undefined] => [label, form1[k] as string | null | undefined],
+          ),
+          // The declaration is fixed boilerplate; HR only needs to see it was affirmed.
+          ['Declaration', form1.declaration && form1.declaration.trim() ? 'Confirmed' : 'Not confirmed'],
+        ]}
+      />
       <MiniTable
         title="Educational Qualifications"
         cols={['Qualification', 'University', 'Year', '%']}
