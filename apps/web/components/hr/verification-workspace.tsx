@@ -132,9 +132,8 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
   function verify(kind: ItemKind, id: string) {
     reviewMutation.mutate({ kind, id, decision: 'VERIFIED' });
   }
-  // Send-back opens the item's file (so HR can point to the problem) and asks for a note.
-  function startSendBack(kind: ItemKind, id: string, label: string, viewUrl?: string) {
-    if (viewUrl) window.open(viewUrl, '_blank', 'noopener,noreferrer');
+  // Send-back just opens the note dialog (Preview is a separate action on documents).
+  function startSendBack(kind: ItemKind, id: string, label: string) {
     setSendingBack({ kind, id, label });
   }
   function confirmSendBack(note: string) {

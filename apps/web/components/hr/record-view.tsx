@@ -26,8 +26,8 @@ interface RecordViewProps {
   revealed?: RevealedSensitive | null;
   onReveal?: () => void;
   onVerify?: (kind: ItemKind, id: string) => void;
-  /** Send this item back to the employee for revision — opens the file, then asks for a note (§3.3). */
-  onSendBack?: (kind: ItemKind, id: string, label: string, viewUrl?: string) => void;
+  /** Send this item back to the employee for revision — asks for a note (§3.3). */
+  onSendBack?: (kind: ItemKind, id: string, label: string) => void;
   onRouted?: (result: RouteToManagerResult) => void;
 }
 
@@ -48,11 +48,6 @@ export function RecordView({
   const f3 = revealed ? revealed.form3 : record.form3;
   const f3Status = record.form3[0]?.status;
   const f3Note = record.form3[0]?.revisionNote;
-
-  // Send-back reopens the item's file so HR can point to the problem: a form's generated PDF, or the
-  // uploaded document — the same presigned viewUrl the preview uses.
-  const formPdf = (kind: 'FORM1' | 'FORM2' | 'FORM3') =>
-    record.generatedDocuments.find((g) => g.kind === kind)?.viewUrl;
 
   return (
     <div className="space-y-5">
@@ -110,7 +105,7 @@ export function RecordView({
         canAct={canAct}
         busy={busy}
         onVerify={() => onVerify?.('form', 'FORM1')}
-        onSendBack={() => onSendBack?.('form', 'FORM1', 'Form 1', formPdf('FORM1'))}
+        onSendBack={() => onSendBack?.('form', 'FORM1', 'Form 1')}
       >
         {f1 ? <Form1Body form1={f1} /> : <Empty />}
       </FormCard>
@@ -122,7 +117,7 @@ export function RecordView({
         canAct={canAct}
         busy={busy}
         onVerify={() => onVerify?.('form', 'FORM2')}
-        onSendBack={() => onSendBack?.('form', 'FORM2', 'Form 2', formPdf('FORM2'))}
+        onSendBack={() => onSendBack?.('form', 'FORM2', 'Form 2')}
       >
         {f2 ? <Form2Body form2={f2} /> : <Empty />}
       </FormCard>
@@ -134,7 +129,7 @@ export function RecordView({
         canAct={canAct && record.form3.length > 0}
         busy={busy}
         onVerify={() => onVerify?.('form', 'FORM3')}
-        onSendBack={() => onSendBack?.('form', 'FORM3', 'Form 3', formPdf('FORM3'))}
+        onSendBack={() => onSendBack?.('form', 'FORM3', 'Form 3')}
       >
         {f3.length === 0 ? (
           <p className="text-sm text-muted-foreground">No previous employment declared.</p>
@@ -171,8 +166,9 @@ export function RecordView({
                   {canAct ? (
                     <ItemActions
                       busy={busy}
+                      viewUrl={d.viewUrl}
                       onVerify={() => onVerify?.('document', d.id)}
-                      onSendBack={() => onSendBack?.('document', d.id, d.fileName, d.viewUrl)}
+                      onSendBack={() => onSendBack?.('document', d.id, d.fileName)}
                     />
                   ) : (
                     <a href={d.viewUrl} target="_blank" rel="noreferrer">
@@ -391,15 +387,26 @@ function Empty() {
  */
 function ItemActions({
   busy,
+  viewUrl,
   onVerify,
   onSendBack,
 }: {
   busy: boolean;
+  /** When set (documents), shows a Preview link that opens the uploaded file in a new tab. */
+  viewUrl?: string;
   onVerify: () => void;
   onSendBack: () => void;
 }) {
   return (
     <div className="flex items-center gap-1.5">
+      {viewUrl ? (
+        <a href={viewUrl} target="_blank" rel="noreferrer">
+          <Button type="button" variant="outline" size="sm">
+            <ExternalLink />
+            Preview
+          </Button>
+        </a>
+      ) : null}
       <Button type="button" variant="success" size="sm" disabled={busy} onClick={onVerify}>
         <CheckCircle2 />
         Verify
