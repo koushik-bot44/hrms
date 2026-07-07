@@ -127,14 +127,16 @@ public class DashboardService {
   // --- HR (own onboarded employees) -----------------------------------------
 
   private DashboardSummary hrSummary(String hrId) {
+    // Each card counts a SINGLE status so its value always equals its drill-down (?status=…) list.
     List<StatCard> stats =
         List.of(
             new StatCard("hr.onboarded", "Onboarded", employees.countByOnboardingHrId(hrId)),
             new StatCard("hr.inProgress", "In progress",
-                employees.countByOnboardingHrIdAndStatusIn(
-                    hrId, List.of(EmployeeStatus.INVITED, EmployeeStatus.IN_PROGRESS))),
+                employees.countByOnboardingHrIdAndStatus(hrId, EmployeeStatus.IN_PROGRESS)),
             new StatCard("hr.pendingVerification", "Pending verification",
                 employees.countByOnboardingHrIdAndStatus(hrId, EmployeeStatus.SUBMITTED)),
+            new StatCard("hr.inRevision", "In revision",
+                employees.countByOnboardingHrIdAndStatus(hrId, EmployeeStatus.REVISION_REQUESTED)),
             new StatCard("hr.approved", "Approved",
                 employees.countByOnboardingHrIdAndStatus(hrId, EmployeeStatus.APPROVED)),
             new StatCard("hr.rejected", "Rejected",

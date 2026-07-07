@@ -18,6 +18,7 @@ const DRILL: Record<string, string> = {
   'hr.onboarded': '/hr/employees',
   'hr.inProgress': '/hr/employees?status=IN_PROGRESS',
   'hr.pendingVerification': '/hr/employees?status=SUBMITTED',
+  'hr.inRevision': '/hr/employees?status=REVISION_REQUESTED',
   'hr.approved': '/hr/employees?status=APPROVED',
   'hr.rejected': '/hr/employees?status=REJECTED',
   'manager.pendingApprovals': '/manager',

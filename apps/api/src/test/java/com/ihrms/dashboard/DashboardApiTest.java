@@ -79,10 +79,11 @@ class DashboardApiTest {
     mgr1 = user(companyA, UserRole.MANAGER, "mgr1@acme.test");
     team(companyA, hr1.getId(), mgr1.getId());
 
-    // Company A / hr1: INVITED, IN_PROGRESS, SUBMITTED, APPROVED, REJECTED
+    // Company A / hr1: INVITED, IN_PROGRESS, SUBMITTED, REVISION_REQUESTED, APPROVED, REJECTED
     emp(companyA, hr1.getId(), EmployeeStatus.INVITED);
     emp(companyA, hr1.getId(), EmployeeStatus.IN_PROGRESS);
     e3 = emp(companyA, hr1.getId(), EmployeeStatus.SUBMITTED);
+    emp(companyA, hr1.getId(), EmployeeStatus.REVISION_REQUESTED);
     emp(companyA, hr1.getId(), EmployeeStatus.APPROVED);
     emp(companyA, hr1.getId(), EmployeeStatus.REJECTED);
     // Company A / hr2: SUBMITTED, APPROVED
@@ -106,9 +107,10 @@ class DashboardApiTest {
   @Test
   void hrSeesOnlyTheirOwnOnboardedEmployees() throws Exception {
     JsonNode hr1Stats = summary(tokenFor(hr1));
-    assertThat(stat(hr1Stats, "hr.onboarded")).isEqualTo(5);
-    assertThat(stat(hr1Stats, "hr.inProgress")).isEqualTo(2); // INVITED + IN_PROGRESS
+    assertThat(stat(hr1Stats, "hr.onboarded")).isEqualTo(6);
+    assertThat(stat(hr1Stats, "hr.inProgress")).isEqualTo(1); // IN_PROGRESS only (matches the queue)
     assertThat(stat(hr1Stats, "hr.pendingVerification")).isEqualTo(1);
+    assertThat(stat(hr1Stats, "hr.inRevision")).isEqualTo(1); // REVISION_REQUESTED
     assertThat(stat(hr1Stats, "hr.approved")).isEqualTo(1);
     assertThat(stat(hr1Stats, "hr.rejected")).isEqualTo(1);
 
@@ -124,7 +126,7 @@ class DashboardApiTest {
   @Test
   void companyAdminSeesOnlyTheirCompany() throws Exception {
     JsonNode a = summary(tokenFor(caA));
-    assertThat(stat(a, "ca.employees")).isEqualTo(7); // hr1(5) + hr2(2)
+    assertThat(stat(a, "ca.employees")).isEqualTo(8); // hr1(6) + hr2(2)
     assertThat(stat(a, "ca.teams")).isEqualTo(1);
     assertThat(stat(a, "ca.pendingVerification")).isEqualTo(2); // e3 + f1
     assertThat(stat(a, "ca.approved")).isEqualTo(2);
@@ -139,7 +141,7 @@ class DashboardApiTest {
     JsonNode s = summary(tokenFor(superAdmin));
     assertThat(stat(s, "super.companiesActive")).isEqualTo(2);
     assertThat(stat(s, "super.companiesArchived")).isEqualTo(0);
-    assertThat(stat(s, "super.employeesTotal")).isEqualTo(9); // 7 + 2
+    assertThat(stat(s, "super.employeesTotal")).isEqualTo(10); // 8 + 2
     assertThat(stat(s, "super.pendingApprovals")).isEqualTo(1);
     // Portfolio activity is flagged with each item's company.
     assertThat(s.get("recentActivity").get(0).has("company")).isTrue();
@@ -149,7 +151,7 @@ class DashboardApiTest {
   void managerSeesOnlyTheirTeamScope() throws Exception {
     JsonNode m = summary(tokenFor(mgr1));
     assertThat(stat(m, "manager.pendingApprovals")).isEqualTo(1);
-    assertThat(stat(m, "manager.teamEmployees")).isEqualTo(5); // hr1's employees
+    assertThat(stat(m, "manager.teamEmployees")).isEqualTo(6); // hr1's employees
     assertThat(stat(m, "manager.approved")).isEqualTo(0);
   }
 
