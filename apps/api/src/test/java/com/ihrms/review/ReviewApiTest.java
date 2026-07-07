@@ -236,6 +236,29 @@ class ReviewApiTest {
         .andExpect(status().isBadRequest());
   }
 
+  @Test
+  void decisionsAreNotLockedSoHrCanReDecideAfterRevising() throws Exception {
+    String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
+
+    // A form: verify -> reject -> verify again. Each PATCH succeeds (200, asserted in the helper)
+    // and the stored status reflects the latest decision — an already-decided item is re-decidable.
+    reviewForm("FORM2", "VERIFIED", null);
+    assertThat(form2s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
+        .isEqualTo(SectionStatus.VERIFIED);
+    reviewForm("FORM2", "REJECTED", "needs a fix");
+    assertThat(form2s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
+        .isEqualTo(SectionStatus.REJECTED);
+    reviewForm("FORM2", "VERIFIED", null);
+    assertThat(form2s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
+        .isEqualTo(SectionStatus.VERIFIED);
+
+    // A document: same — verifying then re-deciding to rejected is allowed.
+    reviewDoc(docId, "VERIFIED", null);
+    assertThat(documents.findById(docId).orElseThrow().getStatus()).isEqualTo(DocumentStatus.VERIFIED);
+    reviewDoc(docId, "REJECTED", "blurry scan");
+    assertThat(documents.findById(docId).orElseThrow().getStatus()).isEqualTo(DocumentStatus.REJECTED);
+  }
+
   // --- helpers --------------------------------------------------------------
 
   private void reviewForm(String form, String decision, String reason) throws Exception {

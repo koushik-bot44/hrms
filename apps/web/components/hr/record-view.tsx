@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { CheckCircle2, Eye, ExternalLink, FileText, XCircle } from 'lucide-react';
+import { CheckCircle2, Eye, ExternalLink, FileSearch, FileText, XCircle } from 'lucide-react';
 import type {
   EmployeeRecord,
   Form1View,
@@ -46,6 +46,14 @@ export function RecordView({
   const f2 = revealed?.form2 ?? record.form2;
   const f3 = revealed ? revealed.form3 : record.form3;
   const f3Status = record.form3[0]?.status;
+
+  // "Revise" reopens the item's file so HR can recheck before re-deciding. For a form section it is
+  // that form's generated PDF; for a document it is the uploaded file. Same presigned viewUrl the
+  // preview uses — new tab.
+  const formPdf = (kind: 'FORM1' | 'FORM2' | 'FORM3') =>
+    record.generatedDocuments.find((g) => g.kind === kind)?.viewUrl;
+  const reviser = (url: string | undefined) =>
+    url ? () => window.open(url, '_blank', 'noopener,noreferrer') : undefined;
 
   return (
     <div className="space-y-5">
@@ -99,6 +107,7 @@ export function RecordView({
         status={record.form1?.status}
         canAct={canAct}
         busy={busy}
+        onRevise={reviser(formPdf('FORM1'))}
         onVerify={() => onVerify?.('form', 'FORM1')}
         onReject={() => onReject?.('form', 'FORM1', 'Form 1')}
       >
@@ -110,6 +119,7 @@ export function RecordView({
         status={record.form2?.status}
         canAct={canAct}
         busy={busy}
+        onRevise={reviser(formPdf('FORM2'))}
         onVerify={() => onVerify?.('form', 'FORM2')}
         onReject={() => onReject?.('form', 'FORM2', 'Form 2')}
       >
@@ -121,6 +131,7 @@ export function RecordView({
         status={f3Status}
         canAct={canAct && record.form3.length > 0}
         busy={busy}
+        onRevise={reviser(formPdf('FORM3'))}
         onVerify={() => onVerify?.('form', 'FORM3')}
         onReject={() => onReject?.('form', 'FORM3', 'Form 3')}
       >
@@ -155,15 +166,21 @@ export function RecordView({
                   </p>
                 </div>
                 <StatusBadge status={d.status} />
-                <a href={d.viewUrl} target="_blank" rel="noreferrer">
-                  <Button type="button" variant="outline" size="sm">
-                    <ExternalLink />
-                    Preview
-                  </Button>
-                </a>
                 {canAct ? (
-                  <ItemActions busy={busy} onVerify={() => onVerify?.('document', d.id)} onReject={() => onReject?.('document', d.id, d.fileName)} />
-                ) : null}
+                  <ItemActions
+                    busy={busy}
+                    onRevise={reviser(d.viewUrl)}
+                    onVerify={() => onVerify?.('document', d.id)}
+                    onReject={() => onReject?.('document', d.id, d.fileName)}
+                  />
+                ) : (
+                  <a href={d.viewUrl} target="_blank" rel="noreferrer">
+                    <Button type="button" variant="outline" size="sm">
+                      <ExternalLink />
+                      Preview
+                    </Button>
+                  </a>
+                )}
               </div>
             ))}
           </div>
@@ -198,6 +215,7 @@ function FormCard({
   status,
   canAct,
   busy,
+  onRevise,
   onVerify,
   onReject,
   children,
@@ -206,6 +224,7 @@ function FormCard({
   status?: SectionStatus;
   canAct: boolean;
   busy: boolean;
+  onRevise?: () => void;
   onVerify: () => void;
   onReject: () => void;
   children: React.ReactNode;
@@ -216,7 +235,9 @@ function FormCard({
         <CardTitle className="text-base">{title}</CardTitle>
         <div className="flex items-center gap-2">
           {status ? <StatusBadge status={status} /> : null}
-          {canAct ? <ItemActions busy={busy} onVerify={onVerify} onReject={onReject} /> : null}
+          {canAct ? (
+            <ItemActions busy={busy} onRevise={onRevise} onVerify={onVerify} onReject={onReject} />
+          ) : null}
         </div>
       </CardHeader>
       <CardContent>{children}</CardContent>
@@ -349,14 +370,39 @@ function Empty() {
   return <p className="text-sm text-muted-foreground">Not provided.</p>;
 }
 
-function ItemActions({ busy, onVerify, onReject }: { busy: boolean; onVerify: () => void; onReject: () => void }) {
+function ItemActions({
+  busy,
+  onRevise,
+  onVerify,
+  onReject,
+}: {
+  busy: boolean;
+  onRevise?: () => void;
+  onVerify: () => void;
+  onReject: () => void;
+}) {
   return (
     <div className="flex items-center gap-1.5">
+      {onRevise ? (
+        // Neutral, non-destructive: reopen the file to recheck before (re-)deciding.
+        <Button type="button" variant="outline" size="sm" onClick={onRevise}>
+          <FileSearch />
+          Revise
+        </Button>
+      ) : null}
+      {/* Verify + Reject stay enabled after a decision, so HR can change it (re-decide). */}
       <Button type="button" variant="success" size="sm" disabled={busy} onClick={onVerify}>
         <CheckCircle2 />
         Verify
       </Button>
-      <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onReject}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="text-destructive hover:text-destructive"
+        disabled={busy}
+        onClick={onReject}
+      >
         <XCircle />
         Reject
       </Button>
