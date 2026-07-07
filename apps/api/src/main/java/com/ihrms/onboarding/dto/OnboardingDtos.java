@@ -106,6 +106,7 @@ public final class OnboardingDtos {
       List<FamilyDetail> familyDetails,
       List<CharacterReference> characterReferences,
       SectionStatus status,
+      String revisionNote,
       String updatedAt) {}
 
   // --- Form 2: Employee Info ------------------------------------------------
@@ -149,6 +150,7 @@ public final class OnboardingDtos {
       String currentAddress,
       String permanentAddress,
       SectionStatus status,
+      String revisionNote,
       String updatedAt) {}
 
   // --- Form 3: Previous Employment (repeatable) -----------------------------
@@ -181,13 +183,27 @@ public final class OnboardingDtos {
       String reportingTo,
       String roContact,
       String hrNameContact,
-      SectionStatus status) {}
+      SectionStatus status,
+      String revisionNote) {}
 
   // --- Form 4: Documents (uploads) ------------------------------------------
 
   public record DocumentUploadRequest(
       @NotNull(message = "docType is required") DocumentType docType,
       @Max(value = 4, message = "groupIndex must be 1..4") Integer groupIndex,
+      @NotBlank(message = "File name is required") @Size(max = 255, message = "File name is too long")
+          String fileName,
+      @NotNull(message = "mimeType is required")
+          @Pattern(
+              regexp = "application/pdf|image/png|image/jpeg",
+              message = "Unsupported file type — use PDF, PNG, or JPEG")
+          String mimeType,
+      @Positive(message = "sizeBytes must be positive")
+          @Max(value = MAX_UPLOAD_BYTES, message = "File is too large")
+          long sizeBytes) {}
+
+  /** Re-upload a document HR sent back for revision (§3.3): the slot is fixed by the existing doc. */
+  public record DocumentReviseRequest(
       @NotBlank(message = "File name is required") @Size(max = 255, message = "File name is too long")
           String fileName,
       @NotNull(message = "mimeType is required")
@@ -208,6 +224,7 @@ public final class OnboardingDtos {
       String mimeType,
       String sha256,
       DocumentStatus status,
+      String revisionNote,
       String uploadedAt) {}
 
   // --- Signature ------------------------------------------------------------

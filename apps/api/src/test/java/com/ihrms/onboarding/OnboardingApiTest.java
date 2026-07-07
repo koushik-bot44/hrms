@@ -15,13 +15,21 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.TokenService;
+import com.ihrms.domain.enums.DocumentStatus;
+import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
+import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.Form1Personal;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.AuditLogRepository;
 import com.ihrms.domain.repository.CompanyRepository;
+import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.repository.Form1PersonalRepository;
+import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.storage.StorageService;
 import com.ihrms.support.Hashing;
@@ -61,6 +69,9 @@ class OnboardingApiTest {
   @Autowired CompanyRepository companies;
   @Autowired UserRepository users;
   @Autowired EmployeeRepository employees;
+  @Autowired Form1PersonalRepository form1s;
+  @Autowired DocumentRepository documents;
+  @Autowired NotificationRepository notifications;
   @Autowired AuditLogRepository auditLogs;
   @Autowired JdbcTemplate jdbc;
 
@@ -68,6 +79,7 @@ class OnboardingApiTest {
 
   private String companyId;
   private String hrId;
+  private String empId;
   private String empToken;
 
   @BeforeEach
@@ -79,6 +91,7 @@ class OnboardingApiTest {
     companyId = company("ACME");
     hrId = hrUser(companyId, "hr@acme.test");
     Employee emp = employee("alex@personal.test");
+    empId = emp.getId();
     empToken = tokenFor(emp);
 
     when(storage.buildKey(anyString(), anyString(), anyString(), anyString()))
@@ -268,7 +281,89 @@ class OnboardingApiTest {
         .andExpect(status().isConflict());
   }
 
+  @Test
+  void revisionLoopUnlocksOnlyFlaggedItemsThenResubmitsForReReview() throws Exception {
+    // Reach SUBMITTED with Form 1 + Form 2 + Aadhaar + PAN + signature.
+    saveForm1();
+    saveForm2();
+    String aadhaarId = upload("AADHAAR");
+    confirm(aadhaarId);
+    String panId = upload("PAN");
+    confirm(panId);
+    signature();
+    mvc.perform(post("/me/onboarding/submit").header("Authorization", "Bearer " + empToken))
+        .andExpect(status().isCreated());
+
+    // HR sends Form 1 and the PAN document back for revision (simulated at the data layer).
+    Form1Personal f1 = form1s.findByEmployeeId(empId).orElseThrow();
+    f1.setStatus(SectionStatus.REVISION_REQUESTED);
+    f1.setRevisionNote("Your city looks wrong - please correct it");
+    form1s.save(f1);
+    Document pan = documents.findById(panId).orElseThrow();
+    pan.setStatus(DocumentStatus.REVISION_REQUESTED);
+    pan.setRevisionNote("The PAN scan is blurry");
+    documents.save(pan);
+    Employee e = employees.findById(empId).orElseThrow();
+    e.setStatus(EmployeeStatus.REVISION_REQUESTED);
+    employees.save(e);
+
+    // The dashboard surfaces the revision state + HR's per-item notes.
+    JsonNode dash = dashboard();
+    assertThat(dash.get("status").asText()).isEqualTo("REVISION_REQUESTED");
+    assertThat(dash.get("form1").get("revisionNote").asText())
+        .isEqualTo("Your city looks wrong - please correct it");
+
+    // A NON-flagged form (Form 2, still SUBMITTED) stays locked.
+    mvc.perform(put("/me/onboarding/form2")
+            .header("Authorization", "Bearer " + empToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("fullName", "Alex Doe", "designation", "Engineer"))))
+        .andExpect(status().isConflict());
+
+    // The flagged form IS editable — saving it clears the note and drops it to DRAFT.
+    saveForm1();
+    Form1Personal savedF1 = form1s.findByEmployeeId(empId).orElseThrow();
+    assertThat(savedF1.getStatus()).isEqualTo(SectionStatus.DRAFT);
+    assertThat(savedF1.getRevisionNote()).isNull();
+
+    // Re-submit is blocked while the PAN document is still flagged.
+    mvc.perform(post("/me/onboarding/resubmit").header("Authorization", "Bearer " + empToken))
+        .andExpect(status().isBadRequest());
+
+    // A NON-flagged document cannot be revised…
+    mvc.perform(post("/me/onboarding/documents/" + aadhaarId + "/revise")
+            .header("Authorization", "Bearer " + empToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(reviseBody("aadhaar-v2.pdf"))))
+        .andExpect(status().isConflict());
+
+    // …but the flagged PAN can be replaced in place, then confirmed back to UPLOADED.
+    mvc.perform(post("/me/onboarding/documents/" + panId + "/revise")
+            .header("Authorization", "Bearer " + empToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(reviseBody("pan-clearer.pdf"))))
+        .andExpect(status().isCreated());
+    confirm(panId);
+    Document revisedPan = documents.findById(panId).orElseThrow();
+    assertThat(revisedPan.getStatus()).isEqualTo(DocumentStatus.UPLOADED);
+    assertThat(revisedPan.getRevisionNote()).isNull();
+    assertThat(revisedPan.getFileName()).isEqualTo("pan-clearer.pdf");
+
+    // Now every flagged item is fixed → re-submit returns them to HR for re-review.
+    mvc.perform(post("/me/onboarding/resubmit").header("Authorization", "Bearer " + empToken))
+        .andExpect(status().isCreated());
+    assertThat(employees.findById(empId).orElseThrow().getStatus()).isEqualTo(EmployeeStatus.SUBMITTED);
+    assertThat(form1s.findByEmployeeId(empId).orElseThrow().getStatus()).isEqualTo(SectionStatus.SUBMITTED);
+    assertThat(notifications.findByRecipientUserId(hrId))
+        .anySatisfy(n -> assertThat(n.getType().name()).isEqualTo("EMPLOYEE_SUBMITTED"));
+    assertThat(auditLogs.findByAction("EMPLOYEE_RESUBMITTED")).hasSize(1);
+  }
+
   // --- helpers --------------------------------------------------------------
+
+  private Map<String, Object> reviseBody(String fileName) {
+    return Map.of("fileName", fileName, "mimeType", "application/pdf", "sizeBytes", 2048);
+  }
 
   private Map<String, Object> form1Body() {
     return Map.of(

@@ -180,6 +180,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/onboarding/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding/documents": {
         parameters: {
             query?: never;
@@ -190,6 +206,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["requestUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/onboarding/documents/{id}/revise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revise"];
         delete?: never;
         options?: never;
         head?: never;
@@ -922,7 +954,8 @@ export interface components {
             roContact?: string;
             hrNameContact?: string;
             /** @enum {string} */
-            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REJECTED";
+            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";
+            revisionNote?: string;
         };
         Form2Request: {
             fullName?: string;
@@ -962,7 +995,8 @@ export interface components {
             currentAddress?: string;
             permanentAddress?: string;
             /** @enum {string} */
-            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REJECTED";
+            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";
+            revisionNote?: string;
             updatedAt?: string;
         };
         CharacterReference: {
@@ -1031,7 +1065,8 @@ export interface components {
             familyDetails?: components["schemas"]["FamilyDetail"][];
             characterReferences?: components["schemas"]["CharacterReference"][];
             /** @enum {string} */
-            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REJECTED";
+            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";
+            revisionNote?: string;
             updatedAt?: string;
         };
         CreateTeamRequest: {
@@ -1047,7 +1082,8 @@ export interface components {
             mimeType?: string;
             sha256?: string;
             /** @enum {string} */
-            status?: "PENDING" | "UPLOADED" | "VERIFIED" | "REJECTED";
+            status?: "PENDING" | "UPLOADED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";
+            revisionNote?: string;
             uploadedAt?: string;
         };
         GeneratedDocumentView: {
@@ -1064,7 +1100,7 @@ export interface components {
             fullName?: string;
             designation?: string;
             /** @enum {string} */
-            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             form1?: components["schemas"]["Form1View"];
             form2?: components["schemas"]["Form2View"];
             form3?: components["schemas"]["Form3EntryView"][];
@@ -1091,6 +1127,12 @@ export interface components {
             };
             /** Format: int32 */
             expiresInSeconds?: number;
+        };
+        DocumentReviseRequest: {
+            fileName: string;
+            mimeType: string;
+            /** Format: int64 */
+            sizeBytes?: number;
         };
         NotificationView: {
             id?: string;
@@ -1122,7 +1164,7 @@ export interface components {
             employeeEmail?: string;
             designation?: string;
             /** @enum {string} */
-            employeeStatus?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            employeeStatus?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             hrName?: string;
         };
         OnboardEmployeeRequest: {
@@ -1140,7 +1182,7 @@ export interface components {
             designation?: string;
             dateOfJoining?: string;
             /** @enum {string} */
-            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             createdAt?: string;
         };
         OnboardEmployeeResult: {
@@ -1153,7 +1195,7 @@ export interface components {
         RouteToManagerResult: {
             employeeCode?: string;
             /** @enum {string} */
-            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             approvalRequestId?: string;
             managerName?: string;
         };
@@ -1239,7 +1281,7 @@ export interface components {
         };
         ReviewRequest: {
             /** @enum {string} */
-            decision: "VERIFIED" | "REJECTED";
+            decision: "VERIFIED" | "REJECTED" | "REVISION_REQUESTED";
             reason?: string;
         };
         EmployeeRecordView: {
@@ -1250,7 +1292,7 @@ export interface components {
             designation?: string;
             dateOfJoining?: string;
             /** @enum {string} */
-            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             reviewComplete?: boolean;
             sensitiveRevealable?: boolean;
             form1?: components["schemas"]["Form1View"];
@@ -1269,7 +1311,8 @@ export interface components {
             mimeType?: string;
             sha256?: string;
             /** @enum {string} */
-            status?: "PENDING" | "UPLOADED" | "VERIFIED" | "REJECTED";
+            status?: "PENDING" | "UPLOADED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";
+            revisionNote?: string;
             uploadedAt?: string;
             viewUrl?: string;
         };
@@ -1713,6 +1756,26 @@ export interface operations {
             };
         };
     };
+    resubmit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OnboardingDashboard"];
+                };
+            };
+        };
+    };
     requestUpload: {
         parameters: {
             query?: never;
@@ -1723,6 +1786,32 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DocumentUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedUpload"];
+                };
+            };
+        };
+    };
+    revise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentReviseRequest"];
             };
         };
         responses: {
@@ -1853,7 +1942,7 @@ export interface operations {
         parameters: {
             query: {
                 search?: string;
-                status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+                status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
                 pageable: components["schemas"]["Pageable"];
             };
             header?: never;

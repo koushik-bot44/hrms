@@ -12,16 +12,22 @@ import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Form1Personal;
 import com.ihrms.domain.model.Form2Info;
 import com.ihrms.domain.model.Form3PrevEmployment;
+import com.ihrms.domain.enums.NotificationType;
 import com.ihrms.domain.model.GeneratedDocument;
+import com.ihrms.domain.model.Notification;
 import com.ihrms.domain.model.Signature;
+import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.Form1PersonalRepository;
 import com.ihrms.domain.repository.Form2InfoRepository;
 import com.ihrms.domain.repository.Form3PrevEmploymentRepository;
 import com.ihrms.domain.repository.GeneratedDocumentRepository;
+import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.SignatureRepository;
+import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.onboarding.dto.OnboardingDtos;
+import com.ihrms.onboarding.dto.OnboardingDtos.DocumentReviseRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentUploadRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentView;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1Request;
@@ -82,6 +88,8 @@ public class OnboardingService {
   private final DocumentRepository documents;
   private final SignatureRepository signatures;
   private final GeneratedDocumentRepository generated;
+  private final NotificationRepository notifications;
+  private final UserRepository users;
   private final StorageService storage;
   private final PdfService pdf;
   private final AuditService audit;
@@ -94,6 +102,8 @@ public class OnboardingService {
       DocumentRepository documents,
       SignatureRepository signatures,
       GeneratedDocumentRepository generated,
+      NotificationRepository notifications,
+      UserRepository users,
       StorageService storage,
       PdfService pdf,
       AuditService audit) {
@@ -104,6 +114,8 @@ public class OnboardingService {
     this.documents = documents;
     this.signatures = signatures;
     this.generated = generated;
+    this.notifications = notifications;
+    this.users = users;
     this.storage = storage;
     this.pdf = pdf;
     this.audit = audit;
@@ -118,19 +130,16 @@ public class OnboardingService {
   @Transactional
   public Form1View saveForm1(IhrmsPrincipal.Employee emp, Form1Request body, String ip) {
     Employee employee = loadEmployee(emp.employeeId());
-    assertEditable(employee);
 
-    Form1Personal f1 =
-        form1s
-            .findByEmployeeId(emp.employeeId())
-            .orElseGet(
-                () -> {
-                  Form1Personal n = new Form1Personal();
-                  n.setEmployeeId(emp.employeeId());
-                  return n;
-                });
+    Form1Personal f1 = form1s.findByEmployeeId(emp.employeeId()).orElse(null);
+    assertFormEditable(employee, f1 == null ? null : f1.getStatus());
+    if (f1 == null) {
+      f1 = new Form1Personal();
+      f1.setEmployeeId(emp.employeeId());
+    }
     f1.setData(FormMappers.toForm1Data(body));
     f1.setOfferedCtc(body.offeredCtc());
+    clearRevision(f1);
     f1.setStatus(SectionStatus.DRAFT);
     form1s.save(f1);
     markInProgress(employee);
@@ -144,20 +153,17 @@ public class OnboardingService {
   @Transactional
   public Form2View saveForm2(IhrmsPrincipal.Employee emp, Form2Request body, String ip) {
     Employee employee = loadEmployee(emp.employeeId());
-    assertEditable(employee);
 
-    Form2Info f2 =
-        form2s
-            .findByEmployeeId(emp.employeeId())
-            .orElseGet(
-                () -> {
-                  Form2Info n = new Form2Info();
-                  n.setEmployeeId(emp.employeeId());
-                  return n;
-                });
+    Form2Info f2 = form2s.findByEmployeeId(emp.employeeId()).orElse(null);
+    assertFormEditable(employee, f2 == null ? null : f2.getStatus());
+    if (f2 == null) {
+      f2 = new Form2Info();
+      f2.setEmployeeId(emp.employeeId());
+    }
     f2.setData(FormMappers.toForm2Data(body));
     f2.setPanNumber(body.panNumber());
     f2.setAxisAccountNumber(body.axisAccountNumber());
+    clearRevision(f2);
     f2.setStatus(SectionStatus.DRAFT);
     form2s.save(f2);
     markInProgress(employee);
@@ -171,10 +177,12 @@ public class OnboardingService {
   @Transactional
   public List<Form3EntryView> saveForm3(IhrmsPrincipal.Employee emp, Form3Request body, String ip) {
     Employee employee = loadEmployee(emp.employeeId());
-    assertEditable(employee);
 
-    // Replace the whole repeatable list (simplest correct upsert for an ordered collection).
-    form3s.deleteAll(form3s.findByEmployeeIdOrderByOrderIndexAsc(emp.employeeId()));
+    // Replace the whole repeatable list (simplest correct upsert for an ordered collection). The
+    // whole form shares one status, so gate on the first row's state (all rows move together).
+    List<Form3PrevEmployment> current = form3s.findByEmployeeIdOrderByOrderIndexAsc(emp.employeeId());
+    assertFormEditable(employee, current.isEmpty() ? null : current.get(0).getStatus());
+    form3s.deleteAll(current);
     int index = 0;
     if (body.entries() != null) {
       for (var entry : body.entries()) {
@@ -234,17 +242,56 @@ public class OnboardingService {
 
   public DocumentView confirmUpload(IhrmsPrincipal.Employee emp, String documentId, String ip) {
     Document doc = loadOwnDocument(emp.employeeId(), documentId);
-    assertEditable(loadEmployee(emp.employeeId()));
+    // Finalises both a fresh upload (PENDING) and a revision re-upload (REVISION_REQUESTED).
+    assertCanUploadDocuments(loadEmployee(emp.employeeId()));
 
     byte[] bytes = storage.getObjectBytes(doc.getStorageKey());
     String sha256 = Hashing.sha256Hex(bytes);
     doc.setSha256(sha256);
     doc.setStatus(DocumentStatus.UPLOADED);
+    clearRevision(doc); // a re-uploaded document is no longer flagged
     documents.save(doc);
 
     audit(emp, "DOCUMENT_UPLOADED", "Document", documentId,
         Map.of("docType", doc.getDocType().name(), "sha256", sha256, "sizeBytes", bytes.length), ip);
     return documentView(doc);
+  }
+
+  /**
+   * Re-upload a document that HR sent back for revision (§3.3): a fresh presigned PUT keyed to the
+   * SAME document, replacing its file in place. Allowed only for a {@code REVISION_REQUESTED} document
+   * while the employee is under revision; {@link #confirmUpload} then flips it back to {@code UPLOADED}.
+   */
+  public PresignedUpload reviseDocument(
+      IhrmsPrincipal.Employee emp, String documentId, DocumentReviseRequest body, String ip) {
+    Document doc = loadOwnDocument(emp.employeeId(), documentId);
+    Employee employee = loadEmployee(emp.employeeId());
+    if (employee.getStatus() != EmployeeStatus.REVISION_REQUESTED
+        || doc.getStatus() != DocumentStatus.REVISION_REQUESTED) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "This document is not open for revision");
+    }
+
+    String oldKey = doc.getStorageKey();
+    String storageKey = storage.buildKey(emp.companyId(), emp.employeeId(), "form4", body.fileName());
+    doc.setFileName(body.fileName());
+    doc.setMimeType(body.mimeType());
+    doc.setStorageKey(storageKey);
+    // status stays REVISION_REQUESTED until confirm, so a re-do stays possible if the PUT fails.
+    documents.save(doc);
+    if (!oldKey.equals(storageKey)) {
+      try {
+        storage.delete(oldKey);
+      } catch (RuntimeException e) {
+        log.warn("Could not delete replaced bytes for document {}: {}", documentId, e.getMessage());
+      }
+    }
+
+    String uploadUrl = storage.presignedPutUrl(storageKey, body.mimeType(), UPLOAD_TTL_SECONDS);
+    audit(emp, "DOCUMENT_REVISION_UPLOAD_REQUESTED", "Document", doc.getId(),
+        Map.of("docType", doc.getDocType().name(), "fileName", body.fileName()), ip);
+    return new PresignedUpload(
+        doc.getId(), uploadUrl, "PUT", Map.of("Content-Type", body.mimeType()), UPLOAD_TTL_SECONDS);
   }
 
   public PresignedView documentViewUrl(IhrmsPrincipal.Employee emp, String documentId, String ip) {
@@ -342,6 +389,86 @@ public class OnboardingService {
     return dashboardOf(employee);
   }
 
+  // --- Re-submit after a revision (§3.3) ------------------------------------
+
+  /**
+   * Re-submit after HR sent one or more items back for revision. Requires the employee to be under
+   * revision with <strong>every</strong> flagged item already updated (no form/document still
+   * {@code REVISION_REQUESTED}); re-runs the completeness gate; returns each revised item to
+   * awaiting-HR ({@code SUBMITTED} / {@code UPLOADED} — which it already is), flips the employee back
+   * to {@code SUBMITTED}, and notifies the onboarding HR. PDFs regenerate post-commit (controller).
+   */
+  @Transactional
+  public OnboardingDashboard resubmit(IhrmsPrincipal.Employee emp, String ip) {
+    Employee employee = loadEmployee(emp.employeeId());
+    if (employee.getStatus() != EmployeeStatus.REVISION_REQUESTED) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "No revision is in progress on your record");
+    }
+
+    Form1Personal f1 = form1s.findByEmployeeId(emp.employeeId()).orElse(null);
+    Form2Info f2 = form2s.findByEmployeeId(emp.employeeId()).orElse(null);
+    List<Form3PrevEmployment> f3 = form3s.findByEmployeeIdOrderByOrderIndexAsc(emp.employeeId());
+    List<Document> docs = documents.findByEmployeeId(emp.employeeId());
+    Signature signature = signatures.findByEmployeeId(emp.employeeId()).orElse(null);
+
+    boolean stillFlagged =
+        (f1 != null && f1.getStatus() == SectionStatus.REVISION_REQUESTED)
+            || (f2 != null && f2.getStatus() == SectionStatus.REVISION_REQUESTED)
+            || f3.stream().anyMatch(r -> r.getStatus() == SectionStatus.REVISION_REQUESTED)
+            || docs.stream().anyMatch(d -> d.getStatus() == DocumentStatus.REVISION_REQUESTED);
+    if (stillFlagged) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Update every item HR sent back before re-submitting");
+    }
+
+    List<String> missing = OnboardingCompleteness.missing(f1, f2, docs, signature);
+    if (!missing.isEmpty()) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Before re-submitting: " + String.join("; ", missing));
+    }
+
+    // Return the revised forms (now DRAFT) to awaiting-HR; already-verified forms stay VERIFIED.
+    if (f1 != null && f1.getStatus() == SectionStatus.DRAFT) {
+      f1.setStatus(SectionStatus.SUBMITTED);
+      form1s.save(f1);
+    }
+    if (f2 != null && f2.getStatus() == SectionStatus.DRAFT) {
+      f2.setStatus(SectionStatus.SUBMITTED);
+      form2s.save(f2);
+    }
+    f3.stream()
+        .filter(r -> r.getStatus() == SectionStatus.DRAFT)
+        .forEach(r -> r.setStatus(SectionStatus.SUBMITTED));
+    form3s.saveAll(f3);
+
+    employee.setStatus(EmployeeStatus.SUBMITTED);
+    employees.save(employee);
+
+    // Notify the onboarding HR that the record is back for re-review (§3.3).
+    String hrUserId = employee.getOnboardingHrId();
+    if (hrUserId != null) {
+      Notification notification = new Notification();
+      notification.setRecipientUserId(hrUserId);
+      notification.setType(NotificationType.EMPLOYEE_SUBMITTED);
+      notification.setEmployeeId(employee.getId());
+      notifications.save(notification);
+      users
+          .findById(hrUserId)
+          .map(User::getEmail)
+          .ifPresent(
+              hrEmail ->
+                  log.warn(
+                      "[DEV RESUBMIT] {} re-submitted revised onboarding for {} ({}) — ready for re-review",
+                      hrEmail,
+                      employee.getFullName(),
+                      employee.getEmail()));
+    }
+
+    audit(emp, "EMPLOYEE_RESUBMITTED", "Employee", emp.employeeId(), null, ip);
+    return dashboardOf(employee);
+  }
+
   /**
    * (Re)generate the employee's PDFs — called by the controller AFTER {@link #submit} commits
    * (post-commit, best-effort), so a storage/rendering failure is logged but never fails or rolls
@@ -422,6 +549,7 @@ public class OnboardingService {
         d.getMimeType(),
         d.getSha256(),
         d.getStatus(),
+        d.getRevisionNote(),
         d.getUploadedAt().toString());
   }
 
@@ -477,6 +605,48 @@ public class OnboardingService {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "Your record is locked for verification");
     }
+  }
+
+  /**
+   * A form is editable when the employee is in normal editing ({@link #EDITABLE}), or — during a
+   * revision — only when that specific form was flagged and is being worked on (its status is
+   * {@code REVISION_REQUESTED} or, once saved, {@code DRAFT}). Every other item stays locked (§3.3).
+   */
+  private void assertFormEditable(Employee employee, SectionStatus currentFormStatus) {
+    if (EDITABLE.contains(employee.getStatus())) {
+      return;
+    }
+    if (employee.getStatus() == EmployeeStatus.REVISION_REQUESTED
+        && (currentFormStatus == SectionStatus.REVISION_REQUESTED
+            || currentFormStatus == SectionStatus.DRAFT)) {
+      return;
+    }
+    throw new ResponseStatusException(
+        HttpStatus.CONFLICT, "This form is locked — only items HR sent back can be edited");
+  }
+
+  /** Confirming an upload is allowed for a fresh upload (EDITABLE) or a revision re-upload. */
+  private void assertCanUploadDocuments(Employee employee) {
+    if (!EDITABLE.contains(employee.getStatus())
+        && employee.getStatus() != EmployeeStatus.REVISION_REQUESTED) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Your record is locked for verification");
+    }
+  }
+
+  private static void clearRevision(Form1Personal f) {
+    f.setRevisionNote(null);
+    f.setRevisionRequestedAt(null);
+  }
+
+  private static void clearRevision(Form2Info f) {
+    f.setRevisionNote(null);
+    f.setRevisionRequestedAt(null);
+  }
+
+  private static void clearRevision(Document d) {
+    d.setRevisionNote(null);
+    d.setRevisionRequestedAt(null);
   }
 
   private void markInProgress(Employee employee) {

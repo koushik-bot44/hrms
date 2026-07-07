@@ -32,6 +32,7 @@ import com.ihrms.review.dto.ReviewDtos.RevealedSensitive;
 import com.ihrms.review.dto.ReviewDtos.ReviewRequest;
 import com.ihrms.review.dto.ReviewDtos.RouteToManagerRequest;
 import com.ihrms.review.dto.ReviewDtos.RouteToManagerResult;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -124,19 +125,25 @@ public class ReviewService {
     return assembler.reveal(employee);
   }
 
-  /** Verify or reject a whole form (FORM1 / FORM2 / FORM3). */
+  /**
+   * Per-item review of a whole form (FORM1 / FORM2 / FORM3): Verify, or Send back for revision
+   * (§3.3). {@code REVISION_REQUESTED} requires a note; VERIFIED/REJECTED clear any prior note.
+   * Decisions are re-decidable while the employee is under review; the employee's overall status is
+   * recomputed from the items afterwards.
+   */
+  @Transactional
   public EmployeeRecordView reviewForm(
       IhrmsPrincipal.User actor, String employeeId, String formParam, ReviewRequest req, String ip) {
     Employee employee = loadOwnById(actor, employeeId);
     assertReviewable(employee);
-    SectionStatus decision = SectionStatus.valueOf(req.decision());
+    SectionStatus decision = parseSectionDecision(req);
     String form = formParam == null ? "" : formParam.toUpperCase();
 
     switch (form) {
       case "FORM1" -> {
         Form1Personal f1 =
             form1s.findByEmployeeId(employee.getId()).orElseThrow(() -> notFound("Form 1 not found"));
-        f1.setStatus(decision);
+        applyDecision(f1, decision, req);
         form1s.save(f1);
         audit.record(
             AuditActor.from(actor), "FORM_REVIEWED", "Form1Personal", f1.getId(),
@@ -145,7 +152,7 @@ public class ReviewService {
       case "FORM2" -> {
         Form2Info f2 =
             form2s.findByEmployeeId(employee.getId()).orElseThrow(() -> notFound("Form 2 not found"));
-        f2.setStatus(decision);
+        applyDecision(f2, decision, req);
         form2s.save(f2);
         audit.record(
             AuditActor.from(actor), "FORM_REVIEWED", "Form2Info", f2.getId(),
@@ -154,7 +161,10 @@ public class ReviewService {
       case "FORM3" -> {
         List<Form3PrevEmployment> rows =
             form3s.findByEmployeeIdOrderByOrderIndexAsc(employee.getId());
-        rows.forEach(r -> r.setStatus(decision));
+        if (rows.isEmpty()) {
+          throw badRequest("There is no Form 3 to review");
+        }
+        rows.forEach(r -> applyDecision(r, decision, req));
         form3s.saveAll(rows);
         audit.record(
             AuditActor.from(actor), "FORM_REVIEWED", "Employee", employee.getId(),
@@ -162,9 +172,11 @@ public class ReviewService {
       }
       default -> throw badRequest("Unknown form \"" + formParam + "\"");
     }
+    recomputeReviewStatus(employee);
     return assembler.build(employee);
   }
 
+  @Transactional
   public EmployeeRecordView reviewDocument(
       IhrmsPrincipal.User actor, String employeeId, String documentId, ReviewRequest req, String ip) {
     Employee employee = loadOwnById(actor, employeeId);
@@ -174,12 +186,21 @@ public class ReviewService {
             .findByIdAndEmployeeId(documentId, employee.getId())
             .orElseThrow(() -> notFound("Document not found"));
 
-    doc.setStatus(DocumentStatus.valueOf(req.decision()));
+    DocumentStatus decision = parseDocumentDecision(req);
+    doc.setStatus(decision);
+    if (decision == DocumentStatus.REVISION_REQUESTED) {
+      doc.setRevisionNote(req.reason());
+      doc.setRevisionRequestedAt(Instant.now());
+    } else {
+      doc.setRevisionNote(null);
+      doc.setRevisionRequestedAt(null);
+    }
     documents.save(doc);
 
     audit.record(
         AuditActor.from(actor), "DOCUMENT_REVIEWED", "Document", doc.getId(),
         reviewMeta("docType", doc.getDocType().name(), req), ip);
+    recomputeReviewStatus(employee);
     return assembler.build(employee);
   }
 
@@ -264,10 +285,74 @@ public class ReviewService {
     return employee;
   }
 
+  /** Review actions are allowed while the employee is under HR review — before routing/approval. */
   private void assertReviewable(Employee employee) {
-    if (employee.getStatus() != EmployeeStatus.SUBMITTED) {
+    EmployeeStatus s = employee.getStatus();
+    if (s != EmployeeStatus.SUBMITTED && s != EmployeeStatus.REVISION_REQUESTED) {
       throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "Employee is not awaiting review (status " + employee.getStatus() + ")");
+          HttpStatus.CONFLICT, "Employee is not awaiting review (status " + s + ")");
+    }
+  }
+
+  /** {@code REVISION_REQUESTED} needs a note (the change request shown to the employee, §3.3). */
+  private SectionStatus parseSectionDecision(ReviewRequest req) {
+    SectionStatus decision = SectionStatus.valueOf(req.decision());
+    requireNoteForRevision(decision == SectionStatus.REVISION_REQUESTED, req);
+    return decision;
+  }
+
+  private DocumentStatus parseDocumentDecision(ReviewRequest req) {
+    DocumentStatus decision = DocumentStatus.valueOf(req.decision());
+    requireNoteForRevision(decision == DocumentStatus.REVISION_REQUESTED, req);
+    return decision;
+  }
+
+  private void requireNoteForRevision(boolean isRevision, ReviewRequest req) {
+    if (isRevision && (req.reason() == null || req.reason().isBlank())) {
+      throw badRequest("Add a note describing the change when sending an item back for revision");
+    }
+  }
+
+  private void applyDecision(Form1Personal f, SectionStatus decision, ReviewRequest req) {
+    f.setStatus(decision);
+    f.setRevisionNote(decision == SectionStatus.REVISION_REQUESTED ? req.reason() : null);
+    f.setRevisionRequestedAt(decision == SectionStatus.REVISION_REQUESTED ? Instant.now() : null);
+  }
+
+  private void applyDecision(Form2Info f, SectionStatus decision, ReviewRequest req) {
+    f.setStatus(decision);
+    f.setRevisionNote(decision == SectionStatus.REVISION_REQUESTED ? req.reason() : null);
+    f.setRevisionRequestedAt(decision == SectionStatus.REVISION_REQUESTED ? Instant.now() : null);
+  }
+
+  private void applyDecision(Form3PrevEmployment f, SectionStatus decision, ReviewRequest req) {
+    f.setStatus(decision);
+    f.setRevisionNote(decision == SectionStatus.REVISION_REQUESTED ? req.reason() : null);
+    f.setRevisionRequestedAt(decision == SectionStatus.REVISION_REQUESTED ? Instant.now() : null);
+  }
+
+  /**
+   * The employee's overall status follows the items while under HR review: {@code REVISION_REQUESTED}
+   * if any form/document is flagged, otherwise {@code SUBMITTED}. Never touches a routed/approved
+   * record. This keeps Verify ⇄ Send-back re-decidable and the routing gate consistent.
+   */
+  private void recomputeReviewStatus(Employee employee) {
+    EmployeeStatus s = employee.getStatus();
+    if (s != EmployeeStatus.SUBMITTED && s != EmployeeStatus.REVISION_REQUESTED) {
+      return;
+    }
+    String id = employee.getId();
+    boolean anyRevision =
+        form1s.findByEmployeeId(id).map(f -> f.getStatus() == SectionStatus.REVISION_REQUESTED).orElse(false)
+            || form2s.findByEmployeeId(id).map(f -> f.getStatus() == SectionStatus.REVISION_REQUESTED).orElse(false)
+            || form3s.findByEmployeeIdOrderByOrderIndexAsc(id).stream()
+                .anyMatch(r -> r.getStatus() == SectionStatus.REVISION_REQUESTED)
+            || documents.findByEmployeeId(id).stream()
+                .anyMatch(d -> d.getStatus() == DocumentStatus.REVISION_REQUESTED);
+    EmployeeStatus target = anyRevision ? EmployeeStatus.REVISION_REQUESTED : EmployeeStatus.SUBMITTED;
+    if (target != s) {
+      employee.setStatus(target);
+      employees.save(employee);
     }
   }
 

@@ -88,6 +88,7 @@ public final class FormMappers {
         famViews(d.get("familyDetails")),
         refViews(d.get("characterReferences")),
         e.getStatus(),
+        e.getRevisionNote(),
         e.getUpdatedAt() == null ? null : e.getUpdatedAt().toString());
   }
 
@@ -135,6 +136,7 @@ public final class FormMappers {
         str(d, "currentAddress"),
         str(d, "permanentAddress"),
         e.getStatus(),
+        e.getRevisionNote(),
         e.getUpdatedAt() == null ? null : e.getUpdatedAt().toString());
   }
 
@@ -170,7 +172,8 @@ public final class FormMappers {
         e.getReportingTo(),
         e.getRoContact(),
         e.getHrNameContact(),
-        e.getStatus());
+        e.getStatus(),
+        e.getRevisionNote());
   }
 
   // --- sensitive helpers ----------------------------------------------------

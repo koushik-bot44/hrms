@@ -98,10 +98,23 @@ HR's team** — that is the path that connects an employee to their approver.
    employee's record**; submission routes to HR for verification.
 
 ### 3.3 Verification & approval
-1. **HR** opens the employee's record (by ID), reviews each section/document, marks items
-   **verified** (or rejects/requests changes).
-2. On completion, HR **routes an approval request** to the **team's Manager**.
+1. **HR** opens the employee's record (by ID) and reviews each form and document with **two per-item
+   actions**:
+   - **Verify** → the item is `VERIFIED`.
+   - **Send back for revision** (with a **note**) → opens that item and returns **only that
+     form/document** to the employee (`REVISION_REQUESTED`). The item becomes re-editable /
+     re-uploadable while **everything else stays locked**; the employee's overall status reflects
+     that a revision is pending. Verify and Send-back are **re-decidable** (HR may flip an item back
+     and forth) and remain available only while the employee is **under HR review** (i.e. not yet
+     routed to the Manager or approved). There is **no per-item Reject** — terminal rejection of the
+     whole application is the Manager's action at approval (step 3).
+   The employee fixes the flagged item(s) and **re-submits**: each revised item returns to
+   awaiting-HR, the affected form PDFs **regenerate**, the onboarding HR is notified, and the items
+   come back for **re-review**.
+2. On completion — **every** form and document `VERIFIED` (a single `REVISION_REQUESTED` item blocks
+   this) — HR **routes an approval request** to the **team's Manager**.
 3. **Manager** sees it in their **notifications/approvals inbox** and **approves** → final step in v1.
+   (Rejecting the application, if needed, is the Manager's decision here.)
 4. **On approval, the system allocates the unique employee ID** (§5) from the company's atomic
    per-company sequence, stamps it on the record, and welcomes the employee with it. The ID is an
    **org/HR-facing identifier** — it is *not* used to log in.
@@ -158,7 +171,8 @@ indicative. **Schema is additive-only thereafter.**
   (FORM1 | FORM2 | FORM3 | FORM4_MANIFEST | MERGED), `storageKey`, `sha256`, `generatedAt`.
   Regenerated on every edit-and-resubmit; re-stamped with `employeeId` on approval.
 
-Each form carries a `status` (DRAFT | SUBMITTED | VERIFIED | REJECTED). SENSITIVE fields are encrypted at
+Each form and document carries a `status` (DRAFT | SUBMITTED | VERIFIED | REVISION_REQUESTED | REJECTED)
+plus a nullable `revisionNote` + `revisionRequestedAt` set when HR sends that item back (§3.3). SENSITIVE fields are encrypted at
 rest and masked in HR views (reveal is an explicit **audited** action — §6). `employeeId` is
 **system-assigned on Manager approval** and never employee-editable; `sparkId` is HR/admin-set. The
 generated PDFs' header/branding is the employee's **joining company** (resolved from `companyId`).
@@ -176,12 +190,15 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
 
 ### Enums (defined in the shared package — single source of truth)
 - **UserRole**: `SUPER_ADMIN`, `COMPANY_ADMIN`, `HR`, `MANAGER`
-- **EmployeeStatus**: `INVITED`, `IN_PROGRESS`, `SUBMITTED`, `HR_VERIFIED`, `APPROVED`, `REJECTED`
-- **SectionStatus** _(status of each form + review item)_: `DRAFT`, `SUBMITTED`, `VERIFIED`, `REJECTED`
+- **EmployeeStatus**: `INVITED`, `IN_PROGRESS`, `SUBMITTED`, `REVISION_REQUESTED` _(HR sent one or more
+  items back; the employee is fixing them)_, `HR_VERIFIED`, `APPROVED`, `REJECTED`
+- **SectionStatus** _(status of each form + review item)_: `DRAFT`, `SUBMITTED`, `VERIFIED`,
+  `REVISION_REQUESTED` _(HR asked for changes to this item)_, `REJECTED`
 - **DocumentType** _(Form 4 slots)_: `SECONDARY`, `INTERMEDIATE`, `DIPLOMA`, `GRADUATION`,
   `POST_GRADUATION`, `OFFER_OR_APPOINTMENT_LETTER`, `HIKE_LETTER`, `RELIEVING_LETTER` _(per-employment,
   with `groupIndex` 1–4)_, `AADHAAR`, `PAN`, `VOTER_ID`, `DRIVING_LICENCE`, `PASSPORT`, `OTHER`
-- **DocumentStatus**: `PENDING`, `UPLOADED`, `VERIFIED`, `REJECTED`
+- **DocumentStatus**: `PENDING`, `UPLOADED`, `VERIFIED`, `REVISION_REQUESTED` _(HR asked for a
+  re-upload)_, `REJECTED`
 - **GeneratedDocumentKind**: `FORM1`, `FORM2`, `FORM3`, `FORM4_MANIFEST`, `MERGED`
 - **ApprovalStatus**: `PENDING`, `APPROVED`, `REJECTED`
 - **NotificationType**: `EMPLOYEE_ONBOARDED`, `EMPLOYEE_SUBMITTED`, `APPROVAL_REQUESTED`,

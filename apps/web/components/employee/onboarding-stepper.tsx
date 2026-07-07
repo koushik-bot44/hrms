@@ -213,16 +213,18 @@ function form1Defaults(f: Form1View | null): Form1Values {
   };
 }
 
-function Form1Step({
+export function Form1Step({
   form1,
   disabled,
   onSaved,
   onNext,
+  submitLabel,
 }: {
   form1: Form1View | null;
   disabled: boolean;
   onSaved: () => void;
-  onNext: () => void;
+  onNext?: () => void;
+  submitLabel?: string;
 }) {
   const { register, control, handleSubmit, watch, setValue, formState } = useForm<Form1Values>({
     resolver: zodResolver(Form1Schema),
@@ -239,7 +241,7 @@ function Form1Step({
     successMessage: 'Form 1 saved',
     onSuccess: () => {
       onSaved();
-      onNext();
+      onNext?.();
     },
   });
 
@@ -359,7 +361,7 @@ function Form1Step({
             </label>
           </div>
 
-          <StepActions saving={save.isPending} />
+          <StepActions saving={save.isPending} nextLabel={submitLabel} />
         </CardContent>
       </Card>
     </form>
@@ -457,20 +459,22 @@ function form2Defaults(f: Form2View | null): Form2Values {
   };
 }
 
-function Form2Step({
+export function Form2Step({
   form2,
   employeeCode,
   disabled,
   onSaved,
   onNext,
   onBack,
+  submitLabel,
 }: {
   form2: Form2View | null;
   employeeCode: string | null;
   disabled: boolean;
   onSaved: () => void;
-  onNext: () => void;
-  onBack: () => void;
+  onNext?: () => void;
+  onBack?: () => void;
+  submitLabel?: string;
 }) {
   const { register, handleSubmit } = useForm<Form2Values>({
     resolver: zodResolver(Form2Schema),
@@ -480,7 +484,7 @@ function Form2Step({
     successMessage: 'Form 2 saved',
     onSuccess: () => {
       onSaved();
-      onNext();
+      onNext?.();
     },
   });
 
@@ -515,7 +519,7 @@ function Form2Step({
             <Field label="Current address"><Input {...register('currentAddress')} disabled={disabled} /></Field>
             <Field label="Permanent address"><Input {...register('permanentAddress')} disabled={disabled} /></Field>
           </div>
-          <StepActions onBack={onBack} saving={save.isPending} />
+          <StepActions onBack={onBack} saving={save.isPending} nextLabel={submitLabel} />
         </CardContent>
       </Card>
     </form>
@@ -526,18 +530,20 @@ function Form2Step({
 // Form 3 — Previous Employment (repeatable)
 // ---------------------------------------------------------------------------
 
-function Form3Step({
+export function Form3Step({
   form3,
   disabled,
   onSaved,
   onNext,
   onBack,
+  submitLabel,
 }: {
   form3: OnboardingDashboard['form3'];
   disabled: boolean;
   onSaved: () => void;
-  onNext: () => void;
-  onBack: () => void;
+  onNext?: () => void;
+  onBack?: () => void;
+  submitLabel?: string;
 }) {
   const { register, control, handleSubmit } = useForm<Form3Values>({
     resolver: zodResolver(Form3Schema),
@@ -562,7 +568,7 @@ function Form3Step({
     successMessage: 'Form 3 saved',
     onSuccess: () => {
       onSaved();
-      onNext();
+      onNext?.();
     },
   });
 
@@ -615,7 +621,7 @@ function Form3Step({
               </div>
             ))
           )}
-          <StepActions onBack={onBack} saving={save.isPending} />
+          <StepActions onBack={onBack} saving={save.isPending} nextLabel={submitLabel} />
         </CardContent>
       </Card>
     </form>

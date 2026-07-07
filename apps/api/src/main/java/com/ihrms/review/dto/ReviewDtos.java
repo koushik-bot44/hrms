@@ -22,11 +22,18 @@ public final class ReviewDtos {
 
   private ReviewDtos() {}
 
-  /** Verify or reject a form/document; the optional reason is recorded in the audit trail. */
+  /**
+   * Verify a form/document, or send it back for revision (§3.3). {@code REVISION_REQUESTED} requires a
+   * {@code reason} — the HR note shown to the employee and recorded in the audit trail. {@code REJECTED}
+   * is retained for compatibility but not offered per-item in the UI (terminal rejection is the
+   * Manager's action at approval).
+   */
   public record ReviewRequest(
       @NotBlank
-          @Pattern(regexp = "VERIFIED|REJECTED", message = "decision must be VERIFIED or REJECTED")
-          @Schema(allowableValues = {"VERIFIED", "REJECTED"})
+          @Pattern(
+              regexp = "VERIFIED|REJECTED|REVISION_REQUESTED",
+              message = "decision must be VERIFIED, REJECTED or REVISION_REQUESTED")
+          @Schema(allowableValues = {"VERIFIED", "REJECTED", "REVISION_REQUESTED"})
           String decision,
       @Size(max = 500, message = "Reason is too long") String reason) {}
 
@@ -43,6 +50,7 @@ public final class ReviewDtos {
       String mimeType,
       String sha256,
       DocumentStatus status,
+      String revisionNote,
       String uploadedAt,
       String viewUrl) {}
 

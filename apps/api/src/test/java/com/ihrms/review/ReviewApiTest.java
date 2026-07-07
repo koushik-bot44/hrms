@@ -259,6 +259,53 @@ class ReviewApiTest {
     assertThat(documents.findById(docId).orElseThrow().getStatus()).isEqualTo(DocumentStatus.REJECTED);
   }
 
+  @Test
+  void sendingAnItemBackForRevisionFlagsItAndTheEmployeeAndBlocksRouting() throws Exception {
+    String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
+    reviewForm("FORM1", "VERIFIED", null);
+    reviewForm("FORM2", "VERIFIED", null);
+
+    // Send the document back for revision — the note is required and surfaces on the record.
+    MvcResult sentBack = reviewDoc(docId, "REVISION_REQUESTED", "Please re-upload a clearer PAN scan");
+    JsonNode body = json.readTree(sentBack.getResponse().getContentAsString());
+    assertThat(body.get("status").asText()).isEqualTo("REVISION_REQUESTED"); // derived from the item
+    assertThat(body.get("reviewComplete").asBoolean()).isFalse();
+    assertThat(body.get("documents").get(0).get("status").asText()).isEqualTo("REVISION_REQUESTED");
+    assertThat(body.get("documents").get(0).get("revisionNote").asText())
+        .isEqualTo("Please re-upload a clearer PAN scan");
+
+    assertThat(documents.findById(docId).orElseThrow().getStatus())
+        .isEqualTo(DocumentStatus.REVISION_REQUESTED);
+    assertThat(employees.findById(emp.getId()).orElseThrow().getStatus())
+        .isEqualTo(EmployeeStatus.REVISION_REQUESTED);
+
+    // A flagged item blocks routing to the Manager.
+    mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
+            .header("Authorization", "Bearer " + hr1Token))
+        .andExpect(status().isBadRequest());
+
+    // Verify ⇄ Send-back is re-decidable: re-verifying clears the note and derives the employee
+    // back to SUBMITTED, which re-completes the review.
+    MvcResult reVerified = reviewDoc(docId, "VERIFIED", null);
+    assertThat(documents.findById(docId).orElseThrow().getRevisionNote()).isNull();
+    assertThat(documents.findById(docId).orElseThrow().getRevisionRequestedAt()).isNull();
+    assertThat(employees.findById(emp.getId()).orElseThrow().getStatus())
+        .isEqualTo(EmployeeStatus.SUBMITTED);
+    assertThat(json.readTree(reVerified.getResponse().getContentAsString()).get("reviewComplete").asBoolean())
+        .isTrue();
+  }
+
+  @Test
+  void sendBackRequiresANote() throws Exception {
+    mvc.perform(patch("/employees/" + emp.getId() + "/forms/FORM1")
+            .header("Authorization", "Bearer " + hr1Token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("decision", "REVISION_REQUESTED"))))
+        .andExpect(status().isBadRequest());
+    assertThat(form1s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
+        .isEqualTo(SectionStatus.SUBMITTED); // unchanged
+  }
+
   // --- helpers --------------------------------------------------------------
 
   private void reviewForm(String form, String decision, String reason) throws Exception {

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { CheckCircle2, Eye, ExternalLink, FileSearch, FileText, XCircle } from 'lucide-react';
+import { CheckCircle2, Eye, ExternalLink, FileText, Undo2 } from 'lucide-react';
 import type {
   EmployeeRecord,
   Form1View,
@@ -26,7 +26,8 @@ interface RecordViewProps {
   revealed?: RevealedSensitive | null;
   onReveal?: () => void;
   onVerify?: (kind: ItemKind, id: string) => void;
-  onReject?: (kind: ItemKind, id: string, label: string) => void;
+  /** Send this item back to the employee for revision — opens the file, then asks for a note (§3.3). */
+  onSendBack?: (kind: ItemKind, id: string, label: string, viewUrl?: string) => void;
   onRouted?: (result: RouteToManagerResult) => void;
 }
 
@@ -38,22 +39,20 @@ export function RecordView({
   revealed = null,
   onReveal,
   onVerify,
-  onReject,
+  onSendBack,
   onRouted,
 }: RecordViewProps) {
-  const canAct = editable && Boolean(onVerify) && Boolean(onReject);
+  const canAct = editable && Boolean(onVerify) && Boolean(onSendBack);
   const f1 = revealed?.form1 ?? record.form1;
   const f2 = revealed?.form2 ?? record.form2;
   const f3 = revealed ? revealed.form3 : record.form3;
   const f3Status = record.form3[0]?.status;
+  const f3Note = record.form3[0]?.revisionNote;
 
-  // "Revise" reopens the item's file so HR can recheck before re-deciding. For a form section it is
-  // that form's generated PDF; for a document it is the uploaded file. Same presigned viewUrl the
-  // preview uses — new tab.
+  // Send-back reopens the item's file so HR can point to the problem: a form's generated PDF, or the
+  // uploaded document — the same presigned viewUrl the preview uses.
   const formPdf = (kind: 'FORM1' | 'FORM2' | 'FORM3') =>
     record.generatedDocuments.find((g) => g.kind === kind)?.viewUrl;
-  const reviser = (url: string | undefined) =>
-    url ? () => window.open(url, '_blank', 'noopener,noreferrer') : undefined;
 
   return (
     <div className="space-y-5">
@@ -90,7 +89,9 @@ export function RecordView({
         </CardHeader>
         {editable && !record.reviewComplete ? (
           <CardContent className="pt-0 text-sm text-muted-foreground">
-            Verify every form and document to enable routing to the Manager.
+            {record.status === 'REVISION_REQUESTED'
+              ? 'Waiting on the employee to fix the items you sent back — they can’t be routed until every item is verified.'
+              : 'Verify every form and document to enable routing to the Manager.'}
           </CardContent>
         ) : null}
         {revealed ? (
@@ -105,11 +106,11 @@ export function RecordView({
         // Status is the LIVE review state (from `record`); the revealed snapshot only supplies
         // unmasked field values and would otherwise freeze the badge after a reveal.
         status={record.form1?.status}
+        note={record.form1?.revisionNote}
         canAct={canAct}
         busy={busy}
-        onRevise={reviser(formPdf('FORM1'))}
         onVerify={() => onVerify?.('form', 'FORM1')}
-        onReject={() => onReject?.('form', 'FORM1', 'Form 1')}
+        onSendBack={() => onSendBack?.('form', 'FORM1', 'Form 1', formPdf('FORM1'))}
       >
         {f1 ? <Form1Body form1={f1} /> : <Empty />}
       </FormCard>
@@ -117,11 +118,11 @@ export function RecordView({
       <FormCard
         title="Form 2 — Employee Info"
         status={record.form2?.status}
+        note={record.form2?.revisionNote}
         canAct={canAct}
         busy={busy}
-        onRevise={reviser(formPdf('FORM2'))}
         onVerify={() => onVerify?.('form', 'FORM2')}
-        onReject={() => onReject?.('form', 'FORM2', 'Form 2')}
+        onSendBack={() => onSendBack?.('form', 'FORM2', 'Form 2', formPdf('FORM2'))}
       >
         {f2 ? <Form2Body form2={f2} /> : <Empty />}
       </FormCard>
@@ -129,11 +130,11 @@ export function RecordView({
       <FormCard
         title="Form 3 — Previous Employment"
         status={f3Status}
+        note={f3Note}
         canAct={canAct && record.form3.length > 0}
         busy={busy}
-        onRevise={reviser(formPdf('FORM3'))}
         onVerify={() => onVerify?.('form', 'FORM3')}
-        onReject={() => onReject?.('form', 'FORM3', 'Form 3')}
+        onSendBack={() => onSendBack?.('form', 'FORM3', 'Form 3', formPdf('FORM3'))}
       >
         {f3.length === 0 ? (
           <p className="text-sm text-muted-foreground">No previous employment declared.</p>
@@ -156,31 +157,33 @@ export function RecordView({
         ) : (
           <div className="space-y-2">
             {record.documents.map((d) => (
-              <div key={d.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
-                <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{d.fileName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {DOCUMENT_TYPE_LABELS[d.docType]}
-                    {d.groupIndex ? ` · Employment ${d.groupIndex}` : ''}
-                  </p>
+              <div key={d.id} className="rounded-md border border-border p-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{d.fileName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {DOCUMENT_TYPE_LABELS[d.docType]}
+                      {d.groupIndex ? ` · Employment ${d.groupIndex}` : ''}
+                    </p>
+                  </div>
+                  <StatusBadge status={d.status} />
+                  {canAct ? (
+                    <ItemActions
+                      busy={busy}
+                      onVerify={() => onVerify?.('document', d.id)}
+                      onSendBack={() => onSendBack?.('document', d.id, d.fileName, d.viewUrl)}
+                    />
+                  ) : (
+                    <a href={d.viewUrl} target="_blank" rel="noreferrer">
+                      <Button type="button" variant="outline" size="sm">
+                        <ExternalLink />
+                        Preview
+                      </Button>
+                    </a>
+                  )}
                 </div>
-                <StatusBadge status={d.status} />
-                {canAct ? (
-                  <ItemActions
-                    busy={busy}
-                    onRevise={reviser(d.viewUrl)}
-                    onVerify={() => onVerify?.('document', d.id)}
-                    onReject={() => onReject?.('document', d.id, d.fileName)}
-                  />
-                ) : (
-                  <a href={d.viewUrl} target="_blank" rel="noreferrer">
-                    <Button type="button" variant="outline" size="sm">
-                      <ExternalLink />
-                      Preview
-                    </Button>
-                  </a>
-                )}
+                <RevisionNote status={d.status} note={d.revisionNote} />
               </div>
             ))}
           </div>
@@ -213,20 +216,20 @@ export function RecordView({
 function FormCard({
   title,
   status,
+  note,
   canAct,
   busy,
-  onRevise,
   onVerify,
-  onReject,
+  onSendBack,
   children,
 }: {
   title: string;
   status?: SectionStatus;
+  note?: string | null;
   canAct: boolean;
   busy: boolean;
-  onRevise?: () => void;
   onVerify: () => void;
-  onReject: () => void;
+  onSendBack: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -235,13 +238,24 @@ function FormCard({
         <CardTitle className="text-base">{title}</CardTitle>
         <div className="flex items-center gap-2">
           {status ? <StatusBadge status={status} /> : null}
-          {canAct ? (
-            <ItemActions busy={busy} onRevise={onRevise} onVerify={onVerify} onReject={onReject} />
-          ) : null}
+          {canAct ? <ItemActions busy={busy} onVerify={onVerify} onSendBack={onSendBack} /> : null}
         </div>
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className="space-y-3">
+        <RevisionNote status={status} note={note} />
+        {children}
+      </CardContent>
     </Card>
+  );
+}
+
+/** Shows the note HR wrote when an item is awaiting the employee's revision. */
+function RevisionNote({ status, note }: { status?: SectionStatus | string; note?: string | null }) {
+  if (status !== 'REVISION_REQUESTED' || !note) return null;
+  return (
+    <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs">
+      <span className="font-medium">Sent back to the employee:</span> {note}
+    </p>
   );
 }
 
@@ -370,41 +384,29 @@ function Empty() {
   return <p className="text-sm text-muted-foreground">Not provided.</p>;
 }
 
+/**
+ * The two per-item HR actions (§3.3): Verify, and Send back for revision. There is no per-item Reject
+ * — terminal rejection of the application is the Manager's action at approval. Both stay enabled after
+ * a decision so HR can re-decide (Verify ⇄ Send-back).
+ */
 function ItemActions({
   busy,
-  onRevise,
   onVerify,
-  onReject,
+  onSendBack,
 }: {
   busy: boolean;
-  onRevise?: () => void;
   onVerify: () => void;
-  onReject: () => void;
+  onSendBack: () => void;
 }) {
   return (
     <div className="flex items-center gap-1.5">
-      {onRevise ? (
-        // Neutral, non-destructive: reopen the file to recheck before (re-)deciding.
-        <Button type="button" variant="outline" size="sm" onClick={onRevise}>
-          <FileSearch />
-          Revise
-        </Button>
-      ) : null}
-      {/* Verify + Reject stay enabled after a decision, so HR can change it (re-decide). */}
       <Button type="button" variant="success" size="sm" disabled={busy} onClick={onVerify}>
         <CheckCircle2 />
         Verify
       </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="text-destructive hover:text-destructive"
-        disabled={busy}
-        onClick={onReject}
-      >
-        <XCircle />
-        Reject
+      <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onSendBack}>
+        <Undo2 />
+        Send back for revision
       </Button>
     </div>
   );

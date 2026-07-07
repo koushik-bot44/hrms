@@ -63,6 +63,14 @@ public class Document {
   @Column(name = "status", nullable = false)
   private DocumentStatus status = DocumentStatus.PENDING;
 
+  /** HR's note when this document is sent back for re-upload (§3.3); null otherwise. */
+  @Column(name = "revisionNote")
+  private String revisionNote;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "revisionRequestedAt")
+  private Instant revisionRequestedAt;
+
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "uploadedAt", nullable = false, updatable = false)

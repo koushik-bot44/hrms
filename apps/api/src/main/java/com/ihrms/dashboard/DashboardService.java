@@ -204,6 +204,7 @@ public class DashboardService {
   private static String nextAction(Employee e) {
     return switch (e.getStatus()) {
       case INVITED, IN_PROGRESS -> "Complete your onboarding forms, then sign and submit.";
+      case REVISION_REQUESTED -> "HR asked for changes — update the flagged items and re-submit.";
       case REJECTED -> "Your submission needs changes — update your forms and re-submit.";
       case SUBMITTED -> "Submitted — awaiting HR verification.";
       case HR_VERIFIED -> "Verified — awaiting your Manager's approval.";
@@ -252,6 +253,7 @@ public class DashboardService {
       case INVITED -> "Invited to onboard";
       case IN_PROGRESS -> "Onboarding in progress";
       case SUBMITTED -> "Submitted for verification";
+      case REVISION_REQUESTED -> "Revision requested";
       case HR_VERIFIED -> "Verified — routed for approval";
       case APPROVED -> "Approved";
       case REJECTED -> "Rejected";

@@ -18,6 +18,7 @@ export const EmployeeStatus = {
   INVITED: 'INVITED',
   IN_PROGRESS: 'IN_PROGRESS',
   SUBMITTED: 'SUBMITTED',
+  REVISION_REQUESTED: 'REVISION_REQUESTED',
   HR_VERIFIED: 'HR_VERIFIED',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
@@ -29,6 +30,7 @@ export const SectionStatus = {
   DRAFT: 'DRAFT',
   SUBMITTED: 'SUBMITTED',
   VERIFIED: 'VERIFIED',
+  REVISION_REQUESTED: 'REVISION_REQUESTED',
   REJECTED: 'REJECTED',
 } as const;
 export type SectionStatus = (typeof SectionStatus)[keyof typeof SectionStatus];
@@ -67,6 +69,7 @@ export const DocumentStatus = {
   PENDING: 'PENDING',
   UPLOADED: 'UPLOADED',
   VERIFIED: 'VERIFIED',
+  REVISION_REQUESTED: 'REVISION_REQUESTED',
   REJECTED: 'REJECTED',
 } as const;
 export type DocumentStatus = (typeof DocumentStatus)[keyof typeof DocumentStatus];

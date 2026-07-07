@@ -5,6 +5,8 @@ public enum EmployeeStatus {
   INVITED,
   IN_PROGRESS,
   SUBMITTED,
+  /** HR sent one or more items back for revision (§3.3); the employee is fixing the flagged items. */
+  REVISION_REQUESTED,
   HR_VERIFIED,
   APPROVED,
   REJECTED

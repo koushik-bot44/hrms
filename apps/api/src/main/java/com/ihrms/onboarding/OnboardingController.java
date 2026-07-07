@@ -1,6 +1,7 @@
 package com.ihrms.onboarding;
 
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.onboarding.dto.OnboardingDtos.DocumentReviseRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentUploadRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentView;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1Request;
@@ -97,6 +98,17 @@ public class OnboardingController {
     return onboarding.documentViewUrl(emp, id, request.getRemoteAddr());
   }
 
+  /** Re-upload a document HR sent back for revision (§3.3); confirm finalises it. */
+  @PostMapping("/documents/{id}/revise")
+  @ResponseStatus(HttpStatus.CREATED)
+  public PresignedUpload revise(
+      @PathVariable String id,
+      @Valid @RequestBody DocumentReviseRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.Employee emp,
+      HttpServletRequest request) {
+    return onboarding.reviseDocument(emp, id, body, request.getRemoteAddr());
+  }
+
   @DeleteMapping("/documents/{id}")
   public OnboardingDashboard deleteDocument(
       @PathVariable String id,
@@ -127,6 +139,17 @@ public class OnboardingController {
       @AuthenticationPrincipal IhrmsPrincipal.Employee emp, HttpServletRequest request) {
     onboarding.submit(emp, request.getRemoteAddr());
     // Post-commit + best-effort: generate the PDFs, then return the dashboard reflecting them.
+    onboarding.regeneratePdfsQuietly(emp);
+    return onboarding.dashboard(emp);
+  }
+
+  /** Re-submit after fixing the items HR sent back (§3.3); regenerates the affected PDFs. */
+  @PostMapping("/resubmit")
+  @ResponseStatus(HttpStatus.CREATED)
+  public OnboardingDashboard resubmit(
+      @AuthenticationPrincipal IhrmsPrincipal.Employee emp, HttpServletRequest request) {
+    onboarding.resubmit(emp, request.getRemoteAddr());
+    // Same post-commit, best-effort PDF regeneration as the first submit.
     onboarding.regeneratePdfsQuietly(emp);
     return onboarding.dashboard(emp);
   }

@@ -54,6 +54,14 @@ public class Form1Personal {
   @Column(name = "status", nullable = false)
   private SectionStatus status = SectionStatus.DRAFT;
 
+  /** HR's note when this form is sent back for revision (§3.3); null otherwise. */
+  @Column(name = "revisionNote")
+  private String revisionNote;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "revisionRequestedAt")
+  private Instant revisionRequestedAt;
+
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "createdAt", nullable = false, updatable = false)

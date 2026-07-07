@@ -12,21 +12,27 @@ export const EmployeeLookupSchema = z.object({
 });
 export type EmployeeLookupInput = z.infer<typeof EmployeeLookupSchema>;
 
-export const ReviewDecisionValues = ['VERIFIED', 'REJECTED'] as const;
+// REJECTED is kept for API compatibility but is not offered per-item in the UI (§3.3): the two
+// surfaced actions are Verify and Send back for revision (REVISION_REQUESTED).
+export const ReviewDecisionValues = ['VERIFIED', 'REJECTED', 'REVISION_REQUESTED'] as const;
 export type ReviewDecision = (typeof ReviewDecisionValues)[number];
 
-/** Verify or reject a section/document; the optional reason is recorded in the audit trail. */
+/** Verify / send back a form or document; the reason is recorded in the audit trail. */
 export const ReviewSchema = z.object({
   decision: z.enum(ReviewDecisionValues),
   reason: z.string().trim().max(500, 'Keep it under 500 characters').optional(),
 });
 export type ReviewInput = z.infer<typeof ReviewSchema>;
 
-/** The reject dialog (optional reason). */
-export const RejectReasonSchema = z.object({
-  reason: z.string().trim().max(500, 'Keep it under 500 characters').optional(),
+/** The "Send back for revision" dialog — the note is REQUIRED and shown to the employee (§3.3). */
+export const SendBackSchema = z.object({
+  note: z
+    .string()
+    .trim()
+    .min(1, 'Add a note telling the employee what to fix')
+    .max(500, 'Keep it under 500 characters'),
 });
-export type RejectReasonInput = z.infer<typeof RejectReasonSchema>;
+export type SendBackInput = z.infer<typeof SendBackSchema>;
 
 /** The route-to-Manager confirm dialog (optional note). */
 export const RouteToManagerSchema = z.object({

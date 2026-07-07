@@ -137,6 +137,7 @@ public class EmployeeRecordAssembler {
         d.getMimeType(),
         d.getSha256(),
         d.getStatus(),
+        d.getRevisionNote(),
         d.getUploadedAt().toString(),
         storage.presignedGetUrl(d.getStorageKey(), VIEW_TTL_SECONDS));
   }

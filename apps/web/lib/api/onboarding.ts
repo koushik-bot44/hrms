@@ -54,6 +54,11 @@ export function submitOnboarding(): Promise<OnboardingDashboard> {
   return apiFetch<OnboardingDashboard>('/me/onboarding/submit', { method: 'POST' });
 }
 
+/** Re-submit after fixing the items HR sent back for revision (§3.3). */
+export function resubmitOnboarding(): Promise<OnboardingDashboard> {
+  return apiFetch<OnboardingDashboard>('/me/onboarding/resubmit', { method: 'POST' });
+}
+
 function isAllowedMime(type: string): type is AllowedUploadMimeType {
   return (ALLOWED_UPLOAD_MIME_TYPES as readonly string[]).includes(type);
 }
@@ -86,6 +91,34 @@ export async function uploadDocument(
       sizeBytes: file.size,
     },
   });
+
+  await putWithProgress(presign.uploadUrl, file, presign.headers, onProgress);
+
+  return apiFetch<DocumentDto>(`/me/onboarding/documents/${presign.documentId}/confirm`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Re-upload a document HR sent back for revision (§3.3): a fresh presigned PUT keyed to the SAME
+ * document, replacing the file in place, then confirm (which returns it to UPLOADED for re-review).
+ */
+export async function reviseDocument(
+  documentId: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<DocumentDto> {
+  if (!isAllowedMime(file.type)) {
+    throw new ApiError(400, 'Unsupported file type — use PDF, PNG, or JPEG');
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new ApiError(400, 'File is too large (max 10 MB)');
+  }
+
+  const presign = await apiFetch<PresignedUpload>(
+    `/me/onboarding/documents/${documentId}/revise`,
+    { method: 'POST', body: { fileName: file.name, mimeType: file.type, sizeBytes: file.size } },
+  );
 
   await putWithProgress(presign.uploadUrl, file, presign.headers, onProgress);
 

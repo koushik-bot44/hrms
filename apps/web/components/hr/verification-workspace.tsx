@@ -7,11 +7,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import {
-  RejectReasonSchema,
+  SendBackSchema,
   type EmployeeRecord,
-  type RejectReasonInput,
   type RevealedSensitive,
   type ReviewDecision,
+  type SendBackInput,
 } from '@/lib/contract';
 import { getEmployeeRecord, reviewDocument, reviewForm, revealSensitive } from '@/lib/api/review';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
@@ -31,18 +31,30 @@ type ReviewVars = { kind: ItemKind; id: string; decision: ReviewDecision; reason
 
 const recordKey = (id: string) => ['hr-record', id] as const;
 
-/** Recompute the routing gate locally so the Route button reacts to optimistic updates. */
+/**
+ * Apply a decision locally so the badges + routing gate + derived employee status react optimistically.
+ * The employee is REVISION_REQUESTED while any item is sent back, else SUBMITTED (matches the server).
+ */
 function patchRecord(rec: EmployeeRecord, v: ReviewVars): EmployeeRecord {
+  // Empty string clears it (the field is non-null in the record type; '' reads as "no note").
+  const note = v.decision === 'REVISION_REQUESTED' ? v.reason ?? '' : '';
   let { form1, form2, form3, documents } = rec;
   if (v.kind === 'form') {
-    if (v.id === 'FORM1' && form1) form1 = { ...form1, status: v.decision };
-    if (v.id === 'FORM2' && form2) form2 = { ...form2, status: v.decision };
-    if (v.id === 'FORM3') form3 = form3.map((e) => ({ ...e, status: v.decision }));
+    if (v.id === 'FORM1' && form1) form1 = { ...form1, status: v.decision, revisionNote: note };
+    if (v.id === 'FORM2' && form2) form2 = { ...form2, status: v.decision, revisionNote: note };
+    if (v.id === 'FORM3') form3 = form3.map((e) => ({ ...e, status: v.decision, revisionNote: note }));
   } else {
-    documents = documents.map((d) => (d.id === v.id ? { ...d, status: v.decision } : d));
+    documents = documents.map((d) => (d.id === v.id ? { ...d, status: v.decision, revisionNote: note } : d));
   }
+  const anyRevision =
+    form1?.status === 'REVISION_REQUESTED' ||
+    form2?.status === 'REVISION_REQUESTED' ||
+    form3.some((e) => e.status === 'REVISION_REQUESTED') ||
+    documents.some((d) => d.status === 'REVISION_REQUESTED');
+  const underReview = rec.status === 'SUBMITTED' || rec.status === 'REVISION_REQUESTED';
+  const status = underReview ? (anyRevision ? 'REVISION_REQUESTED' : 'SUBMITTED') : rec.status;
   const reviewComplete =
-    rec.status === 'SUBMITTED' &&
+    status === 'SUBMITTED' &&
     !!form1 &&
     form1.status === 'VERIFIED' &&
     !!form2 &&
@@ -50,14 +62,14 @@ function patchRecord(rec: EmployeeRecord, v: ReviewVars): EmployeeRecord {
     form3.every((e) => e.status === 'VERIFIED') &&
     documents.length > 0 &&
     documents.every((d) => d.status === 'VERIFIED');
-  return { ...rec, form1, form2, form3, documents, reviewComplete };
+  return { ...rec, status, form1, form2, form3, documents, reviewComplete };
 }
 
-/** Verify/reject an employee's forms + documents by INTERNAL id, then route to the Manager (§3.3). */
+/** Verify / send items back by INTERNAL id, then route to the Manager once all are verified (§3.3). */
 export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [rejecting, setRejecting] = React.useState<{ kind: ItemKind; id: string; label: string } | null>(null);
+  const [sendingBack, setSendingBack] = React.useState<{ kind: ItemKind; id: string; label: string } | null>(null);
   const [revealed, setRevealed] = React.useState<RevealedSensitive | null>(null);
 
   const recordQuery = useApiQuery(
@@ -72,8 +84,12 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
         ? reviewForm(employeeId, v.id, { decision: v.decision, reason: v.reason })
         : reviewDocument(employeeId, v.id, { decision: v.decision, reason: v.reason }),
     {
-      successMessage: (_r, v) =>
-        `${v.kind === 'form' ? 'Form' : 'Document'} ${v.decision === 'VERIFIED' ? 'verified' : 'rejected'}`,
+      successMessage: (_r, v) => {
+        const item = v.kind === 'form' ? 'Form' : 'Document';
+        if (v.decision === 'VERIFIED') return `${item} verified`;
+        if (v.decision === 'REVISION_REQUESTED') return `${item} sent back for revision`;
+        return `${item} rejected`;
+      },
       onMutate: async (v) => {
         const key = recordKey(employeeId);
         await queryClient.cancelQueries({ queryKey: key });
@@ -95,7 +111,8 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
   });
 
   const record = recordQuery.data;
-  const editable = record?.status === 'SUBMITTED';
+  // HR can act while the employee is under review — before routing (SUBMITTED or a revision in flight).
+  const editable = record?.status === 'SUBMITTED' || record?.status === 'REVISION_REQUESTED';
 
   if (recordQuery.isLoading) return <RecordSkeleton />;
   if (recordQuery.isError || !record) {
@@ -115,10 +132,15 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
   function verify(kind: ItemKind, id: string) {
     reviewMutation.mutate({ kind, id, decision: 'VERIFIED' });
   }
-  function confirmReject(reason?: string) {
-    if (!rejecting) return;
-    reviewMutation.mutate({ kind: rejecting.kind, id: rejecting.id, decision: 'REJECTED', reason });
-    setRejecting(null);
+  // Send-back opens the item's file (so HR can point to the problem) and asks for a note.
+  function startSendBack(kind: ItemKind, id: string, label: string, viewUrl?: string) {
+    if (viewUrl) window.open(viewUrl, '_blank', 'noopener,noreferrer');
+    setSendingBack({ kind, id, label });
+  }
+  function confirmSendBack(note: string) {
+    if (!sendingBack) return;
+    reviewMutation.mutate({ kind: sendingBack.kind, id: sendingBack.id, decision: 'REVISION_REQUESTED', reason: note });
+    setSendingBack(null);
   }
 
   return (
@@ -134,23 +156,23 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
         revealed={revealed}
         onReveal={() => revealMutation.mutate()}
         onVerify={verify}
-        onReject={(kind, id, label) => setRejecting({ kind, id, label })}
+        onSendBack={startSendBack}
         onRouted={() => {
           void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
           router.push('/hr/employees');
         }}
       />
-      <RejectDialog
-        open={Boolean(rejecting)}
-        label={rejecting?.label ?? ''}
-        onCancel={() => setRejecting(null)}
-        onConfirm={confirmReject}
+      <SendBackDialog
+        open={Boolean(sendingBack)}
+        label={sendingBack?.label ?? ''}
+        onCancel={() => setSendingBack(null)}
+        onConfirm={confirmSendBack}
       />
     </div>
   );
 }
 
-function RejectDialog({
+function SendBackDialog({
   open,
   label,
   onCancel,
@@ -159,48 +181,54 @@ function RejectDialog({
   open: boolean;
   label: string;
   onCancel: () => void;
-  onConfirm: (reason?: string) => void;
+  onConfirm: (note: string) => void;
 }) {
-  const { register, handleSubmit, reset } = useForm<RejectReasonInput>({
-    resolver: zodResolver(RejectReasonSchema),
-    defaultValues: { reason: '' },
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<SendBackInput>({
+    resolver: zodResolver(SendBackSchema),
+    defaultValues: { note: '' },
   });
 
   React.useEffect(() => {
-    if (open) reset({ reason: '' });
+    if (open) reset({ note: '' });
   }, [open, reset]);
 
-  const submit = handleSubmit((v) => onConfirm(v.reason?.trim() ? v.reason.trim() : undefined));
+  const submit = handleSubmit((v) => onConfirm(v.note.trim()));
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? null : onCancel())}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Reject “{label}”</DialogTitle>
+          <DialogTitle>Send “{label}” back for revision</DialogTitle>
           <DialogDescription>
-            Let the employee know what to fix. The reason is recorded in the audit trail.
+            Tell the employee what to fix. Only this item reopens for them; everything else stays
+            locked. The note is shown to the employee and recorded in the audit trail.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4" noValidate>
           <div className="space-y-1.5">
-            <label htmlFor="reject-reason" className="text-sm font-medium">
-              Reason <span className="text-muted-foreground">(optional)</span>
+            <label htmlFor="send-back-note" className="text-sm font-medium">
+              Note <span className="text-destructive">*</span>
             </label>
             <textarea
-              id="reject-reason"
+              id="send-back-note"
               rows={3}
-              placeholder="e.g. The PAN scan is blurry — please re-upload."
+              placeholder="e.g. The PAN scan is blurry — please re-upload a clearer copy."
               className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              {...register('reason')}
+              aria-invalid={Boolean(errors.note)}
+              {...register('note')}
             />
+            {errors.note ? <p className="text-xs text-destructive">{errors.note.message}</p> : null}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
-            <Button type="submit" variant="destructive">
-              Reject
-            </Button>
+            <Button type="submit">Send back for revision</Button>
           </div>
         </form>
       </DialogContent>

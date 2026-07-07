@@ -5,5 +5,7 @@ public enum DocumentStatus {
   PENDING,
   UPLOADED,
   VERIFIED,
+  /** HR asked for a re-upload (§3.3); the employee may replace only this document. */
+  REVISION_REQUESTED,
   REJECTED
 }

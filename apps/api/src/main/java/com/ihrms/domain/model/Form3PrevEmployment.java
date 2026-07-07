@@ -81,6 +81,14 @@ public class Form3PrevEmployment {
   @Column(name = "status", nullable = false)
   private SectionStatus status = SectionStatus.DRAFT;
 
+  /** HR's note when Form 3 is sent back for revision (§3.3); mirrored on every row, null otherwise. */
+  @Column(name = "revisionNote")
+  private String revisionNote;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "revisionRequestedAt")
+  private Instant revisionRequestedAt;
+
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "createdAt", nullable = false, updatable = false)
