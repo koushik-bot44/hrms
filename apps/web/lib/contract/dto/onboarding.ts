@@ -15,7 +15,15 @@ import type { DocumentDto, Form1View, Form2View, SignatureView } from '../respon
 // ---------------------------------------------------------------------------
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+/** Upper bound across any slot (Aadhaar/PAN); see {@link maxDocumentsForType}. */
 export const MAX_DOCUMENTS_PER_SLOT = 2;
+
+/** Aadhaar & PAN accept two files (front + back); every other document is a single file. */
+export function maxDocumentsForType(docType: DocumentType): number {
+  return docType === DocumentType.AADHAAR || docType === DocumentType.PAN
+    ? MAX_DOCUMENTS_PER_SLOT
+    : 1;
+}
 export const ALLOWED_UPLOAD_MIME_TYPES = [
   'application/pdf',
   'image/png',

@@ -201,12 +201,14 @@ public class OnboardingService {
     int existing =
         documents.countByEmployeeIdAndDocTypeAndGroupIndex(
             emp.employeeId(), body.docType(), groupIndex);
-    if (existing >= OnboardingDtos.MAX_DOCUMENTS_PER_SLOT) {
+    int max = OnboardingDtos.maxDocumentsForType(body.docType());
+    if (existing >= max) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT,
           "You can upload at most "
-              + OnboardingDtos.MAX_DOCUMENTS_PER_SLOT
-              + " files for this document. Remove one to add another.");
+              + max
+              + (max == 1 ? " file" : " files")
+              + " for this document. Remove one to add another.");
     }
 
     String storageKey =

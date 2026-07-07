@@ -252,6 +252,22 @@ class OnboardingApiTest {
     assertThat(auditLogs.findByAction("DOCUMENT_DELETED")).hasSize(1);
   }
 
+  @Test
+  void nonIdDocumentsCapAtOneFile() throws Exception {
+    upload("SECONDARY"); // the single allowed file for a non-Aadhaar/PAN slot
+
+    // A second file for the same single-file slot is rejected.
+    mvc.perform(
+            post("/me/onboarding/documents")
+                .header("Authorization", "Bearer " + empToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    json.writeValueAsString(
+                        Map.of("docType", "SECONDARY", "fileName", "again.pdf",
+                            "mimeType", "application/pdf", "sizeBytes", 2048))))
+        .andExpect(status().isConflict());
+  }
+
   // --- helpers --------------------------------------------------------------
 
   private Map<String, Object> form1Body() {

@@ -7,8 +7,8 @@ import { toast } from 'sonner';
 import { ExternalLink, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import {
   DOCUMENT_TYPE_LABELS,
-  MAX_DOCUMENTS_PER_SLOT,
   MAX_UPLOAD_BYTES,
+  maxDocumentsForType,
   type DocumentDto,
   type DocumentType,
 } from '@/lib/contract';
@@ -41,7 +41,8 @@ export function DocumentUploader({
   const mine = documents.filter(
     (d) => d.docType === docType && (d.groupIndex ?? null) === groupIndex,
   );
-  const limitReached = mine.length >= MAX_DOCUMENTS_PER_SLOT;
+  const maxFilesForSlot = maxDocumentsForType(docType); // 2 for Aadhaar/PAN, 1 otherwise
+  const limitReached = mine.length >= maxFilesForSlot;
 
   const onDrop = React.useCallback(
     async (accepted: File[], rejections: FileRejection[]) => {
@@ -101,7 +102,7 @@ export function DocumentUploader({
         {label ?? DOCUMENT_TYPE_LABELS[docType]}
         {required ? <span className="text-destructive">*</span> : null}
         <span className="text-xs font-normal text-muted-foreground">
-          {mine.length}/{MAX_DOCUMENTS_PER_SLOT}
+          {mine.length}/{maxFilesForSlot}
         </span>
       </span>
 
@@ -137,7 +138,9 @@ export function DocumentUploader({
 
       {!disabled && limitReached ? (
         <p className="rounded-md border border-dashed px-3 py-2 text-center text-xs text-muted-foreground">
-          Maximum of {MAX_DOCUMENTS_PER_SLOT} files reached — remove one to upload a different file.
+          {maxFilesForSlot === 1
+            ? 'A file is uploaded — remove it to upload a different one.'
+            : `Maximum of ${maxFilesForSlot} files reached — remove one to upload a different file.`}
         </p>
       ) : null}
 

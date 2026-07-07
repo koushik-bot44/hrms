@@ -26,8 +26,15 @@ public final class OnboardingDtos {
   /** 10 MiB, matching the shared MAX_UPLOAD_BYTES. */
   public static final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024;
 
-  /** Max files an employee may upload per Form 4 slot (e.g. front + back). */
+  /** Upper bound across any slot (Aadhaar/PAN); see {@link #maxDocumentsForType}. */
   public static final int MAX_DOCUMENTS_PER_SLOT = 2;
+
+  /** Aadhaar & PAN accept two files (front + back); every other document is a single file. */
+  public static int maxDocumentsForType(DocumentType docType) {
+    return docType == DocumentType.AADHAAR || docType == DocumentType.PAN
+        ? MAX_DOCUMENTS_PER_SLOT
+        : 1;
+  }
 
   private OnboardingDtos() {}
 
