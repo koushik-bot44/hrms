@@ -21,9 +21,9 @@ const DRILL: Record<string, string> = {
   'hr.inRevision': '/hr/employees?status=REVISION_REQUESTED',
   'hr.approved': '/hr/employees?status=APPROVED',
   'hr.rejected': '/hr/employees?status=REJECTED',
-  'manager.pendingApprovals': '/manager',
-  'manager.approved': '/manager',
-  'manager.rejected': '/manager',
+  'manager.pendingApprovals': '/manager?tab=pending',
+  'manager.approved': '/manager?tab=history&status=APPROVED',
+  'manager.rejected': '/manager?tab=history&status=REJECTED',
   'manager.unreadNotifications': '/manager/notifications',
 };
 

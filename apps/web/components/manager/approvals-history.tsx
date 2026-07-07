@@ -12,7 +12,8 @@ import { ManagerRecordDialog } from '@/components/manager/record-dialog';
 
 const KEY = ['manager-approvals-history'] as const;
 
-export function ApprovalsHistory() {
+/** {@code statusFilter} (from a dashboard drill-down) narrows to APPROVED or REJECTED decisions. */
+export function ApprovalsHistory({ statusFilter = null }: { statusFilter?: string | null }) {
   const query = useApiQuery(KEY, getApprovalHistory);
 
   if (query.isLoading) {
@@ -24,13 +25,20 @@ export function ApprovalsHistory() {
     );
   }
 
-  const items: Approval[] = query.data ?? [];
+  const all: Approval[] = query.data ?? [];
+  const items = statusFilter ? all.filter((a) => a.status === statusFilter) : all;
   if (items.length === 0) {
+    const what =
+      statusFilter === 'APPROVED' ? 'approved' : statusFilter === 'REJECTED' ? 'rejected' : null;
     return (
       <EmptyState
         icon={History}
-        title="No decisions yet"
-        description="Employees you approve or reject will appear here."
+        title={what ? `No ${what} decisions yet` : 'No decisions yet'}
+        description={
+          what
+            ? `Employees you ${what === 'approved' ? 'approve' : 'reject'} will appear here.`
+            : 'Employees you approve or reject will appear here.'
+        }
       />
     );
   }
