@@ -8,16 +8,22 @@ public final class AuditDtos {
 
   private AuditDtos() {}
 
-  /** One audit row. {@code actorLabel} is the resolved actor name/code (cuid actorId stays too). */
+  /**
+   * One audit row. {@code actorLabel} / {@code companyName} / {@code targetLabel} are resolved,
+   * human-readable names (the raw cuid {@code actorId} / {@code companyId} / {@code targetId} stay
+   * too). {@code targetLabel} is the employee's name when the target is an Employee, else null.
+   */
   public record AuditLogView(
       String id,
       String companyId,
+      String companyName,
       String actorType,
       String actorId,
       String actorLabel,
       String action,
       String targetType,
       String targetId,
+      String targetLabel,
       Map<String, Object> metadata,
       String ipAddress,
       String createdAt) {}

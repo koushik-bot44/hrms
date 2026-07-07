@@ -31,24 +31,14 @@ const COLUMNS: ColumnDef<AuditLogEntry>[] = [
     ),
   },
   {
-    accessorKey: 'companyId',
+    accessorKey: 'companyName',
     header: 'Company',
-    cell: ({ row }) =>
-      row.original.companyId ? (
-        <span className="font-mono text-xs text-muted-foreground">…{row.original.companyId.slice(-6)}</span>
-      ) : (
-        <span className="text-muted-foreground">—</span>
-      ),
+    cell: ({ row }) => row.original.companyName ?? '—',
   },
   {
-    accessorKey: 'targetId',
+    accessorKey: 'targetLabel',
     header: 'Employee',
-    cell: ({ row }) =>
-      row.original.targetId ? (
-        <span className="font-mono text-xs text-muted-foreground">…{row.original.targetId.slice(-6)}</span>
-      ) : (
-        <span className="text-muted-foreground">—</span>
-      ),
+    cell: ({ row }) => row.original.targetLabel ?? '—',
   },
   {
     accessorKey: 'createdAt',

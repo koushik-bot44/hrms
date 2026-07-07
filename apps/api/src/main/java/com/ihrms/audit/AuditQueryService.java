@@ -6,9 +6,11 @@ import com.ihrms.auth.AuthorizationService;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.AuditLog;
+import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.AuditLogRepository;
+import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.UserRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -41,16 +43,19 @@ public class AuditQueryService {
   private final AuditLogRepository auditLogs;
   private final UserRepository users;
   private final EmployeeRepository employees;
+  private final CompanyRepository companies;
   private final AuthorizationService authz;
 
   public AuditQueryService(
       AuditLogRepository auditLogs,
       UserRepository users,
       EmployeeRepository employees,
+      CompanyRepository companies,
       AuthorizationService authz) {
     this.auditLogs = auditLogs;
     this.users = users;
     this.employees = employees;
+    this.companies = companies;
     this.authz = authz;
   }
 
@@ -142,6 +147,15 @@ public class AuditQueryService {
   private List<AuditLogView> mapWithActors(List<AuditLog> logs) {
     Set<String> userIds = actorIds(logs, "USER");
     Set<String> employeeIds = actorIds(logs, "EMPLOYEE");
+    // Approval events target an Employee — resolve their names; and resolve every row's company name.
+    Set<String> targetEmployeeIds =
+        logs.stream()
+            .filter(l -> "Employee".equals(l.getTargetType()) && l.getTargetId() != null)
+            .map(AuditLog::getTargetId)
+            .collect(Collectors.toSet());
+    Set<String> companyIds =
+        logs.stream().map(AuditLog::getCompanyId).filter(id -> id != null).collect(Collectors.toSet());
+
     Map<String, String> userNames =
         userIds.isEmpty()
             ? Map.of()
@@ -152,7 +166,20 @@ public class AuditQueryService {
             ? Map.of()
             : employees.findAllById(employeeIds).stream()
                 .collect(Collectors.toMap(Employee::getId, AuditQueryService::employeeLabel));
-    return logs.stream().map(l -> toView(l, userNames, employeeCodes)).toList();
+    Map<String, String> targetNames =
+        targetEmployeeIds.isEmpty()
+            ? Map.of()
+            : employees.findAllById(targetEmployeeIds).stream()
+                .collect(Collectors.toMap(Employee::getId, AuditQueryService::employeeName));
+    Map<String, String> companyNames =
+        companyIds.isEmpty()
+            ? Map.of()
+            : companies.findAllById(companyIds).stream()
+                .collect(Collectors.toMap(Company::getId, Company::getName));
+
+    return logs.stream()
+        .map(l -> toView(l, userNames, employeeCodes, targetNames, companyNames))
+        .toList();
   }
 
   private static Set<String> actorIds(List<AuditLog> logs, String actorType) {
@@ -163,7 +190,11 @@ public class AuditQueryService {
   }
 
   private static AuditLogView toView(
-      AuditLog l, Map<String, String> userNames, Map<String, String> employeeCodes) {
+      AuditLog l,
+      Map<String, String> userNames,
+      Map<String, String> employeeCodes,
+      Map<String, String> targetNames,
+      Map<String, String> companyNames) {
     String label;
     if ("SYSTEM".equals(l.getActorType()) || l.getActorId() == null) {
       label = "System";
@@ -172,15 +203,21 @@ public class AuditQueryService {
     } else {
       label = userNames.getOrDefault(l.getActorId(), l.getActorId());
     }
+    String targetLabel =
+        "Employee".equals(l.getTargetType()) && l.getTargetId() != null
+            ? targetNames.get(l.getTargetId())
+            : null;
     return new AuditLogView(
         l.getId(),
         l.getCompanyId(),
+        l.getCompanyId() == null ? null : companyNames.get(l.getCompanyId()),
         l.getActorType(),
         l.getActorId(),
         label,
         l.getAction(),
         l.getTargetType(),
         l.getTargetId(),
+        targetLabel,
         l.getMetadata(),
         l.getIpAddress(),
         l.getCreatedAt().toString());
@@ -192,6 +229,14 @@ public class AuditQueryService {
       return e.getEmployeeCode();
     }
     return e.getFullName() != null ? e.getFullName() : e.getId();
+  }
+
+  /** Label for a TARGET employee: prefer the human name, then the code, then the id — never null. */
+  private static String employeeName(Employee e) {
+    if (e.getFullName() != null && !e.getFullName().isBlank()) {
+      return e.getFullName();
+    }
+    return e.getEmployeeCode() != null ? e.getEmployeeCode() : e.getId();
   }
 
   private static boolean isPresent(String s) {

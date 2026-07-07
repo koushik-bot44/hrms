@@ -1506,12 +1506,14 @@ export interface components {
         AuditLogView: {
             id?: string;
             companyId?: string;
+            companyName?: string;
             actorType?: string;
             actorId?: string;
             actorLabel?: string;
             action?: string;
             targetType?: string;
             targetId?: string;
+            targetLabel?: string;
             metadata?: {
                 [key: string]: Record<string, never>;
             };

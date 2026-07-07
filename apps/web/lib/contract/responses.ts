@@ -207,11 +207,14 @@ export type Approval = Omit<
 
 export type AuditLogEntry = Omit<
   Required<Schemas['AuditLogView']>,
-  'actorId' | 'targetType' | 'targetId' | 'ipAddress' | 'metadata'
+  'actorId' | 'companyName' | 'targetType' | 'targetId' | 'targetLabel' | 'ipAddress' | 'metadata'
 > & {
   actorId: string | null;
+  companyName: string | null;
   targetType: string | null;
   targetId: string | null;
+  // Resolved employee name when the target is an Employee (e.g. approval events); else null.
+  targetLabel: string | null;
   ipAddress: string | null;
   metadata: Record<string, unknown> | null;
 };
