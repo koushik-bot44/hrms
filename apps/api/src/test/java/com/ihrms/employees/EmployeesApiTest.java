@@ -151,6 +151,14 @@ class EmployeesApiTest {
     // Email search.
     assertThat(queue(get("/employees").param("search", "bob@")).get("content")).hasSize(1);
 
+    // Employee-ID search: once a code is minted (on approval), HR can find by ID substring too.
+    // Null codes (Bob is still INVITED) are LIKE-safe and simply don't match.
+    jdbc.update(
+        "UPDATE \"employees\" SET \"employeeCode\" = 'ACME-EMP-000042' WHERE lower(\"email\") = 'alice@personal.test'");
+    JsonNode byCode = queue(get("/employees").param("search", "emp-000042"));
+    assertThat(byCode.get("content")).hasSize(1);
+    assertThat(byCode.get("content").get(0).get("fullName").asText()).isEqualTo("Alice Wonder");
+
     // Status filter: both are INVITED; APPROVED matches none.
     JsonNode invited = queue(get("/employees").param("status", "INVITED"));
     assertThat(invited.get("content")).hasSize(2);

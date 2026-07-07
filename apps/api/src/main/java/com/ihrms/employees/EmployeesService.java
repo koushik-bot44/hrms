@@ -167,7 +167,7 @@ public class EmployeesService {
 
   /**
    * The HR's onboarding queue: their onboarded employees within their company (§6), with optional
-   * name/email search and status filter, paginated. This is how HR reaches in-flight employees —
+   * name / email / employee-ID search and status filter, paginated. This is how HR reaches in-flight employees —
    * they have no employee ID yet (allocated on approval, §5).
    */
   public EmployeePage queue(
@@ -183,10 +183,12 @@ public class EmployeesService {
           }
           if (search != null && !search.isBlank()) {
             String like = "%" + search.trim().toLowerCase() + "%";
+            // employeeCode is null until approval — a LIKE on null yields no match (never an NPE).
             p.add(
                 cb.or(
                     cb.like(cb.lower(root.get("fullName")), like),
-                    cb.like(cb.lower(root.get("email")), like)));
+                    cb.like(cb.lower(root.get("email")), like),
+                    cb.like(cb.lower(root.get("employeeCode")), like)));
           }
           return cb.and(p.toArray(new Predicate[0]));
         };

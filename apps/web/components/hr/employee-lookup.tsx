@@ -1,83 +1,156 @@
 'use client';
 
 import * as React from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Search, ShieldCheck } from 'lucide-react';
-import { EmployeeLookupSchema, type EmployeeLookupInput } from '@/lib/contract';
-import { lookupEmployeeByCode } from '@/lib/api/review';
+import { ArrowLeft, Search, ShieldCheck } from 'lucide-react';
+import { getEmployeeQueue } from '@/lib/api/employees';
+import { getEmployeeRecord } from '@/lib/api/review';
 import { useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/empty-state';
+import { StatusBadge } from '@/components/status-badge';
 import { RecordView } from '@/components/hr/record-view';
+import { cn } from '@/lib/utils';
 
-/** §3.4 records lookup by employee ID — read-only, resolves approved employees only. */
+/**
+ * §3.4 records lookup — read-only, approved employees only. Search by employee ID or name (the
+ * queue is filtered to APPROVED); pick a match to view the full record.
+ */
 export function EmployeeLookup() {
-  const [code, setCode] = React.useState<string | null>(null);
-  const lookup = useForm<EmployeeLookupInput>({
-    resolver: zodResolver(EmployeeLookupSchema),
-    defaultValues: { employeeCode: '' },
-  });
+  const [search, setSearch] = React.useState('');
+  const [debounced, setDebounced] = React.useState('');
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
-  const query = useApiQuery(
-    code ? ['hr-lookup', code] : ['hr-lookup', 'idle'],
-    (signal) => lookupEmployeeByCode(code as string, signal),
-    { enabled: Boolean(code), retry: false },
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const results = useApiQuery(
+    ['hr-lookup-search', debounced],
+    (signal) => getEmployeeQueue({ search: debounced, status: 'APPROVED', size: 20 }, signal),
+    { enabled: debounced.length > 0, placeholderData: (prev) => prev },
   );
 
-  const onLookup = lookup.handleSubmit((v) => setCode(v.employeeCode));
-  const record = query.data;
+  const record = useApiQuery(
+    selectedId ? ['hr-lookup-record', selectedId] : ['hr-lookup-record', 'idle'],
+    (signal) => getEmployeeRecord(selectedId as string, signal),
+    { enabled: Boolean(selectedId), retry: false },
+  );
+
+  // Detail view: a match was picked — show the full record (read-only).
+  if (selectedId) {
+    return (
+      <div className="space-y-6">
+        <Button type="button" variant="outline" size="sm" onClick={() => setSelectedId(null)}>
+          <ArrowLeft />
+          Back to results
+        </Button>
+
+        {record.isLoading ? <Skeleton className="h-40 w-full" /> : null}
+
+        {record.isError ? (
+          <EmptyState
+            icon={ShieldCheck}
+            title="Couldn't load the record"
+            description={
+              record.error?.status === 404
+                ? 'That employee is no longer in your workspace.'
+                : record.error?.message ?? 'Please try again.'
+            }
+          />
+        ) : null}
+
+        {record.data ? <RecordView record={record.data} editable={false} /> : null}
+      </div>
+    );
+  }
+
+  const data = results.data;
+  const dim = results.isFetching && results.isPlaceholderData;
 
   return (
     <div className="space-y-6">
-      <form onSubmit={onLookup} className="flex flex-col gap-2 sm:flex-row sm:items-start" noValidate>
-        <div className="flex-1 space-y-1.5">
-          <label htmlFor="lookup" className="sr-only">
-            Employee ID
-          </label>
+      <div className="space-y-1.5">
+        <label htmlFor="lookup" className="sr-only">
+          Search by employee ID or name
+        </label>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             id="lookup"
-            placeholder="Enter an approved employee's ID, e.g. ACME-EMP-000123"
-            className="font-mono"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by employee ID or name, e.g. ACME-EMP-000123 or Priya"
+            className="pl-9"
             autoComplete="off"
-            aria-invalid={Boolean(lookup.formState.errors.employeeCode)}
-            {...lookup.register('employeeCode')}
           />
-          {lookup.formState.errors.employeeCode ? (
-            <p className="text-xs text-destructive">{lookup.formState.errors.employeeCode.message}</p>
-          ) : null}
         </div>
-        <Button type="submit">
-          <Search />
-          Look up
-        </Button>
-      </form>
+      </div>
 
-      {!code ? (
+      {debounced.length === 0 ? (
         <EmptyState
           icon={ShieldCheck}
           title="Look up an approved employee"
-          description="Enter an employee ID to view their full record (read-only). IDs are assigned on approval."
+          description="Search by employee ID or name to view their full record (read-only). IDs are assigned on approval."
         />
-      ) : null}
-
-      {code && query.isLoading ? <Skeleton className="h-40 w-full" /> : null}
-
-      {code && query.isError ? (
+      ) : results.isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      ) : results.isError ? (
+        <EmptyState
+          icon={ShieldCheck}
+          title="Couldn't search employees"
+          description={results.error?.message ?? 'Please try again.'}
+        />
+      ) : !data || data.content.length === 0 ? (
         <EmptyState
           icon={ShieldCheck}
           title="No matching employee"
-          description={
-            query.error?.status === 404
-              ? 'No approved employee with that ID in your workspace.'
-              : query.error?.message ?? 'Could not load the record.'
-          }
+          description="No approved employee in your workspace matches that ID or name."
         />
-      ) : null}
-
-      {record ? <RecordView record={record} editable={false} /> : null}
+      ) : (
+        <div className={cn('overflow-x-auto rounded-md border transition-opacity', dim && 'opacity-60')}>
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-medium">Name</th>
+                <th className="px-3 py-2 font-medium">Employee ID</th>
+                <th className="px-3 py-2 font-medium">Designation</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {data.content.map((e) => (
+                <tr key={e.id} className="border-t hover:bg-accent/40">
+                  <td className="px-3 py-2 font-medium">{e.fullName ?? '—'}</td>
+                  <td className="px-3 py-2 font-mono text-muted-foreground">{e.employeeCode ?? '—'}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{e.designation ?? '—'}</td>
+                  <td className="px-3 py-2">
+                    <StatusBadge status={e.status} />
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0"
+                      onClick={() => setSelectedId(e.id)}
+                    >
+                      View record
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
