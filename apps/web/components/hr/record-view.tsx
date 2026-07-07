@@ -152,7 +152,7 @@ export function RecordView({
         ) : (
           <div className="space-y-2">
             {record.documents.map((d) => (
-              <div key={d.id} className="rounded-md border border-border p-3">
+              <div key={d.id} className="space-y-2 rounded-md border border-border p-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <div className="min-w-0 flex-1">
