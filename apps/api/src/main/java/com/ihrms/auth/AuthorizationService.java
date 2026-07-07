@@ -48,7 +48,11 @@ public class AuthorizationService {
       return e.companyId();
     }
     IhrmsPrincipal.User u = (IhrmsPrincipal.User) principal;
-    return u.role() == com.ihrms.domain.enums.UserRole.SUPER_ADMIN ? null : u.companyId();
+    // SUPER_ADMIN and ACCOUNTANT are cross-company (null companyId); everyone else is company-locked.
+    return u.role() == com.ihrms.domain.enums.UserRole.SUPER_ADMIN
+            || u.role() == com.ihrms.domain.enums.UserRole.ACCOUNTANT
+        ? null
+        : u.companyId();
   }
 
   /** True if {@code companyId} is a DELETED (archived) company. Null (e.g. SUPER_ADMIN) is never. */
@@ -105,6 +109,9 @@ public class AuthorizationService {
     IhrmsPrincipal.User u = (IhrmsPrincipal.User) principal;
     return switch (u.role()) {
       case SUPER_ADMIN -> true;
+      // Read-only, cross-company, APPROVED-only: an employeeCode is minted only on approval (§5), so a
+      // non-null code == approved. AccountantService also re-checks status explicitly (defence in depth).
+      case ACCOUNTANT -> employee.employeeCode() != null;
       case COMPANY_ADMIN -> employee.companyId().equals(u.companyId());
       case HR ->
           employee.companyId().equals(u.companyId())

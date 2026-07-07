@@ -17,6 +17,11 @@ public interface UserRepository extends JpaRepository<User, String> {
 
   boolean existsByCompanyIdAndRole(String companyId, UserRole role);
 
+  /** Portal-wide role checks (the ACCOUNTANT singleton, which belongs to no company). */
+  boolean existsByRole(UserRole role);
+
+  Optional<User> findFirstByRoleOrderByCreatedAtAsc(UserRole role);
+
   /** The company's admin (first by creation), if provisioned. */
   Optional<User> findFirstByCompanyIdAndRoleOrderByCreatedAtAsc(String companyId, UserRole role);
 

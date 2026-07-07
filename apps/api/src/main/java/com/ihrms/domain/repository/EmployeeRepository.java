@@ -25,6 +25,9 @@ public interface EmployeeRepository
   // --- Dashboard counts (scoped exactly like the list views; COUNT, not fetch-all) ---
   long countByCompanyIdAndStatus(String companyId, EmployeeStatus status);
 
+  /** Portal-wide count by status — the ACCOUNTANT's cross-company (READ-only) breadth. */
+  long countByStatus(EmployeeStatus status);
+
   long countByOnboardingHrId(String onboardingHrId);
 
   long countByOnboardingHrIdAndStatus(String onboardingHrId, EmployeeStatus status);
@@ -45,4 +48,7 @@ public interface EmployeeRepository
   List<Employee> findTop10ByOnboardingHrIdOrderByUpdatedAtDesc(String onboardingHrId);
 
   List<Employee> findTop10ByOnboardingHrIdInOrderByUpdatedAtDesc(Collection<String> onboardingHrIds);
+
+  /** Recent employees of a given status across ALL companies (ACCOUNTANT activity feed). */
+  List<Employee> findTop10ByStatusOrderByUpdatedAtDesc(EmployeeStatus status);
 }

@@ -8,6 +8,8 @@ export function homePathForSession(session: Session): string {
   switch (session.role) {
     case UserRole.SUPER_ADMIN:
       return '/super-admin';
+    case UserRole.ACCOUNTANT:
+      return '/accountant';
     case UserRole.COMPANY_ADMIN:
       return '/company-admin';
     case UserRole.HR:

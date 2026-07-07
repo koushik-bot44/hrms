@@ -7,7 +7,6 @@ import com.ihrms.dashboard.dto.DashboardDtos.EmployeeProgress;
 import com.ihrms.dashboard.dto.DashboardDtos.StatCard;
 import com.ihrms.domain.enums.ApprovalStatus;
 import com.ihrms.domain.enums.EmployeeStatus;
-import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Team;
@@ -84,10 +83,25 @@ public class DashboardService {
     IhrmsPrincipal.User u = (IhrmsPrincipal.User) principal;
     return switch (u.role()) {
       case SUPER_ADMIN -> superAdminSummary();
+      case ACCOUNTANT -> accountantSummary();
       case COMPANY_ADMIN -> companyAdminSummary(u.companyId());
       case HR -> hrSummary(u.userId());
       case MANAGER -> managerSummary(u.userId());
     };
+  }
+
+  // --- Accountant (cross-company, read-only, approved employees) -------------
+
+  private DashboardSummary accountantSummary() {
+    List<StatCard> stats =
+        List.of(
+            new StatCard("accountant.approvedEmployees", "Approved employees",
+                employees.countByStatus(EmployeeStatus.APPROVED)),
+            new StatCard("accountant.companies", "Companies", companies.countByStatusNot("DELETED")));
+    // Activity is the recently-approved employees across every company (flagged with their company).
+    return new DashboardSummary(
+        "ACCOUNTANT", stats,
+        activity(employees.findTop10ByStatusOrderByUpdatedAtDesc(EmployeeStatus.APPROVED), true), null);
   }
 
   // --- Super Admin (org-wide) -----------------------------------------------

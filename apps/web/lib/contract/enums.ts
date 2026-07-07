@@ -8,6 +8,7 @@
 
 export const UserRole = {
   SUPER_ADMIN: 'SUPER_ADMIN',
+  ACCOUNTANT: 'ACCOUNTANT',
   COMPANY_ADMIN: 'COMPANY_ADMIN',
   HR: 'HR',
   MANAGER: 'MANAGER',

@@ -1,0 +1,336 @@
+package com.ihrms.accountant;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.auth.TokenService;
+import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.domain.enums.SectionStatus;
+import com.ihrms.domain.enums.UserRole;
+import com.ihrms.domain.model.AuditLog;
+import com.ihrms.domain.model.Company;
+import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.Form1Personal;
+import com.ihrms.domain.model.Form2Info;
+import com.ihrms.domain.model.User;
+import com.ihrms.domain.repository.AuditLogRepository;
+import com.ihrms.domain.repository.CompanyRepository;
+import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.repository.Form1PersonalRepository;
+import com.ihrms.domain.repository.Form2InfoRepository;
+import com.ihrms.domain.repository.UserRepository;
+import com.ihrms.storage.StorageService;
+import java.time.LocalDate;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+/**
+ * The ACCOUNTANT role (ARCHITECTURE.md §2/§6): a SUPER_ADMIN-provisioned SINGLETON, cross-company,
+ * READ-ONLY viewer of APPROVED employees. Storage is mocked so it runs in {@code ./mvnw package} with
+ * only a DB. Covers: singleton provisioning; approved-only across companies (in-flight hidden); masked
+ * record + audited reveal (HR's mechanism); approval-only audit; and 403 on every write.
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@EnabledIfEnvironmentVariable(named = "IHRMS_TEST_DB", matches = ".+")
+class AccountantApiTest {
+
+  @Autowired MockMvc mvc;
+  @Autowired ObjectMapper json;
+  @Autowired TokenService tokens;
+  @Autowired CompanyRepository companies;
+  @Autowired UserRepository users;
+  @Autowired EmployeeRepository employees;
+  @Autowired Form1PersonalRepository form1s;
+  @Autowired Form2InfoRepository form2s;
+  @Autowired AuditLogRepository auditLogs;
+  @Autowired JdbcTemplate jdbc;
+
+  @MockBean StorageService storage;
+
+  private String superToken;
+  private String accountantToken;
+  private String companyA;
+  private String companyB;
+  private Employee approvedA; // has offeredCtc + panNumber (sensitive)
+  private Employee inflightA; // SUBMITTED — must be invisible to the accountant
+
+  @BeforeEach
+  void setup() {
+    jdbc.execute(
+        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\","
+            + "\"form1_personal\",\"form2_info\",\"form3_prev_employment\",\"documents\",\"signatures\",\"generated_documents\",\"approval_requests\",\"notifications\",\"audit_logs\","
+            + "\"employee_code_sequences\" RESTART IDENTITY CASCADE");
+    companyA = company("AAA");
+    companyB = company("BBB");
+    User hrA = user(companyA, UserRole.HR, "hra@a.test");
+    User hrB = user(companyB, UserRole.HR, "hrb@b.test");
+
+    approvedA = approved(companyA, hrA.getId(), "AAA-EMP-000001", "Anita Approved", "anita@p.test");
+    approved(companyB, hrB.getId(), "BBB-EMP-000001", "Bob Approved", "bob@p.test");
+    inflightA = submitted(companyA, hrA.getId(), "Ivan Inflight", "ivan@p.test");
+
+    // Approval + a non-approval audit event in each company (the latter must be excluded).
+    auditRow(companyA, "APPROVAL_APPROVED", approvedA.getId());
+    auditRow(companyB, "APPROVAL_ROUTED", null);
+    auditRow(companyA, "FORM_REVIEWED", approvedA.getId()); // not an approval event
+
+    User sa = user(null, UserRole.SUPER_ADMIN, "super@x.test");
+    superToken = token(sa, UserRole.SUPER_ADMIN);
+
+    when(storage.presignedGetUrl(any(), anyInt())).thenReturn("http://storage.local/get?sig=test");
+  }
+
+  // --- Provisioning (SUPER_ADMIN, singleton) --------------------------------
+
+  @Test
+  void superAdminProvisionsTheSingleAccountantAndASecondIsRejected() throws Exception {
+    assertThat(provisioningStatus(superToken).get("exists").asBoolean()).isFalse();
+
+    MvcResult created =
+        mvc.perform(
+                post("/provisioning/accountant")
+                    .header("Authorization", "Bearer " + superToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json.writeValueAsString(
+                        Map.of("name", "Casey Counts", "email", "Casey@Books.test", "password", "Ledger@2026"))))
+            .andExpect(status().isCreated())
+            .andReturn();
+    JsonNode body = json.readTree(created.getResponse().getContentAsString());
+    assertThat(body.get("accountant").get("email").asText()).isEqualTo("casey@books.test"); // lower-cased
+    assertThat(body.get("devPassword").asText()).isEqualTo("Ledger@2026"); // echoed in dev
+    assertThat(users.existsByRole(UserRole.ACCOUNTANT)).isTrue();
+    assertThat(provisioningStatus(superToken).get("exists").asBoolean()).isTrue();
+
+    // Singleton: a second create is rejected.
+    mvc.perform(
+            post("/provisioning/accountant")
+                .header("Authorization", "Bearer " + superToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(
+                    Map.of("name", "Second One", "email", "second@books.test", "password", "Another@2026"))))
+        .andExpect(status().isConflict());
+    assertThat(auditLogs.findByAction("ACCOUNTANT_PROVISIONED")).hasSize(1);
+
+    // The provisioned Accountant signs in with email + password (no OTP) and is routed by role.
+    MvcResult login =
+        mvc.perform(
+                post("/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json.writeValueAsString(
+                        Map.of("email", "casey@books.test", "password", "Ledger@2026"))))
+            .andExpect(status().isCreated())
+            .andReturn();
+    assertThat(json.readTree(login.getResponse().getContentAsString()).get("session").get("role").asText())
+        .isEqualTo("ACCOUNTANT");
+  }
+
+  @Test
+  void onlySuperAdminMayProvisionOrCheckTheAccountant() throws Exception {
+    String hrToken = token(user(companyA, UserRole.HR, "hr2@a.test"), UserRole.HR);
+    mvc.perform(get("/provisioning/accountant").header("Authorization", "Bearer " + hrToken))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            post("/provisioning/accountant")
+                .header("Authorization", "Bearer " + hrToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(
+                    Map.of("name", "X Y", "email", "x@books.test", "password", "Passw0rd!"))))
+        .andExpect(status().isForbidden());
+  }
+
+  // --- Reads: approved-only across companies --------------------------------
+
+  @Test
+  void accountantSeesApprovedEmployeesAcrossAllCompaniesButNotInFlight() throws Exception {
+    accountantToken = mintAccountant();
+
+    JsonNode all = list(null);
+    assertThat(all.get("totalElements").asInt()).isEqualTo(2); // both companies' approved
+    assertThat(all.get("content")).allSatisfy(r -> assertThat(r.get("employeeCode").asText()).contains("-EMP-"));
+    // The company name is resolved for the DataTable.
+    assertThat(all.get("content")).anySatisfy(r -> assertThat(r.get("companyName").asText()).isEqualTo("AAA Inc"));
+
+    // Company filter narrows to one company.
+    assertThat(list("?companyId=" + companyA).get("totalElements").asInt()).isEqualTo(1);
+
+    // The in-flight (SUBMITTED) employee is NOT visible — record read is 404.
+    mvc.perform(get("/accountant/employees/" + inflightA.getId()).header("Authorization", "Bearer " + accountantToken))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void accountantRecordIsMaskedAndRevealIsAudited() throws Exception {
+    accountantToken = mintAccountant();
+
+    MvcResult res =
+        mvc.perform(get("/accountant/employees/" + approvedA.getId()).header("Authorization", "Bearer " + accountantToken))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode record = json.readTree(res.getResponse().getContentAsString());
+    assertThat(record.get("form1").get("offeredCtc").asText()).isEqualTo("********"); // masked (§6)
+    assertThat(record.get("form2").get("panNumber").asText()).isEqualTo("********");
+    assertThat(auditLogs.findByAction("EMPLOYEE_RECORD_VIEWED"))
+        .singleElement()
+        .satisfies(a -> assertThat(a.getCompanyId()).isEqualTo(companyA)); // logged under the company
+
+    MvcResult revealed =
+        mvc.perform(post("/accountant/employees/" + approvedA.getId() + "/reveal").header("Authorization", "Bearer " + accountantToken))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode plain = json.readTree(revealed.getResponse().getContentAsString());
+    assertThat(plain.get("form1").get("offeredCtc").asText()).isEqualTo("2500000");
+    assertThat(plain.get("form2").get("panNumber").asText()).isEqualTo("ABCDE1234F");
+    assertThat(auditLogs.findByAction("SENSITIVE_FIELD_REVEALED")).hasSize(1);
+  }
+
+  @Test
+  void approvalAuditIsCrossCompanyAndApprovalOnly() throws Exception {
+    accountantToken = mintAccountant();
+    MvcResult res =
+        mvc.perform(get("/accountant/audit").header("Authorization", "Bearer " + accountantToken))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode page = json.readTree(res.getResponse().getContentAsString());
+    // Two approval events (company A APPROVAL_APPROVED + company B APPROVAL_ROUTED); FORM_REVIEWED excluded.
+    assertThat(page.get("totalElements").asInt()).isEqualTo(2);
+    assertThat(page.get("content")).allSatisfy(r -> assertThat(r.get("action").asText()).startsWith("APPROVAL_"));
+    assertThat(page.get("content")).anySatisfy(r -> assertThat(r.get("companyId").asText()).isEqualTo(companyB));
+  }
+
+  // --- No writes ------------------------------------------------------------
+
+  @Test
+  void accountantCannotPerformAnyWrite() throws Exception {
+    accountantToken = mintAccountant();
+    // Onboard (HR), verify a form (HR), create a company (SUPER_ADMIN), provision an accountant (SUPER_ADMIN).
+    forbidden(post("/employees").content("{}"));
+    forbidden(patch("/employees/" + approvedA.getId() + "/forms/FORM1").content("{\"decision\":\"VERIFIED\"}"));
+    forbidden(post("/companies").content("{}"));
+    forbidden(post("/provisioning/accountant").content("{}"));
+  }
+
+  // --- helpers --------------------------------------------------------------
+
+  private void forbidden(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder req)
+      throws Exception {
+    mvc.perform(
+            req.header("Authorization", "Bearer " + accountantToken).contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isForbidden());
+  }
+
+  private JsonNode provisioningStatus(String token) throws Exception {
+    return json.readTree(
+        mvc.perform(get("/provisioning/accountant").header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private JsonNode list(String query) throws Exception {
+    return json.readTree(
+        mvc.perform(get("/accountant/employees" + (query == null ? "" : query))
+                .header("Authorization", "Bearer " + accountantToken))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private String mintAccountant() {
+    User acc = user(null, UserRole.ACCOUNTANT, "casey@books.test");
+    return token(acc, UserRole.ACCOUNTANT);
+  }
+
+  private String company(String code) {
+    Company c = new Company();
+    c.setName(code + " Inc");
+    c.setCode(code);
+    return companies.save(c).getId();
+  }
+
+  private User user(String companyId, UserRole role, String email) {
+    User u = new User();
+    u.setEmail(email);
+    u.setName(email);
+    u.setRole(role);
+    u.setCompanyId(companyId);
+    return users.save(u);
+  }
+
+  private Employee approved(String companyId, String hrId, String code, String name, String email) {
+    Employee e = new Employee();
+    e.setEmployeeCode(code);
+    e.setFullName(name);
+    e.setEmail(email);
+    e.setDesignation("Software Engineer");
+    e.setDateOfJoining(LocalDate.parse("2026-07-01"));
+    e.setCompanyId(companyId);
+    e.setOnboardingHrId(hrId);
+    e.setStatus(EmployeeStatus.APPROVED);
+    employees.save(e);
+
+    Form1Personal f1 = new Form1Personal();
+    f1.setEmployeeId(e.getId());
+    f1.setData(Map.of("name", name));
+    f1.setOfferedCtc("2500000"); // sensitive
+    f1.setStatus(SectionStatus.VERIFIED);
+    form1s.save(f1);
+
+    Form2Info f2 = new Form2Info();
+    f2.setEmployeeId(e.getId());
+    f2.setData(Map.of("fullName", name));
+    f2.setPanNumber("ABCDE1234F"); // sensitive
+    f2.setStatus(SectionStatus.VERIFIED);
+    form2s.save(f2);
+    return e;
+  }
+
+  private Employee submitted(String companyId, String hrId, String name, String email) {
+    Employee e = new Employee();
+    e.setFullName(name);
+    e.setEmail(email);
+    e.setDesignation("Analyst");
+    e.setCompanyId(companyId);
+    e.setOnboardingHrId(hrId);
+    e.setStatus(EmployeeStatus.SUBMITTED); // no code — in-flight
+    return employees.save(e);
+  }
+
+  private void auditRow(String companyId, String action, String targetId) {
+    AuditLog l = new AuditLog();
+    l.setCompanyId(companyId);
+    l.setActorType("USER");
+    l.setActorId("someone");
+    l.setAction(action);
+    l.setTargetType("Employee");
+    l.setTargetId(targetId);
+    l.setMetadata(Map.of());
+    auditLogs.save(l);
+  }
+
+  private String token(User u, UserRole role) {
+    return tokens.issueAccess(
+        new IhrmsPrincipal.User(u.getId(), u.getEmail(), u.getName(), role, u.getCompanyId(), null));
+  }
+}

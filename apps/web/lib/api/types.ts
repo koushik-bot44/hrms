@@ -164,6 +164,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/provisioning/accountant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["status"];
+        put?: never;
+        post: operations["provision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding/submit": {
         parameters: {
             query?: never;
@@ -532,6 +548,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accountant/employees/{id}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reveal_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/teams/{id}": {
         parameters: {
             query?: never;
@@ -852,6 +884,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accountant/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["employees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accountant/employees/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["record_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accountant/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["audit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding/documents/{id}": {
         parameters: {
             query?: never;
@@ -913,7 +993,7 @@ export interface components {
             name?: string;
             email?: string;
             /** @enum {string} */
-            role?: "SUPER_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER";
+            role?: "SUPER_ADMIN" | "ACCOUNTANT" | "COMPANY_ADMIN" | "HR" | "MANAGER";
             status?: string;
         };
         SignatureRequest: {
@@ -1071,6 +1151,22 @@ export interface components {
         };
         CreateTeamRequest: {
             name: string;
+        };
+        ProvisionAccountantRequest: {
+            name: string;
+            email: string;
+            password: string;
+        };
+        AccountantView: {
+            id?: string;
+            email?: string;
+            name?: string;
+            status?: string;
+            createdAt?: string;
+        };
+        ProvisionAccountantResult: {
+            accountant?: components["schemas"]["AccountantView"];
+            devPassword?: string;
         };
         DocumentView: {
             id?: string;
@@ -1338,6 +1434,10 @@ export interface components {
             memberCount?: number;
             createdAt?: string;
         };
+        AccountantStatus: {
+            exists?: boolean;
+            accountant?: components["schemas"]["AccountantView"];
+        };
         PresignedView: {
             url?: string;
             /** Format: int32 */
@@ -1429,6 +1529,28 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
             companyDeleted?: boolean;
+        };
+        ApprovedEmployeePage: {
+            content?: components["schemas"]["ApprovedEmployeeRow"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        ApprovedEmployeeRow: {
+            id?: string;
+            employeeCode?: string;
+            fullName?: string;
+            email?: string;
+            companyId?: string;
+            companyName?: string;
+            designation?: string;
+            dateOfJoining?: string;
+            approvedAt?: string;
         };
         PurgeCompanyResult: {
             id?: string;
@@ -1732,6 +1854,50 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["TeamDetailView"];
+                };
+            };
+        };
+    };
+    status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountantStatus"];
+                };
+            };
+        };
+    };
+    provision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProvisionAccountantRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProvisionAccountantResult"];
                 };
             };
         };
@@ -2340,6 +2506,28 @@ export interface operations {
             };
         };
     };
+    reveal_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RevealedSensitive"];
+                };
+            };
+        };
+    };
     get: {
         parameters: {
             query?: never;
@@ -2915,6 +3103,77 @@ export interface operations {
                 companyId?: string;
                 action?: string;
                 actorType?: string;
+                from?: string;
+                to?: string;
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuditPage"];
+                };
+            };
+        };
+    };
+    employees: {
+        parameters: {
+            query: {
+                search?: string;
+                companyId?: string;
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApprovedEmployeePage"];
+                };
+            };
+        };
+    };
+    record_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
+    audit: {
+        parameters: {
+            query: {
+                companyId?: string;
                 from?: string;
                 to?: string;
                 pageable: components["schemas"]["Pageable"];

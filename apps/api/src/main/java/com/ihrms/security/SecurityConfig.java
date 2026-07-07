@@ -70,6 +70,11 @@ public class SecurityConfig {
                     .hasRole("MANAGER")
                     .requestMatchers("/audit/**")
                     .hasAnyRole("SUPER_ADMIN", "COMPANY_ADMIN")
+                    // The Accountant's read-only, cross-company area; provisioning is SUPER_ADMIN-only.
+                    .requestMatchers("/accountant/**")
+                    .hasRole("ACCOUNTANT")
+                    .requestMatchers("/provisioning/**")
+                    .hasRole("SUPER_ADMIN")
                     .anyRequest()
                     .authenticated())
         // Hardened response headers (§6): nosniff, frame DENY, HSTS (prod/HTTPS), no-referrer.

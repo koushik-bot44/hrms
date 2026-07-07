@@ -239,3 +239,26 @@ export type DashboardSummary = Omit<
   recentActivity: ActivityItem[];
   employeeProgress: EmployeeProgress | null;
 };
+
+// --- Accountant (cross-company, read-only, approved employees; §2/§6) ------
+
+export type AccountantView = Required<Schemas['AccountantView']>;
+
+/** {@code accountant} is present only once the singleton exists. */
+export type AccountantStatus = Omit<Required<Schemas['AccountantStatus']>, 'accountant'> & {
+  accountant: AccountantView | null;
+};
+
+export type ProvisionAccountantResult = Omit<
+  Required<Schemas['ProvisionAccountantResult']>,
+  'devPassword'
+> & {
+  devPassword: string | null;
+};
+
+/** One row of the cross-company approved-employees table. */
+export type ApprovedEmployeeRow = Schemas['ApprovedEmployeeRow'];
+
+export type ApprovedEmployeePage = Omit<Required<Schemas['ApprovedEmployeePage']>, 'content'> & {
+  content: ApprovedEmployeeRow[];
+};

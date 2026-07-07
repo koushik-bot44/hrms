@@ -12,6 +12,7 @@ import { DataTable } from '@/components/data-table';
 import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/loading-skeleton';
 import { CreateCompanyDialog } from '@/components/super-admin/create-company-dialog';
+import { CreateAccountantDialog } from '@/components/super-admin/create-accountant-dialog';
 import { SuperAdminOnboardDialog } from '@/components/super-admin/super-admin-onboard-dialog';
 import { CompanyStatusBadge } from '@/components/super-admin/company-status-badge';
 import { DeleteCompanyDialog } from '@/components/super-admin/delete-company-dialog';
@@ -142,6 +143,7 @@ export default function CompaniesPage() {
         description="Every company in the portal. Provision each company's admin, or archive one."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <CreateAccountantDialog />
             <SuperAdminOnboardDialog />
             <CreateCompanyDialog />
           </div>

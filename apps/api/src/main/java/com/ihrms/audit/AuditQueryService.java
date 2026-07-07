@@ -34,6 +34,10 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class AuditQueryService {
 
+  /** The approval-lifecycle audit actions the Accountant may read across companies (§7). */
+  private static final Set<String> APPROVAL_ACTIONS =
+      Set.of("APPROVAL_ROUTED", "APPROVAL_APPROVED", "APPROVAL_REJECTED");
+
   private final AuditLogRepository auditLogs;
   private final UserRepository users;
   private final EmployeeRepository employees;
@@ -87,6 +91,37 @@ public class AuditQueryService {
         page.getTotalElements(),
         page.getTotalPages(),
         authz.isCompanyDeleted(companyId)); // still viewable, flagged as archived (§7)
+  }
+
+  /**
+   * The Accountant's cross-company, APPROVAL-only audit view (§7): approval-lifecycle events across all
+   * companies (optionally narrowed to one), never the full trail. Access is gated at the controller
+   * (ACCOUNTANT-only); {@code companyDeleted} is not meaningful for an all-company view, so it is false.
+   */
+  public AuditPage approvalTrail(String companyIdParam, Instant from, Instant to, Pageable pageable) {
+    Specification<AuditLog> spec =
+        (root, q, cb) -> {
+          List<Predicate> p = new ArrayList<>();
+          p.add(root.get("action").in(APPROVAL_ACTIONS)); // approval events only (§7)
+          if (isPresent(companyIdParam)) {
+            p.add(cb.equal(root.get("companyId"), companyIdParam));
+          }
+          if (from != null) {
+            p.add(cb.greaterThanOrEqualTo(root.get("createdAt"), from));
+          }
+          if (to != null) {
+            p.add(cb.lessThanOrEqualTo(root.get("createdAt"), to));
+          }
+          return cb.and(p.toArray(new Predicate[0]));
+        };
+    Page<AuditLog> page = auditLogs.findAll(spec, pageable);
+    return new AuditPage(
+        mapWithActors(page.getContent()),
+        page.getNumber(),
+        page.getSize(),
+        page.getTotalElements(),
+        page.getTotalPages(),
+        false);
   }
 
   /** SUPER_ADMIN picks any company (required); COMPANY_ADMIN is forced to their own (cross -> 403). */
