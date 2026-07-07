@@ -154,7 +154,12 @@ public class DashboardService {
             .filter(Objects::nonNull)
             .distinct()
             .toList();
-    long teamEmployees = hrIds.isEmpty() ? 0 : employees.countByOnboardingHrIdIn(hrIds);
+    // The onboarding queue = the team's employees still going through onboarding (approved ones have
+    // left the pipeline, so they're excluded).
+    long onboardingQueue =
+        hrIds.isEmpty()
+            ? 0
+            : employees.countByOnboardingHrIdInAndStatusNot(hrIds, EmployeeStatus.APPROVED);
     List<Employee> recent =
         hrIds.isEmpty() ? List.of() : employees.findTop10ByOnboardingHrIdInOrderByUpdatedAtDesc(hrIds);
 
@@ -166,7 +171,7 @@ public class DashboardService {
                 approvals.countByManagerUserIdAndStatus(managerId, ApprovalStatus.APPROVED)),
             new StatCard("manager.rejected", "Rejected",
                 approvals.countByManagerUserIdAndStatus(managerId, ApprovalStatus.REJECTED)),
-            new StatCard("manager.teamEmployees", "Team employees", teamEmployees),
+            new StatCard("manager.onboardingQueue", "Onboarding queue", onboardingQueue),
             new StatCard("manager.unreadNotifications", "Unread notifications",
                 notifications.countByRecipientUserIdAndReadFalse(managerId)));
     return new DashboardSummary("MANAGER", stats, activity(recent, false), null);

@@ -151,7 +151,8 @@ class DashboardApiTest {
   void managerSeesOnlyTheirTeamScope() throws Exception {
     JsonNode m = summary(tokenFor(mgr1));
     assertThat(stat(m, "manager.pendingApprovals")).isEqualTo(1);
-    assertThat(stat(m, "manager.teamEmployees")).isEqualTo(6); // hr1's employees
+    // hr1's 6 employees minus the 1 APPROVED (left the onboarding pipeline).
+    assertThat(stat(m, "manager.onboardingQueue")).isEqualTo(5);
     assertThat(stat(m, "manager.approved")).isEqualTo(0);
   }
 

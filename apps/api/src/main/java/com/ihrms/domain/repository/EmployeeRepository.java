@@ -35,6 +35,8 @@ public interface EmployeeRepository
 
   long countByOnboardingHrIdInAndStatus(Collection<String> onboardingHrIds, EmployeeStatus status);
 
+  long countByOnboardingHrIdInAndStatusNot(Collection<String> onboardingHrIds, EmployeeStatus status);
+
   // --- Dashboard activity (scoped recent records by updatedAt) ---
   List<Employee> findTop10ByOrderByUpdatedAtDesc();
 
