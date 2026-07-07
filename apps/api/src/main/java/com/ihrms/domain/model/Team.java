@@ -15,8 +15,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 /**
- * A team within a company (table {@code teams}). The single nullable hrUserId/managerUserId
- * columns structurally enforce "exactly one HR + one Manager", assignable after creation.
+ * A team within a company (table {@code teams}). The single nullable hrUserId/managerUserId/
+ * accountantUserId columns structurally enforce "exactly one HR + one Manager + one Accountant",
+ * each assignable after creation.
  */
 @Entity
 @Table(name = "teams")
@@ -41,6 +42,10 @@ public class Team {
 
   @Column(name = "managerUserId")
   private String managerUserId;
+
+  /** The team's read-only Accountant (§2); nullable until assigned. */
+  @Column(name = "accountantUserId")
+  private String accountantUserId;
 
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)

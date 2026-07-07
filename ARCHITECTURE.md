@@ -35,11 +35,12 @@ Super Admin
 
 | Role | Scope | Can do |
 |------|-------|--------|
-| **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **provision the single Accountant**; **archive (soft-delete) a company and restore it**; **manage teams in any company** (create / rename / reassign HR + Manager) and **onboard employees into any company** (selecting company → team → HR); view **all** companies' audit logs (separated per company), including archived companies'. |
-| **Accountant** | Entire portal — **read-only** | A central, cross-company **viewer** (`companyId = null`, like Super Admin but never writes). Sees **approved** employees across **all** companies and their **full records** (the four forms + documents/PDFs) with sensitive fields **masked by default** and an **audited reveal** — the exact HR mechanism; and an **approval-only** audit trail across companies. **No onboarding / verify / approve / edit / archive / delete / provisioning — GET-only.** In-flight (non-approved) employees are **not** visible. |
-| **Company Admin** | One company | Create teams and assign the team's HR and Manager (one each); view **own company's** audit logs. |
+| **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **provision the single Accounts Admin**; **archive (soft-delete) a company and restore it**; **manage teams in any company** (create / rename / reassign HR + Manager + Accountant) and **onboard employees into any company** (selecting company → team → HR); view **all** companies' audit logs (separated per company), including archived companies'. |
+| **Accounts Admin** | Entire portal — **read-only** | A central, cross-company **viewer** (`companyId = null`, like Super Admin but never writes). Sees **approved** employees across **all** companies and their **full records** (the four forms + documents/PDFs) with sensitive fields **masked by default** and an **audited reveal** — the exact HR mechanism; and an **approval-only** audit trail across companies. **No onboarding / verify / approve / edit / archive / delete / provisioning — GET-only.** In-flight (non-approved) employees are **not** visible. **Exactly one** may exist; provisioned by Super Admin. |
+| **Company Admin** | One company | Create teams and assign the team's HR, Manager and Accountant (one each); view **own company's** audit logs. |
 | **HR** | Own team / own onboarded employees | Trigger onboarding (email + unique ID); look up an employee by ID and see all their forms/documents; verify documents; route the approval request to the team's Manager. |
 | **Manager** | Own team | Workspace inbox/notifications (who was onboarded, who was verified, pending approvals); **approve** verified employees. Approval is the **final step** _[parked: post-approval actions]_. |
+| **Accountant** | Own team — **read-only** | A **team-scoped** viewer (a staff `User` with a `teamId`, like HR/Manager, but never writes). Sees the **approved** employees of **its own team** (those onboarded by that team's HR) and their **full records** — masked by default with the same **audited reveal** as HR — plus an **approval-only** audit trail for **its team**. **No writes — GET-only.** Cannot see other teams' or other companies' employees. |
 | **Employee** | Own record only | Authenticate with **unique ID + email/OTP**; fill tabbed forms and upload documents under their own record. |
 
 **Company archival (soft-delete):** Super Admin can **delete a company as a reversible archive** — it
@@ -50,7 +51,10 @@ company's **audit trail are all retained**, and Super Admin can still view the a
 history. A **restore** returns it to active and its people can sign in again. The **Super Admin is
 never affected** (they belong to no company).
 
-**Team rule:** exactly one HR and one Manager per team. Approvals stay **within the team**.
+**Team rule:** a team holds **exactly one HR, one Manager, and one Accountant** (`{1 HR, 1 Manager, 1
+Accountant}`). All three are expected on a **new** team; **existing** teams may still be missing one and
+keep working, surfacing a "needs accountant" (or needs-HR/Manager) state until filled. Approvals stay
+**within the team**, and the team's Accountant reads only that team's approved employees.
 
 **Super Admin cross-company operations.** Team management and onboarding are normally the Company
 Admin's and HR's jobs; the **Super Admin can do both in any company** by selecting the target company
@@ -66,17 +70,27 @@ HR, and approved by **that team's Manager** (who mints the unique ID).
 (no direct team field in v1). The approving Manager is therefore **the Manager on the onboarding
 HR's team** — that is the path that connects an employee to their approver.
 
-**Accountant (central read-only viewer).** A top-level, cross-company **read** role for oversight of
-finished onboardings. The Accountant is a staff `User` with **`companyId = null`** — the same
+**Accounts Admin (central read-only viewer).** A top-level, cross-company **read** role for oversight of
+finished onboardings. The Accounts Admin is a staff `User` with **`companyId = null`** — the same
 cross-company breadth as the Super Admin, but with **no write capability at all**. They can list
 **approved** employees across every company and open each one's full record (four forms + Form-4
 documents + generated PDFs) with the sensitive financial/PII fields **masked by default and revealed
 only via the audited reveal action** (the identical `EmployeeRecordAssembler` + `SENSITIVE_FIELD_REVEALED`
 path HR uses), and read an **approval-only** slice of the audit trail across all companies. They never
 appear in an onboarding, verification, approval, provisioning, or company-management flow. **Exactly
-one Accountant may exist** — the Super Admin provisions it (email + name + initial password), and a
-second creation is rejected. The Accountant signs in with **staff email + password** (§6), exactly like
-the other staff roles.
+one Accounts Admin may exist** — the Super Admin provisions it (email + name + initial password), and a
+second creation is rejected. It signs in with **staff email + password** (§6), like the other staff roles.
+
+**Accountant (team-scoped read-only viewer).** The **per-team** analogue of the Accounts Admin: a staff
+`User` with a `companyId` **and a `teamId`** (like HR/Manager), **read-only**. It sees exactly the
+**approved** employees of **its own team** — those onboarded by that team's HR (`onboardingHrId ==
+team.hrUserId`) — and opens their full records with the same masking + audited reveal, plus an
+**approval-only** audit trail scoped to **its team's** employees. It never writes anything (no onboard /
+verify / approve / edit) and **cannot** see other teams or other companies. It is provisioned like HR and
+Manager — the **Company Admin** (own company) or **Super Admin** (any company) assigns the team's
+Accountant slot (create a new staff user or attach an existing unassigned one); **at most one per team**.
+Both roles are served by the same read-only workspace, scoped by the signed-in role (all companies for
+Accounts Admin, own team for Accountant).
 
 ---
 
@@ -157,8 +171,10 @@ indicative. **Schema is additive-only thereafter.**
 - **Company** — `id`, `name`, `code` (short mnemonic, e.g. `ACME`; used in the employee ID),
   `status` (`ACTIVE` | `SUSPENDED` | `DELETED`), `deletedAt?` + `deletedByUserId?` (→ User) — set
   when archived (soft-delete), cleared on restore, `createdAt`.
-- **Team** — `id`, `companyId`, `name`, `hrUserId` (→ User), `managerUserId` (→ User).
-  Holding both FKs enforces the "exactly one HR + one Manager" rule.
+- **Team** — `id`, `companyId`, `name`, `hrUserId` (→ User), `managerUserId` (→ User),
+  `accountantUserId` (→ User, nullable). Holding the three single FKs structurally enforces the
+  "exactly one HR + one Manager + one Accountant" rule (each slot holds at most one person). A team may
+  transiently be missing a slot (surfaced as a "needs …" state) until filled.
 
 ### Employee record (the four onboarding forms)
 - **Form1Personal** — Personal Details: `name`, `dob`, `email`, `mobile`, `designation`,
@@ -202,7 +218,8 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
   `metadata` (Json), `ipAddress?`, `createdAt`. **Append-only** (see §7).
 
 ### Enums (defined in the shared package — single source of truth)
-- **UserRole**: `SUPER_ADMIN`, `COMPANY_ADMIN`, `HR`, `MANAGER`
+- **UserRole**: `SUPER_ADMIN`, `ACCOUNTS_ADMIN` _(cross-company read-only viewer; singleton)_,
+  `COMPANY_ADMIN`, `HR`, `MANAGER`, `ACCOUNTANT` _(team-scoped read-only viewer)_
 - **EmployeeStatus**: `INVITED`, `IN_PROGRESS`, `SUBMITTED`, `REVISION_REQUESTED` _(HR sent one or more
   items back; the employee is fixing them)_, `HR_VERIFIED`, `APPROVED`, `REJECTED`
 - **SectionStatus** _(status of each form + review item)_: `DRAFT`, `SUBMITTED`, `VERIFIED`,
@@ -239,14 +256,18 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
 
 - **Authorization = the hierarchy.** Every request is scoped:
   - Super Admin → all companies.
-  - **Accountant → all companies, but READ-ONLY and APPROVED-only.** A cross-company principal
+  - **Accounts Admin → all companies, but READ-ONLY and APPROVED-only.** A cross-company principal
     (`companyId = null`) that may only issue GET/read operations, and only over **approved**
     employees + their records + an approval-only audit view. No handler that mutates state (onboard,
-    verify, approve, edit, archive, purge, provision, …) accepts an Accountant.
+    verify, approve, edit, archive, purge, provision, …) accepts an Accounts Admin.
   - Company Admin → only their `companyId`.
   - HR → only employees they onboarded (`onboardingHrId == self`) within their company.
   - Manager → only employees in their team's scope (onboarded by their team's HR) + their own
     notifications/approvals.
+  - **Accountant → its own team, READ-ONLY and APPROVED-only.** A team-scoped principal (has a
+    `companyId` + `teamId`) that may only read the **approved** employees onboarded by its team's HR
+    (the same team-resolution as the Manager, restricted to approved) + their records + an approval-only
+    audit view for its team. No mutating handler accepts an Accountant.
   - Employee → only their own record.
   - Centralise these relationship checks; do not scatter them across handlers.
   - **Archived-company denial:** a principal whose `companyId` refers to a **DELETED** company is
@@ -257,12 +278,12 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
 - **Authentication (two audiences, two entry points).** Staff and employees are distinct principals
   with distinct sign-in methods; each entry point resolves against **only one** table so the two can
   never cross over.
-  - **Staff (Super Admin, Accountant, Company Admin, HR, Manager) — email + password, at `/login`.**
-    `POST /auth/login {email, password}` resolves a **User by email** (an employee email or an unknown
-    email gets the same generic denial), verifies the password (hashed with the app's `PasswordEncoder`
-    — BCrypt today; argon2 is a drop-in swap), and issues the session. **No OTP for any staff role.**
-    The Accountant uses this same path; the reveal action on their read-only record view is audited
-    (`SENSITIVE_FIELD_REVEALED`) exactly as for HR.
+  - **Staff (Super Admin, Accounts Admin, Company Admin, HR, Manager, Accountant) — email + password,
+    at `/login`.** `POST /auth/login {email, password}` resolves a **User by email** (an employee email
+    or an unknown email gets the same generic denial), verifies the password (hashed with the app's
+    `PasswordEncoder` — BCrypt today; argon2 is a drop-in swap), and issues the session. **No OTP for any
+    staff role.** The Accounts Admin and the team Accountant use this same path; the reveal action on
+    their read-only record views is audited (`SENSITIVE_FIELD_REVEALED`) exactly as for HR.
     - The password is **set at provisioning** (see below) and is **self-service changeable** while
       logged in: `POST /auth/change-password {currentPassword, newPassword}` (verify current → rehash
       → audit `PASSWORD_CHANGED`). A minimum length of **8** is enforced everywhere a password is set.
@@ -304,10 +325,11 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
 - Logs are **partitioned per company** via `companyId` so Super Admin can view each company's trail
   separately and Company Admin sees only their own.
 - **Append-only:** no code path updates or deletes an `AuditLog` row (enforce at the data layer).
-- **Accountant audit visibility.** The Accountant reads a **cross-company but approval-only** slice —
-  the `APPROVAL_ROUTED` / `APPROVAL_APPROVED` / `APPROVAL_REJECTED` events across all companies, never
-  the full trail. Their own sensitive reads (opening a record, revealing a masked field) are logged
-  like any other principal's (`EMPLOYEE_RECORD_VIEWED`, `SENSITIVE_FIELD_REVEALED`).
+- **Accounts Admin / Accountant audit visibility.** Both read an **approval-only** slice — the
+  `APPROVAL_ROUTED` / `APPROVAL_APPROVED` / `APPROVAL_REJECTED` events, never the full trail. The
+  **Accounts Admin** sees these across **all companies**; the team **Accountant** sees only those for
+  **its own team's** employees. Their own sensitive reads (opening a record, revealing a masked field)
+  are logged like any other principal's (`EMPLOYEE_RECORD_VIEWED`, `SENSITIVE_FIELD_REVEALED`).
 - **Retained across company archival:** deleting (archiving) a company never removes its audit rows.
   Super Admin can still **select an archived company** in the explorer (shown flagged as deleted) and
   read its retained trail; the archival itself is recorded (`COMPANY_DELETED` / `COMPANY_RESTORED`).

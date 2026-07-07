@@ -99,15 +99,28 @@ public class AuditQueryService {
   }
 
   /**
-   * The Accountant's cross-company, APPROVAL-only audit view (§7): approval-lifecycle events across all
-   * companies (optionally narrowed to one), never the full trail. Access is gated at the controller
-   * (ACCOUNTANT-only); {@code companyDeleted} is not meaningful for an all-company view, so it is false.
+   * The APPROVAL-only audit view (§7): approval-lifecycle events, never the full trail. The
+   * Accounts Admin reads it across all companies ({@code targetEmployeeIds == null}); the team
+   * Accountant passes its team's employee ids so it sees only their approval events. Access is gated at
+   * the controller; {@code companyDeleted} is not meaningful here, so it is false. An empty (non-null)
+   * {@code targetEmployeeIds} means "no employees in scope" → an empty page.
    */
-  public AuditPage approvalTrail(String companyIdParam, Instant from, Instant to, Pageable pageable) {
+  public AuditPage approvalTrail(
+      String companyIdParam,
+      List<String> targetEmployeeIds,
+      Instant from,
+      Instant to,
+      Pageable pageable) {
+    if (targetEmployeeIds != null && targetEmployeeIds.isEmpty()) {
+      return new AuditPage(List.of(), 0, pageable.getPageSize(), 0, 0, false);
+    }
     Specification<AuditLog> spec =
         (root, q, cb) -> {
           List<Predicate> p = new ArrayList<>();
           p.add(root.get("action").in(APPROVAL_ACTIONS)); // approval events only (§7)
+          if (targetEmployeeIds != null) {
+            p.add(root.get("targetId").in(targetEmployeeIds)); // team scope
+          }
           if (isPresent(companyIdParam)) {
             p.add(cb.equal(root.get("companyId"), companyIdParam));
           }

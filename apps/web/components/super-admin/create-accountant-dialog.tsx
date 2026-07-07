@@ -24,7 +24,7 @@ import { CredentialNotice } from '@/components/staff-credential-notice';
 const STATUS_KEY = ['accountant', 'status'] as const;
 
 /**
- * The single, cross-company READ-ONLY Accountant (§2). One may exist: while none does, this shows a
+ * The single, cross-company READ-ONLY Accounts Admin (§2). One may exist: while none does, this shows a
  * create form; once provisioned, it shows who it is (no second create).
  */
 export function CreateAccountantDialog() {
@@ -46,7 +46,7 @@ export function CreateAccountantDialog() {
   });
 
   const mutation = useApiMutation((body: ProvisionAccountantInput) => provisionAccountant(body), {
-    successMessage: 'Accountant provisioned',
+    successMessage: 'Accounts Admin provisioned',
     onSuccess: (_result, variables) => {
       setCreated({ email: variables.email, password: variables.password });
       reset();
@@ -71,12 +71,12 @@ export function CreateAccountantDialog() {
       <DialogTrigger asChild>
         <Button variant="outline">
           <Calculator />
-          Accountant
+          Accounts Admin
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Accountant</DialogTitle>
+          <DialogTitle>Accounts Admin</DialogTitle>
           <DialogDescription>
             One central, read-only viewer across all companies — sees approved employees and their
             records, and an approval-only audit trail. Exactly one may exist.
@@ -89,18 +89,18 @@ export function CreateAccountantDialog() {
           <div className="flex items-start gap-3 rounded-md border border-success/30 bg-success/5 p-4">
             <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
             <div className="space-y-1 text-sm">
-              <div className="font-medium">An Accountant is already provisioned</div>
+              <div className="font-medium">An Accounts Admin is already provisioned</div>
               <p className="text-muted-foreground">
                 {status.data?.accountant?.name} · {status.data?.accountant?.email}
               </p>
               <p className="text-xs text-muted-foreground">
-                Only one Accountant may exist. They can change their own password after signing in.
+                Only one Accounts Admin may exist. They can change their own password after signing in.
               </p>
             </div>
           </div>
         ) : created ? (
           <CredentialNotice
-            title="Accountant provisioned"
+            title="Accounts Admin provisioned"
             email={created.email}
             password={created.password}
             onDismiss={() => setCreated(null)}
@@ -121,7 +121,7 @@ export function CreateAccountantDialog() {
               <Input
                 id="acc-email"
                 type="email"
-                placeholder="accountant@portal.com"
+                placeholder="accounts-admin@portal.com"
                 aria-invalid={Boolean(errors.email)}
                 {...register('email')}
               />
@@ -159,7 +159,7 @@ export function CreateAccountantDialog() {
             </div>
             <Button type="submit" disabled={isSubmitting}>
               <UserPlus />
-              {isSubmitting ? 'Provisioning…' : 'Provision Accountant'}
+              {isSubmitting ? 'Provisioning…' : 'Provision Accounts Admin'}
             </Button>
           </form>
         )}

@@ -112,4 +112,14 @@ public class CompanyTeamsController {
       HttpServletRequest request) {
     return teams.assign(companyId, id, UserRole.MANAGER, body, actor, request.getRemoteAddr());
   }
+
+  @PutMapping("/{id}/accountant")
+  public AssignMemberResult assignAccountant(
+      @PathVariable String companyId,
+      @PathVariable String id,
+      @RequestBody AssignMemberRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return teams.assign(companyId, id, UserRole.ACCOUNTANT, body, actor, request.getRemoteAddr());
+  }
 }

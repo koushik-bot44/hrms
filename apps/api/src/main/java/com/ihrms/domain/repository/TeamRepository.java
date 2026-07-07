@@ -23,4 +23,11 @@ public interface TeamRepository extends JpaRepository<Team, String> {
   /** True iff this manager manages a team whose HR onboarded the employee (§6 manager scope). */
   boolean existsByCompanyIdAndManagerUserIdAndHrUserId(
       String companyId, String managerUserId, String hrUserId);
+
+  /** The team(s) an Accountant reads (for its team-scoped views); exactly one in practice. */
+  List<Team> findByAccountantUserId(String accountantUserId);
+
+  /** True iff this accountant's team is the one whose HR onboarded the employee (§6 accountant scope). */
+  boolean existsByCompanyIdAndAccountantUserIdAndHrUserId(
+      String companyId, String accountantUserId, String hrUserId);
 }

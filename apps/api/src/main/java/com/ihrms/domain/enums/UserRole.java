@@ -4,8 +4,10 @@ package com.ihrms.domain.enums;
 public enum UserRole {
   SUPER_ADMIN,
   /** Top-level, cross-company READ-ONLY viewer of approved employees (§2/§6); singleton. */
-  ACCOUNTANT,
+  ACCOUNTS_ADMIN,
   COMPANY_ADMIN,
   HR,
-  MANAGER
+  MANAGER,
+  /** Team-scoped READ-ONLY viewer of its own team's approved employees (§2/§6). */
+  ACCOUNTANT
 }

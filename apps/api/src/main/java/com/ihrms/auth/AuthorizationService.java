@@ -48,9 +48,10 @@ public class AuthorizationService {
       return e.companyId();
     }
     IhrmsPrincipal.User u = (IhrmsPrincipal.User) principal;
-    // SUPER_ADMIN and ACCOUNTANT are cross-company (null companyId); everyone else is company-locked.
+    // SUPER_ADMIN and ACCOUNTS_ADMIN are cross-company (null companyId); everyone else (incl. the
+    // team-scoped ACCOUNTANT) is company-locked.
     return u.role() == com.ihrms.domain.enums.UserRole.SUPER_ADMIN
-            || u.role() == com.ihrms.domain.enums.UserRole.ACCOUNTANT
+            || u.role() == com.ihrms.domain.enums.UserRole.ACCOUNTS_ADMIN
         ? null
         : u.companyId();
   }
@@ -109,9 +110,9 @@ public class AuthorizationService {
     IhrmsPrincipal.User u = (IhrmsPrincipal.User) principal;
     return switch (u.role()) {
       case SUPER_ADMIN -> true;
-      // Read-only, cross-company, APPROVED-only: an employeeCode is minted only on approval (§5), so a
-      // non-null code == approved. AccountantService also re-checks status explicitly (defence in depth).
-      case ACCOUNTANT -> employee.employeeCode() != null;
+      // ACCOUNTS_ADMIN: read-only, cross-company, APPROVED-only — an employeeCode is minted only on
+      // approval (§5), so a non-null code == approved. The service also re-checks status explicitly.
+      case ACCOUNTS_ADMIN -> employee.employeeCode() != null;
       case COMPANY_ADMIN -> employee.companyId().equals(u.companyId());
       case HR ->
           employee.companyId().equals(u.companyId())
@@ -120,6 +121,14 @@ public class AuthorizationService {
           employee.companyId().equals(u.companyId())
               && u.companyId() != null
               && teams.existsByCompanyIdAndManagerUserIdAndHrUserId(
+                  u.companyId(), u.userId(), employee.onboardingHrId());
+      // ACCOUNTANT: read-only, OWN-TEAM, APPROVED-only — the Manager scope restricted to approved
+      // (its team is the one whose HR onboarded the employee).
+      case ACCOUNTANT ->
+          employee.companyId().equals(u.companyId())
+              && u.companyId() != null
+              && employee.employeeCode() != null
+              && teams.existsByCompanyIdAndAccountantUserIdAndHrUserId(
                   u.companyId(), u.userId(), employee.onboardingHrId());
     };
   }

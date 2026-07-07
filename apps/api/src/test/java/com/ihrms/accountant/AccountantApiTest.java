@@ -21,12 +21,14 @@ import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Form1Personal;
 import com.ihrms.domain.model.Form2Info;
+import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.AuditLogRepository;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.Form1PersonalRepository;
 import com.ihrms.domain.repository.Form2InfoRepository;
+import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.storage.StorageService;
 import java.time.LocalDate;
@@ -63,6 +65,7 @@ class AccountantApiTest {
   @Autowired Form1PersonalRepository form1s;
   @Autowired Form2InfoRepository form2s;
   @Autowired AuditLogRepository auditLogs;
+  @Autowired TeamRepository teams;
   @Autowired JdbcTemplate jdbc;
 
   @MockBean StorageService storage;
@@ -71,7 +74,9 @@ class AccountantApiTest {
   private String accountantToken;
   private String companyA;
   private String companyB;
+  private User hrA;
   private Employee approvedA; // has offeredCtc + panNumber (sensitive)
+  private Employee approvedB; // in companyB / hrB — invisible to companyA's team accountant
   private Employee inflightA; // SUBMITTED — must be invisible to the accountant
 
   @BeforeEach
@@ -82,11 +87,11 @@ class AccountantApiTest {
             + "\"employee_code_sequences\" RESTART IDENTITY CASCADE");
     companyA = company("AAA");
     companyB = company("BBB");
-    User hrA = user(companyA, UserRole.HR, "hra@a.test");
+    hrA = user(companyA, UserRole.HR, "hra@a.test");
     User hrB = user(companyB, UserRole.HR, "hrb@b.test");
 
     approvedA = approved(companyA, hrA.getId(), "AAA-EMP-000001", "Anita Approved", "anita@p.test");
-    approved(companyB, hrB.getId(), "BBB-EMP-000001", "Bob Approved", "bob@p.test");
+    approvedB = approved(companyB, hrB.getId(), "BBB-EMP-000001", "Bob Approved", "bob@p.test");
     inflightA = submitted(companyA, hrA.getId(), "Ivan Inflight", "ivan@p.test");
 
     // Approval + a non-approval audit event in each company (the latter must be excluded).
@@ -108,7 +113,7 @@ class AccountantApiTest {
 
     MvcResult created =
         mvc.perform(
-                post("/provisioning/accountant")
+                post("/provisioning/accounts-admin")
                     .header("Authorization", "Bearer " + superToken)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(json.writeValueAsString(
@@ -118,18 +123,18 @@ class AccountantApiTest {
     JsonNode body = json.readTree(created.getResponse().getContentAsString());
     assertThat(body.get("accountant").get("email").asText()).isEqualTo("casey@books.test"); // lower-cased
     assertThat(body.get("devPassword").asText()).isEqualTo("Ledger@2026"); // echoed in dev
-    assertThat(users.existsByRole(UserRole.ACCOUNTANT)).isTrue();
+    assertThat(users.existsByRole(UserRole.ACCOUNTS_ADMIN)).isTrue();
     assertThat(provisioningStatus(superToken).get("exists").asBoolean()).isTrue();
 
     // Singleton: a second create is rejected.
     mvc.perform(
-            post("/provisioning/accountant")
+            post("/provisioning/accounts-admin")
                 .header("Authorization", "Bearer " + superToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(
                     Map.of("name", "Second One", "email", "second@books.test", "password", "Another@2026"))))
         .andExpect(status().isConflict());
-    assertThat(auditLogs.findByAction("ACCOUNTANT_PROVISIONED")).hasSize(1);
+    assertThat(auditLogs.findByAction("ACCOUNTS_ADMIN_PROVISIONED")).hasSize(1);
 
     // The provisioned Accountant signs in with email + password (no OTP) and is routed by role.
     MvcResult login =
@@ -141,16 +146,16 @@ class AccountantApiTest {
             .andExpect(status().isCreated())
             .andReturn();
     assertThat(json.readTree(login.getResponse().getContentAsString()).get("session").get("role").asText())
-        .isEqualTo("ACCOUNTANT");
+        .isEqualTo("ACCOUNTS_ADMIN");
   }
 
   @Test
   void onlySuperAdminMayProvisionOrCheckTheAccountant() throws Exception {
     String hrToken = token(user(companyA, UserRole.HR, "hr2@a.test"), UserRole.HR);
-    mvc.perform(get("/provisioning/accountant").header("Authorization", "Bearer " + hrToken))
+    mvc.perform(get("/provisioning/accounts-admin").header("Authorization", "Bearer " + hrToken))
         .andExpect(status().isForbidden());
     mvc.perform(
-            post("/provisioning/accountant")
+            post("/provisioning/accounts-admin")
                 .header("Authorization", "Bearer " + hrToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(
@@ -217,6 +222,66 @@ class AccountantApiTest {
     assertThat(page.get("content")).anySatisfy(r -> assertThat(r.get("companyId").asText()).isEqualTo(companyB));
   }
 
+  // --- Team-scoped ACCOUNTANT (own team only) -------------------------------
+
+  @Test
+  void teamAccountantSeesOnlyItsOwnTeamsApprovedEmployees() throws Exception {
+    // A team in company A whose HR is hrA and whose Accountant is a team-scoped ACCOUNTANT user.
+    User teamAcc = user(companyA, UserRole.ACCOUNTANT, "team-acc@a.test");
+    Team teamA = new Team();
+    teamA.setName("Team A");
+    teamA.setCompanyId(companyA);
+    teamA.setHrUserId(hrA.getId());
+    teamA.setAccountantUserId(teamAcc.getId());
+    teams.save(teamA);
+    String token =
+        tokens.issueAccess(
+            new IhrmsPrincipal.User(
+                teamAcc.getId(), teamAcc.getEmail(), teamAcc.getName(),
+                UserRole.ACCOUNTANT, companyA, teamA.getId()));
+
+    // Sees only company A / hrA's approved employee — not company B's, not the in-flight one.
+    JsonNode list =
+        json.readTree(
+            mvc.perform(get("/accountant/employees").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(list.get("totalElements").asInt()).isEqualTo(1);
+    assertThat(list.get("content").get(0).get("employeeCode").asText()).isEqualTo("AAA-EMP-000001");
+
+    // Own team's approved -> 200; another team/company's -> 404; in-flight -> 404.
+    mvc.perform(get("/accountant/employees/" + approvedA.getId()).header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk());
+    mvc.perform(get("/accountant/employees/" + approvedB.getId()).header("Authorization", "Bearer " + token))
+        .andExpect(status().isNotFound());
+    mvc.perform(get("/accountant/employees/" + inflightA.getId()).header("Authorization", "Bearer " + token))
+        .andExpect(status().isNotFound());
+
+    // Approval audit is team-scoped: only company A's approval event targeting this team's employee.
+    JsonNode audit =
+        json.readTree(
+            mvc.perform(get("/accountant/audit").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(audit.get("totalElements").asInt()).isEqualTo(1);
+    assertThat(audit.get("content").get(0).get("action").asText()).isEqualTo("APPROVAL_APPROVED");
+
+    // Reveal works + is audited; writes are forbidden.
+    mvc.perform(post("/accountant/employees/" + approvedA.getId() + "/reveal").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk());
+    assertThat(auditLogs.findByAction("SENSITIVE_FIELD_REVEALED")).hasSize(1);
+    mvc.perform(
+            post("/employees")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isForbidden());
+  }
+
   // --- No writes ------------------------------------------------------------
 
   @Test
@@ -226,7 +291,7 @@ class AccountantApiTest {
     forbidden(post("/employees").content("{}"));
     forbidden(patch("/employees/" + approvedA.getId() + "/forms/FORM1").content("{\"decision\":\"VERIFIED\"}"));
     forbidden(post("/companies").content("{}"));
-    forbidden(post("/provisioning/accountant").content("{}"));
+    forbidden(post("/provisioning/accounts-admin").content("{}"));
   }
 
   // --- helpers --------------------------------------------------------------
@@ -240,7 +305,7 @@ class AccountantApiTest {
 
   private JsonNode provisioningStatus(String token) throws Exception {
     return json.readTree(
-        mvc.perform(get("/provisioning/accountant").header("Authorization", "Bearer " + token))
+        mvc.perform(get("/provisioning/accounts-admin").header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -258,8 +323,8 @@ class AccountantApiTest {
   }
 
   private String mintAccountant() {
-    User acc = user(null, UserRole.ACCOUNTANT, "casey@books.test");
-    return token(acc, UserRole.ACCOUNTANT);
+    User acc = user(null, UserRole.ACCOUNTS_ADMIN, "casey@books.test");
+    return token(acc, UserRole.ACCOUNTS_ADMIN);
   }
 
   private String company(String code) {

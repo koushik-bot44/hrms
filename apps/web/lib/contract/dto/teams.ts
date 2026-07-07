@@ -16,8 +16,8 @@ export const UpdateTeamSchema = z.object({
 });
 export type UpdateTeamInput = z.infer<typeof UpdateTeamSchema>;
 
-/** Which slot is being assigned. */
-export const TeamRoleSchema = z.enum([UserRole.HR, UserRole.MANAGER]);
+/** Which slot is being assigned (§2: a team holds one HR, one Manager, one Accountant). */
+export const TeamRoleSchema = z.enum([UserRole.HR, UserRole.MANAGER, UserRole.ACCOUNTANT]);
 export type TeamRole = z.infer<typeof TeamRoleSchema>;
 
 /** Attach an existing company user to the slot. */

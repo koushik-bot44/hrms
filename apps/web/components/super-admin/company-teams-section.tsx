@@ -46,6 +46,7 @@ export function CompanyTeamsSection({ companyId }: { companyId: string }) {
                 <th className="px-3 py-2 font-medium">Team</th>
                 <th className="px-3 py-2 font-medium">HR</th>
                 <th className="px-3 py-2 font-medium">Manager</th>
+                <th className="px-3 py-2 font-medium">Accountant</th>
                 <th className="px-3 py-2 font-medium">Members</th>
                 <th className="px-3 py-2 font-medium">Status</th>
               </tr>
@@ -65,9 +66,12 @@ export function CompanyTeamsSection({ companyId }: { companyId: string }) {
                   <td className="px-3 py-2 text-muted-foreground">
                     {team.manager?.name ?? 'Unassigned'}
                   </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {team.accountant?.name ?? 'Unassigned'}
+                  </td>
                   <td className="px-3 py-2 tabular-nums">{team.memberCount}</td>
                   <td className="px-3 py-2">
-                    <TeamStatusBadge complete={Boolean(team.hr && team.manager)} />
+                    <TeamStatusBadge complete={team.complete} />
                   </td>
                 </tr>
               ))}

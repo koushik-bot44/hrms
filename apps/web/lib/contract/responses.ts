@@ -46,17 +46,19 @@ export type PurgeCompanyResult = Required<Schemas['PurgeCompanyResult']>;
 
 export type TeamMember = Required<Schemas['TeamMemberView']>;
 
-export type TeamSummary = Omit<Required<Schemas['TeamSummaryView']>, 'hr' | 'manager'> & {
+export type TeamSummary = Omit<Required<Schemas['TeamSummaryView']>, 'hr' | 'manager' | 'accountant'> & {
   hr: TeamMember | null;
   manager: TeamMember | null;
+  accountant: TeamMember | null;
 };
 
 export type TeamDetail = Omit<
   Required<Schemas['TeamDetailView']>,
-  'hr' | 'manager' | 'members'
+  'hr' | 'manager' | 'accountant' | 'members'
 > & {
   hr: TeamMember | null;
   manager: TeamMember | null;
+  accountant: TeamMember | null;
   members: TeamMember[];
 };
 

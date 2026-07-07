@@ -16,9 +16,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** SUPER_ADMIN provisions the single Accountant (ARCHITECTURE.md §2). Read status + create only. */
+/** SUPER_ADMIN provisions the single Accounts Admin (ARCHITECTURE.md §2). Read status + create only. */
 @RestController
-@RequestMapping("/provisioning/accountant")
+@RequestMapping("/provisioning/accounts-admin")
 @PreAuthorize("hasRole('SUPER_ADMIN')")
 public class AccountantProvisioningController {
 

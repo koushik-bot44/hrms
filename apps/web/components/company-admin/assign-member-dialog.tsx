@@ -48,7 +48,7 @@ export function AssignMemberDialog({
   /** SUPER_ADMIN cross-company; omit for COMPANY_ADMIN (own company). */
   companyId?: string;
 }) {
-  const roleLabel = role === 'HR' ? 'HR' : 'Manager';
+  const roleLabel = role === 'HR' ? 'HR' : role === 'MANAGER' ? 'Manager' : 'Accountant';
   const [open, setOpen] = React.useState(false);
   const [mode, setMode] = React.useState<'new' | 'existing'>('new');
   const [userId, setUserId] = React.useState('');

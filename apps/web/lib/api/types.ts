@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/teams/{id}/accountant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["assignAccountant"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/storage/blobs/{token}": {
         parameters: {
             query?: never;
@@ -148,6 +164,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/teams/{id}/accountant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["assignAccountant_1"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/teams": {
         parameters: {
             query?: never;
@@ -164,7 +196,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/provisioning/accountant": {
+    "/provisioning/accounts-admin": {
         parameters: {
             query?: never;
             header?: never;
@@ -983,6 +1015,8 @@ export interface components {
             name?: string;
             hr?: components["schemas"]["TeamMemberView"];
             manager?: components["schemas"]["TeamMemberView"];
+            accountant?: components["schemas"]["TeamMemberView"];
+            complete?: boolean;
             /** Format: int64 */
             memberCount?: number;
             createdAt?: string;
@@ -993,7 +1027,7 @@ export interface components {
             name?: string;
             email?: string;
             /** @enum {string} */
-            role?: "SUPER_ADMIN" | "ACCOUNTANT" | "COMPANY_ADMIN" | "HR" | "MANAGER";
+            role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
             status?: string;
         };
         SignatureRequest: {
@@ -1430,6 +1464,8 @@ export interface components {
             name?: string;
             hr?: components["schemas"]["TeamMemberView"];
             manager?: components["schemas"]["TeamMemberView"];
+            accountant?: components["schemas"]["TeamMemberView"];
+            complete?: boolean;
             /** Format: int64 */
             memberCount?: number;
             createdAt?: string;
@@ -1595,6 +1631,32 @@ export interface operations {
         };
     };
     assignHr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AssignMemberResult"];
+                };
+            };
+        };
+    };
+    assignAccountant: {
         parameters: {
             query?: never;
             header?: never;
@@ -1790,6 +1852,33 @@ export interface operations {
         };
     };
     assignHr_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AssignMemberResult"];
+                };
+            };
+        };
+    };
+    assignAccountant_1: {
         parameters: {
             query?: never;
             header?: never;

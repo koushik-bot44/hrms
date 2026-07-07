@@ -128,9 +128,8 @@ public class TeamsService {
       String ip) {
     Team team = requireTeam(id, companyId);
 
-    boolean isHr = role == UserRole.HR;
-    String currentUserId = isHr ? team.getHrUserId() : team.getManagerUserId();
-    String otherUserId = isHr ? team.getManagerUserId() : team.getHrUserId();
+    String currentUserId = slotUserId(team, role);
+    List<String> otherSlotUserIds = otherSlotUserIds(team, role);
 
     String userId;
     String devPassword = null;
@@ -176,8 +175,8 @@ public class TeamsService {
       devPassword = isProd() ? null : password;
     }
 
-    if (otherUserId != null && otherUserId.equals(userId)) {
-      throw conflict("This person already holds the other role on this team");
+    if (otherSlotUserIds.contains(userId)) {
+      throw conflict("This person already holds another role on this team");
     }
 
     // Detach a replaced holder so the slot keeps exactly one person.
@@ -194,20 +193,11 @@ public class TeamsService {
     assignee.setTeamId(id);
     assignee.setRole(role);
     users.save(assignee);
-    if (isHr) {
-      team.setHrUserId(userId);
-    } else {
-      team.setManagerUserId(userId);
-    }
+    setSlot(team, role, userId);
     teams.save(team);
 
-    audit(
-        actor,
-        companyId,
-        isHr ? "TEAM_HR_ASSIGNED" : "TEAM_MANAGER_ASSIGNED",
-        id,
-        Map.of("userId", userId, "role", role.name()),
-        ip);
+    audit(actor, companyId, assignAction(role), id,
+        Map.of("userId", userId, "role", role.name()), ip);
 
     return new AssignMemberResult(detail(team), devPassword);
   }
@@ -220,6 +210,8 @@ public class TeamsService {
         team.getName(),
         slotMember(team.getHrUserId()),
         slotMember(team.getManagerUserId()),
+        slotMember(team.getAccountantUserId()),
+        isComplete(team),
         users.countByTeamId(team.getId()),
         team.getCreatedAt().toString());
   }
@@ -232,9 +224,57 @@ public class TeamsService {
         team.getName(),
         slotMember(team.getHrUserId()),
         slotMember(team.getManagerUserId()),
+        slotMember(team.getAccountantUserId()),
+        isComplete(team),
         members.size(),
         team.getCreatedAt().toString(),
         members);
+  }
+
+  /** A team is complete when all three slots — HR, Manager, Accountant — are filled (§2). */
+  private static boolean isComplete(Team team) {
+    return team.getHrUserId() != null
+        && team.getManagerUserId() != null
+        && team.getAccountantUserId() != null;
+  }
+
+  private static String slotUserId(Team team, UserRole role) {
+    return switch (role) {
+      case HR -> team.getHrUserId();
+      case MANAGER -> team.getManagerUserId();
+      case ACCOUNTANT -> team.getAccountantUserId();
+      default -> null;
+    };
+  }
+
+  private static void setSlot(Team team, UserRole role, String userId) {
+    switch (role) {
+      case HR -> team.setHrUserId(userId);
+      case MANAGER -> team.setManagerUserId(userId);
+      case ACCOUNTANT -> team.setAccountantUserId(userId);
+      default -> {
+        /* not a team slot */
+      }
+    }
+  }
+
+  /** The other two slot holders (non-null) — a person may hold at most one slot per team. */
+  private static List<String> otherSlotUserIds(Team team, UserRole role) {
+    return java.util.stream.Stream.of(
+            role == UserRole.HR ? null : team.getHrUserId(),
+            role == UserRole.MANAGER ? null : team.getManagerUserId(),
+            role == UserRole.ACCOUNTANT ? null : team.getAccountantUserId())
+        .filter(java.util.Objects::nonNull)
+        .toList();
+  }
+
+  private static String assignAction(UserRole role) {
+    return switch (role) {
+      case HR -> "TEAM_HR_ASSIGNED";
+      case MANAGER -> "TEAM_MANAGER_ASSIGNED";
+      case ACCOUNTANT -> "TEAM_ACCOUNTANT_ASSIGNED";
+      default -> "TEAM_MEMBER_ASSIGNED";
+    };
   }
 
   private TeamMemberView slotMember(String userId) {
@@ -262,7 +302,10 @@ public class TeamsService {
     if (UserRole.MANAGER.name().equals(role)) {
       return UserRole.MANAGER;
     }
-    throw badRequest("role must be HR or MANAGER");
+    if (UserRole.ACCOUNTANT.name().equals(role)) {
+      return UserRole.ACCOUNTANT;
+    }
+    throw badRequest("role must be HR, MANAGER or ACCOUNTANT");
   }
 
   private void audit(

@@ -8,6 +8,8 @@ export function homePathForSession(session: Session): string {
   switch (session.role) {
     case UserRole.SUPER_ADMIN:
       return '/super-admin';
+    // Both the cross-company Accounts Admin and the team-scoped Accountant use the same read-only area.
+    case UserRole.ACCOUNTS_ADMIN:
     case UserRole.ACCOUNTANT:
       return '/accountant';
     case UserRole.COMPANY_ADMIN:

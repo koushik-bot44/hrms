@@ -61,25 +61,24 @@ export default function TeamDetailPage({ params }: { params: { teamId: string } 
     );
   }
 
-  const complete = Boolean(data.hr && data.manager);
-
   return (
     <div className="space-y-6">
       {backLink}
       <PageHeader
         title={data.name}
-        description="One HR and one Manager run each team."
+        description="One HR, one Manager and one Accountant run each team."
         actions={
           <div className="flex items-center gap-2">
-            <TeamStatusBadge complete={complete} />
+            <TeamStatusBadge complete={data.complete} />
             <DeleteTeamDialog teamId={data.id} teamName={data.name} />
           </div>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <SlotCard title="HR" role="HR" member={data.hr} teamId={data.id} />
         <SlotCard title="Manager" role="MANAGER" member={data.manager} teamId={data.id} />
+        <SlotCard title="Accountant" role="ACCOUNTANT" member={data.accountant} teamId={data.id} />
       </div>
 
       <Card>

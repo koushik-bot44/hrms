@@ -125,6 +125,49 @@ class TeamsApiTest {
   }
 
   @Test
+  void assignsTeamAccountantOnePerTeamAndCompletesTheTeam() throws Exception {
+    String teamId = createTeam(adminA, "Engineering");
+    mvc.perform(asAdminA(put("/teams/" + teamId + "/hr"),
+            Map.of("name", "Holly HR", "email", "holly@a.test", "password", "HollyHR@1")))
+        .andExpect(status().isOk());
+    MvcResult mgr =
+        mvc.perform(asAdminA(put("/teams/" + teamId + "/manager"),
+                Map.of("name", "Max Manager", "email", "max@a.test", "password", "MaxMgr@1")))
+            .andExpect(status().isOk())
+            .andReturn();
+    // Not complete yet — the Accountant slot is empty (needs accountant, §2).
+    assertThat(json.readTree(mgr.getResponse().getContentAsString()).get("team").get("complete").asBoolean())
+        .isFalse();
+
+    // Assign the Accountant -> role ACCOUNTANT; the team is now complete (all three slots filled).
+    MvcResult acc =
+        mvc.perform(asAdminA(put("/teams/" + teamId + "/accountant"),
+                Map.of("name", "Casey Counts", "email", "casey@a.test", "password", "Casey@2026")))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode team = json.readTree(acc.getResponse().getContentAsString()).get("team");
+    assertThat(team.get("accountant").get("email").asText()).isEqualTo("casey@a.test");
+    assertThat(team.get("accountant").get("role").asText()).isEqualTo("ACCOUNTANT");
+    assertThat(team.get("complete").asBoolean()).isTrue();
+    assertThat(team.get("memberCount").asInt()).isEqualTo(3);
+
+    // At most one Accountant per team: a second one replaces + detaches the first (like HR/Manager).
+    MvcResult acc2 =
+        mvc.perform(asAdminA(put("/teams/" + teamId + "/accountant"),
+                Map.of("name", "Dana Digits", "email", "dana@a.test", "password", "Dana@2026")))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode team2 = json.readTree(acc2.getResponse().getContentAsString()).get("team");
+    assertThat(team2.get("accountant").get("email").asText()).isEqualTo("dana@a.test");
+    assertThat(team2.get("memberCount").asInt()).isEqualTo(3); // first accountant detached
+
+    // The team's HR (role HR) cannot be dropped into the Accountant slot — wrong role.
+    String hrUserId = team.get("hr").get("id").asText();
+    mvc.perform(asAdminA(put("/teams/" + teamId + "/accountant"), Map.of("userId", hrUserId)))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void assigningAnotherHrReplacesAndDetachesTheFirst() throws Exception {
     String teamId = createTeam(adminA, "Engineering");
     assignNewHr(teamId, "first@a.test");

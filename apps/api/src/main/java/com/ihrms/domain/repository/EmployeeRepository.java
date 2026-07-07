@@ -49,6 +49,9 @@ public interface EmployeeRepository
 
   List<Employee> findTop10ByOnboardingHrIdInOrderByUpdatedAtDesc(Collection<String> onboardingHrIds);
 
-  /** Recent employees of a given status across ALL companies (ACCOUNTANT activity feed). */
+  /** Recent employees of a given status across ALL companies (ACCOUNTS_ADMIN activity feed). */
   List<Employee> findTop10ByStatusOrderByUpdatedAtDesc(EmployeeStatus status);
+
+  /** Employees onboarded by any of these HRs — the team Accountant's employee set (for its audit). */
+  List<Employee> findByOnboardingHrIdIn(java.util.Collection<String> onboardingHrIds);
 }

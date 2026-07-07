@@ -28,11 +28,14 @@ public final class TeamDtos {
 
   public record TeamMemberView(String id, String name, String email, UserRole role, String status) {}
 
+  /** {@code complete} = all three slots filled (§2); otherwise the team surfaces a "needs …" state. */
   public record TeamSummaryView(
       String id,
       String name,
       TeamMemberView hr,
       TeamMemberView manager,
+      TeamMemberView accountant,
+      boolean complete,
       long memberCount,
       String createdAt) {}
 
@@ -42,6 +45,8 @@ public final class TeamDtos {
       String name,
       TeamMemberView hr,
       TeamMemberView manager,
+      TeamMemberView accountant,
+      boolean complete,
       long memberCount,
       String createdAt,
       List<TeamMemberView> members) {}

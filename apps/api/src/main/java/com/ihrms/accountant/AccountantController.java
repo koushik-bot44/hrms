@@ -1,7 +1,6 @@
 package com.ihrms.accountant;
 
 import com.ihrms.accountant.dto.AccountantDtos.ApprovedEmployeePage;
-import com.ihrms.audit.AuditQueryService;
 import com.ihrms.audit.dto.AuditDtos.AuditPage;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
@@ -22,30 +21,30 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The Accountant's READ-ONLY, cross-company workspace (ARCHITECTURE.md §2/§6): APPROVED employees
- * across all companies + each one's full record (masked, audited-reveal) + an approval-only audit view.
- * ACCOUNTANT-gated; every handler is a GET/read (the reveal is a read that logs an audit event).
+ * The READ-ONLY viewer workspace (ARCHITECTURE.md §2/§6), shared by the cross-company ACCOUNTS_ADMIN
+ * and the team-scoped ACCOUNTANT — the service scopes each read by the caller's role. APPROVED
+ * employees + each one's full record (masked, audited-reveal) + an approval-only audit view. Every
+ * handler is a GET/read (the reveal is a read that logs an audit event).
  */
 @RestController
 @RequestMapping("/accountant")
-@PreAuthorize("hasRole('ACCOUNTANT')")
+@PreAuthorize("hasAnyRole('ACCOUNTS_ADMIN', 'ACCOUNTANT')")
 public class AccountantController {
 
   private final AccountantService accountant;
-  private final AuditQueryService auditQuery;
 
-  public AccountantController(AccountantService accountant, AuditQueryService auditQuery) {
+  public AccountantController(AccountantService accountant) {
     this.accountant = accountant;
-    this.auditQuery = auditQuery;
   }
 
   @GetMapping("/employees")
   public ApprovedEmployeePage employees(
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String companyId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
       @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return accountant.listApproved(search, companyId, pageable);
+    return accountant.listApproved(actor, search, companyId, pageable);
   }
 
   @GetMapping("/employees/{id}")
@@ -70,8 +69,9 @@ public class AccountantController {
       @RequestParam(required = false) String companyId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
       @PageableDefault(size = 25, sort = "createdAt", direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return auditQuery.approvalTrail(companyId, from, to, pageable);
+    return accountant.approvalAudit(actor, companyId, from, to, pageable);
   }
 }

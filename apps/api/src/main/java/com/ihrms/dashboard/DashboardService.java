@@ -83,25 +83,51 @@ public class DashboardService {
     IhrmsPrincipal.User u = (IhrmsPrincipal.User) principal;
     return switch (u.role()) {
       case SUPER_ADMIN -> superAdminSummary();
-      case ACCOUNTANT -> accountantSummary();
+      case ACCOUNTS_ADMIN -> accountsAdminSummary();
       case COMPANY_ADMIN -> companyAdminSummary(u.companyId());
       case HR -> hrSummary(u.userId());
       case MANAGER -> managerSummary(u.userId());
+      case ACCOUNTANT -> accountantTeamSummary(u.userId());
     };
   }
 
-  // --- Accountant (cross-company, read-only, approved employees) -------------
+  // --- Accounts Admin (cross-company, read-only, approved employees) ---------
 
-  private DashboardSummary accountantSummary() {
+  private DashboardSummary accountsAdminSummary() {
     List<StatCard> stats =
         List.of(
-            new StatCard("accountant.approvedEmployees", "Approved employees",
+            new StatCard("accountsAdmin.approvedEmployees", "Approved employees",
                 employees.countByStatus(EmployeeStatus.APPROVED)),
-            new StatCard("accountant.companies", "Companies", companies.countByStatusNot("DELETED")));
+            new StatCard("accountsAdmin.companies", "Companies", companies.countByStatusNot("DELETED")));
     // Activity is the recently-approved employees across every company (flagged with their company).
     return new DashboardSummary(
-        "ACCOUNTANT", stats,
+        "ACCOUNTS_ADMIN", stats,
         activity(employees.findTop10ByStatusOrderByUpdatedAtDesc(EmployeeStatus.APPROVED), true), null);
+  }
+
+  // --- Accountant (team-scoped, read-only, approved employees of its team) ---
+
+  private DashboardSummary accountantTeamSummary(String accountantUserId) {
+    // The team's employees are those onboarded by its HR (like the Manager's scope, approved-only).
+    List<String> hrIds =
+        teams.findByAccountantUserId(accountantUserId).stream()
+            .map(Team::getHrUserId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+    long approved =
+        hrIds.isEmpty()
+            ? 0
+            : employees.countByOnboardingHrIdInAndStatus(hrIds, EmployeeStatus.APPROVED);
+    List<Employee> recent =
+        hrIds.isEmpty()
+            ? List.of()
+            : employees.findTop10ByOnboardingHrIdInOrderByUpdatedAtDesc(hrIds).stream()
+                .filter(e -> e.getStatus() == EmployeeStatus.APPROVED)
+                .toList();
+    List<StatCard> stats =
+        List.of(new StatCard("accountant.approvedEmployees", "Approved employees", approved));
+    return new DashboardSummary("ACCOUNTANT", stats, activity(recent, false), null);
   }
 
   // --- Super Admin (org-wide) -----------------------------------------------

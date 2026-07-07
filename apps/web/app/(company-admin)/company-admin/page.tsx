@@ -54,14 +54,18 @@ const columns: ColumnDef<TeamSummary>[] = [
     enableSorting: false,
     cell: ({ row }) => <Assignee name={row.original.manager?.name} />,
   },
+  {
+    id: 'accountant',
+    header: 'Accountant',
+    enableSorting: false,
+    cell: ({ row }) => <Assignee name={row.original.accountant?.name} />,
+  },
   { accessorKey: 'memberCount', header: 'Members' },
   {
     id: 'status',
     header: 'Status',
     enableSorting: false,
-    cell: ({ row }) => (
-      <TeamStatusBadge complete={Boolean(row.original.hr && row.original.manager)} />
-    ),
+    cell: ({ row }) => <TeamStatusBadge complete={row.original.complete} />,
   },
   {
     id: 'actions',

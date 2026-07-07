@@ -58,12 +58,16 @@ export function getAssignableUsers(
   return apiFetch<AssignableUser[]>(`${base(companyId)}/assignable-users?role=${role}`, { signal });
 }
 
+const TEAM_SLOT: Record<TeamRole, string> = { HR: 'hr', MANAGER: 'manager', ACCOUNTANT: 'accountant' };
+
 export function assignTeamMember(
   id: string,
   role: TeamRole,
   body: AssignMemberInput,
   companyId?: string,
 ): Promise<AssignMemberResult> {
-  const slot = role === 'HR' ? 'hr' : 'manager';
-  return apiFetch<AssignMemberResult>(`${base(companyId)}/${id}/${slot}`, { method: 'PUT', body });
+  return apiFetch<AssignMemberResult>(`${base(companyId)}/${id}/${TEAM_SLOT[role]}`, {
+    method: 'PUT',
+    body,
+  });
 }

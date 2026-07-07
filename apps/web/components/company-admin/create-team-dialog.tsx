@@ -49,6 +49,8 @@ export function CreateTeamDialog({ companyId }: { companyId?: string }) {
         name: vars.name,
         hr: null,
         manager: null,
+        accountant: null,
+        complete: false,
         memberCount: 0,
         createdAt: new Date().toISOString(),
       };

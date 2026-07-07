@@ -70,9 +70,10 @@ public class SecurityConfig {
                     .hasRole("MANAGER")
                     .requestMatchers("/audit/**")
                     .hasAnyRole("SUPER_ADMIN", "COMPANY_ADMIN")
-                    // The Accountant's read-only, cross-company area; provisioning is SUPER_ADMIN-only.
+                    // The read-only viewer area serves BOTH the cross-company Accounts Admin and the
+                    // team-scoped Accountant (the service scopes by role). Provisioning is SUPER_ADMIN-only.
                     .requestMatchers("/accountant/**")
-                    .hasRole("ACCOUNTANT")
+                    .hasAnyRole("ACCOUNTS_ADMIN", "ACCOUNTANT")
                     .requestMatchers("/provisioning/**")
                     .hasRole("SUPER_ADMIN")
                     .anyRequest()

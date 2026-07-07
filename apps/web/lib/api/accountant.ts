@@ -13,11 +13,11 @@ import { apiFetch } from './client';
 
 /** Whether the singleton Accountant exists — drives the Super Admin "Create Accountant" UI. */
 export function getAccountantStatus(signal?: AbortSignal): Promise<AccountantStatus> {
-  return apiFetch<AccountantStatus>('/provisioning/accountant', { signal });
+  return apiFetch<AccountantStatus>('/provisioning/accounts-admin', { signal });
 }
 
 export function provisionAccountant(body: ProvisionAccountantInput): Promise<ProvisionAccountantResult> {
-  return apiFetch<ProvisionAccountantResult>('/provisioning/accountant', { method: 'POST', body });
+  return apiFetch<ProvisionAccountantResult>('/provisioning/accounts-admin', { method: 'POST', body });
 }
 
 // --- Accountant reads (ACCOUNTANT) ----------------------------------------

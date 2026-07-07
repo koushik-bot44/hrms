@@ -9,8 +9,8 @@ export default function AccountantOverviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Accountant workspace"
-        description="Read-only oversight across every company — approved employees and their records."
+        title="Accounts workspace"
+        description="Read-only oversight of approved employees and their records, scoped to your access."
       />
       <RoleDashboard show="stats" />
       <h2 className="text-sm font-semibold text-muted-foreground">Approved employees</h2>

@@ -104,6 +104,15 @@ public class TeamsController {
     return teams.assign(scope(actor), id, UserRole.MANAGER, body, actor, request.getRemoteAddr());
   }
 
+  @PutMapping("/{id}/accountant")
+  public AssignMemberResult assignAccountant(
+      @PathVariable String id,
+      @RequestBody AssignMemberRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return teams.assign(scope(actor), id, UserRole.ACCOUNTANT, body, actor, request.getRemoteAddr());
+  }
+
   /** A COMPANY_ADMIN is always locked to their own company. */
   private static String scope(IhrmsPrincipal.User actor) {
     if (actor.companyId() == null) {
