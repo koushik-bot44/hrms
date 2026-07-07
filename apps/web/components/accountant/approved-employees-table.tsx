@@ -5,8 +5,10 @@ import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import type { ApprovedEmployeeRow } from '@/lib/contract';
+import { UserRole } from '@/lib/contract';
 import { getApprovedEmployees } from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
+import { useAuth } from '@/components/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DataTable } from '@/components/data-table';
@@ -61,15 +63,30 @@ const COLUMNS: ColumnDef<ApprovedEmployeeRow>[] = [
   },
 ];
 
-/** Approved employees across all companies (§2): server search + company filter + pagination. */
+/**
+ * Approved employees (§2): server search + pagination. The company filter/column only makes sense for
+ * the cross-company Accounts Admin — the team Accountant has a single company, so both are hidden.
+ */
 export function ApprovedEmployeesTable() {
+  const { session } = useAuth();
+  const crossCompany = session?.type === 'USER' && session.role === UserRole.ACCOUNTS_ADMIN;
+
   const [search, setSearch] = React.useState('');
   const [debounced, setDebounced] = React.useState('');
   const [companyId, setCompanyId] = React.useState('');
   const [page, setPage] = React.useState(0);
-  // The Accountant can't list companies (SUPER_ADMIN-only), so the filter is built from the companies
-  // seen in the approved rows — accumulated so a selection never empties the dropdown.
+  // The Accounts Admin can't list companies (SUPER_ADMIN-only), so the filter is built from the
+  // companies seen in the approved rows — accumulated so a selection never empties the dropdown.
   const [companies, setCompanies] = React.useState<Map<string, string>>(new Map());
+
+  // Drop the redundant Company column for the single-company team Accountant.
+  const columns = React.useMemo(
+    () =>
+      crossCompany
+        ? COLUMNS
+        : COLUMNS.filter((c) => (c as { accessorKey?: string }).accessorKey !== 'companyName'),
+    [crossCompany],
+  );
 
   React.useEffect(() => {
     const t = setTimeout(() => {
@@ -88,7 +105,7 @@ export function ApprovedEmployeesTable() {
 
   const data = query.data;
   React.useEffect(() => {
-    if (!data) return;
+    if (!data || !crossCompany) return;
     setCompanies((prev) => {
       const next = new Map(prev);
       for (const r of data.content) {
@@ -114,27 +131,29 @@ export function ApprovedEmployeesTable() {
             placeholder="Name, email or employee ID…"
           />
         </div>
-        <div className="space-y-1.5">
-          <label htmlFor="acc-company" className="text-xs font-medium text-muted-foreground">
-            Company
-          </label>
-          <select
-            id="acc-company"
-            value={companyId}
-            onChange={(e) => {
-              setCompanyId(e.target.value);
-              setPage(0);
-            }}
-            className={SELECT_CLASS}
-          >
-            <option value="">All companies</option>
-            {[...companies.entries()].map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {crossCompany ? (
+          <div className="space-y-1.5">
+            <label htmlFor="acc-company" className="text-xs font-medium text-muted-foreground">
+              Company
+            </label>
+            <select
+              id="acc-company"
+              value={companyId}
+              onChange={(e) => {
+                setCompanyId(e.target.value);
+                setPage(0);
+              }}
+              className={SELECT_CLASS}
+            >
+              <option value="">All companies</option>
+              {[...companies.entries()].map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
       </div>
 
       {query.isLoading ? (
@@ -148,7 +167,7 @@ export function ApprovedEmployeesTable() {
       ) : (
         <div className={cn('transition-opacity', dim && 'opacity-60')}>
           <DataTable
-            columns={COLUMNS}
+            columns={columns}
             data={data?.content ?? []}
             searchPlaceholder="Filter loaded rows…"
             emptyState={
