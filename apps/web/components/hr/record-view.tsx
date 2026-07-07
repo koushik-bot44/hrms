@@ -94,7 +94,9 @@ export function RecordView({
 
       <FormCard
         title="Form 1 — Personal Details"
-        status={f1?.status}
+        // Status is the LIVE review state (from `record`); the revealed snapshot only supplies
+        // unmasked field values and would otherwise freeze the badge after a reveal.
+        status={record.form1?.status}
         canAct={canAct}
         busy={busy}
         onVerify={() => onVerify?.('form', 'FORM1')}
@@ -105,7 +107,7 @@ export function RecordView({
 
       <FormCard
         title="Form 2 — Employee Info"
-        status={f2?.status}
+        status={record.form2?.status}
         canAct={canAct}
         busy={busy}
         onVerify={() => onVerify?.('form', 'FORM2')}
