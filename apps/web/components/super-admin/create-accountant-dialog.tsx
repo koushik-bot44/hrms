@@ -4,9 +4,9 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Calculator, CheckCircle2, UserPlus } from 'lucide-react';
+import { Calculator, CheckCircle2, Trash2, UserPlus } from 'lucide-react';
 import { ProvisionAccountantSchema, type ProvisionAccountantInput } from '@/lib/contract';
-import { getAccountantStatus, provisionAccountant } from '@/lib/api/accountant';
+import { getAccountantStatus, provisionAccountant, removeAccountsAdmin } from '@/lib/api/accountant';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { generatePassword } from '@/lib/auth/password';
 import { Button } from '@/components/ui/button';
@@ -31,7 +31,16 @@ export function CreateAccountantDialog() {
   const [open, setOpen] = React.useState(false);
   const queryClient = useQueryClient();
   const [created, setCreated] = React.useState<{ email: string; password: string } | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = React.useState(false);
   const status = useApiQuery(STATUS_KEY, getAccountantStatus);
+
+  const removeMutation = useApiMutation(() => removeAccountsAdmin(), {
+    successMessage: 'Accounts Admin removed',
+    onSuccess: () => {
+      setConfirmingRemove(false);
+      void queryClient.invalidateQueries({ queryKey: STATUS_KEY });
+    },
+  });
 
   const {
     register,
@@ -65,7 +74,10 @@ export function CreateAccountantDialog() {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) setCreated(null);
+        if (!next) {
+          setCreated(null);
+          setConfirmingRemove(false);
+        }
       }}
     >
       <DialogTrigger asChild>
@@ -86,16 +98,52 @@ export function CreateAccountantDialog() {
         {status.isLoading ? (
           <p className="py-4 text-sm text-muted-foreground">Checking…</p>
         ) : exists ? (
-          <div className="flex items-start gap-3 rounded-md border border-success/30 bg-success/5 p-4">
-            <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
-            <div className="space-y-1 text-sm">
-              <div className="font-medium">An Accounts Admin is already provisioned</div>
-              <p className="text-muted-foreground">
-                {status.data?.accountant?.name} · {status.data?.accountant?.email}
-              </p>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 rounded-md border border-success/30 bg-success/5 p-4">
+              <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
+              <div className="space-y-1 text-sm">
+                <div className="font-medium">An Accounts Admin is already provisioned</div>
+                <p className="text-muted-foreground">
+                  {status.data?.accountant?.name} · {status.data?.accountant?.email}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Only one Accounts Admin may exist. They can change their own password after signing in.
+                </p>
+              </div>
+            </div>
+
+            {confirmingRemove ? (
               <p className="text-xs text-muted-foreground">
-                Only one Accounts Admin may exist. They can change their own password after signing in.
+                Remove this Accounts Admin to provision a new one. Their sign-in stops working; their
+                audit history is kept.
               </p>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              {confirmingRemove ? (
+                <>
+                  <Button type="button" variant="ghost" onClick={() => setConfirmingRemove(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={removeMutation.isPending}
+                    onClick={() => removeMutation.mutate()}
+                  >
+                    {removeMutation.isPending ? 'Removing…' : 'Confirm remove'}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setConfirmingRemove(true)}
+                >
+                  <Trash2 />
+                  Remove &amp; replace
+                </Button>
+              )}
             </div>
           </div>
         ) : created ? (

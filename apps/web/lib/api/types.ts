@@ -206,7 +206,7 @@ export interface paths {
         get: operations["status"];
         put?: never;
         post: operations["provision"];
-        delete?: never;
+        delete: operations["remove_1"];
         options?: never;
         head?: never;
         patch?: never;
@@ -670,7 +670,7 @@ export interface paths {
         get: operations["get_2"];
         put?: never;
         post?: never;
-        delete: operations["remove_1"];
+        delete: operations["remove_2"];
         options?: never;
         head?: never;
         patch: operations["update_2"];
@@ -1993,6 +1993,26 @@ export interface operations {
             };
         };
     };
+    remove_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountantStatus"];
+                };
+            };
+        };
+    };
     submit: {
         parameters: {
             query?: never;
@@ -2838,7 +2858,7 @@ export interface operations {
             };
         };
     };
-    remove_1: {
+    remove_2: {
         parameters: {
             query?: never;
             header?: never;

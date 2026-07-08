@@ -20,6 +20,11 @@ export function provisionAccountant(body: ProvisionAccountantInput): Promise<Pro
   return apiFetch<ProvisionAccountantResult>('/provisioning/accounts-admin', { method: 'POST', body });
 }
 
+/** Remove the current Accounts Admin so a replacement can be provisioned. */
+export function removeAccountsAdmin(): Promise<AccountantStatus> {
+  return apiFetch<AccountantStatus>('/provisioning/accounts-admin', { method: 'DELETE' });
+}
+
 // --- Accountant reads (ACCOUNTANT) ----------------------------------------
 
 export interface ApprovedQuery {

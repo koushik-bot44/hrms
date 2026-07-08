@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -147,6 +148,30 @@ class AccountantApiTest {
             .andReturn();
     assertThat(json.readTree(login.getResponse().getContentAsString()).get("session").get("role").asText())
         .isEqualTo("ACCOUNTS_ADMIN");
+  }
+
+  @Test
+  void superAdminCanRemoveAndReplaceTheAccountsAdmin() throws Exception {
+    provision(superToken, "Casey Counts", "casey@books.test", "Ledger@2026");
+    assertThat(users.existsByRole(UserRole.ACCOUNTS_ADMIN)).isTrue();
+
+    // Remove it -> singleton is gone (audited), so a replacement can be created.
+    MvcResult removed =
+        mvc.perform(delete("/provisioning/accounts-admin").header("Authorization", "Bearer " + superToken))
+            .andExpect(status().isOk())
+            .andReturn();
+    assertThat(json.readTree(removed.getResponse().getContentAsString()).get("exists").asBoolean()).isFalse();
+    assertThat(users.existsByRole(UserRole.ACCOUNTS_ADMIN)).isFalse();
+    assertThat(auditLogs.findByAction("ACCOUNTS_ADMIN_REMOVED")).hasSize(1);
+
+    // A brand-new Accounts Admin (even reusing the freed email) can now be provisioned.
+    provision(superToken, "Dana Digits", "casey@books.test", "Ledger@2027");
+    assertThat(users.existsByRole(UserRole.ACCOUNTS_ADMIN)).isTrue();
+
+    // Only SUPER_ADMIN may remove.
+    String hrToken = token(user(companyA, UserRole.HR, "hr9@a.test"), UserRole.HR);
+    mvc.perform(delete("/provisioning/accounts-admin").header("Authorization", "Bearer " + hrToken))
+        .andExpect(status().isForbidden());
   }
 
   @Test
@@ -301,6 +326,15 @@ class AccountantApiTest {
     mvc.perform(
             req.header("Authorization", "Bearer " + accountantToken).contentType(MediaType.APPLICATION_JSON))
         .andExpect(status().isForbidden());
+  }
+
+  private void provision(String token, String name, String email, String password) throws Exception {
+    mvc.perform(
+            post("/provisioning/accounts-admin")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("name", name, "email", email, "password", password))))
+        .andExpect(status().isCreated());
   }
 
   private JsonNode provisioningStatus(String token) throws Exception {

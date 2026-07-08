@@ -141,6 +141,28 @@ public class AccountantService {
     return new ProvisionAccountantResult(view(user), isProd() ? null : input.password());
   }
 
+  /**
+   * Remove the current Accounts Admin so a new one can be provisioned (§2). Idempotent — a no-op if
+   * none exists. Audited. Their audit history is retained (audit rows reference a plain actorId, not an
+   * FK), and any already-issued access token simply expires.
+   */
+  public AccountantStatus remove(IhrmsPrincipal.User actor, String ip) {
+    users
+        .findFirstByRoleOrderByCreatedAtAsc(UserRole.ACCOUNTS_ADMIN)
+        .ifPresent(
+            admin -> {
+              users.delete(admin);
+              audit.record(
+                  new AuditActor("USER", actor.userId(), null),
+                  "ACCOUNTS_ADMIN_REMOVED",
+                  "User",
+                  admin.getId(),
+                  Map.of("email", admin.getEmail()),
+                  ip);
+            });
+    return new AccountantStatus(false, null);
+  }
+
   // --- Reads (scoped by role: ACCOUNTS_ADMIN cross-company, ACCOUNTANT own-team) --
 
   /** APPROVED employees in scope, optional company filter (Accounts Admin only) + name/email/ID search. */
