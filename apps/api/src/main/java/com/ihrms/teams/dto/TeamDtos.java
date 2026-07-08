@@ -20,11 +20,13 @@ public final class TeamDtos {
           String name) {}
 
   /**
-   * {@code AssignMemberInput = { userId } | { name, email, password } } — attach an existing company
-   * user OR create a new one (with an initial sign-in password, min 8, for staff email+password login,
-   * §6). The branch is resolved (and validated) in the service.
+   * {@code AssignMemberInput = { userId } | { name, localPart, password } } — attach an existing company
+   * user OR create a new one. For a new user, {@code localPart} forms the mailbox address
+   * {@code localPart@companyDomain}, which IS the login email (§8; {@code email} is a transitional
+   * fallback). The branch is resolved (and validated) in the service.
    */
-  public record AssignMemberRequest(String userId, String name, String email, String password) {}
+  public record AssignMemberRequest(
+      String userId, String name, String localPart, String email, String password) {}
 
   public record TeamMemberView(String id, String name, String email, UserRole role, String status) {}
 

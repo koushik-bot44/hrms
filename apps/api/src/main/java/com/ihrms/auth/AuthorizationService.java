@@ -1,9 +1,12 @@
 package com.ihrms.auth;
 
+import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.TeamRepository;
+import java.util.EnumSet;
 import java.util.Objects;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -131,5 +134,46 @@ public class AuthorizationService {
               && teams.existsByCompanyIdAndAccountantUserIdAndHrUserId(
                   u.companyId(), u.userId(), employee.onboardingHrId());
     };
+  }
+
+  // --- Internal mail send graph (§8) ----------------------------------------
+
+  /**
+   * The ONE central check for internal mail: may {@code a} and {@code b} message each other? Symmetric
+   * (both directions allowed together). The graph (§8):
+   *
+   * <pre>
+   *   SUPER_ADMIN   &lt;-&gt; COMPANY_ADMIN   (any company)
+   *   SUPER_ADMIN   &lt;-&gt; ACCOUNTS_ADMIN
+   *   COMPANY_ADMIN &lt;-&gt; HR | MANAGER | ACCOUNTANT   (SAME company only)
+   * </pre>
+   *
+   * Everything else — and every cross-company company-domain pair — is denied. Employees are not in mail.
+   */
+  public boolean canSendMail(User a, User b) {
+    if (a == null || b == null || a.getId().equals(b.getId())) {
+      return false; // no self-send
+    }
+    EnumSet<UserRole> pair = EnumSet.of(a.getRole(), b.getRole());
+
+    // Platform-level pairs — no company constraint (SUPER_ADMIN / ACCOUNTS_ADMIN have no company).
+    if (pair.equals(EnumSet.of(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN))
+        || pair.equals(EnumSet.of(UserRole.SUPER_ADMIN, UserRole.ACCOUNTS_ADMIN))) {
+      return true;
+    }
+
+    // Company Admin <-> its own company's HR / Manager / Accountant.
+    User admin = a.getRole() == UserRole.COMPANY_ADMIN ? a : b.getRole() == UserRole.COMPANY_ADMIN ? b : null;
+    if (admin != null) {
+      User other = admin == a ? b : a;
+      boolean companyStaff =
+          other.getRole() == UserRole.HR
+              || other.getRole() == UserRole.MANAGER
+              || other.getRole() == UserRole.ACCOUNTANT;
+      return companyStaff
+          && admin.getCompanyId() != null
+          && admin.getCompanyId().equals(other.getCompanyId()); // never cross-company
+    }
+    return false;
   }
 }

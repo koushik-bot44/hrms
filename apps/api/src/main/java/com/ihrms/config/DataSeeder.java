@@ -33,7 +33,7 @@ public class DataSeeder implements CommandLineRunner {
   public DataSeeder(
       UserRepository users,
       PasswordEncoder encoder,
-      @Value("${app.seed.super-admin-email:superadmin@ihrms.local}") String email,
+      @Value("${app.seed.super-admin-email:superadmin@ihrms}") String email,
       @Value("${app.seed.super-admin-password:SuperAdmin@123}") String password) {
     this.users = users;
     this.encoder = encoder;
@@ -43,17 +43,29 @@ public class DataSeeder implements CommandLineRunner {
 
   @Override
   public void run(String... args) {
+    String localPart = email.contains("@") ? email.substring(0, email.indexOf('@')) : email;
     if (users.findByEmail(email).isPresent()) {
       log.info("SUPER_ADMIN {} already present; skipping seed", email);
       return;
     }
-    User admin = new User();
+    // Reconcile any legacy SUPER_ADMIN (older seed email) to the platform mailbox superadmin@ihrms (§8),
+    // keeping its password so the login it already knows still works.
+    User admin = users.findFirstByRoleOrderByCreatedAtAsc(UserRole.SUPER_ADMIN).orElseGet(User::new);
+    boolean fresh = admin.getPasswordHash() == null;
     admin.setEmail(email);
-    admin.setName("Super Admin");
+    admin.setMailLocalPart(localPart);
+    if (admin.getName() == null) {
+      admin.setName("Super Admin");
+    }
     admin.setRole(UserRole.SUPER_ADMIN);
-    admin.setPasswordHash(encoder.encode(password));
+    if (fresh) {
+      admin.setPasswordHash(encoder.encode(password));
+    }
     admin.setStatus("ACTIVE");
     users.save(admin);
-    log.warn("[DEV SEED] SUPER_ADMIN sign-in -> {} / {}  (email + password at /login)", email, password);
+    log.warn(
+        "[DEV SEED] SUPER_ADMIN sign-in -> {} / {}  (email + password at /login)",
+        email,
+        fresh ? password : "(existing password kept)");
   }
 }

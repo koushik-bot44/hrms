@@ -15,7 +15,9 @@ public final class CompanyDtos {
       @NotBlank(message = "Name is required") @Size(min = 2, max = 120, message = "Name is too long")
           String name,
       // Upper-cased + COMPANY_CODE_REGEX-validated in the service.
-      @NotBlank(message = "Code is required") String code) {}
+      @NotBlank(message = "Code is required") String code,
+      // Internal-mail domain (§8); optional — defaults to the lowercased code when omitted.
+      @Size(max = 63, message = "Mail domain is too long") String mailDomain) {}
 
   /** At least one field required (enforced in the service). */
   public record UpdateCompanyRequest(
@@ -23,10 +25,16 @@ public final class CompanyDtos {
       @Pattern(regexp = "ACTIVE|SUSPENDED", message = "status must be ACTIVE or SUSPENDED")
           String status) {}
 
+  /**
+   * The mailbox local part (§8) forms the Company Admin's address {@code localPart@companyDomain}, which
+   * IS their login email. {@code email} is a transitional fallback for callers not yet sending a local
+   * part; exactly one of {@code localPart} / {@code email} must be provided (enforced in the service).
+   */
   public record ProvisionAdminRequest(
       @NotBlank(message = "Name is required") @Size(min = 2, max = 120, message = "Name is too long")
           String name,
-      @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
+      @Size(max = 64, message = "Mailbox name is too long") String localPart,
+      @Email(message = "Enter a valid email") String email,
       // The Company Admin's initial sign-in password (staff use email + password, §6).
       @NotBlank(message = "An initial password is required")
           @Size(min = 8, message = "Use at least 8 characters")

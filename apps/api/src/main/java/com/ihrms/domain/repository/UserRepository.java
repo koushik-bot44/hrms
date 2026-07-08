@@ -17,6 +17,9 @@ public interface UserRepository extends JpaRepository<User, String> {
 
   boolean existsByCompanyIdAndRole(String companyId, UserRole role);
 
+  /** Staff of the given roles across the portal — the candidate set for mail contacts (§8). */
+  List<User> findByRoleIn(java.util.Collection<UserRole> roles);
+
   /** Portal-wide role checks (the ACCOUNTANT singleton, which belongs to no company). */
   boolean existsByRole(UserRole role);
 

@@ -345,7 +345,43 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
 
 ---
 
-## 8. Deployment Architecture (existing shell — keep as-is)
+## 8. Internal Mail
+
+A lightweight **internal-only** messaging system between IHRMS accounts — no external email, no SMTP or
+DNS. A "message" is just rows in our own DB, scoped exactly like everything else.
+
+- **Addresses are logical identifiers `localpart@domain`** — display/reference handles, not routable
+  email. Routing/authorization is by the account's **role + companyId**, never by parsing the address.
+  - The **platform domain `ihrms`** carries the two top-level roles: `SUPER_ADMIN` and `ACCOUNTS_ADMIN`
+    (e.g. `superadmin@ihrms`, `accounts@ihrms`).
+  - Each **Company has a mail domain** (e.g. `anvicorp`), set by the Super Admin at company creation
+    (prefilled from the company's code, editable, **unique across companies**). Its staff
+    (`COMPANY_ADMIN` / `HR` / `MANAGER` / `ACCOUNTANT`) get `localpart@companyDomain`.
+- **One mailbox per staff `User`, and the mailbox address IS the login email — a single identity, no
+  second login.** When a user is provisioned the assigner types the **local part**; the system forms
+  `localpart@domain`, and sets it as **both** the user's `mailLocalPart` and login `email`. Because the
+  address is the login email, uniqueness "within a domain" is enforced by the **existing global
+  email-unique index** (a duplicate `localpart@domain` is a duplicate email).
+- **Send graph — who may message whom (enforced server-side as ONE central check, symmetric both
+  directions):**
+  - `SUPER_ADMIN` ↔ `COMPANY_ADMIN` (any company)
+  - `SUPER_ADMIN` ↔ `ACCOUNTS_ADMIN`
+  - `COMPANY_ADMIN` ↔ `HR` (same company)
+  - `COMPANY_ADMIN` ↔ `MANAGER` (same company)
+  - `COMPANY_ADMIN` ↔ `ACCOUNTANT` (same company)
+  - **Everything else is forbidden. Never cross-company** — a company-domain mailbox reaches only
+    same-company counterparts (plus, for a Company Admin, the Super Admin). **Employees are not in mail**
+    in this stage.
+- **Model:** a `Message` (sender, subject, text body, createdAt) fans out to one or more
+  `MessageRecipient` rows (recipient + nullable `readAt`) — a child table so multi-recipient is possible
+  later. The sender sees **Sent**, each recipient sees **Inbox**; opening a message stamps the
+  recipient's `readAt`. **Text only in v1** (no attachments). Sending is a mutation → audited
+  (`MAIL_SENT`); opening is an audited read. The send check lives in the authorization component
+  (`canSendMail`) so it can never be bypassed or duplicated.
+
+---
+
+## 9. Deployment Architecture (existing shell — keep as-is)
 
 The project is built into the already-deployed monorepo shell. **Do not change the deployment
 pipeline.**
@@ -373,7 +409,7 @@ repo root
 
 ---
 
-## 9. Design Language & UX
+## 10. Design Language & UX
 
 Goal: **interactive, user-friendly, trustworthy.** One coherent design system across four distinct
 surfaces, each designed for its specific job (not a generic admin template).
@@ -394,7 +430,7 @@ surfaces, each designed for its specific job (not a generic admin template).
 
 ---
 
-## 10. Conventions (for Claude Code)
+## 11. Conventions (for Claude Code)
 
 - Work only in the app/package named in a given phase; survey before building; smallest change.
 - **Schema is additive-only**; every change is a new Prisma migration; never edit a past migration.
@@ -408,7 +444,7 @@ surfaces, each designed for its specific job (not a generic admin template).
 
 ---
 
-## 11. Deferred / Open _[parked]_
+## 12. Deferred / Open _[parked]_
 
 - **Offer & experience letter issuance** — whether HR uploads or the system generates them, and at
   which stage. (Records exist conceptually under the employee; flow TBD.)

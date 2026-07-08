@@ -6,11 +6,14 @@ import com.ihrms.auth.AccountEmails;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
 import com.ihrms.domain.enums.UserRole;
+import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
+import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
+import com.ihrms.mail.MailAddresses;
 import com.ihrms.teams.dto.TeamDtos.AssignMemberRequest;
 import com.ihrms.teams.dto.TeamDtos.AssignMemberResult;
 import com.ihrms.teams.dto.TeamDtos.CreateTeamRequest;
@@ -40,9 +43,11 @@ public class TeamsService {
 
   private final TeamRepository teams;
   private final UserRepository users;
+  private final CompanyRepository companies;
   private final ApprovalRequestRepository approvals;
   private final AuditService audit;
   private final MailService mail;
+  private final MailAddresses mailAddresses;
   private final PasswordEncoder encoder;
   private final AccountEmails accountEmails;
   private final Environment env;
@@ -50,17 +55,21 @@ public class TeamsService {
   public TeamsService(
       TeamRepository teams,
       UserRepository users,
+      CompanyRepository companies,
       ApprovalRequestRepository approvals,
       AuditService audit,
       MailService mail,
+      MailAddresses mailAddresses,
       PasswordEncoder encoder,
       AccountEmails accountEmails,
       Environment env) {
     this.teams = teams;
     this.users = users;
+    this.companies = companies;
     this.approvals = approvals;
     this.audit = audit;
     this.mail = mail;
+    this.mailAddresses = mailAddresses;
     this.encoder = encoder;
     this.accountEmails = accountEmails;
     this.env = env;
@@ -147,11 +156,15 @@ public class TeamsService {
       }
       userId = user.getId();
     } else {
-      if (isBlank(input.name()) || isBlank(input.email())) {
-        throw badRequest("Provide a userId or a name and email");
+      if (isBlank(input.name())) {
+        throw badRequest("Provide a userId, or a name and mailbox name");
       }
-      String email = input.email().trim().toLowerCase();
-      accountEmails.assertAvailableForStaff(email); // unique across staff + employees (§6)
+      // The mailbox address = localPart@companyDomain, and IS the login email (§8).
+      Company company =
+          companies.findById(companyId).orElseThrow(() -> notFound("Company not found"));
+      var address =
+          mailAddresses.resolve(input.localPart(), input.email(), company.getMailDomain());
+      accountEmails.assertAvailableForStaff(address.email()); // unique across staff + employees (§6)
       // New staff sign in with email + password (§6): an initial password (min 8) is required.
       String password = input.password();
       if (isBlank(password) || password.trim().length() < 8) {
@@ -159,7 +172,8 @@ public class TeamsService {
       }
       User created = new User();
       created.setName(input.name().trim());
-      created.setEmail(email);
+      created.setEmail(address.email());
+      created.setMailLocalPart(address.localPart());
       created.setRole(role);
       created.setCompanyId(companyId);
       created.setTeamId(id);
@@ -168,10 +182,10 @@ public class TeamsService {
       try {
         users.saveAndFlush(created);
       } catch (DataIntegrityViolationException e) {
-        throw conflict("Email \"" + email + "\" is already in use");
+        throw conflict("Email \"" + address.email() + "\" is already in use");
       }
       userId = created.getId();
-      mail.sendStaffInvite(email, role.name(), password);
+      mail.sendStaffInvite(address.email(), role.name(), password);
       devPassword = isProd() ? null : password;
     }
 

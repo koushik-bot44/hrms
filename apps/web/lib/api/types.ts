@@ -356,6 +356,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mail/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees": {
         parameters: {
             query?: never;
@@ -804,6 +820,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mail/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["unreadCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["sent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/messages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["message"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["inbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["contacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1003,6 +1099,7 @@ export interface components {
         AssignMemberRequest: {
             userId?: string;
             name?: string;
+            localPart?: string;
             email?: string;
             password?: string;
         };
@@ -1188,7 +1285,8 @@ export interface components {
         };
         ProvisionAccountantRequest: {
             name: string;
-            email: string;
+            localPart?: string;
+            email?: string;
             password: string;
         };
         AccountantView: {
@@ -1297,6 +1395,14 @@ export interface components {
             employeeStatus?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             hrName?: string;
         };
+        SendMessageRequest: {
+            toUserId: string;
+            subject: string;
+            body: string;
+        };
+        SendMessageResult: {
+            id?: string;
+        };
         OnboardEmployeeRequest: {
             fullName: string;
             email: string;
@@ -1337,6 +1443,7 @@ export interface components {
         CreateCompanyRequest: {
             name: string;
             code: string;
+            mailDomain?: string;
         };
         CompanyAdminView: {
             id?: string;
@@ -1361,7 +1468,8 @@ export interface components {
         };
         ProvisionAdminRequest: {
             name: string;
-            email: string;
+            localPart?: string;
+            email?: string;
             password: string;
         };
         ProvisionAdminResult: {
@@ -1479,12 +1587,67 @@ export interface components {
             /** Format: int32 */
             expiresInSeconds?: number;
         };
+        UnreadCountView: {
+            /** Format: int64 */
+            unread?: number;
+        };
         Pageable: {
             /** Format: int32 */
             page?: number;
             /** Format: int32 */
             size?: number;
             sort?: string[];
+        };
+        MailPartyView: {
+            userId?: string;
+            name?: string;
+            address?: string;
+            /** @enum {string} */
+            role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
+        };
+        SentMessageView: {
+            id?: string;
+            subject?: string;
+            createdAt?: string;
+            to?: components["schemas"]["MailPartyView"][];
+        };
+        SentPage: {
+            content?: components["schemas"]["SentMessageView"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        MessageView: {
+            id?: string;
+            subject?: string;
+            body?: string;
+            createdAt?: string;
+            from?: components["schemas"]["MailPartyView"];
+            to?: components["schemas"]["MailPartyView"][];
+            read?: boolean;
+        };
+        InboxMessageView: {
+            id?: string;
+            subject?: string;
+            createdAt?: string;
+            from?: components["schemas"]["MailPartyView"];
+            read?: boolean;
+        };
+        InboxPage: {
+            content?: components["schemas"]["InboxMessageView"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
         };
         EmployeePage: {
             content?: components["schemas"]["EmployeeSummaryView"][];
@@ -2211,6 +2374,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApprovalView"];
+                };
+            };
+        };
+    };
+    send: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SendMessageResult"];
                 };
             };
         };
@@ -3074,6 +3261,112 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApprovalView"][];
+                };
+            };
+        };
+    };
+    unreadCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["UnreadCountView"];
+                };
+            };
+        };
+    };
+    sent: {
+        parameters: {
+            query: {
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SentPage"];
+                };
+            };
+        };
+    };
+    message: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MessageView"];
+                };
+            };
+        };
+    };
+    inbox: {
+        parameters: {
+            query: {
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InboxPage"];
+                };
+            };
+        };
+    };
+    contacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MailPartyView"][];
                 };
             };
         };

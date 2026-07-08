@@ -65,6 +65,7 @@ public class AccountantService {
   private final EmployeeRecordAssembler assembler;
   private final AuditQueryService auditQuery;
   private final AccountEmails accountEmails;
+  private final com.ihrms.mail.MailAddresses mailAddresses;
   private final PasswordEncoder encoder;
   private final MailService mail;
   private final AuditService audit;
@@ -78,6 +79,7 @@ public class AccountantService {
       EmployeeRecordAssembler assembler,
       AuditQueryService auditQuery,
       AccountEmails accountEmails,
+      com.ihrms.mail.MailAddresses mailAddresses,
       PasswordEncoder encoder,
       MailService mail,
       AuditService audit,
@@ -89,6 +91,7 @@ public class AccountantService {
     this.assembler = assembler;
     this.auditQuery = auditQuery;
     this.accountEmails = accountEmails;
+    this.mailAddresses = mailAddresses;
     this.encoder = encoder;
     this.mail = mail;
     this.audit = audit;
@@ -112,11 +115,15 @@ public class AccountantService {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "An Accounts Admin already exists (only one is allowed)");
     }
-    String email = input.email().trim().toLowerCase();
-    accountEmails.assertAvailableForStaff(email); // unique across staff + employees (§6)
+    // Platform-domain mailbox: localPart@ihrms, which IS the login email (§8).
+    var address =
+        mailAddresses.resolve(
+            input.localPart(), input.email(), com.ihrms.mail.MailAddresses.PLATFORM_DOMAIN);
+    accountEmails.assertAvailableForStaff(address.email()); // unique across staff + employees (§6)
 
     User user = new User();
-    user.setEmail(email);
+    user.setEmail(address.email());
+    user.setMailLocalPart(address.localPart());
     user.setName(input.name().trim());
     user.setRole(UserRole.ACCOUNTS_ADMIN);
     user.setCompanyId(null); // cross-company, like SUPER_ADMIN
@@ -125,17 +132,18 @@ public class AccountantService {
     try {
       users.save(user);
     } catch (DataIntegrityViolationException e) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "Email \"" + email + "\" is already in use");
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Email \"" + address.email() + "\" is already in use");
     }
 
-    mail.sendStaffInvite(email, "ACCOUNTS_ADMIN", input.password());
+    mail.sendStaffInvite(address.email(), "ACCOUNTS_ADMIN", input.password());
     // Portal-level event (no companyId) — the Accounts Admin belongs to no company.
     audit.record(
         new AuditActor("USER", actor.userId(), null),
         "ACCOUNTS_ADMIN_PROVISIONED",
         "User",
         user.getId(),
-        Map.of("email", email),
+        Map.of("email", address.email()),
         ip);
 
     return new ProvisionAccountantResult(view(user), isProd() ? null : input.password());

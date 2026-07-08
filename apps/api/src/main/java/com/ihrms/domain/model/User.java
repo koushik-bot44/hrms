@@ -33,6 +33,10 @@ public class User {
   @Column(name = "email", nullable = false)
   private String email;
 
+  /** Internal-mail local part; the mailbox address {@code mailLocalPart@domain} == the login email (§8). */
+  @Column(name = "mailLocalPart")
+  private String mailLocalPart;
+
   @Column(name = "name", nullable = false)
   private String name;
 

@@ -50,6 +50,7 @@ public class CompaniesService {
   private final EmployeeRepository employees;
   private final AuditService audit;
   private final MailService mail;
+  private final com.ihrms.mail.MailAddresses mailAddresses;
   private final PasswordEncoder encoder;
   private final AccountEmails accountEmails;
   private final Environment env;
@@ -63,6 +64,7 @@ public class CompaniesService {
       EmployeeRepository employees,
       AuditService audit,
       MailService mail,
+      com.ihrms.mail.MailAddresses mailAddresses,
       PasswordEncoder encoder,
       AccountEmails accountEmails,
       Environment env,
@@ -74,6 +76,7 @@ public class CompaniesService {
     this.employees = employees;
     this.audit = audit;
     this.mail = mail;
+    this.mailAddresses = mailAddresses;
     this.encoder = encoder;
     this.accountEmails = accountEmails;
     this.env = env;
@@ -83,16 +86,22 @@ public class CompaniesService {
 
   public CompanyDetailView create(CreateCompanyRequest input, IhrmsPrincipal.User actor, String ip) {
     String code = normalizeCode(input.code());
+    // The mail domain (§8): the Super Admin may set it, else it defaults to the lowercased code.
+    String mailDomain =
+        input.mailDomain() != null && !input.mailDomain().isBlank()
+            ? mailAddresses.normalizeDomain(input.mailDomain())
+            : code.toLowerCase();
     Company company = new Company();
     company.setName(input.name().trim());
     company.setCode(code);
+    company.setMailDomain(mailDomain);
     try {
       companies.save(company);
     } catch (DataIntegrityViolationException e) {
-      throw conflict("Company code \"" + code + "\" is already in use");
+      throw conflict("Company code \"" + code + "\" or mail domain \"" + mailDomain + "\" is already in use");
     }
     audit(actor, company.getId(), "COMPANY_CREATED", "Company", company.getId(),
-        Map.of("name", company.getName(), "code", code), ip);
+        Map.of("name", company.getName(), "code", code, "mailDomain", mailDomain), ip);
     return detail(company.getId());
   }
 
@@ -251,11 +260,13 @@ public class CompaniesService {
       throw conflict("This company already has an admin");
     }
 
-    String email = input.email().trim().toLowerCase();
-    accountEmails.assertAvailableForStaff(email); // unique across staff + employees (§6)
+    // The mailbox address = localPart@companyDomain, and IS the login email (§8).
+    var address = mailAddresses.resolve(input.localPart(), input.email(), company.getMailDomain());
+    accountEmails.assertAvailableForStaff(address.email()); // unique across staff + employees (§6)
     String password = input.password(); // admin-set initial staff password (§6)
     User user = new User();
-    user.setEmail(email);
+    user.setEmail(address.email());
+    user.setMailLocalPart(address.localPart());
     user.setName(input.name().trim());
     user.setRole(UserRole.COMPANY_ADMIN);
     user.setCompanyId(id);
@@ -264,12 +275,12 @@ public class CompaniesService {
     try {
       users.save(user);
     } catch (DataIntegrityViolationException e) {
-      throw conflict("Email \"" + email + "\" is already in use");
+      throw conflict("Email \"" + address.email() + "\" is already in use");
     }
 
-    mail.sendCompanyAdminInvite(email, company.getName(), password);
+    mail.sendCompanyAdminInvite(address.email(), company.getName(), password);
     audit(actor, id, "COMPANY_ADMIN_PROVISIONED", "User", user.getId(),
-        Map.of("email", email), ip);
+        Map.of("email", address.email()), ip);
 
     // Echo the initial password (dev only) — the provisioning admin already knows it (they set it).
     return new ProvisionAdminResult(adminView(user), isProd() ? null : password);
