@@ -20,9 +20,12 @@ import { RecordView } from '@/components/hr/record-view';
 export function ManagerRecordDialog({
   approvalId,
   label,
+  onOpened,
 }: {
   approvalId: string;
   label: string;
+  /** Fires the first time the record is opened — the Manager must view it before approving (§3.3). */
+  onOpened?: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const query = useApiQuery(
@@ -33,7 +36,13 @@ export function ManagerRecordDialog({
   const record = query.data;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) onOpened?.();
+      }}
+    >
       <DialogTrigger asChild>
         <Button type="button" variant="outline" size="sm">
           <FileText className="size-4" />

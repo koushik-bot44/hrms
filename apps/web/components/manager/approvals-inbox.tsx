@@ -29,6 +29,9 @@ type Deciding = { id: string; action: 'approve' | 'reject'; label: string } | nu
 export function ApprovalsInbox() {
   const queryClient = useQueryClient();
   const [deciding, setDeciding] = React.useState<Deciding>(null);
+  // The Manager must open an employee's record before approving them (§3.3).
+  const [viewed, setViewed] = React.useState<ReadonlySet<string>>(new Set());
+  const markViewed = (id: string) => setViewed((prev) => new Set(prev).add(id));
   const query = useApiQuery(KEY, getApprovals);
 
   const dropFromQueue = (id: string) =>
@@ -107,7 +110,11 @@ export function ApprovalsInbox() {
               Onboarded by {a.hrName ?? 'HR'}
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <ManagerRecordDialog approvalId={a.id} label={a.fullName ?? 'Employee'} />
+              <ManagerRecordDialog
+                approvalId={a.id}
+                label={a.fullName ?? 'Employee'}
+                onOpened={() => markViewed(a.id)}
+              />
               <Button
                 size="sm"
                 variant="outline"
@@ -121,6 +128,8 @@ export function ApprovalsInbox() {
               <Button
                 size="sm"
                 variant="success"
+                disabled={!viewed.has(a.id)}
+                title={viewed.has(a.id) ? undefined : 'View the record before approving'}
                 onClick={() =>
                   setDeciding({ id: a.id, action: 'approve', label: a.fullName ?? a.employeeEmail ?? '' })
                 }
