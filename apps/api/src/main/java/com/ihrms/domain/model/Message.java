@@ -29,6 +29,14 @@ public class Message {
   @Column(name = "id")
   private String id;
 
+  /** The conversation this message belongs to (§8). A new compose mints one; replies reuse it. */
+  @Column(name = "threadId", nullable = false)
+  private String threadId;
+
+  /** The message this one replies to (the reply chain); null for a thread's first message. */
+  @Column(name = "parentMessageId")
+  private String parentMessageId;
+
   @Column(name = "senderUserId", nullable = false)
   private String senderUserId;
 
@@ -37,6 +45,11 @@ public class Message {
 
   @Column(name = "body", nullable = false)
   private String body;
+
+  /** The sender's per-user soft-hide (§8): set when the sender deletes; the row is never destroyed. */
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "senderDeletedAt")
+  private Instant senderDeletedAt;
 
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)

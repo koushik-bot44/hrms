@@ -2,38 +2,57 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   Inbox,
   Mail,
+  MailMinus,
+  MailOpen,
+  Search,
   Send,
   SquarePen,
+  Trash2,
+  X,
 } from 'lucide-react';
-import type { InboxMessage, SentMessage } from '@/lib/contract';
+import type { ThreadListItem, ThreadPage } from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
-import { useApiQuery } from '@/lib/api/hooks';
+import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import type { ApiError } from '@/lib/api/client';
-import { getInbox, getSent, getUnreadCount, mailKeys } from '@/lib/api/mail';
+import {
+  deleteThread,
+  getInbox,
+  getSent,
+  getUnreadCount,
+  mailKeys,
+  markThreadRead,
+  markThreadUnread,
+  searchMail,
+} from '@/lib/api/mail';
 import { relativeTime } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ComposeDialog } from '@/components/mail/compose-dialog';
-import { MessageView } from '@/components/mail/message-view';
+import { ThreadView } from '@/components/mail/thread-view';
 
 type Folder = 'inbox' | 'sent';
 
-/** The full webmail client (§8): folders (Inbox/Sent) + message list + reading pane + compose. */
+/** The full webmail client (§8, Stage 3): Inbox/Sent thread lists + search + reading pane + compose. */
 export function Mailbox() {
   const { session } = useAuth();
   const [folder, setFolder] = React.useState<Folder>('inbox');
   const [page, setPage] = React.useState(0);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [composeOpen, setComposeOpen] = React.useState(false);
+  const [searchInput, setSearchInput] = React.useState('');
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const searching = searchTerm.trim().length > 0;
 
   const myAddress = session?.type === 'USER' ? session.email : '';
   const myName = session?.type === 'USER' ? session.name : '';
@@ -44,20 +63,39 @@ export function Mailbox() {
     staleTime: 15_000,
   });
   const inbox = useApiQuery(mailKeys.inbox(page), (s) => getInbox(page, 20, s), {
-    enabled: folder === 'inbox',
+    enabled: !searching && folder === 'inbox',
   });
   const sent = useApiQuery(mailKeys.sent(page), (s) => getSent(page, 20, s), {
-    enabled: folder === 'sent',
+    enabled: !searching && folder === 'sent',
+  });
+  const results = useApiQuery(mailKeys.search(searchTerm, page), (s) => searchMail(searchTerm, page, 20, s), {
+    enabled: searching,
   });
 
   const switchFolder = (next: Folder) => {
     setFolder(next);
     setPage(0);
     setSelectedId(null);
+    setSearchTerm('');
+    setSearchInput('');
   };
 
-  const active = folder === 'inbox' ? inbox : sent;
+  const submitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchTerm(searchInput.trim());
+    setPage(0);
+    setSelectedId(null);
+  };
+  const clearSearch = () => {
+    setSearchTerm('');
+    setSearchInput('');
+    setPage(0);
+    setSelectedId(null);
+  };
+
+  const active = searching ? results : folder === 'inbox' ? inbox : sent;
   const unreadCount = unread.data?.unread ?? 0;
+  const mode: ListMode = searching ? 'search' : folder;
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
@@ -76,12 +114,35 @@ export function Mailbox() {
             ) : null}
           </div>
         </div>
+
+        <form onSubmit={submitSearch} className="relative hidden max-w-xs flex-1 sm:block">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search your mail"
+            aria-label="Search your mail"
+            className="h-9 pl-8 pr-8"
+          />
+          {searchInput ? (
+            <button
+              type="button"
+              onClick={clearSearch}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          ) : null}
+        </form>
+
         <div className="flex items-center gap-2">
           <a
             href="/mail"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:inline-flex"
+            className="hidden items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground md:inline-flex"
           >
             <ExternalLink className="size-4" />
             Open in new tab
@@ -103,23 +164,31 @@ export function Mailbox() {
           <FolderButton
             icon={Inbox}
             label="Inbox"
-            active={folder === 'inbox'}
+            active={!searching && folder === 'inbox'}
             badge={unreadCount}
             onClick={() => switchFolder('inbox')}
           />
           <FolderButton
             icon={Send}
             label="Sent"
-            active={folder === 'sent'}
+            active={!searching && folder === 'sent'}
             onClick={() => switchFolder('sent')}
           />
+          {searching ? (
+            <div className="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
+              <span className="truncate">Results for “{searchTerm}”</span>
+              <button type="button" onClick={clearSearch} aria-label="Clear search">
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ) : null}
         </aside>
 
-        {/* Mobile folder switch + compose */}
+        {/* Mobile controls */}
         <div className="flex w-full flex-col md:hidden">
           <div className="flex items-center gap-2 border-b p-2">
             <Button
-              variant={folder === 'inbox' ? 'secondary' : 'ghost'}
+              variant={!searching && folder === 'inbox' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => switchFolder('inbox')}
             >
@@ -127,7 +196,7 @@ export function Mailbox() {
               Inbox{unreadCount > 0 ? ` (${unreadCount})` : ''}
             </Button>
             <Button
-              variant={folder === 'sent' ? 'secondary' : 'ghost'}
+              variant={!searching && folder === 'sent' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => switchFolder('sent')}
             >
@@ -136,11 +205,21 @@ export function Mailbox() {
             </Button>
             <Button size="sm" className="ml-auto" onClick={() => setComposeOpen(true)}>
               <SquarePen />
-              Compose
+              New
             </Button>
           </div>
+          <form onSubmit={submitSearch} className="relative border-b p-2">
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search your mail"
+              className="h-9 pl-8"
+            />
+          </form>
           <MobilePanes
-            folder={folder}
+            mode={mode}
             selectedId={selectedId}
             setSelectedId={setSelectedId}
             active={active}
@@ -151,9 +230,9 @@ export function Mailbox() {
 
         {/* Desktop: list + reading pane */}
         <div className="hidden min-w-0 flex-1 md:flex">
-          <div className="flex w-[22rem] shrink-0 flex-col border-r">
-            <MessageList
-              folder={folder}
+          <div className="flex w-[24rem] shrink-0 flex-col border-r">
+            <ThreadList
+              mode={mode}
               selectedId={selectedId}
               onSelect={setSelectedId}
               query={active}
@@ -161,7 +240,11 @@ export function Mailbox() {
             <Pager query={active} page={page} setPage={setPage} />
           </div>
           <div className="min-w-0 flex-1">
-            <MessageView messageId={selectedId} onBack={() => setSelectedId(null)} />
+            <ThreadView
+              threadId={selectedId}
+              onBack={() => setSelectedId(null)}
+              onDeleted={() => setSelectedId(null)}
+            />
           </div>
         </div>
       </div>
@@ -169,11 +252,16 @@ export function Mailbox() {
       <ComposeDialog
         open={composeOpen}
         onOpenChange={setComposeOpen}
-        onSent={() => switchFolder('sent')}
+        onSent={(threadId) => {
+          switchFolder('sent');
+          setSelectedId(threadId);
+        }}
       />
     </div>
   );
 }
+
+type ListMode = Folder | 'search';
 
 function FolderButton({
   icon: Icon,
@@ -211,24 +299,20 @@ function FolderButton({
   );
 }
 
-/**
- * A structural view of either list query (inbox or sent) — just the fields the list/pager read, so one
- * component can render either folder without wrestling react-query's per-state result union.
- */
 interface ListQuery {
   isLoading: boolean;
   isError: boolean;
   error: ApiError | null;
-  data?: { content: (InboxMessage | SentMessage)[]; totalPages: number };
+  data?: ThreadPage;
 }
 
-function MessageList({
-  folder,
+function ThreadList({
+  mode,
   selectedId,
   onSelect,
   query,
 }: {
-  folder: Folder;
+  mode: ListMode;
   selectedId: string | null;
   onSelect: (id: string) => void;
   query: ListQuery;
@@ -245,7 +329,6 @@ function MessageList({
       </div>
     );
   }
-
   if (query.isError) {
     return (
       <EmptyState
@@ -260,12 +343,14 @@ function MessageList({
   if (rows.length === 0) {
     return (
       <EmptyState
-        icon={folder === 'inbox' ? Inbox : Send}
-        title={folder === 'inbox' ? 'No messages yet' : 'Nothing sent yet'}
+        icon={mode === 'search' ? Search : mode === 'inbox' ? Inbox : Send}
+        title={mode === 'search' ? 'No results' : mode === 'inbox' ? 'No conversations yet' : 'Nothing sent yet'}
         description={
-          folder === 'inbox'
-            ? 'Messages from your contacts will appear here.'
-            : 'Messages you send will appear here.'
+          mode === 'search'
+            ? 'Try a different word from a subject or message.'
+            : mode === 'inbox'
+              ? 'Conversations from your contacts will appear here.'
+              : 'Conversations you start will appear here.'
         }
         className="m-3 border-0 bg-transparent"
       />
@@ -273,54 +358,103 @@ function MessageList({
   }
 
   return (
-    <ul className="flex-1 overflow-y-auto" aria-label={folder === 'inbox' ? 'Inbox' : 'Sent'}>
-      {rows.map((row) => {
-        // Inbox rows carry `from` + a read flag; Sent rows carry `to[]`.
-        const unread = 'from' in row ? !row.read : false;
-        const heading =
-          'from' in row
-            ? row.from.name
-            : `To: ${row.to.map((t) => t.name).join(', ') || '(no recipient)'}`;
-        return (
-          <li key={row.id}>
-            <button
-              type="button"
-              onClick={() => onSelect(row.id)}
-              aria-current={selectedId === row.id ? 'true' : undefined}
-              className={cn(
-                'flex w-full flex-col gap-0.5 border-b px-4 py-3 text-left transition-colors',
-                selectedId === row.id ? 'bg-accent' : 'hover:bg-accent/60',
-              )}
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <span
-                  className={cn(
-                    'truncate text-sm',
-                    unread ? 'font-semibold text-foreground' : 'font-medium text-foreground/90',
-                  )}
-                >
-                  {heading}
-                </span>
-                <span className="shrink-0 text-[11px] text-muted-foreground">
-                  {relativeTime(row.createdAt)}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {unread ? <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden /> : null}
-                <span
-                  className={cn(
-                    'truncate text-sm',
-                    unread ? 'font-medium text-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  {row.subject}
-                </span>
-              </div>
-            </button>
-          </li>
-        );
-      })}
+    <ul className="flex-1 overflow-y-auto" aria-label={mode === 'inbox' ? 'Inbox' : mode === 'sent' ? 'Sent' : 'Search results'}>
+      {rows.map((row) => (
+        <ThreadRow key={row.threadId} row={row} selected={selectedId === row.threadId} onSelect={onSelect} />
+      ))}
     </ul>
+  );
+}
+
+function ThreadRow({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: ThreadListItem;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const refresh = React.useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: mailKeys.unread });
+    void queryClient.invalidateQueries({ queryKey: ['mail', 'inbox'] });
+    void queryClient.invalidateQueries({ queryKey: ['mail', 'sent'] });
+    void queryClient.invalidateQueries({ queryKey: ['mail', 'search'] });
+  }, [queryClient]);
+
+  const toggleRead = useApiMutation(
+    () => (row.unread ? markThreadRead(row.threadId) : markThreadUnread(row.threadId)),
+    { successMessage: row.unread ? 'Marked read' : 'Marked unread', onSuccess: refresh },
+  );
+  const del = useApiMutation(() => deleteThread(row.threadId), {
+    successMessage: 'Removed from your mailbox',
+    onSuccess: refresh,
+  });
+
+  const names = row.participants.map((p) => p.name).join(', ') || '(no one)';
+
+  return (
+    <li className="group relative">
+      <button
+        type="button"
+        onClick={() => onSelect(row.threadId)}
+        aria-current={selected ? 'true' : undefined}
+        className={cn(
+          'flex w-full flex-col gap-0.5 border-b px-4 py-3 pr-16 text-left transition-colors',
+          selected ? 'bg-accent' : 'hover:bg-accent/60',
+        )}
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <span
+            className={cn(
+              'truncate text-sm',
+              row.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground/90',
+            )}
+          >
+            {names}
+            {row.messageCount > 1 ? (
+              <span className="ml-1 text-xs font-normal text-muted-foreground">({row.messageCount})</span>
+            ) : null}
+          </span>
+          <span className="shrink-0 text-[11px] text-muted-foreground">{relativeTime(row.lastMessageAt)}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {row.unread ? <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden /> : null}
+          <span className={cn('truncate text-sm', row.unread ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+            {row.subject}
+          </span>
+        </div>
+        {row.snippet ? <p className="truncate text-xs text-muted-foreground">{row.snippet}</p> : null}
+      </button>
+
+      {/* Row actions (appear on hover / focus-within; always tappable on touch) */}
+      <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <button
+          type="button"
+          onClick={() => toggleRead.mutate()}
+          disabled={toggleRead.isPending}
+          aria-label={row.unread ? 'Mark read' : 'Mark unread'}
+          title={row.unread ? 'Mark read' : 'Mark unread'}
+          className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
+        >
+          {row.unread ? <MailOpen className="size-4" /> : <MailMinus className="size-4" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Remove this conversation from YOUR mailbox? The other person keeps their copy.'))
+              del.mutate();
+          }}
+          disabled={del.isPending}
+          aria-label="Delete for me"
+          title="Delete for me"
+          className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-destructive"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      </div>
+    </li>
   );
 }
 
@@ -341,20 +475,10 @@ function Pager({
         Page {page + 1} of {totalPages}
       </span>
       <div className="flex gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={page <= 0}
-          onClick={() => setPage(Math.max(0, page - 1))}
-        >
+        <Button variant="ghost" size="sm" disabled={page <= 0} onClick={() => setPage(Math.max(0, page - 1))}>
           <ChevronLeft />
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={page >= totalPages - 1}
-          onClick={() => setPage(page + 1)}
-        >
+        <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
           <ChevronRight />
         </Button>
       </div>
@@ -362,16 +486,16 @@ function Pager({
   );
 }
 
-/** Mobile: show the list, or the reading pane once a message is opened. */
+/** Mobile: show the list, or the reading pane once a conversation is opened. */
 function MobilePanes({
-  folder,
+  mode,
   selectedId,
   setSelectedId,
   active,
   page,
   setPage,
 }: {
-  folder: Folder;
+  mode: ListMode;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
   active: ListQuery;
@@ -379,11 +503,17 @@ function MobilePanes({
   setPage: (n: number) => void;
 }) {
   if (selectedId) {
-    return <MessageView messageId={selectedId} onBack={() => setSelectedId(null)} />;
+    return (
+      <ThreadView
+        threadId={selectedId}
+        onBack={() => setSelectedId(null)}
+        onDeleted={() => setSelectedId(null)}
+      />
+    );
   }
   return (
     <div className="flex flex-1 flex-col">
-      <MessageList folder={folder} selectedId={selectedId} onSelect={setSelectedId} query={active} />
+      <ThreadList mode={mode} selectedId={selectedId} onSelect={setSelectedId} query={active} />
       <Pager query={active} page={page} setPage={setPage} />
     </div>
   );

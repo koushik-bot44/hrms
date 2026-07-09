@@ -39,4 +39,9 @@ public class MessageRecipient {
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "readAt")
   private Instant readAt;
+
+  /** The recipient's per-user soft-hide (§8): set when they delete; the row is never destroyed. */
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "deletedAt")
+  private Instant deletedAt;
 }

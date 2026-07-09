@@ -390,6 +390,26 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
   of a raw email; the Super Admin sets each company's mail **domain** at creation (prefilled from the
   code). The address so formed IS the login email — the earlier transitional `email` fallback has been
   **retired**, so an address is created exactly one way.
+- **Threads, reply, search, read-state + delete (Stage 3):**
+  - **Threads (conversations).** Every message carries a `threadId` (an opaque grouping key). A new
+    compose starts a thread; a **reply** joins it. Inbox / Sent / Search list **threads**, not messages —
+    each row shows the other participant(s), the subject, a snippet, the latest message time, the message
+    count, and is **unread if ANY message in the thread is unread for the viewer**. Opening a thread shows
+    its messages in chronological order and marks the viewer's unread messages read.
+  - **Reply.** From an open thread the recipient is **derived** from the thread (the other participant) —
+    never free-typed — and a reply **is a send**, so it is re-validated through `canSendMail` every time
+    (403 if the graph would now forbid it, e.g. a participant changed company/role after the thread
+    started). Audited `MAIL_SENT`.
+  - **Search** (`GET /mail/search?q=`) runs over the viewer's **own mail only** (threads with a message
+    they sent or received), matching **subject + body** case-insensitively — never another mailbox, never
+    cross-company.
+  - **Read state** is explicit per thread (`POST /mail/threads/{id}/read` | `/unread`); the unread badge
+    counts **unread threads**.
+  - **Delete is a per-user soft-hide:** deleting a thread stamps the viewer's own copies
+    (`message_recipients.deletedAt` for received messages, `messages.senderDeletedAt` for sent ones) —
+    the rows are **never destroyed** and the counterparty still sees their copy. Deleted threads vanish
+    from the viewer's lists; a later reply (an un-hidden message) resurfaces the thread. Audited
+    `MAIL_DELETED`. Still **text-only, no attachments; employees excluded**.
 
 ---
 

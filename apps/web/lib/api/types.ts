@@ -356,6 +356,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mail/threads/{id}/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["markUnread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/threads/{id}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/threads/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["markRead_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mail/messages": {
         parameters: {
             query?: never;
@@ -670,7 +718,7 @@ export interface paths {
         get: operations["get_1"];
         put?: never;
         post?: never;
-        delete: operations["delete"];
+        delete: operations["delete_1"];
         options?: never;
         head?: never;
         patch: operations["update_1"];
@@ -836,6 +884,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mail/threads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["thread"];
+        put?: never;
+        post?: never;
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mail/sent": {
         parameters: {
             query?: never;
@@ -852,14 +916,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/mail/messages/{id}": {
+    "/mail/search": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["message"];
+        get: operations["search"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1393,13 +1457,21 @@ export interface components {
             employeeStatus?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             hrName?: string;
         };
-        SendMessageRequest: {
-            toUserId: string;
-            subject: string;
+        UnreadCountView: {
+            /** Format: int64 */
+            unread?: number;
+        };
+        ReplyRequest: {
             body: string;
         };
         SendMessageResult: {
             id?: string;
+            threadId?: string;
+        };
+        SendMessageRequest: {
+            toUserId: string;
+            subject: string;
+            body: string;
         };
         OnboardEmployeeRequest: {
             fullName: string;
@@ -1585,9 +1657,26 @@ export interface components {
             /** Format: int32 */
             expiresInSeconds?: number;
         };
-        UnreadCountView: {
-            /** Format: int64 */
-            unread?: number;
+        MailPartyView: {
+            userId?: string;
+            name?: string;
+            address?: string;
+            /** @enum {string} */
+            role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
+        };
+        ThreadDetailView: {
+            threadId?: string;
+            subject?: string;
+            participants?: components["schemas"]["MailPartyView"][];
+            counterparty?: components["schemas"]["MailPartyView"];
+            messages?: components["schemas"]["ThreadMessageView"][];
+        };
+        ThreadMessageView: {
+            id?: string;
+            from?: components["schemas"]["MailPartyView"];
+            body?: string;
+            createdAt?: string;
+            mine?: boolean;
         };
         Pageable: {
             /** Format: int32 */
@@ -1596,48 +1685,18 @@ export interface components {
             size?: number;
             sort?: string[];
         };
-        MailPartyView: {
-            userId?: string;
-            name?: string;
-            address?: string;
-            /** @enum {string} */
-            role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
-        };
-        SentMessageView: {
-            id?: string;
+        ThreadListItemView: {
+            threadId?: string;
             subject?: string;
-            createdAt?: string;
-            to?: components["schemas"]["MailPartyView"][];
-        };
-        SentPage: {
-            content?: components["schemas"]["SentMessageView"][];
+            snippet?: string;
+            lastMessageAt?: string;
+            participants?: components["schemas"]["MailPartyView"][];
             /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            messageCount?: number;
+            unread?: boolean;
         };
-        MessageView: {
-            id?: string;
-            subject?: string;
-            body?: string;
-            createdAt?: string;
-            from?: components["schemas"]["MailPartyView"];
-            to?: components["schemas"]["MailPartyView"][];
-            read?: boolean;
-        };
-        InboxMessageView: {
-            id?: string;
-            subject?: string;
-            createdAt?: string;
-            from?: components["schemas"]["MailPartyView"];
-            read?: boolean;
-        };
-        InboxPage: {
-            content?: components["schemas"]["InboxMessageView"][];
+        ThreadPage: {
+            content?: components["schemas"]["ThreadListItemView"][];
             /** Format: int32 */
             page?: number;
             /** Format: int32 */
@@ -2376,6 +2435,76 @@ export interface operations {
             };
         };
     };
+    markUnread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["UnreadCountView"];
+                };
+            };
+        };
+    };
+    reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SendMessageResult"];
+                };
+            };
+        };
+    };
+    markRead_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["UnreadCountView"];
+                };
+            };
+        };
+    };
     send: {
         parameters: {
             query?: never;
@@ -2972,7 +3101,7 @@ export interface operations {
             };
         };
     };
-    delete: {
+    delete_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -3283,6 +3412,48 @@ export interface operations {
             };
         };
     };
+    thread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ThreadDetailView"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     sent: {
         parameters: {
             query: {
@@ -3300,18 +3471,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["SentPage"];
+                    "*/*": components["schemas"]["ThreadPage"];
                 };
             };
         };
     };
-    message: {
+    search: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
+            query: {
+                q?: string;
+                pageable: components["schemas"]["Pageable"];
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -3322,7 +3494,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["MessageView"];
+                    "*/*": components["schemas"]["ThreadPage"];
                 };
             };
         };
@@ -3344,7 +3516,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["InboxPage"];
+                    "*/*": components["schemas"]["ThreadPage"];
                 };
             };
         };

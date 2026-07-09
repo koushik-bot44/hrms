@@ -37,13 +37,19 @@ export const MailDomainSchema = z
     'Use lowercase letters, digits or hyphen — no spaces or @',
   );
 
-/** Compose a message. The recipient is chosen from `/mail/contacts` (graph-derived, never free-typed). */
+/** Compose a NEW thread. The recipient is chosen from `/mail/contacts` (graph-derived, never free-typed). */
 export const SendMessageSchema = z.object({
   toUserId: z.string().min(1, 'Choose a recipient'),
   subject: z.string().trim().min(1, 'Subject is required').max(200, 'Subject is too long'),
   body: z.string().trim().min(1, 'Write a message').max(10000, 'Message is too long'),
 });
 export type SendMessageInput = z.infer<typeof SendMessageSchema>;
+
+/** Reply within a thread — recipient is derived server-side (and re-checked by the graph). */
+export const ReplyMessageSchema = z.object({
+  body: z.string().trim().min(1, 'Write a reply').max(10000, 'Message is too long'),
+});
+export type ReplyMessageInput = z.infer<typeof ReplyMessageSchema>;
 
 /**
  * Preview the address a local part will form in a domain (mirrors the backend's normalization) so

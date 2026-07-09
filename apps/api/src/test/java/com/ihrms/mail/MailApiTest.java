@@ -2,6 +2,7 @@ package com.ihrms.mail;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -28,12 +29,15 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * Internal mail (ARCHITECTURE.md §8). Proves the ONE send graph ({@code canSendMail}) end-to-end over
- * HTTP — symmetric where allowed, never cross-company, employees excluded — plus inbox/sent/read state,
- * contacts, unread-count, address formation ({@code localpart@domain}), and address uniqueness within a
- * domain. Runs in {@code ./mvnw package} against a real Postgres (gated on IHRMS_TEST_DB).
+ * Internal mail (ARCHITECTURE.md §8) — thread-based (Stage 3). Proves: the ONE send graph
+ * ({@code canSendMail}) for both new sends AND replies (403 where forbidden, even after a participant
+ * changes company mid-thread); threads (inbox/sent list conversations; a reply joins the thread in
+ * chronological order); own-mail-only case-insensitive search; explicit read/unread with a thread-level
+ * badge; per-user soft delete (row intact, counterparty unaffected, resurfaces on reply); plus contacts,
+ * address formation, and address uniqueness. Runs against a real Postgres (gated on IHRMS_TEST_DB).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -79,22 +83,21 @@ class MailApiTest {
     hrT = user(testco, UserRole.HR, "hr@testco", "hr");
   }
 
-  // --- Send graph -----------------------------------------------------------
+  // --- Send graph (new sends) -----------------------------------------------
 
   @Test
-  void companyAdminMessagesSameCompanyHr_andItLandsUnreadInTheInbox() throws Exception {
-    JsonNode sent = json.readTree(sendOk(caA, hrA, "Welcome", "Please onboard the new hire."));
-    assertThat(sent.get("id").asText()).isNotBlank();
-
-    // One MAIL_SENT audit event, attributed to the sender's company.
+  void companyAdminStartsAThreadToHr_landsAsAnUnreadThreadInTheInbox() throws Exception {
+    startThread(caA, hrA, "Welcome", "Please onboard the new hire.");
     assertThat(audit("MAIL_SENT")).isEqualTo(1);
 
-    assertThat(unread(hrA)).isEqualTo(1);
+    assertThat(unread(hrA)).isEqualTo(1); // one UNREAD THREAD
     JsonNode inbox = inbox(hrA);
     assertThat(inbox.get("totalElements").asInt()).isEqualTo(1);
     JsonNode row = inbox.get("content").get(0);
-    assertThat(row.get("from").get("address").asText()).isEqualTo("admin@anvicorp");
-    assertThat(row.get("read").asBoolean()).isFalse();
+    assertThat(row.get("participants").get(0).get("address").asText()).isEqualTo("admin@anvicorp");
+    assertThat(row.get("subject").asText()).isEqualTo("Welcome");
+    assertThat(row.get("messageCount").asInt()).isEqualTo(1);
+    assertThat(row.get("unread").asBoolean()).isTrue();
   }
 
   @Test
@@ -115,16 +118,16 @@ class MailApiTest {
 
   @Test
   void allowedEdgesWorkInBothDirections() throws Exception {
-    sendOk(sa, caA, "s", "b"); // SUPER_ADMIN <-> COMPANY_ADMIN
-    sendOk(caA, sa, "s", "b");
-    sendOk(sa, aa, "s", "b"); // SUPER_ADMIN <-> ACCOUNTS_ADMIN
-    sendOk(aa, sa, "s", "b");
-    sendOk(caA, hrA, "s", "b"); // COMPANY_ADMIN <-> HR
-    sendOk(hrA, caA, "s", "b");
-    sendOk(caA, mgrA, "s", "b"); // COMPANY_ADMIN <-> MANAGER
-    sendOk(mgrA, caA, "s", "b");
-    sendOk(caA, accA, "s", "b"); // COMPANY_ADMIN <-> ACCOUNTANT
-    sendOk(accA, caA, "s", "b");
+    startThread(sa, caA, "s", "b"); // SUPER_ADMIN <-> COMPANY_ADMIN
+    startThread(caA, sa, "s", "b");
+    startThread(sa, aa, "s", "b"); // SUPER_ADMIN <-> ACCOUNTS_ADMIN
+    startThread(aa, sa, "s", "b");
+    startThread(caA, hrA, "s", "b"); // COMPANY_ADMIN <-> HR
+    startThread(hrA, caA, "s", "b");
+    startThread(caA, mgrA, "s", "b"); // COMPANY_ADMIN <-> MANAGER
+    startThread(mgrA, caA, "s", "b");
+    startThread(caA, accA, "s", "b"); // COMPANY_ADMIN <-> ACCOUNTANT
+    startThread(accA, caA, "s", "b");
     assertThat(audit("MAIL_SENT")).isEqualTo(10);
   }
 
@@ -132,58 +135,155 @@ class MailApiTest {
 
   @Test
   void contactsAreExactlyTheReachableAccounts() throws Exception {
-    // COMPANY_ADMIN: its own company's staff + SUPER_ADMIN — NOT the Accounts Admin, NOT other companies.
     assertThat(contactAddresses(caA))
         .containsExactlyInAnyOrder(
             "hr@anvicorp", "hr2@anvicorp", "mgr@anvicorp", "acc@anvicorp", "superadmin@ihrms");
-
-    // HR: only its Company Admin.
     assertThat(contactAddresses(hrA)).containsExactly("admin@anvicorp");
-
-    // SUPER_ADMIN: the Accounts Admin + every company's admin (cross-company is allowed for this edge).
     assertThat(contactAddresses(sa))
         .containsExactlyInAnyOrder("books@ihrms", "admin@anvicorp", "admin@testco");
-
-    // ACCOUNTS_ADMIN: only the Super Admin.
     assertThat(contactAddresses(aa)).containsExactly("superadmin@ihrms");
   }
 
-  // --- Read flow: read_at, unread-count, sent, and view authorization -------
+  // --- Threads + reply ------------------------------------------------------
 
   @Test
-  void openingAMessageMarksItReadForTheRecipientOnly_andSenderMayReadWithoutAffectingIt()
-      throws Exception {
-    String id = json.readTree(sendOk(caA, hrA, "Subject", "The body")).get("id").asText();
+  void replyJoinsTheThread_chronological_andReachesTheOtherParticipant() throws Exception {
+    String threadId = startThread(caA, hrA, "Onboarding", "Please start.");
 
-    // Sender's "sent" shows the recipient by address.
-    JsonNode sentList = sent(caA);
-    assertThat(sentList.get("totalElements").asInt()).isEqualTo(1);
-    assertThat(sentList.get("content").get(0).get("to").get(0).get("address").asText())
+    // HR opens the thread: one message, the reply target is the Company Admin.
+    JsonNode opened = openThreadJson(hrA, threadId);
+    assertThat(opened.get("messages")).hasSize(1);
+    assertThat(opened.get("counterparty").get("address").asText()).isEqualTo("admin@anvicorp");
+
+    // HR replies — recipient is DERIVED from the thread (never supplied).
+    JsonNode replied = replyOk(hrA, threadId, "On it, thanks.");
+    assertThat(replied.get("threadId").asText()).isEqualTo(threadId);
+    assertThat(audit("MAIL_SENT")).isEqualTo(2);
+
+    // The reply lands in the Company Admin's inbox, SAME thread, 2 messages, unread.
+    JsonNode row = threadRow(inbox(caA), threadId);
+    assertThat(row).isNotNull();
+    assertThat(row.get("messageCount").asInt()).isEqualTo(2);
+    assertThat(row.get("unread").asBoolean()).isTrue();
+
+    // The Company Admin opens it: both messages, chronological, correct senders + mine flags.
+    JsonNode caView = openThreadJson(caA, threadId);
+    assertThat(caView.get("messages")).hasSize(2);
+    assertThat(caView.get("messages").get(0).get("from").get("address").asText())
+        .isEqualTo("admin@anvicorp");
+    assertThat(caView.get("messages").get(0).get("mine").asBoolean()).isTrue();
+    assertThat(caView.get("messages").get(1).get("from").get("address").asText())
         .isEqualTo("hr@anvicorp");
+    assertThat(caView.get("messages").get(1).get("mine").asBoolean()).isFalse();
+    assertThat(caView.get("counterparty").get("address").asText()).isEqualTo("hr@anvicorp");
+  }
 
-    // A non-participant cannot open it.
-    view(mgrA, id).andExpect(status().isForbidden());
+  @Test
+  void replyIsGraphValidated_forbiddenWhenAParticipantMovesCompany() throws Exception {
+    String threadId = startThread(caA, hrA, "Hello", "Hi there.");
 
-    // The recipient opens it: 200, full body, now read + audited.
-    JsonNode opened =
-        json.readTree(
-            view(hrA, id)
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString());
-    assertThat(opened.get("body").asText()).isEqualTo("The body");
-    assertThat(opened.get("read").asBoolean()).isTrue();
-    assertThat(audit("MAIL_VIEWED")).isEqualTo(1);
+    // HR is reassigned to another company AFTER the thread started. A reply is a send — the graph
+    // re-checks it, and HR<->anvi Company Admin is now cross-company.
+    hrA.setCompanyId(testco);
+    users.saveAndFlush(hrA);
+
+    reply(hrA, threadId, "Trying to reply.").andExpect(status().isForbidden());
+    assertThat(audit("MAIL_SENT")).isEqualTo(1); // only the original send
+  }
+
+  @Test
+  void aNonParticipantCannotOpenAThread() throws Exception {
+    String threadId = startThread(caA, hrA, "Private", "Between us.");
+    mvc.perform(get("/mail/threads/" + threadId).header("Authorization", "Bearer " + token(mgrA)))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void sentListsThreadsWithTheRecipient() throws Exception {
+    String threadId = startThread(caA, hrA, "Note", "A note.");
+    JsonNode row = threadRow(sent(caA), threadId);
+    assertThat(row).isNotNull();
+    assertThat(row.get("participants").get(0).get("address").asText()).isEqualTo("hr@anvicorp");
+    assertThat(row.get("messageCount").asInt()).isEqualTo(1);
+  }
+
+  // --- Search (own mail only, subject + body, case-insensitive) -------------
+
+  @Test
+  void searchIsOwnMailOnly_matchesSubjectAndBody_caseInsensitive() throws Exception {
+    startThread(caA, hrA, "Payroll", "The payroll run details are attached.");
+    startThread(caA, mgrA, "Budget", "Quarterly budget sync.");
+
+    // HR is a participant of the Payroll thread only.
+    assertThat(searchCount(hrA, "payroll")).isEqualTo(1); // subject
+    assertThat(searchCount(hrA, "PAYROLL")).isEqualTo(1); // case-insensitive
+    assertThat(searchCount(hrA, "run")).isEqualTo(1); // body match
+    assertThat(searchCount(hrA, "budget")).isZero(); // NOT HR's mail — no cross-mailbox leak
+    assertThat(searchCount(mgrA, "payroll")).isZero(); // NOT the Manager's mail either
+
+    // The Company Admin is a participant of both.
+    assertThat(searchCount(caA, "payroll")).isEqualTo(1);
+    assertThat(searchCount(caA, "budget")).isEqualTo(1);
+  }
+
+  // --- Read state (explicit + thread-level badge) ---------------------------
+
+  @Test
+  void markReadAndUnreadMoveTheThreadBadge() throws Exception {
+    String threadId = startThread(caA, hrA, "Ping", "Ping body.");
+    assertThat(unread(hrA)).isEqualTo(1);
+
+    // Opening marks read.
+    openThreadJson(hrA, threadId);
     assertThat(unread(hrA)).isZero();
-    assertThat(inbox(hrA).get("content").get(0).get("read").asBoolean()).isTrue();
 
-    // The sender may also read it (as sender) — this does not resurrect the recipient's unread state.
-    view(caA, id).andExpect(status().isOk());
+    // Explicit unread -> badge back to 1; explicit read -> 0. The endpoints return the fresh count.
+    assertThat(markUnread(hrA, threadId).get("unread").asLong()).isEqualTo(1);
+    assertThat(unread(hrA)).isEqualTo(1);
+    assertThat(markRead(hrA, threadId).get("unread").asLong()).isZero();
     assertThat(unread(hrA)).isZero();
   }
 
-  // --- Employees are excluded from mail at this stage -----------------------
+  // --- Delete (per-user soft-hide) ------------------------------------------
+
+  @Test
+  void deleteHidesTheThreadForMeOnly_rowIntact_andResurfacesOnReply() throws Exception {
+    String threadId = startThread(caA, hrA, "Notice", "Notice body.");
+
+    mvc.perform(delete("/mail/threads/" + threadId).header("Authorization", "Bearer " + token(hrA)))
+        .andExpect(status().isNoContent());
+    assertThat(audit("MAIL_DELETED")).isEqualTo(1);
+
+    // Gone from HR's inbox...
+    assertThat(inbox(hrA).get("totalElements").asInt()).isZero();
+    assertThat(unread(hrA)).isZero();
+    // ...but the Company Admin still has the whole conversation.
+    assertThat(threadRow(sent(caA), threadId)).isNotNull();
+    mvc.perform(get("/mail/threads/" + threadId).header("Authorization", "Bearer " + token(caA)))
+        .andExpect(status().isOk());
+
+    // The message row is NOT destroyed — only HR's recipient copy is soft-hidden.
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM \"messages\" WHERE \"threadId\" = ?", Long.class, threadId))
+        .isEqualTo(1L);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM \"message_recipients\" r JOIN \"messages\" m ON m.\"id\" = r.\"messageId\""
+                    + " WHERE m.\"threadId\" = ? AND r.\"deletedAt\" IS NOT NULL",
+                Long.class,
+                threadId))
+        .isEqualTo(1L);
+
+    // A new reply from the Company Admin resurfaces the thread for HR (only the un-hidden message shows).
+    replyOk(caA, threadId, "Following up.");
+    JsonNode row = threadRow(inbox(hrA), threadId);
+    assertThat(row).isNotNull();
+    assertThat(row.get("messageCount").asInt()).isEqualTo(1); // the original is still hidden from HR
+    assertThat(row.get("unread").asBoolean()).isTrue();
+  }
+
+  // --- Employees are excluded from mail -------------------------------------
 
   @Test
   void employeesCannotReachTheMailbox() throws Exception {
@@ -196,7 +296,7 @@ class MailApiTest {
         .andExpect(status().isForbidden());
   }
 
-  // --- Address formation from a provisioned local part ----------------------
+  // --- Address formation + uniqueness (unchanged from Stage 2) --------------
 
   @Test
   void provisioningFormsTheAddressFromLocalPartAndCompanyDomain() throws Exception {
@@ -234,20 +334,14 @@ class MailApiTest {
                     .getResponse()
                     .getContentAsString())
             .get("admin");
-    // localPart + companyDomain -> the address, which IS the login email.
     assertThat(admin.get("email").asText()).isEqualTo("bella@betacorp");
     assertThat(users.findByEmail("bella@betacorp").orElseThrow().getMailLocalPart()).isEqualTo("bella");
   }
 
-  // --- Uniqueness of localpart@domain (the address IS the unique login email) --
-
   @Test
   void anAddressIsUniqueWithinADomainButFreeAcrossDomains() {
-    // Same local part, DIFFERENT domain -> two distinct addresses, both fine.
     users.saveAndFlush(newUser(anvi, UserRole.HR, "sales@anvicorp", "sales"));
     users.saveAndFlush(newUser(testco, UserRole.HR, "sales@testco", "sales"));
-
-    // Same local part, SAME domain -> same address -> rejected by the unique index.
     assertThatThrownBy(() -> users.saveAndFlush(newUser(anvi, UserRole.MANAGER, "sales@anvicorp", "sales")))
         .isInstanceOf(DataIntegrityViolationException.class);
   }
@@ -282,33 +376,54 @@ class MailApiTest {
   }
 
   /** POST /mail/messages from -> to (no status assertion). */
-  private org.springframework.test.web.servlet.ResultActions send(User from, User to) throws Exception {
+  private ResultActions send(User from, User to) throws Exception {
     return mvc.perform(
         post("/mail/messages")
             .header("Authorization", "Bearer " + token(from))
             .contentType(MediaType.APPLICATION_JSON)
-            .content(
-                json.writeValueAsString(
-                    Map.of("toUserId", to.getId(), "subject", "s", "body", "b"))));
+            .content(json.writeValueAsString(Map.of("toUserId", to.getId(), "subject", "s", "body", "b"))));
   }
 
-  /** Send expecting 200; returns the response body (the SendMessageResult). */
-  private String sendOk(User from, User to, String subject, String body) throws Exception {
+  /** Start a new thread (expects 200); returns the threadId. */
+  private String startThread(User from, User to, String subject, String body) throws Exception {
+    String out =
+        mvc.perform(
+                post("/mail/messages")
+                    .header("Authorization", "Bearer " + token(from))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        json.writeValueAsString(
+                            Map.of("toUserId", to.getId(), "subject", subject, "body", body))))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    return json.readTree(out).get("threadId").asText();
+  }
+
+  private ResultActions reply(User who, String threadId, String body) throws Exception {
     return mvc.perform(
-            post("/mail/messages")
-                .header("Authorization", "Bearer " + token(from))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    json.writeValueAsString(
-                        Map.of("toUserId", to.getId(), "subject", subject, "body", body))))
-        .andExpect(status().isOk())
-        .andReturn()
-        .getResponse()
-        .getContentAsString();
+        post("/mail/threads/" + threadId + "/reply")
+            .header("Authorization", "Bearer " + token(who))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("body", body))));
   }
 
-  private org.springframework.test.web.servlet.ResultActions view(User who, String id) throws Exception {
-    return mvc.perform(get("/mail/messages/" + id).header("Authorization", "Bearer " + token(who)));
+  private JsonNode replyOk(User who, String threadId, String body) throws Exception {
+    return json.readTree(
+        reply(who, threadId, body).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+  }
+
+  private JsonNode openThreadJson(User who, String threadId) throws Exception {
+    return getJson(who, "/mail/threads/" + threadId);
+  }
+
+  private JsonNode markRead(User who, String threadId) throws Exception {
+    return postJson(who, "/mail/threads/" + threadId + "/read");
+  }
+
+  private JsonNode markUnread(User who, String threadId) throws Exception {
+    return postJson(who, "/mail/threads/" + threadId + "/unread");
   }
 
   private JsonNode inbox(User who) throws Exception {
@@ -319,8 +434,22 @@ class MailApiTest {
     return getJson(who, "/mail/sent");
   }
 
+  private long searchCount(User who, String q) throws Exception {
+    return getJson(who, "/mail/search?q=" + q).get("totalElements").asLong();
+  }
+
   private long unread(User who) throws Exception {
     return getJson(who, "/mail/unread-count").get("unread").asLong();
+  }
+
+  /** Find a thread row in a ThreadPage by threadId, or null. */
+  private JsonNode threadRow(JsonNode page, String threadId) {
+    for (JsonNode row : page.get("content")) {
+      if (row.get("threadId").asText().equals(threadId)) {
+        return row;
+      }
+    }
+    return null;
   }
 
   private Set<String> contactAddresses(User who) throws Exception {
@@ -333,6 +462,15 @@ class MailApiTest {
   private JsonNode getJson(User who, String path) throws Exception {
     return json.readTree(
         mvc.perform(get(path).header("Authorization", "Bearer " + token(who)))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private JsonNode postJson(User who, String path) throws Exception {
+    return json.readTree(
+        mvc.perform(post(path).header("Authorization", "Bearer " + token(who)))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()

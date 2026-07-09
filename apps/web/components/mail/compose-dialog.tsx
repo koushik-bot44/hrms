@@ -5,12 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Send } from 'lucide-react';
-import {
-  SendMessageSchema,
-  type MailParty,
-  type SendMessageInput,
-  type SentPage,
-} from '@/lib/contract';
+import { SendMessageSchema, type MailParty, type SendMessageInput } from '@/lib/contract';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { getMailContacts, mailKeys, sendMessage } from '@/lib/api/mail';
 import { Button } from '@/components/ui/button';
@@ -25,10 +20,9 @@ import {
 } from '@/components/ui/dialog';
 
 /**
- * Compose a text message (§8). The recipient dropdown is populated from `/mail/contacts` — exactly the
+ * Compose a NEW thread (§8). The recipient dropdown is populated from `/mail/contacts` — exactly the
  * accounts the send graph allows — so an off-graph or cross-company recipient can never be chosen (the
- * server re-checks and would 403, surfaced as a friendly error). On success the message is optimistically
- * added to Sent and the caches reconcile.
+ * server re-checks and would 403, surfaced as a friendly error). On success the new thread is opened.
  */
 export function ComposeDialog({
   open,
@@ -38,7 +32,7 @@ export function ComposeDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSent?: () => void;
+  onSent?: (threadId: string) => void;
   presetToUserId?: string;
 }) {
   const queryClient = useQueryClient();
@@ -61,29 +55,11 @@ export function ComposeDialog({
 
   const mutation = useApiMutation((body: SendMessageInput) => sendMessage(body), {
     successMessage: 'Message sent',
-    onSuccess: (result, vars) => {
-      // Optimistically prepend to Sent page 0 using the chosen contact, then reconcile.
-      const recipient = (contacts.data ?? []).find((c) => c.userId === vars.toUserId);
-      queryClient.setQueryData<SentPage>(mailKeys.sent(0), (prev) =>
-        prev
-          ? {
-              ...prev,
-              totalElements: prev.totalElements + 1,
-              content: [
-                {
-                  id: result.id,
-                  subject: vars.subject,
-                  createdAt: new Date().toISOString(),
-                  to: recipient ? [recipient] : [],
-                },
-                ...prev.content,
-              ],
-            }
-          : prev,
-      );
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['mail', 'sent'] });
+      void queryClient.invalidateQueries({ queryKey: mailKeys.unread });
       onOpenChange(false);
-      onSent?.();
+      onSent?.(result.threadId);
     },
   });
 

@@ -268,35 +268,36 @@ export type ApprovedEmployeePage = Omit<Required<Schemas['ApprovedEmployeePage']
   content: ApprovedEmployeeRow[];
 };
 
-// --- Internal mail (§8) ----------------------------------------------------
+// --- Internal mail — thread-based (§8, Stage 3) ----------------------------
 
 /** A mail participant — a staff account shown by name + `localpart@domain` address. */
 export type MailParty = Required<Schemas['MailPartyView']>;
 
-/** An inbox row — who it is from + this recipient's read state. */
-export type InboxMessage = Omit<Required<Schemas['InboxMessageView']>, 'from'> & {
+/** One row in an Inbox / Sent / Search list — a THREAD from the viewer's perspective. */
+export type ThreadListItem = Omit<Required<Schemas['ThreadListItemView']>, 'participants'> & {
+  participants: MailParty[];
+};
+
+export type ThreadPage = Omit<Required<Schemas['ThreadPage']>, 'content'> & {
+  content: ThreadListItem[];
+};
+
+/** One message inside an open thread; `mine` marks the viewer's own messages. */
+export type ThreadMessage = Omit<Required<Schemas['ThreadMessageView']>, 'from'> & {
   from: MailParty;
 };
 
-/** A sent row — who it went to. */
-export type SentMessage = Omit<Required<Schemas['SentMessageView']>, 'to'> & {
-  to: MailParty[];
-};
-
-/** A full message (only the sender or a recipient may read it — enforced server-side). */
-export type MailMessage = Omit<Required<Schemas['MessageView']>, 'from' | 'to'> & {
-  from: MailParty;
-  to: MailParty[];
-};
-
-export type InboxPage = Omit<Required<Schemas['InboxPage']>, 'content'> & {
-  content: InboxMessage[];
-};
-
-export type SentPage = Omit<Required<Schemas['SentPage']>, 'content'> & {
-  content: SentMessage[];
+/** An open thread: its messages in order + the counterparty a reply would go to. */
+export type ThreadDetail = Omit<
+  Required<Schemas['ThreadDetailView']>,
+  'participants' | 'counterparty' | 'messages'
+> & {
+  participants: MailParty[];
+  counterparty: MailParty | null;
+  messages: ThreadMessage[];
 };
 
 export type MailUnreadCount = Required<Schemas['UnreadCountView']>;
 
+/** The created message + the thread it lives in (so the client can open the thread). */
 export type SendMessageResult = Required<Schemas['SendMessageResult']>;

@@ -1,17 +1,17 @@
 import type {
-  InboxPage,
-  MailMessage,
   MailParty,
   MailUnreadCount,
+  ReplyMessageInput,
   SendMessageInput,
   SendMessageResult,
-  SentPage,
+  ThreadDetail,
+  ThreadPage,
 } from '@/lib/contract';
 import { apiFetch } from './client';
 
 /**
- * Internal-mail API (ARCHITECTURE.md §8). Every call acts as the signed-in staff user on their own
- * mailbox; the send graph is enforced server-side (the recipient list here is already graph-derived).
+ * Internal-mail API (ARCHITECTURE.md §8) — thread-based (Stage 3). Every call acts as the signed-in
+ * staff user on their own mailbox; the send graph is enforced server-side (both new sends and replies).
  */
 
 // --- Query keys (array convention, mail-namespaced) -----------------------
@@ -21,7 +21,8 @@ export const mailKeys = {
   contacts: ['mail', 'contacts'] as const,
   inbox: (page: number) => ['mail', 'inbox', page] as const,
   sent: (page: number) => ['mail', 'sent', page] as const,
-  message: (id: string) => ['mail', 'message', id] as const,
+  search: (q: string, page: number) => ['mail', 'search', q, page] as const,
+  thread: (id: string) => ['mail', 'thread', id] as const,
 };
 
 // --- Reads ----------------------------------------------------------------
@@ -35,23 +36,53 @@ export function getUnreadCount(signal?: AbortSignal): Promise<MailUnreadCount> {
   return apiFetch<MailUnreadCount>('/mail/unread-count', { signal });
 }
 
-export function getInbox(page = 0, size = 20, signal?: AbortSignal): Promise<InboxPage> {
+export function getInbox(page = 0, size = 20, signal?: AbortSignal): Promise<ThreadPage> {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
-  return apiFetch<InboxPage>(`/mail/inbox?${params.toString()}`, { signal });
+  return apiFetch<ThreadPage>(`/mail/inbox?${params.toString()}`, { signal });
 }
 
-export function getSent(page = 0, size = 20, signal?: AbortSignal): Promise<SentPage> {
+export function getSent(page = 0, size = 20, signal?: AbortSignal): Promise<ThreadPage> {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
-  return apiFetch<SentPage>(`/mail/sent?${params.toString()}`, { signal });
+  return apiFetch<ThreadPage>(`/mail/sent?${params.toString()}`, { signal });
 }
 
-/** Open one message (sender or recipient only). Server-side this stamps the recipient's read_at. */
-export function getMessage(id: string, signal?: AbortSignal): Promise<MailMessage> {
-  return apiFetch<MailMessage>(`/mail/messages/${encodeURIComponent(id)}`, { signal });
+/** Search the caller's own mail (subject + body, case-insensitive). */
+export function searchMail(q: string, page = 0, size = 20, signal?: AbortSignal): Promise<ThreadPage> {
+  const params = new URLSearchParams({ q, page: String(page), size: String(size) });
+  return apiFetch<ThreadPage>(`/mail/search?${params.toString()}`, { signal });
 }
 
-// --- Write ----------------------------------------------------------------
+/** Open a thread (participant only). Server-side this stamps the viewer's unread messages read. */
+export function getThread(id: string, signal?: AbortSignal): Promise<ThreadDetail> {
+  return apiFetch<ThreadDetail>(`/mail/threads/${encodeURIComponent(id)}`, { signal });
+}
 
+// --- Writes ---------------------------------------------------------------
+
+/** Start a new thread. 403 if the send graph forbids it. */
 export function sendMessage(body: SendMessageInput): Promise<SendMessageResult> {
   return apiFetch<SendMessageResult>('/mail/messages', { method: 'POST', body });
+}
+
+/** Reply within a thread — recipient derived server-side, still graph-checked. */
+export function replyToThread(threadId: string, body: ReplyMessageInput): Promise<SendMessageResult> {
+  return apiFetch<SendMessageResult>(`/mail/threads/${encodeURIComponent(threadId)}/reply`, {
+    method: 'POST',
+    body,
+  });
+}
+
+export function markThreadRead(id: string): Promise<MailUnreadCount> {
+  return apiFetch<MailUnreadCount>(`/mail/threads/${encodeURIComponent(id)}/read`, { method: 'POST' });
+}
+
+export function markThreadUnread(id: string): Promise<MailUnreadCount> {
+  return apiFetch<MailUnreadCount>(`/mail/threads/${encodeURIComponent(id)}/unread`, {
+    method: 'POST',
+  });
+}
+
+/** Delete a thread for the caller only (per-user soft-hide). */
+export function deleteThread(id: string): Promise<void> {
+  return apiFetch<void>(`/mail/threads/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
