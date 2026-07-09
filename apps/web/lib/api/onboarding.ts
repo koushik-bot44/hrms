@@ -127,8 +127,8 @@ export async function reviseDocument(
   });
 }
 
-/** Direct PUT to object storage with upload progress (fetch lacks upload progress). */
-function putWithProgress(
+/** Direct PUT to object storage with upload progress (fetch lacks upload progress). Shared with mail. */
+export function putWithProgress(
   url: string,
   file: File,
   headers: Record<string, string>,

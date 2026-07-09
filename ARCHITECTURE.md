@@ -409,7 +409,26 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     (`message_recipients.deletedAt` for received messages, `messages.senderDeletedAt` for sent ones) —
     the rows are **never destroyed** and the counterparty still sees their copy. Deleted threads vanish
     from the viewer's lists; a later reply (an un-hidden message) resurfaces the thread. Audited
-    `MAIL_DELETED`. Still **text-only, no attachments; employees excluded**.
+    `MAIL_DELETED`. Employees are excluded from mail throughout.
+- **Attachments (Stage 4):** a message (new send or reply) may carry files, stored in **S3 via the same
+  presigned upload→confirm handshake as employee documents** (`storage.buildKey` → presigned PUT →
+  server reads the bytes to compute + store the **sha256**). Attachment rows (`message_attachments`) are
+  bound to the message they were sent with; **storage keys are never exposed** — a raw key never leaves
+  the server.
+  - **Access is governed by the THREAD, not by company scope.** `GET /mail/attachments/{id}/download`
+    resolves the attachment → its message → its thread and issues a short-lived presigned **GET only if the
+    requester is a participant** in that thread (sender or a recipient). Anyone else — **including a Super
+    Admin who is not a participant** — gets 403. This is a distinct authorization basis from the employee
+    document/company scope; mail attachments have their OWN participant-scoped endpoint (never reuse the
+    employee-document download). Every download is audited `MAIL_ATTACHMENT_DOWNLOADED`.
+  - **Limits (enforced server-side, the authority; mirrored client-side):** at most **5 files per
+    message**, **10 MB per file**; allowed types are images (png/jpeg/gif/webp), pdf, plain text, csv,
+    the office docs (docx/xlsx/pptx) and zip. Executables/scripts are **rejected** — the server validates
+    **both the declared content type AND the file extension**, so a spoofed content type or a bypassed
+    client cannot smuggle an `.exe`/`.sh`/`.js`/`.jar`. A message still requires a subject and/or body —
+    no attachment-only messages. Thread/list responses expose attachment metadata (id, name, type, size)
+    and a paperclip indicator, never keys. Text-only threads are unaffected; per-user delete hides the
+    viewer's copy but the attachment follows the message (the counterparty keeps theirs).
 
 ---
 

@@ -1,4 +1,5 @@
 import type {
+  MailAttachmentUpload,
   MailParty,
   MailUnreadCount,
   ReplyMessageInput,
@@ -7,7 +8,9 @@ import type {
   ThreadDetail,
   ThreadPage,
 } from '@/lib/contract';
-import { apiFetch } from './client';
+import { validateMailAttachment } from '@/lib/contract';
+import { apiFetch, ApiError } from './client';
+import { putWithProgress } from './onboarding';
 
 /**
  * Internal-mail API (ARCHITECTURE.md §8) — thread-based (Stage 3). Every call acts as the signed-in
@@ -85,4 +88,37 @@ export function markThreadUnread(id: string): Promise<MailUnreadCount> {
 /** Delete a thread for the caller only (per-user soft-hide). */
 export function deleteThread(id: string): Promise<void> {
   return apiFetch<void>(`/mail/threads/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+// --- Attachments (§8, Stage 4) --------------------------------------------
+
+/**
+ * Upload one attachment via the presigned handshake: validate (server re-validates), request a presigned
+ * PUT, upload the bytes directly to storage, and return the DRAFT attachment id to send with the message.
+ */
+export async function uploadMailAttachment(
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<string> {
+  const error = validateMailAttachment(file);
+  if (error) {
+    throw new ApiError(400, error);
+  }
+  const presign = await apiFetch<MailAttachmentUpload>('/mail/attachments/upload-url', {
+    method: 'POST',
+    body: {
+      fileName: file.name,
+      contentType: file.type,
+      sizeBytes: file.size,
+    },
+  });
+  await putWithProgress(presign.uploadUrl, file, presign.headers, onProgress);
+  return presign.attachmentId;
+}
+
+/** Resolve a short-lived, participant-scoped presigned download URL for an attachment. */
+export function getAttachmentDownloadUrl(attachmentId: string): Promise<{ url: string }> {
+  return apiFetch<{ url: string }>(
+    `/mail/attachments/${encodeURIComponent(attachmentId)}/download`,
+  );
 }

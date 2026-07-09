@@ -46,6 +46,15 @@ public class StorageService {
         + safe;
   }
 
+  /** A unique object key for a mail attachment, namespaced under its uploader (never exposed, §8). */
+  public String buildMailAttachmentKey(String uploaderUserId, String fileName) {
+    String safe = fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+    if (safe.length() > 120) {
+      safe = safe.substring(0, 120);
+    }
+    return "mail/attachments/" + uploaderUserId + "/" + UUID.randomUUID() + "-" + safe;
+  }
+
   public String presignedPutUrl(String key, String contentType, int expiresInSeconds) {
     return backend.presignedPutUrl(key, contentType, expiresInSeconds);
   }

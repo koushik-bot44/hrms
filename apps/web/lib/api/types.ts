@@ -420,6 +420,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mail/attachments/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["attachmentUploadUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees": {
         parameters: {
             query?: never;
@@ -964,6 +980,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mail/attachments/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["attachmentDownload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1463,6 +1495,7 @@ export interface components {
         };
         ReplyRequest: {
             body: string;
+            attachmentIds?: string[];
         };
         SendMessageResult: {
             id?: string;
@@ -1472,6 +1505,23 @@ export interface components {
             toUserId: string;
             subject: string;
             body: string;
+            attachmentIds?: string[];
+        };
+        AttachmentUploadRequest: {
+            fileName: string;
+            contentType: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+        };
+        AttachmentUpload: {
+            attachmentId?: string;
+            uploadUrl?: string;
+            method?: string;
+            headers?: {
+                [key: string]: string;
+            };
+            /** Format: int32 */
+            expiresInSeconds?: number;
         };
         OnboardEmployeeRequest: {
             fullName: string;
@@ -1657,6 +1707,13 @@ export interface components {
             /** Format: int32 */
             expiresInSeconds?: number;
         };
+        AttachmentView: {
+            id?: string;
+            fileName?: string;
+            contentType?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+        };
         MailPartyView: {
             userId?: string;
             name?: string;
@@ -1677,6 +1734,7 @@ export interface components {
             body?: string;
             createdAt?: string;
             mine?: boolean;
+            attachments?: components["schemas"]["AttachmentView"][];
         };
         Pageable: {
             /** Format: int32 */
@@ -1694,6 +1752,7 @@ export interface components {
             /** Format: int32 */
             messageCount?: number;
             unread?: boolean;
+            hasAttachments?: boolean;
         };
         ThreadPage: {
             content?: components["schemas"]["ThreadListItemView"][];
@@ -1705,6 +1764,11 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+        };
+        AttachmentDownload: {
+            url?: string;
+            /** Format: int32 */
+            expiresInSeconds?: number;
         };
         EmployeePage: {
             content?: components["schemas"]["EmployeeSummaryView"][];
@@ -2525,6 +2589,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SendMessageResult"];
+                };
+            };
+        };
+    };
+    attachmentUploadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachmentUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AttachmentUpload"];
                 };
             };
         };
@@ -3537,6 +3625,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MailPartyView"][];
+                };
+            };
+        };
+    };
+    attachmentDownload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AttachmentDownload"];
                 };
             };
         };

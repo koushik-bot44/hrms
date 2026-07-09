@@ -7,13 +7,19 @@ import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Message;
+import com.ihrms.domain.model.MessageAttachment;
 import com.ihrms.domain.model.MessageRecipient;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
+import com.ihrms.domain.repository.MessageAttachmentRepository;
 import com.ihrms.domain.repository.MessageRecipientRepository;
 import com.ihrms.domain.repository.MessageRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.Cuids;
+import com.ihrms.mail.dto.MailDtos.AttachmentDownload;
+import com.ihrms.mail.dto.MailDtos.AttachmentUpload;
+import com.ihrms.mail.dto.MailDtos.AttachmentUploadRequest;
+import com.ihrms.mail.dto.MailDtos.AttachmentView;
 import com.ihrms.mail.dto.MailDtos.MailPartyView;
 import com.ihrms.mail.dto.MailDtos.ReplyRequest;
 import com.ihrms.mail.dto.MailDtos.SendMessageRequest;
@@ -23,6 +29,8 @@ import com.ihrms.mail.dto.MailDtos.ThreadListItemView;
 import com.ihrms.mail.dto.MailDtos.ThreadMessageView;
 import com.ihrms.mail.dto.MailDtos.ThreadPage;
 import com.ihrms.mail.dto.MailDtos.UnreadCountView;
+import com.ihrms.storage.StorageService;
+import com.ihrms.support.Hashing;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -62,22 +70,31 @@ public class InternalMailService {
   private final CompanyRepository companies;
   private final MessageRepository messages;
   private final MessageRecipientRepository recipients;
+  private final MessageAttachmentRepository attachments;
   private final AuthorizationService authz;
   private final AuditService audit;
+  private final StorageService storage;
+  private final MailAttachments attachmentRules;
 
   public InternalMailService(
       UserRepository users,
       CompanyRepository companies,
       MessageRepository messages,
       MessageRecipientRepository recipients,
+      MessageAttachmentRepository attachments,
       AuthorizationService authz,
-      AuditService audit) {
+      AuditService audit,
+      StorageService storage,
+      MailAttachments attachmentRules) {
     this.users = users;
     this.companies = companies;
     this.messages = messages;
     this.recipients = recipients;
+    this.attachments = attachments;
     this.authz = authz;
     this.audit = audit;
+    this.storage = storage;
+    this.attachmentRules = attachmentRules;
   }
 
   // --- Contacts -----------------------------------------------------------------
@@ -130,8 +147,9 @@ public class InternalMailService {
     message.setBody(input.body());
     messages.save(message);
     saveRecipient(message.getId(), to.getId());
+    int bound = bindAttachments(me, message.getId(), input.attachmentIds());
 
-    auditSent(me, message, to.getId(), ip);
+    auditSent(me, message, to.getId(), bound, ip);
     return new SendMessageResult(message.getId(), threadId);
   }
 
@@ -173,9 +191,118 @@ public class InternalMailService {
     reply.setBody(input.body());
     messages.save(reply);
     saveRecipient(reply.getId(), to.getId());
+    int bound = bindAttachments(me, reply.getId(), input.attachmentIds());
 
-    auditSent(me, reply, to.getId(), ip);
+    auditSent(me, reply, to.getId(), bound, ip);
     return new SendMessageResult(reply.getId(), threadId);
+  }
+
+  // --- Attachments (§8, Stage 4) ------------------------------------------------
+
+  /**
+   * Step 1 of the upload handshake: validate the file (type + extension + size, server-authoritative),
+   * allocate a storage key, create an unbound DRAFT, and return a short-lived presigned PUT. The draft is
+   * bound to a message when the caller sends/replies with its id.
+   */
+  @Transactional
+  public AttachmentUpload requestAttachmentUpload(
+      IhrmsPrincipal.User actor, AttachmentUploadRequest input, String ip) {
+    User me = requireUser(actor.userId());
+    String type = attachmentRules.validate(input.fileName(), input.contentType(), input.sizeBytes());
+
+    String key = storage.buildMailAttachmentKey(me.getId(), input.fileName());
+    MessageAttachment draft = new MessageAttachment();
+    draft.setUploaderUserId(me.getId());
+    draft.setFileName(input.fileName());
+    draft.setContentType(type);
+    draft.setSizeBytes(input.sizeBytes());
+    draft.setStorageKey(key);
+    attachments.save(draft);
+
+    String uploadUrl = storage.presignedPutUrl(key, type, MailAttachments.UPLOAD_TTL_SECONDS);
+    audit.record(
+        new AuditActor("USER", me.getId(), me.getCompanyId()),
+        "MAIL_ATTACHMENT_UPLOAD_REQUESTED",
+        "MessageAttachment",
+        draft.getId(),
+        Map.of("fileName", input.fileName(), "contentType", type),
+        ip);
+    return new AttachmentUpload(
+        draft.getId(), uploadUrl, "PUT", Map.of("Content-Type", type), MailAttachments.UPLOAD_TTL_SECONDS);
+  }
+
+  /**
+   * Download an attachment: resolve it → its message → its thread and issue a presigned GET ONLY if the
+   * caller is a participant in that thread (else 403 — even a Super Admin who is not a participant).
+   * Access is thread-scoped, never company-scoped. Audited {@code MAIL_ATTACHMENT_DOWNLOADED} (a writable
+   * tx so the audit row commits).
+   */
+  @Transactional
+  public AttachmentDownload downloadAttachment(IhrmsPrincipal.User actor, String attachmentId, String ip) {
+    User me = requireUser(actor.userId());
+    MessageAttachment att =
+        attachments
+            .findById(attachmentId)
+            .filter(a -> a.getMessageId() != null) // unbound drafts are not downloadable
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
+    Message message =
+        messages
+            .findById(att.getMessageId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
+
+    List<Message> threadMsgs = messages.findByThreadIdOrderByCreatedAtAsc(message.getThreadId());
+    if (!isParticipant(me, threadMsgs, recipientsByMessage(threadMsgs))) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot download this attachment");
+    }
+
+    String url = storage.presignedGetUrl(att.getStorageKey(), MailAttachments.DOWNLOAD_TTL_SECONDS);
+    audit.record(
+        new AuditActor("USER", me.getId(), me.getCompanyId()),
+        "MAIL_ATTACHMENT_DOWNLOADED",
+        "MessageAttachment",
+        att.getId(),
+        Map.of("threadId", message.getThreadId(), "messageId", message.getId(), "fileName", att.getFileName()),
+        ip);
+    return new AttachmentDownload(url, MailAttachments.DOWNLOAD_TTL_SECONDS);
+  }
+
+  /**
+   * Bind the caller's uploaded drafts to a freshly-created message. Each draft must be theirs, still
+   * unbound, and actually present in storage; its real size + sha256 are (re)computed and the limits +
+   * type are re-enforced (never trusting the client). Returns how many were bound. Drafts never referenced
+   * here are harmless orphans (no message ⇒ not downloadable; a future sweep can delete stale ones).
+   */
+  private int bindAttachments(User me, String messageId, List<String> attachmentIds) {
+    if (attachmentIds == null || attachmentIds.isEmpty()) {
+      return 0;
+    }
+    List<String> ids = attachmentIds.stream().distinct().toList();
+    if (ids.size() > MailAttachments.MAX_PER_MESSAGE) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "At most " + MailAttachments.MAX_PER_MESSAGE + " attachments per message");
+    }
+    List<MessageAttachment> toBind = new ArrayList<>();
+    for (String id : ids) {
+      MessageAttachment att =
+          attachments
+              .findById(id)
+              .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown attachment"));
+      if (!att.getUploaderUserId().equals(me.getId()) || att.getMessageId() != null) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "That attachment is not available");
+      }
+      byte[] bytes = storage.getObjectBytes(att.getStorageKey());
+      if (bytes == null || bytes.length == 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "An attachment upload did not complete");
+      }
+      // Re-validate against the ACTUAL stored bytes (size) + the declared type (never trust the client).
+      attachmentRules.validate(att.getFileName(), att.getContentType(), bytes.length);
+      att.setSizeBytes(bytes.length);
+      att.setSha256(Hashing.sha256Hex(bytes));
+      att.setMessageId(messageId);
+      toBind.add(att);
+    }
+    attachments.saveAll(toBind);
+    return toBind.size();
   }
 
   // --- Lists: Inbox / Sent / Search (all THREADS) -------------------------------
@@ -243,6 +370,7 @@ public class InternalMailService {
 
     Map<String, User> userMap = usersById(participantIds(msgs, recByMsg, null));
     Map<String, String> domains = domainsFor(userMap.values());
+    Map<String, List<MessageAttachment>> attByMsg = attachmentsByMessage(visible);
 
     List<ThreadMessageView> messageViews =
         visible.stream()
@@ -253,7 +381,8 @@ public class InternalMailService {
                         party(userMap.get(m.getSenderUserId()), domains),
                         m.getBody(),
                         m.getCreatedAt().toString(),
-                        m.getSenderUserId().equals(me.getId())))
+                        m.getSenderUserId().equals(me.getId()),
+                        attachmentViews(attByMsg.get(m.getId()))))
             .toList();
     List<MailPartyView> participants = otherParties(me, msgs, recByMsg, userMap, domains);
     String otherId = counterpartyId(me, msgs, recByMsg);
@@ -360,6 +489,12 @@ public class InternalMailService {
 
     Map<String, User> userMap = usersById(participantIds(all, recByMsg, null));
     Map<String, String> domains = domainsFor(userMap.values());
+    // Which of these messages carry an attachment (for the paperclip indicator).
+    Set<String> messagesWithAttachments =
+        attachments.findByMessageIdInOrderByCreatedAtAsc(all.stream().map(Message::getId).toList())
+            .stream()
+            .map(MessageAttachment::getMessageId)
+            .collect(Collectors.toSet());
 
     List<ThreadListItemView> out = new ArrayList<>();
     for (String threadId : threadIds) {
@@ -379,6 +514,8 @@ public class InternalMailService {
                       !m.getSenderUserId().equals(me.getId())
                           && mine.get(m.getId()) != null
                           && mine.get(m.getId()).getReadAt() == null);
+      boolean hasAttachments =
+          visible.stream().anyMatch(m -> messagesWithAttachments.contains(m.getId()));
       List<MailPartyView> participants = otherParties(me, msgs, recByMsg, userMap, domains);
       out.add(
           new ThreadListItemView(
@@ -388,7 +525,8 @@ public class InternalMailService {
               last.getCreatedAt().toString(),
               participants,
               visible.size(),
-              unread));
+              unread,
+              hasAttachments));
     }
     return out;
   }
@@ -494,6 +632,27 @@ public class InternalMailService {
     return map;
   }
 
+  private Map<String, List<MessageAttachment>> attachmentsByMessage(List<Message> msgs) {
+    List<String> ids = msgs.stream().map(Message::getId).toList();
+    Map<String, List<MessageAttachment>> map = new HashMap<>();
+    if (ids.isEmpty()) {
+      return map;
+    }
+    for (MessageAttachment a : attachments.findByMessageIdInOrderByCreatedAtAsc(ids)) {
+      map.computeIfAbsent(a.getMessageId(), k -> new ArrayList<>()).add(a);
+    }
+    return map;
+  }
+
+  private List<AttachmentView> attachmentViews(List<MessageAttachment> list) {
+    if (list == null || list.isEmpty()) {
+      return List.of();
+    }
+    return list.stream()
+        .map(a -> new AttachmentView(a.getId(), a.getFileName(), a.getContentType(), a.getSizeBytes()))
+        .collect(Collectors.toList());
+  }
+
   private Map<String, MessageRecipient> myRows(User me, Map<String, List<MessageRecipient>> recByMsg) {
     Map<String, MessageRecipient> mine = new HashMap<>();
     for (List<MessageRecipient> rs : recByMsg.values()) {
@@ -515,7 +674,7 @@ public class InternalMailService {
     recipients.save(row);
   }
 
-  private void auditSent(User me, Message message, String toUserId, String ip) {
+  private void auditSent(User me, Message message, String toUserId, int attachmentCount, String ip) {
     // Attribute to the sender's company (portal-level for SUPER_ADMIN); mail crosses portal↔company,
     // never company↔company.
     audit.record(
@@ -523,7 +682,11 @@ public class InternalMailService {
         "MAIL_SENT",
         "Message",
         message.getId(),
-        Map.of("threadId", message.getThreadId(), "toUserId", toUserId, "subject", message.getSubject()),
+        Map.of(
+            "threadId", message.getThreadId(),
+            "toUserId", toUserId,
+            "subject", message.getSubject(),
+            "attachmentCount", attachmentCount),
         ip);
   }
 

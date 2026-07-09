@@ -2,6 +2,9 @@ package com.ihrms.mail;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -17,6 +20,7 @@ import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.UserRepository;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +29,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -50,6 +55,11 @@ class MailApiTest {
   @Autowired CompanyRepository companies;
   @Autowired UserRepository users;
   @Autowired JdbcTemplate jdbc;
+
+  // Storage is mocked so the presigned handshake runs without a real bucket: the key is derived from the
+  // file name, and getObjectBytes returns bytes so bind can hash them. (The real S3/db roundtrip is
+  // covered by the storage tests + the live walk.)
+  @MockBean com.ihrms.storage.StorageService storage;
 
   private String anvi; // company, mailDomain "anvicorp"
   private String testco; // company, mailDomain "testco"
@@ -81,6 +91,14 @@ class MailApiTest {
     accA = user(anvi, UserRole.ACCOUNTANT, "acc@anvicorp", "acc");
     caT = user(testco, UserRole.COMPANY_ADMIN, "admin@testco", "admin");
     hrT = user(testco, UserRole.HR, "hr@testco", "hr");
+
+    // Storage stubs: key = "mail/att/<fileName>"; every stored object is small unless a test overrides
+    // getObjectBytes for a specific key (used to prove bind re-checks the ACTUAL size).
+    when(storage.buildMailAttachmentKey(any(), any()))
+        .thenAnswer(inv -> "mail/att/" + inv.getArgument(1));
+    when(storage.presignedPutUrl(any(), any(), anyInt())).thenReturn("http://storage.local/put");
+    when(storage.presignedGetUrl(any(), anyInt())).thenReturn("http://storage.local/get?sig=x");
+    when(storage.getObjectBytes(any())).thenReturn("hello world".getBytes());
   }
 
   // --- Send graph (new sends) -----------------------------------------------
@@ -283,6 +301,90 @@ class MailApiTest {
     assertThat(row.get("unread").asBoolean()).isTrue();
   }
 
+  // --- Attachments (Stage 4) ------------------------------------------------
+
+  @Test
+  void attachmentsUploadBindDownload_andAreParticipantScoped() throws Exception {
+    String a1 = uploadDraft(caA, "photo.png", "image/png", 1024);
+    String a2 = uploadDraft(caA, "doc.pdf", "application/pdf", 2048);
+
+    String threadId = startThreadWith(caA, hrA, "Docs", "See attached.", List.of(a1, a2));
+
+    // HR sees both attachments on the message + the paperclip on the list row.
+    JsonNode atts = openThreadJson(hrA, threadId).get("messages").get(0).get("attachments");
+    assertThat(atts).hasSize(2);
+    assertThat(atts.get(0).get("fileName").asText()).isEqualTo("photo.png");
+    assertThat(atts.get(0).get("sizeBytes").asLong()).isGreaterThan(0);
+    assertThat(threadRow(inbox(hrA), threadId).get("hasAttachments").asBoolean()).isTrue();
+
+    // A participant downloads one -> 200 + audited.
+    download(hrA, a1).andExpect(status().isOk());
+    assertThat(audit("MAIL_ATTACHMENT_DOWNLOADED")).isEqualTo(1);
+
+    // A non-participant -> 403, INCLUDING a Super Admin who is not in the thread.
+    download(mgrA, a1).andExpect(status().isForbidden());
+    download(sa, a1).andExpect(status().isForbidden());
+    assertThat(audit("MAIL_ATTACHMENT_DOWNLOADED")).isEqualTo(1); // the 403s did not audit a download
+  }
+
+  @Test
+  void serverEnforcesTypeExtensionSizeAndCountLimits() throws Exception {
+    // Executable -> content type not in the allowlist -> 415.
+    uploadExpect(caA, "malware.exe", "application/octet-stream", 10, status().isUnsupportedMediaType());
+    // A script spoofing a PDF content type -> the extension doesn't match -> 400 (extension IS validated).
+    uploadExpect(caA, "run.sh", "application/pdf", 10, status().isBadRequest());
+    // Over 10 MB -> 413 (the upload endpoint is the server-side gate; a client cannot bypass it).
+    uploadExpect(caA, "big.pdf", "application/pdf", 11L * 1024 * 1024, status().isPayloadTooLarge());
+    // More than 5 attachments on one message -> 400.
+    mvc.perform(
+            post("/mail/messages")
+                .header("Authorization", "Bearer " + token(caA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    json.writeValueAsString(
+                        Map.of(
+                            "toUserId", hrA.getId(), "subject", "s", "body", "b",
+                            "attachmentIds", List.of("a", "b", "c", "d", "e", "f")))))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void bindRechecksTheActualStoredSize_notTheClientClaim() throws Exception {
+    // The upload declares a small size (passing the upload gate)…
+    String a = uploadDraft(caA, "big.pdf", "application/pdf", 10);
+    // …but the stored object is actually > 10 MB. Bind reads the real bytes and rejects it.
+    when(storage.getObjectBytes("mail/att/big.pdf")).thenReturn(new byte[(int) (11L * 1024 * 1024)]);
+    mvc.perform(
+            post("/mail/messages")
+                .header("Authorization", "Bearer " + token(caA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    json.writeValueAsString(
+                        Map.of("toUserId", hrA.getId(), "subject", "s", "body", "b", "attachmentIds", List.of(a)))))
+        .andExpect(status().isPayloadTooLarge());
+  }
+
+  @Test
+  void replyCanCarryAnAttachment_downloadableByTheCounterparty() throws Exception {
+    String threadId = startThread(caA, hrA, "Q", "Question?");
+    String a = uploadDraft(hrA, "answer.pdf", "application/pdf", 512);
+    replyWith(hrA, threadId, "Answer attached.", List.of(a)).andExpect(status().isOk());
+
+    assertThat(openThreadJson(caA, threadId).get("messages").get(1).get("attachments")).hasSize(1);
+    download(caA, a).andExpect(status().isOk()); // the counterparty downloads it
+  }
+
+  @Test
+  void deletingAThreadKeepsTheAttachmentForTheOtherParticipant() throws Exception {
+    String a = uploadDraft(caA, "photo.png", "image/png", 256);
+    String threadId = startThreadWith(caA, hrA, "Pic", "Here.", List.of(a));
+    // HR soft-deletes their copy...
+    mvc.perform(delete("/mail/threads/" + threadId).header("Authorization", "Bearer " + token(hrA)))
+        .andExpect(status().isNoContent());
+    // ...the Company Admin (still a participant) can still download the attachment (it follows the message).
+    download(caA, a).andExpect(status().isOk());
+  }
+
   // --- Employees are excluded from mail -------------------------------------
 
   @Test
@@ -412,6 +514,75 @@ class MailApiTest {
   private JsonNode replyOk(User who, String threadId, String body) throws Exception {
     return json.readTree(
         reply(who, threadId, body).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+  }
+
+  /** Request a presigned upload (expects 200); returns the draft attachment id. */
+  private String uploadDraft(User who, String fileName, String contentType, long sizeBytes)
+      throws Exception {
+    String out =
+        mvc.perform(
+                post("/mail/attachments/upload-url")
+                    .header("Authorization", "Bearer " + token(who))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        json.writeValueAsString(
+                            Map.of("fileName", fileName, "contentType", contentType, "sizeBytes", sizeBytes))))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    return json.readTree(out).get("attachmentId").asText();
+  }
+
+  private void uploadExpect(
+      User who,
+      String fileName,
+      String contentType,
+      long sizeBytes,
+      org.springframework.test.web.servlet.ResultMatcher expected)
+      throws Exception {
+    mvc.perform(
+            post("/mail/attachments/upload-url")
+                .header("Authorization", "Bearer " + token(who))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    json.writeValueAsString(
+                        Map.of("fileName", fileName, "contentType", contentType, "sizeBytes", sizeBytes))))
+        .andExpect(expected);
+  }
+
+  private String startThreadWith(User from, User to, String subject, String body, List<String> attachmentIds)
+      throws Exception {
+    String out =
+        mvc.perform(
+                post("/mail/messages")
+                    .header("Authorization", "Bearer " + token(from))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        json.writeValueAsString(
+                            Map.of(
+                                "toUserId", to.getId(), "subject", subject, "body", body,
+                                "attachmentIds", attachmentIds))))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    return json.readTree(out).get("threadId").asText();
+  }
+
+  private ResultActions replyWith(User who, String threadId, String body, List<String> attachmentIds)
+      throws Exception {
+    return mvc.perform(
+        post("/mail/threads/" + threadId + "/reply")
+            .header("Authorization", "Bearer " + token(who))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("body", body, "attachmentIds", attachmentIds))));
+  }
+
+  private ResultActions download(User who, String attachmentId) throws Exception {
+    return mvc.perform(
+        get("/mail/attachments/" + attachmentId + "/download")
+            .header("Authorization", "Bearer " + token(who)));
   }
 
   private JsonNode openThreadJson(User who, String threadId) throws Exception {

@@ -12,6 +12,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import {
+  AttachmentPicker,
+  attachmentsUploading,
+  stagedAttachmentIds,
+  type StagedAttachment,
+} from '@/components/mail/attachment-picker';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -37,6 +43,7 @@ export function ComposeDialog({
 }) {
   const queryClient = useQueryClient();
   const contacts = useApiQuery(mailKeys.contacts, getMailContacts, { enabled: open });
+  const [staged, setStaged] = React.useState<StagedAttachment[]>([]);
 
   const {
     register,
@@ -48,9 +55,12 @@ export function ComposeDialog({
     defaultValues: { toUserId: presetToUserId ?? '', subject: '', body: '' },
   });
 
-  // Reset the form each time the dialog opens (and honour a preset recipient).
+  // Reset the form + staged files each time the dialog opens (and honour a preset recipient).
   React.useEffect(() => {
-    if (open) reset({ toUserId: presetToUserId ?? '', subject: '', body: '' });
+    if (open) {
+      reset({ toUserId: presetToUserId ?? '', subject: '', body: '' });
+      setStaged([]);
+    }
   }, [open, presetToUserId, reset]);
 
   const mutation = useApiMutation((body: SendMessageInput) => sendMessage(body), {
@@ -58,12 +68,16 @@ export function ComposeDialog({
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['mail', 'sent'] });
       void queryClient.invalidateQueries({ queryKey: mailKeys.unread });
+      setStaged([]);
       onOpenChange(false);
       onSent?.(result.threadId);
     },
   });
 
-  const onSubmit = handleSubmit((values) => mutation.mutate(values));
+  const uploading = attachmentsUploading(staged);
+  const onSubmit = handleSubmit((values) =>
+    mutation.mutate({ ...values, attachmentIds: stagedAttachmentIds(staged) }),
+  );
   const options: MailParty[] = contacts.data ?? [];
   const noContacts = contacts.isSuccess && options.length === 0;
 
@@ -145,13 +159,15 @@ export function ComposeDialog({
             {errors.body ? <p className="text-xs text-destructive">{errors.body.message}</p> : null}
           </div>
 
+          <AttachmentPicker staged={staged} setStaged={setStaged} disabled={noContacts} />
+
           <div className="flex items-center justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting || noContacts}>
+            <Button type="submit" disabled={isSubmitting || noContacts || uploading}>
               <Send />
-              {isSubmitting ? 'Sending…' : 'Send'}
+              {uploading ? 'Uploading…' : isSubmitting ? 'Sending…' : 'Send'}
             </Button>
           </div>
         </form>

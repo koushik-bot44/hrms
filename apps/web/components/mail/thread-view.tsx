@@ -20,6 +20,13 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AttachmentChips } from '@/components/mail/attachment-chips';
+import {
+  AttachmentPicker,
+  attachmentsUploading,
+  stagedAttachmentIds,
+  type StagedAttachment,
+} from '@/components/mail/attachment-picker';
 
 /**
  * The reading pane (§8, Stage 3): a thread's messages in order + an inline reply box (the recipient is
@@ -62,13 +69,20 @@ export function ThreadView({
     resolver: zodResolver(ReplyMessageSchema),
     defaultValues: { body: '' },
   });
+  const [staged, setStaged] = React.useState<StagedAttachment[]>([]);
+
+  // Clear staged files when switching threads.
+  React.useEffect(() => {
+    setStaged([]);
+    replyForm.reset({ body: '' });
+  }, [threadId, replyForm]);
 
   const replyMutation = useApiMutation(
     (body: ReplyMessageInput) => replyToThread(threadId as string, body),
     {
       successMessage: 'Reply sent',
       onSuccess: (result, vars) => {
-        // Optimistically append my reply, then reconcile.
+        // Optimistically append my reply, then reconcile (the refetch fills in attachments).
         if (session?.type === 'USER') {
           queryClient.setQueryData<ThreadDetail>(mailKeys.thread(threadId as string), (prev) =>
             prev
@@ -87,6 +101,7 @@ export function ThreadView({
                       body: vars.body,
                       createdAt: new Date().toISOString(),
                       mine: true,
+                      attachments: [],
                     },
                   ],
                 }
@@ -94,6 +109,7 @@ export function ThreadView({
           );
         }
         replyForm.reset();
+        setStaged([]);
         void queryClient.invalidateQueries({ queryKey: mailKeys.thread(threadId as string) });
         refreshLists();
         onChanged?.();
@@ -214,13 +230,16 @@ export function ThreadView({
               </span>
             </div>
             <p className="whitespace-pre-wrap break-words leading-relaxed">{m.body}</p>
+            <AttachmentChips attachments={m.attachments} />
           </article>
         ))}
       </div>
 
       {/* Inline reply — recipient is implicit (the other participant). */}
       <form
-        onSubmit={replyForm.handleSubmit((v) => replyMutation.mutate(v))}
+        onSubmit={replyForm.handleSubmit((v) =>
+          replyMutation.mutate({ ...v, attachmentIds: stagedAttachmentIds(staged) }),
+        )}
         className="border-t p-3 md:p-4"
         noValidate
       >
@@ -241,15 +260,24 @@ export function ThreadView({
           )}
           {...replyForm.register('body')}
         />
+        {canReply ? (
+          <div className="mt-1.5">
+            <AttachmentPicker staged={staged} setStaged={setStaged} />
+          </div>
+        ) : null}
         <div className="mt-2 flex items-center justify-between">
           {replyForm.formState.errors.body ? (
             <p className="text-xs text-destructive">{replyForm.formState.errors.body.message}</p>
           ) : (
             <span />
           )}
-          <Button type="submit" size="sm" disabled={!canReply || replyMutation.isPending}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!canReply || replyMutation.isPending || attachmentsUploading(staged)}
+          >
             <Send />
-            {replyMutation.isPending ? 'Sending…' : 'Reply'}
+            {attachmentsUploading(staged) ? 'Uploading…' : replyMutation.isPending ? 'Sending…' : 'Reply'}
           </Button>
         </div>
       </form>

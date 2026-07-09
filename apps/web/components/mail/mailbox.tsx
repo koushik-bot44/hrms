@@ -11,6 +11,7 @@ import {
   Mail,
   MailMinus,
   MailOpen,
+  Paperclip,
   Search,
   Send,
   SquarePen,
@@ -424,6 +425,9 @@ function ThreadRow({
           <span className={cn('truncate text-sm', row.unread ? 'font-medium text-foreground' : 'text-muted-foreground')}>
             {row.subject}
           </span>
+          {row.hasAttachments ? (
+            <Paperclip className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has attachments" />
+          ) : null}
         </div>
         {row.snippet ? <p className="truncate text-xs text-muted-foreground">{row.snippet}</p> : null}
       </button>

@@ -1,6 +1,9 @@
 package com.ihrms.mail;
 
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.mail.dto.MailDtos.AttachmentDownload;
+import com.ihrms.mail.dto.MailDtos.AttachmentUpload;
+import com.ihrms.mail.dto.MailDtos.AttachmentUploadRequest;
 import com.ihrms.mail.dto.MailDtos.MailPartyView;
 import com.ihrms.mail.dto.MailDtos.ReplyRequest;
 import com.ihrms.mail.dto.MailDtos.SendMessageRequest;
@@ -63,6 +66,24 @@ public class MailController {
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     return mail.reply(actor, id, body, request.getRemoteAddr());
+  }
+
+  /** Step 1 of attaching a file: validate + get a short-lived presigned PUT (+ a draft attachment id). */
+  @PostMapping("/attachments/upload-url")
+  public AttachmentUpload attachmentUploadUrl(
+      @Valid @RequestBody AttachmentUploadRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return mail.requestAttachmentUpload(actor, body, request.getRemoteAddr());
+  }
+
+  /** Download an attachment — participant-scoped presigned GET (403 for non-participants). Audited. */
+  @GetMapping("/attachments/{id}/download")
+  public AttachmentDownload attachmentDownload(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return mail.downloadAttachment(actor, id, request.getRemoteAddr());
   }
 
   /** Inbox — conversations addressed to the caller, newest activity first. */

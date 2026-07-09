@@ -273,6 +273,9 @@ export type ApprovedEmployeePage = Omit<Required<Schemas['ApprovedEmployeePage']
 /** A mail participant — a staff account shown by name + `localpart@domain` address. */
 export type MailParty = Required<Schemas['MailPartyView']>;
 
+/** Attachment metadata shown on a message — never the storage key (§6/§8). */
+export type MailAttachment = Required<Schemas['AttachmentView']>;
+
 /** One row in an Inbox / Sent / Search list — a THREAD from the viewer's perspective. */
 export type ThreadListItem = Omit<Required<Schemas['ThreadListItemView']>, 'participants'> & {
   participants: MailParty[];
@@ -283,9 +286,13 @@ export type ThreadPage = Omit<Required<Schemas['ThreadPage']>, 'content'> & {
 };
 
 /** One message inside an open thread; `mine` marks the viewer's own messages. */
-export type ThreadMessage = Omit<Required<Schemas['ThreadMessageView']>, 'from'> & {
+export type ThreadMessage = Omit<Required<Schemas['ThreadMessageView']>, 'from' | 'attachments'> & {
   from: MailParty;
+  attachments: MailAttachment[];
 };
+
+/** The presigned PUT + the draft attachment id to send once the upload completes. */
+export type MailAttachmentUpload = Required<Schemas['AttachmentUpload']>;
 
 /** An open thread: its messages in order + the counterparty a reply would go to. */
 export type ThreadDetail = Omit<
