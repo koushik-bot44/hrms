@@ -8,8 +8,8 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * Forms and validates internal-mail addresses (§8). A staff mailbox address is {@code localpart@domain}
  * and IS the user's login email (single identity). At provisioning the assigner types the local part;
- * this forms the address. (An {@code email} fallback is accepted transitionally, for callers not yet
- * updated to send a local part — the address then equals that email.)
+ * this forms the address — the single, only way an address/login email is created (the earlier
+ * transitional {@code email} fallback has been retired now the UI always sends a local part).
  */
 @Component
 public class MailAddresses {
@@ -24,21 +24,16 @@ public class MailAddresses {
   public record Address(String email, String localPart) {}
 
   /**
-   * Resolve the mailbox from a typed {@code localPart} + a domain, or fall back to a full {@code email}.
-   * Uniqueness within the domain is enforced downstream by the global email-unique index (the address
-   * IS the email).
+   * Resolve the mailbox from a typed {@code localPart} + a domain: {@code localpart@domain}, which IS
+   * the login email. The local part is required (400 if blank). Uniqueness within the domain is enforced
+   * downstream by the global email-unique index (the address IS the email).
    */
-  public Address resolve(String localPart, String email, String domain) {
-    if (isPresent(localPart)) {
-      String lp = normalizeLocalPart(localPart);
-      return new Address(lp + "@" + normalizeDomain(domain), lp);
+  public Address resolve(String localPart, String domain) {
+    if (!isPresent(localPart)) {
+      throw badRequest("Provide a mailbox local part");
     }
-    if (isPresent(email)) {
-      String e = email.trim().toLowerCase();
-      int at = e.indexOf('@');
-      return new Address(e, at > 0 ? e.substring(0, at) : e);
-    }
-    throw badRequest("Provide a mailbox local part");
+    String lp = normalizeLocalPart(localPart);
+    return new Address(lp + "@" + normalizeDomain(domain), lp);
   }
 
   public String normalizeLocalPart(String localPart) {

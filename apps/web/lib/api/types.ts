@@ -1100,7 +1100,6 @@ export interface components {
             userId?: string;
             name?: string;
             localPart?: string;
-            email?: string;
             password?: string;
         };
         AssignMemberResult: {
@@ -1285,8 +1284,7 @@ export interface components {
         };
         ProvisionAccountantRequest: {
             name: string;
-            localPart?: string;
-            email?: string;
+            localPart: string;
             password: string;
         };
         AccountantView: {
@@ -1456,6 +1454,7 @@ export interface components {
             id?: string;
             name?: string;
             code?: string;
+            mailDomain?: string;
             status?: string;
             /** Format: int64 */
             teamCount?: number;
@@ -1468,8 +1467,7 @@ export interface components {
         };
         ProvisionAdminRequest: {
             name: string;
-            localPart?: string;
-            email?: string;
+            localPart: string;
             password: string;
         };
         ProvisionAdminResult: {

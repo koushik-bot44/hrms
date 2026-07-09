@@ -7,3 +7,4 @@ export * from './onboarding';
 export * from './review';
 export * from './manager';
 export * from './accountant';
+export * from './mail';

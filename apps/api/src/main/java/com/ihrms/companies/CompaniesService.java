@@ -261,7 +261,7 @@ public class CompaniesService {
     }
 
     // The mailbox address = localPart@companyDomain, and IS the login email (§8).
-    var address = mailAddresses.resolve(input.localPart(), input.email(), company.getMailDomain());
+    var address = mailAddresses.resolve(input.localPart(), company.getMailDomain());
     accountEmails.assertAvailableForStaff(address.email()); // unique across staff + employees (§6)
     String password = input.password(); // admin-set initial staff password (§6)
     User user = new User();
@@ -298,6 +298,7 @@ public class CompaniesService {
         company.getId(),
         company.getName(),
         company.getCode(),
+        company.getMailDomain(),
         company.getStatus(),
         teams.countByCompanyId(id),
         employees.countByCompanyId(id),

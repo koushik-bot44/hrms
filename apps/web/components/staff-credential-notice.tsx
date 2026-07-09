@@ -7,16 +7,17 @@ import { Button } from '@/components/ui/button';
 
 /**
  * Shows the initial staff credentials once, on successful provisioning, so the admin can share them.
- * The password is only known at creation time — surface it clearly with a copy affordance.
+ * The {@code address} is the mailbox `localpart@domain`, which is also the login email (§8); the
+ * password is only known at creation time — surface both clearly with a copy affordance.
  */
 export function CredentialNotice({
   title,
-  email,
+  address,
   password,
   onDismiss,
 }: {
   title: string;
-  email: string;
+  address: string;
   password: string;
   onDismiss: () => void;
 }) {
@@ -24,7 +25,7 @@ export function CredentialNotice({
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(`${email} / ${password}`);
+      await navigator.clipboard.writeText(`${address} / ${password}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -46,11 +47,12 @@ export function CredentialNotice({
         </button>
       </div>
       <p className="mt-1 text-muted-foreground">
-        Share these sign-in credentials — the password is shown only now.
+        Share these sign-in credentials — they sign in with this address + password (the password is
+        shown only now).
       </p>
       <div className="mt-2 flex items-center justify-between gap-3 rounded bg-background px-2.5 py-1.5 font-mono text-xs">
         <span className="truncate">
-          {email} · {password}
+          {address} · {password}
         </span>
         <Button type="button" variant="ghost" size="sm" onClick={copy}>
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}

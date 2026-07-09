@@ -117,11 +117,12 @@ class CompaniesApiTest {
 
     MvcResult res =
         mvc.perform(asSuper(post("/companies/" + id + "/admin"),
-                Map.of("name", "Ada Admin", "email", "ada@acme.test", "password", "AdaAdmin@1")))
+                Map.of("name", "Ada Admin", "localPart", "ada", "password", "AdaAdmin@1")))
             .andExpect(status().isCreated())
             .andReturn();
     JsonNode body = json.readTree(res.getResponse().getContentAsString());
-    assertThat(body.get("admin").get("email").asText()).isEqualTo("ada@acme.test");
+    // localPart@companyDomain (code ACME -> domain "acme") IS the login email (§8).
+    assertThat(body.get("admin").get("email").asText()).isEqualTo("ada@acme");
     assertThat(body.get("admin").get("status").asText()).isEqualTo("ACTIVE");
     // The initial password is echoed in dev (the admin who set it already knows it).
     assertThat(body.get("devPassword").asText()).isEqualTo("AdaAdmin@1");
@@ -133,7 +134,7 @@ class CompaniesApiTest {
                 post("/auth/login")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(json.writeValueAsString(
-                        Map.of("email", "ada@acme.test", "password", "AdaAdmin@1"))))
+                        Map.of("email", "ada@acme", "password", "AdaAdmin@1"))))
             .andExpect(status().isCreated())
             .andReturn();
     JsonNode session = json.readTree(login.getResponse().getContentAsString()).get("session");
@@ -148,9 +149,9 @@ class CompaniesApiTest {
     assertThat(json.readTree(detail.getResponse().getContentAsString()).get("hasAdmin").asBoolean())
         .isTrue();
 
-    // Second admin (any email) rejected — one admin per company.
+    // Second admin (any mailbox) rejected — one admin per company.
     mvc.perform(asSuper(post("/companies/" + id + "/admin"),
-            Map.of("name", "Bob", "email", "bob@acme.test", "password", "BobAdmin@1")))
+            Map.of("name", "Bob", "localPart", "bob", "password", "BobAdmin@1")))
         .andExpect(status().isConflict());
   }
 

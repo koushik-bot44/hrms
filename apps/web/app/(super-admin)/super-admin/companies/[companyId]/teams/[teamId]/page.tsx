@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Users } from 'lucide-react';
 import type { TeamMember, TeamRole } from '@/lib/contract';
 import { getTeam, teamKey } from '@/lib/api/teams';
+import { getCompany } from '@/lib/api/companies';
 import { useApiQuery } from '@/lib/api/hooks';
 import { PageHeader } from '@/components/page-header';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
@@ -25,6 +26,9 @@ export default function SuperAdminTeamDetailPage({
   const { data, isLoading, isError, error } = useApiQuery(teamKey(teamId, companyId), (signal) =>
     getTeam(teamId, companyId, signal),
   );
+  // The company's mail domain drives the address preview when creating new staff (§8).
+  const company = useApiQuery(['company', companyId], (signal) => getCompany(companyId, signal));
+  const mailDomain = company.data?.mailDomain ?? '';
 
   const backLink = (
     <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit text-muted-foreground">
@@ -81,13 +85,21 @@ export default function SuperAdminTeamDetailPage({
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <SlotCard title="HR" role="HR" member={data.hr} teamId={data.id} companyId={companyId} />
+        <SlotCard
+          title="HR"
+          role="HR"
+          member={data.hr}
+          teamId={data.id}
+          companyId={companyId}
+          mailDomain={mailDomain}
+        />
         <SlotCard
           title="Manager"
           role="MANAGER"
           member={data.manager}
           teamId={data.id}
           companyId={companyId}
+          mailDomain={mailDomain}
         />
         <SlotCard
           title="Accountant"
@@ -95,6 +107,7 @@ export default function SuperAdminTeamDetailPage({
           member={data.accountant}
           teamId={data.id}
           companyId={companyId}
+          mailDomain={mailDomain}
         />
       </div>
 
@@ -130,19 +143,27 @@ function SlotCard({
   member,
   teamId,
   companyId,
+  mailDomain,
 }: {
   title: string;
   role: TeamRole;
   member: TeamMember | null;
   teamId: string;
   companyId: string;
+  mailDomain: string;
 }) {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">{title}</CardTitle>
         {member ? (
-          <AssignMemberDialog teamId={teamId} role={role} label="Change" companyId={companyId} />
+          <AssignMemberDialog
+            teamId={teamId}
+            role={role}
+            label="Change"
+            companyId={companyId}
+            mailDomain={mailDomain}
+          />
         ) : null}
       </CardHeader>
       <CardContent>
@@ -159,6 +180,7 @@ function SlotCard({
               role={role}
               label={`Assign ${title}`}
               companyId={companyId}
+              mailDomain={mailDomain}
             />
           </div>
         )}

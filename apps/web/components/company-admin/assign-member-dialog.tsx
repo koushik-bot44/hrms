@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { UserPlus } from 'lucide-react';
 import {
   AssignNewMemberSchema,
+  previewAddress,
   type AssignMemberInput,
   type AssignNewMemberInput,
   type TeamRole,
@@ -19,8 +20,10 @@ import {
   teamsKey,
 } from '@/lib/api/teams';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
+import { useAuth } from '@/components/auth-provider';
 import { generatePassword } from '@/lib/auth/password';
 import { CredentialNotice } from '@/components/staff-credential-notice';
+import { AddressPreview } from '@/components/mail/address-preview';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -41,25 +44,35 @@ export function AssignMemberDialog({
   role,
   label,
   companyId,
+  mailDomain,
 }: {
   teamId: string;
   role: TeamRole;
   label: string;
   /** SUPER_ADMIN cross-company; omit for COMPANY_ADMIN (own company). */
   companyId?: string;
+  /** The team's company mail domain (§8). SUPER_ADMIN passes it; COMPANY_ADMIN derives its own. */
+  mailDomain?: string;
 }) {
   const roleLabel = role === 'HR' ? 'HR' : role === 'MANAGER' ? 'Manager' : 'Accountant';
+  const { session } = useAuth();
   const [open, setOpen] = React.useState(false);
   const [mode, setMode] = React.useState<'new' | 'existing'>('new');
   const [userId, setUserId] = React.useState('');
   const [existingError, setExistingError] = React.useState<string | undefined>(undefined);
-  const [created, setCreated] = React.useState<{ email: string; password: string } | null>(null);
+  const [created, setCreated] = React.useState<{ address: string; password: string } | null>(null);
   const queryClient = useQueryClient();
+
+  // The company's mail domain: passed by the Super Admin; for a Company Admin it is their OWN domain
+  // (every staff mailbox in a company shares it — so the acting admin's address carries it).
+  const domain =
+    mailDomain ?? (session?.type === 'USER' ? (session.email.split('@')[1] ?? '') : '');
 
   const newForm = useForm<AssignNewMemberInput>({
     resolver: zodResolver(AssignNewMemberSchema),
-    defaultValues: { name: '', email: '', password: '' },
+    defaultValues: { name: '', localPart: '', password: '' },
   });
+  const localPart = newForm.watch('localPart');
 
   const assignable = useApiQuery(
     assignableKey(role, companyId),
@@ -71,15 +84,24 @@ export function AssignMemberDialog({
     (body: AssignMemberInput) => assignTeamMember(teamId, role, body, companyId),
     {
       successMessage: `${roleLabel} assigned`,
-      onSuccess: (_result, variables) => {
+      onSuccess: (result, variables) => {
         void queryClient.invalidateQueries({ queryKey: teamKey(teamId, companyId) });
         void queryClient.invalidateQueries({ queryKey: teamsKey(companyId) });
         void queryClient.invalidateQueries({ queryKey: assignableKey(role, companyId) });
         setUserId('');
         // A newly-created person has an initial password to hand over; keep the dialog open to show
-        // it. Attaching an existing user just closes.
+        // it (with their new address). Attaching an existing user just closes.
         if ('password' in variables && variables.password) {
-          setCreated({ email: variables.email, password: variables.password });
+          const slot =
+            role === 'HR'
+              ? result.team.hr
+              : role === 'MANAGER'
+                ? result.team.manager
+                : result.team.accountant;
+          setCreated({
+            address: slot?.email ?? previewAddress(variables.localPart, domain),
+            password: variables.password,
+          });
           newForm.reset();
         } else {
           setOpen(false);
@@ -87,7 +109,7 @@ export function AssignMemberDialog({
       },
       onError: (error) => {
         if (mode === 'new' && error.status === 409) {
-          newForm.setError('email', { message: error.message });
+          newForm.setError('localPart', { message: error.message });
         }
       },
     },
@@ -141,7 +163,7 @@ export function AssignMemberDialog({
               <div className="space-y-4">
                 <CredentialNotice
                   title={`${roleLabel} assigned`}
-                  email={created.email}
+                  address={created.address}
                   password={created.password}
                   onDismiss={() => setCreated(null)}
                 />
@@ -171,21 +193,24 @@ export function AssignMemberDialog({
                   ) : null}
                 </div>
                 <div className="space-y-1.5">
-                  <label htmlFor="member-email" className="text-sm font-medium">
-                    Email
+                  <label htmlFor="member-localpart" className="text-sm font-medium">
+                    Mailbox name
                   </label>
                   <Input
-                    id="member-email"
-                    type="email"
-                    placeholder={`${role.toLowerCase()}@company.com`}
-                    aria-invalid={Boolean(newForm.formState.errors.email)}
-                    {...newForm.register('email')}
+                    id="member-localpart"
+                    placeholder={role.toLowerCase()}
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    aria-invalid={Boolean(newForm.formState.errors.localPart)}
+                    {...newForm.register('localPart')}
                   />
-                  {newForm.formState.errors.email ? (
+                  {newForm.formState.errors.localPart ? (
                     <p className="text-xs text-destructive">
-                      {newForm.formState.errors.email.message}
+                      {newForm.formState.errors.localPart.message}
                     </p>
-                  ) : null}
+                  ) : (
+                    <AddressPreview address={previewAddress(localPart, domain)} />
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -217,7 +242,7 @@ export function AssignMemberDialog({
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      They sign in with their email + this password and can change it later.
+                      They sign in with their address + this password and can change it later.
                     </p>
                   )}
                 </div>

@@ -162,8 +162,7 @@ public class TeamsService {
       // The mailbox address = localPart@companyDomain, and IS the login email (§8).
       Company company =
           companies.findById(companyId).orElseThrow(() -> notFound("Company not found"));
-      var address =
-          mailAddresses.resolve(input.localPart(), input.email(), company.getMailDomain());
+      var address = mailAddresses.resolve(input.localPart(), company.getMailDomain());
       accountEmails.assertAvailableForStaff(address.email()); // unique across staff + employees (§6)
       // New staff sign in with email + password (§6): an initial password (min 8) is required.
       String password = input.password();

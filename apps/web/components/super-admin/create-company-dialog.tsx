@@ -29,16 +29,34 @@ export function CreateCompanyDialog() {
   const [open, setOpen] = React.useState(false);
   const queryClient = useQueryClient();
 
+  // The mail domain (§8) prefills from the code (lowercased) until the admin edits it themselves.
+  const [domainEdited, setDomainEdited] = React.useState(false);
   const {
     register,
     handleSubmit,
     reset,
     setError,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<CreateCompanyInput>({
     resolver: zodResolver(CreateCompanySchema),
-    defaultValues: { name: '', code: '' },
+    defaultValues: { name: '', code: '', mailDomain: '' },
   });
+
+  const resetForm = React.useCallback(() => {
+    reset();
+    setDomainEdited(false);
+  }, [reset]);
+
+  const code = watch('code');
+  React.useEffect(() => {
+    if (!domainEdited) {
+      setValue('mailDomain', (code ?? '').trim().toLowerCase());
+    }
+  }, [code, domainEdited, setValue]);
+
+  const domainField = register('mailDomain');
 
   const mutation = useApiMutation((body: CreateCompanyInput) => createCompany(body), {
     successMessage: (company) => `Company “${company.name}” created`,
@@ -73,7 +91,7 @@ export function CreateCompanyDialog() {
     },
     onSuccess: () => {
       setOpen(false);
-      reset();
+      resetForm();
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: COMPANIES_KEY });
@@ -87,7 +105,7 @@ export function CreateCompanyDialog() {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) reset();
+        if (!next) resetForm();
       }}
     >
       <DialogTrigger asChild>
@@ -130,6 +148,32 @@ export function CreateCompanyDialog() {
               {...register('code')}
             />
             {errors.code ? <p className="text-xs text-destructive">{errors.code.message}</p> : null}
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="company-mail-domain" className="text-sm font-medium">
+              Mail domain
+            </label>
+            <Input
+              id="company-mail-domain"
+              placeholder="acme"
+              autoCapitalize="none"
+              spellCheck={false}
+              className="font-mono lowercase"
+              aria-invalid={Boolean(errors.mailDomain)}
+              {...domainField}
+              onChange={(e) => {
+                setDomainEdited(true);
+                void domainField.onChange(e);
+              }}
+            />
+            {errors.mailDomain ? (
+              <p className="text-xs text-destructive">{errors.mailDomain.message}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Staff mailboxes are <span className="font-mono">name@{watch('mailDomain') || 'domain'}</span>{' '}
+                (internal mail, §8). Unique across companies.
+              </p>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>

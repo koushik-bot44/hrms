@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { COMPANY_CODE_REGEX } from '../ids';
+import { MailDomainSchema, MailLocalPartSchema } from './mail';
 
 /**
  * Company management REQUEST contracts (ARCHITECTURE.md §2/§3.1). Response shapes are derived
@@ -25,6 +26,8 @@ export const CompanyCodeSchema = z
 export const CreateCompanySchema = z.object({
   name: z.string().trim().min(2, 'Name is required').max(120, 'Name is too long'),
   code: CompanyCodeSchema,
+  // The company's internal-mail domain (§8) — prefilled from the code, editable, unique across companies.
+  mailDomain: MailDomainSchema,
 });
 export type CreateCompanyInput = z.infer<typeof CreateCompanySchema>;
 
@@ -41,7 +44,8 @@ export type UpdateCompanyInput = z.infer<typeof UpdateCompanySchema>;
 
 export const ProvisionCompanyAdminSchema = z.object({
   name: z.string().trim().min(2, 'Name is required').max(120, 'Name is too long'),
-  email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
+  // The mailbox local part forms localPart@companyDomain, which IS the admin's login email (§8).
+  localPart: MailLocalPartSchema,
   // Staff sign in with email + password (§6): the admin sets an initial password (min 8).
   password: z.string().min(8, 'Use at least 8 characters'),
 });

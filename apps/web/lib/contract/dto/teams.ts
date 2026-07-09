@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { UserRole } from '../enums';
+import { MailLocalPartSchema } from './mail';
 
 /**
  * Team management REQUEST contracts (ARCHITECTURE.md §2/§3.1). Response shapes are derived from
@@ -25,10 +26,10 @@ export const AssignExistingMemberSchema = z.object({
   userId: z.string().min(1, 'Select a person'),
 });
 
-/** Create a new staff user for the slot (with an initial email + password sign-in, §6). */
+/** Create a new staff user for the slot. The local part forms localPart@companyDomain = login email (§8). */
 export const AssignNewMemberSchema = z.object({
   name: z.string().trim().min(2, 'Name is required').max(120, 'Name is too long'),
-  email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
+  localPart: MailLocalPartSchema,
   password: z.string().min(8, 'Use at least 8 characters'),
 });
 

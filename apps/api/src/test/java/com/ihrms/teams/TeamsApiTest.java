@@ -105,22 +105,23 @@ class TeamsApiTest {
 
     MvcResult hrRes =
         mvc.perform(asAdminA(put("/teams/" + teamId + "/hr"),
-                Map.of("name", "Holly HR", "email", "holly@a.test", "password", "HollyHR@1")))
+                Map.of("name", "Holly HR", "localPart", "holly", "password", "HollyHR@1")))
             .andExpect(status().isOk())
             .andReturn();
     JsonNode hrBody = json.readTree(hrRes.getResponse().getContentAsString());
-    assertThat(hrBody.get("team").get("hr").get("email").asText()).isEqualTo("holly@a.test");
+    // localPart@companyDomain (company AAA -> domain "aaa") IS the login email (§8).
+    assertThat(hrBody.get("team").get("hr").get("email").asText()).isEqualTo("holly@aaa");
     assertThat(hrBody.get("team").get("hr").get("role").asText()).isEqualTo("HR");
     // The initial password is echoed in dev (it is what the admin set).
     assertThat(hrBody.get("devPassword").asText()).isEqualTo("HollyHR@1");
 
     MvcResult mgrRes =
         mvc.perform(asAdminA(put("/teams/" + teamId + "/manager"),
-                Map.of("name", "Max Manager", "email", "max@a.test", "password", "MaxMgr@1")))
+                Map.of("name", "Max Manager", "localPart", "max", "password", "MaxMgr@1")))
             .andExpect(status().isOk())
             .andReturn();
     JsonNode mgrBody = json.readTree(mgrRes.getResponse().getContentAsString());
-    assertThat(mgrBody.get("team").get("manager").get("email").asText()).isEqualTo("max@a.test");
+    assertThat(mgrBody.get("team").get("manager").get("email").asText()).isEqualTo("max@aaa");
     assertThat(mgrBody.get("team").get("memberCount").asInt()).isEqualTo(2);
   }
 
@@ -128,11 +129,11 @@ class TeamsApiTest {
   void assignsTeamAccountantOnePerTeamAndCompletesTheTeam() throws Exception {
     String teamId = createTeam(adminA, "Engineering");
     mvc.perform(asAdminA(put("/teams/" + teamId + "/hr"),
-            Map.of("name", "Holly HR", "email", "holly@a.test", "password", "HollyHR@1")))
+            Map.of("name", "Holly HR", "localPart", "holly", "password", "HollyHR@1")))
         .andExpect(status().isOk());
     MvcResult mgr =
         mvc.perform(asAdminA(put("/teams/" + teamId + "/manager"),
-                Map.of("name", "Max Manager", "email", "max@a.test", "password", "MaxMgr@1")))
+                Map.of("name", "Max Manager", "localPart", "max", "password", "MaxMgr@1")))
             .andExpect(status().isOk())
             .andReturn();
     // Not complete yet — the Accountant slot is empty (needs accountant, §2).
@@ -142,11 +143,11 @@ class TeamsApiTest {
     // Assign the Accountant -> role ACCOUNTANT; the team is now complete (all three slots filled).
     MvcResult acc =
         mvc.perform(asAdminA(put("/teams/" + teamId + "/accountant"),
-                Map.of("name", "Casey Counts", "email", "casey@a.test", "password", "Casey@2026")))
+                Map.of("name", "Casey Counts", "localPart", "casey", "password", "Casey@2026")))
             .andExpect(status().isOk())
             .andReturn();
     JsonNode team = json.readTree(acc.getResponse().getContentAsString()).get("team");
-    assertThat(team.get("accountant").get("email").asText()).isEqualTo("casey@a.test");
+    assertThat(team.get("accountant").get("email").asText()).isEqualTo("casey@aaa");
     assertThat(team.get("accountant").get("role").asText()).isEqualTo("ACCOUNTANT");
     assertThat(team.get("complete").asBoolean()).isTrue();
     assertThat(team.get("memberCount").asInt()).isEqualTo(3);
@@ -154,11 +155,11 @@ class TeamsApiTest {
     // At most one Accountant per team: a second one replaces + detaches the first (like HR/Manager).
     MvcResult acc2 =
         mvc.perform(asAdminA(put("/teams/" + teamId + "/accountant"),
-                Map.of("name", "Dana Digits", "email", "dana@a.test", "password", "Dana@2026")))
+                Map.of("name", "Dana Digits", "localPart", "dana", "password", "Dana@2026")))
             .andExpect(status().isOk())
             .andReturn();
     JsonNode team2 = json.readTree(acc2.getResponse().getContentAsString()).get("team");
-    assertThat(team2.get("accountant").get("email").asText()).isEqualTo("dana@a.test");
+    assertThat(team2.get("accountant").get("email").asText()).isEqualTo("dana@aaa");
     assertThat(team2.get("memberCount").asInt()).isEqualTo(3); // first accountant detached
 
     // The team's HR (role HR) cannot be dropped into the Accountant slot — wrong role.
@@ -170,11 +171,11 @@ class TeamsApiTest {
   @Test
   void assigningAnotherHrReplacesAndDetachesTheFirst() throws Exception {
     String teamId = createTeam(adminA, "Engineering");
-    assignNewHr(teamId, "first@a.test");
-    MvcResult second = assignNewHr(teamId, "second@a.test");
+    assignNewHr(teamId, "first");
+    MvcResult second = assignNewHr(teamId, "second");
 
     JsonNode team = json.readTree(second.getResponse().getContentAsString()).get("team");
-    assertThat(team.get("hr").get("email").asText()).isEqualTo("second@a.test");
+    assertThat(team.get("hr").get("email").asText()).isEqualTo("second@aaa");
     assertThat(team.get("memberCount").asInt()).isEqualTo(1); // first HR detached
 
     // The replaced HR is unassigned again -> shows up as assignable.
@@ -182,7 +183,7 @@ class TeamsApiTest {
         mvc.perform(get("/teams/assignable-users?role=HR").header("Authorization", "Bearer " + adminA))
             .andExpect(status().isOk())
             .andReturn();
-    assertThat(assignable.getResponse().getContentAsString()).contains("first@a.test");
+    assertThat(assignable.getResponse().getContentAsString()).contains("first@aaa");
   }
 
   @Test
@@ -253,9 +254,9 @@ class TeamsApiTest {
 
   // --- fixtures -------------------------------------------------------------
 
-  private MvcResult assignNewHr(String teamId, String email) throws Exception {
+  private MvcResult assignNewHr(String teamId, String localPart) throws Exception {
     return mvc.perform(asAdminA(put("/teams/" + teamId + "/hr"),
-            Map.of("name", "HR " + email, "email", email, "password", "NewStaff@1")))
+            Map.of("name", "HR " + localPart, "localPart", localPart, "password", "NewStaff@1")))
         .andExpect(status().isOk())
         .andReturn();
   }

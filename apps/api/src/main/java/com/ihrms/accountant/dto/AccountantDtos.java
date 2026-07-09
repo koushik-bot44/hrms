@@ -1,7 +1,6 @@
 package com.ihrms.accountant.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -18,14 +17,15 @@ public final class AccountantDtos {
 
   /**
    * SUPER_ADMIN creates the single Accounts Admin with an initial staff password (§6). The mailbox
-   * local part forms {@code localPart@ihrms} (the platform domain) and IS the login email (§8);
-   * {@code email} is a transitional fallback.
+   * local part forms {@code localPart@ihrms} (the platform domain) and IS the login email (§8) — the
+   * single way the address is created.
    */
   public record ProvisionAccountantRequest(
       @NotBlank(message = "Name is required") @Size(min = 2, max = 120, message = "Name is too long")
           String name,
-      @Size(max = 64, message = "Mailbox name is too long") String localPart,
-      @Email(message = "Enter a valid email") String email,
+      @NotBlank(message = "A mailbox name is required")
+          @Size(max = 64, message = "Mailbox name is too long")
+          String localPart,
       @NotBlank(message = "An initial password is required")
           @Size(min = 8, message = "Use at least 8 characters")
           String password) {}

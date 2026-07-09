@@ -197,7 +197,7 @@ class CompanySoftDeleteTest {
                 .header("Authorization", "Bearer " + superToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(
-                    Map.of("name", "New Admin", "email", "new@acme.test", "password", "NewAdmin@1"))))
+                    Map.of("name", "New Admin", "localPart", "newadmin", "password", "NewAdmin@1"))))
         .andExpect(status().isConflict());
 
     // The archived company's emails remain reserved (clean restore, no collisions): the staff email

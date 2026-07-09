@@ -267,3 +267,36 @@ export type ApprovedEmployeeRow = Schemas['ApprovedEmployeeRow'];
 export type ApprovedEmployeePage = Omit<Required<Schemas['ApprovedEmployeePage']>, 'content'> & {
   content: ApprovedEmployeeRow[];
 };
+
+// --- Internal mail (§8) ----------------------------------------------------
+
+/** A mail participant — a staff account shown by name + `localpart@domain` address. */
+export type MailParty = Required<Schemas['MailPartyView']>;
+
+/** An inbox row — who it is from + this recipient's read state. */
+export type InboxMessage = Omit<Required<Schemas['InboxMessageView']>, 'from'> & {
+  from: MailParty;
+};
+
+/** A sent row — who it went to. */
+export type SentMessage = Omit<Required<Schemas['SentMessageView']>, 'to'> & {
+  to: MailParty[];
+};
+
+/** A full message (only the sender or a recipient may read it — enforced server-side). */
+export type MailMessage = Omit<Required<Schemas['MessageView']>, 'from' | 'to'> & {
+  from: MailParty;
+  to: MailParty[];
+};
+
+export type InboxPage = Omit<Required<Schemas['InboxPage']>, 'content'> & {
+  content: InboxMessage[];
+};
+
+export type SentPage = Omit<Required<Schemas['SentPage']>, 'content'> & {
+  content: SentMessage[];
+};
+
+export type MailUnreadCount = Required<Schemas['UnreadCountView']>;
+
+export type SendMessageResult = Required<Schemas['SendMessageResult']>;

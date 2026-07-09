@@ -81,11 +81,11 @@ class SuperAdminTeamsAndOnboardTest {
     JsonNode hrRes =
         json.readTree(
             perform(put("/companies/" + companyA + "/teams/" + teamId + "/hr"), superToken,
-                    Map.of("name", "Hana HR", "email", "hana@acme.test", "password", "HanaHR@12"), 200)
+                    Map.of("name", "Hana HR", "localPart", "hana", "password", "HanaHR@12"), 200)
                 .getResponse().getContentAsString());
     String hrId = hrRes.get("team").get("hr").get("id").asText();
     perform(put("/companies/" + companyA + "/teams/" + teamId + "/manager"), superToken,
-        Map.of("name", "Max Mgr", "email", "max@acme.test", "password", "MaxMgr@12"), 200);
+        Map.of("name", "Max Mgr", "localPart", "max", "password", "MaxMgr@12"), 200);
 
     // Rename.
     perform(patch("/companies/" + companyA + "/teams/" + teamId), superToken,
@@ -98,8 +98,8 @@ class SuperAdminTeamsAndOnboardTest {
     assertThat(listed).anySatisfy(
         t -> {
           assertThat(t.get("name").asText()).isEqualTo("Engineering");
-          assertThat(t.get("hr").get("email").asText()).isEqualTo("hana@acme.test");
-          assertThat(t.get("manager").get("email").asText()).isEqualTo("max@acme.test");
+          assertThat(t.get("hr").get("email").asText()).isEqualTo("hana@acme");
+          assertThat(t.get("manager").get("email").asText()).isEqualTo("max@acme");
         });
 
     // Onboard an employee into company A by selecting the team -> attaches to that team's HR.
@@ -130,7 +130,7 @@ class SuperAdminTeamsAndOnboardTest {
   void rejectsATeamThatIsNotInTheSelectedCompany() throws Exception {
     String teamInB = idOf(post("/companies/" + companyB + "/teams"), superToken, Map.of("name", "Team B"), 201);
     perform(put("/companies/" + companyB + "/teams/" + teamInB + "/hr"), superToken,
-        Map.of("name", "HR B", "email", "hrb@beta.test", "password", "HrBeta@123"), 200);
+        Map.of("name", "HR B", "localPart", "hrb", "password", "HrBeta@123"), 200);
 
     // Onboard into A but pass B's team -> 400.
     perform(post("/companies/" + companyA + "/employees"), superToken,

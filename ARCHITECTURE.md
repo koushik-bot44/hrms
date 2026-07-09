@@ -378,6 +378,18 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
   recipient's `readAt`. **Text only in v1** (no attachments). Sending is a mutation → audited
   (`MAIL_SENT`); opening is an audited read. The send check lives in the authorization component
   (`canSendMail`) so it can never be bypassed or duplicated.
+- **Webmail UI (Stage 2):** every staff portal's topbar carries a **Mail** control with a live unread
+  badge (`GET /mail/unread-count`, refetched on focus + after send/open); employees never see it. It
+  opens the mailbox **in-session at `/mail`** — a Gmail-style full-page client (Inbox / Sent, a message
+  list with unread emphasis, a reading pane, and a **Compose** dialog whose recipient dropdown is the
+  graph-derived `/mail/contacts` list — never a free-typed address). The `/mail` page also offers
+  **Open in new tab** so it can be popped out while working elsewhere (same session/auth). The sender's
+  own address is shown as their identity. Threading / search / mark-unread are deferred.
+- **Provisioning assigns the local part:** every staff-create flow (Company Admin, Accounts Admin,
+  HR/Manager/Accountant) takes a **mailbox local part** (with a live `localpart@domain` preview) instead
+  of a raw email; the Super Admin sets each company's mail **domain** at creation (prefilled from the
+  code). The address so formed IS the login email — the earlier transitional `email` fallback has been
+  **retired**, so an address is created exactly one way.
 
 ---
 

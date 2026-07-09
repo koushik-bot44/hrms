@@ -5,42 +5,56 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { UserPlus } from 'lucide-react';
-import { ProvisionCompanyAdminSchema, type ProvisionCompanyAdminInput } from '@/lib/contract';
+import {
+  ProvisionCompanyAdminSchema,
+  previewAddress,
+  type ProvisionCompanyAdminInput,
+} from '@/lib/contract';
 import { provisionCompanyAdmin } from '@/lib/api/companies';
 import { useApiMutation } from '@/lib/api/hooks';
 import { generatePassword } from '@/lib/auth/password';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CredentialNotice } from '@/components/staff-credential-notice';
+import { AddressPreview } from '@/components/mail/address-preview';
 
-export function ProvisionAdminForm({ companyId }: { companyId: string }) {
+export function ProvisionAdminForm({
+  companyId,
+  mailDomain,
+}: {
+  companyId: string;
+  mailDomain: string;
+}) {
   const queryClient = useQueryClient();
-  const [created, setCreated] = React.useState<{ email: string; password: string } | null>(null);
+  const [created, setCreated] = React.useState<{ address: string; password: string } | null>(null);
   const {
     register,
     handleSubmit,
     reset,
     setValue,
     setError,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<ProvisionCompanyAdminInput>({
     resolver: zodResolver(ProvisionCompanyAdminSchema),
-    defaultValues: { name: '', email: '', password: '' },
+    defaultValues: { name: '', localPart: '', password: '' },
   });
+
+  const localPart = watch('localPart');
 
   const mutation = useApiMutation(
     (body: ProvisionCompanyAdminInput) => provisionCompanyAdmin(companyId, body),
     {
-      successMessage: 'Company admin provisioned',
-      onSuccess: (_result, variables) => {
-        setCreated({ email: variables.email, password: variables.password });
+      successMessage: (result) => `Company admin provisioned — ${result.admin.email}`,
+      onSuccess: (result, variables) => {
+        setCreated({ address: result.admin.email, password: variables.password });
         reset();
         void queryClient.invalidateQueries({ queryKey: ['company', companyId] });
         void queryClient.invalidateQueries({ queryKey: ['companies'] });
       },
       onError: (error) => {
         if (error.status === 409) {
-          setError('email', { message: error.message });
+          setError('localPart', { message: error.message });
         }
       },
     },
@@ -53,7 +67,7 @@ export function ProvisionAdminForm({ companyId }: { companyId: string }) {
       {created ? (
         <CredentialNotice
           title="Company admin provisioned"
-          email={created.email}
+          address={created.address}
           password={created.password}
           onDismiss={() => setCreated(null)}
         />
@@ -71,17 +85,22 @@ export function ProvisionAdminForm({ companyId }: { companyId: string }) {
         {errors.name ? <p className="text-xs text-destructive">{errors.name.message}</p> : null}
       </div>
       <div className="space-y-1.5">
-        <label htmlFor="admin-email" className="text-sm font-medium">
-          Admin email
+        <label htmlFor="admin-localpart" className="text-sm font-medium">
+          Mailbox name
         </label>
         <Input
-          id="admin-email"
-          type="email"
-          placeholder="admin@company.com"
-          aria-invalid={Boolean(errors.email)}
-          {...register('email')}
+          id="admin-localpart"
+          placeholder="admin"
+          autoCapitalize="none"
+          spellCheck={false}
+          aria-invalid={Boolean(errors.localPart)}
+          {...register('localPart')}
         />
-        {errors.email ? <p className="text-xs text-destructive">{errors.email.message}</p> : null}
+        {errors.localPart ? (
+          <p className="text-xs text-destructive">{errors.localPart.message}</p>
+        ) : (
+          <AddressPreview address={previewAddress(localPart, mailDomain)} />
+        )}
       </div>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
@@ -109,7 +128,7 @@ export function ProvisionAdminForm({ companyId }: { companyId: string }) {
           <p className="text-xs text-destructive">{errors.password.message}</p>
         ) : (
           <p className="text-xs text-muted-foreground">
-            The admin signs in with their email + this password and can change it later.
+            The admin signs in with their address + this password and can change it later.
           </p>
         )}
       </div>

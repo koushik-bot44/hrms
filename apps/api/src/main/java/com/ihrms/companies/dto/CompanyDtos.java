@@ -1,7 +1,6 @@
 package com.ihrms.companies.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -27,14 +26,15 @@ public final class CompanyDtos {
 
   /**
    * The mailbox local part (§8) forms the Company Admin's address {@code localPart@companyDomain}, which
-   * IS their login email. {@code email} is a transitional fallback for callers not yet sending a local
-   * part; exactly one of {@code localPart} / {@code email} must be provided (enforced in the service).
+   * IS their login email — the single way an address is created. Validated + normalized by
+   * {@code MailAddresses}.
    */
   public record ProvisionAdminRequest(
       @NotBlank(message = "Name is required") @Size(min = 2, max = 120, message = "Name is too long")
           String name,
-      @Size(max = 64, message = "Mailbox name is too long") String localPart,
-      @Email(message = "Enter a valid email") String email,
+      @NotBlank(message = "A mailbox name is required")
+          @Size(max = 64, message = "Mailbox name is too long")
+          String localPart,
       // The Company Admin's initial sign-in password (staff use email + password, §6).
       @NotBlank(message = "An initial password is required")
           @Size(min = 8, message = "Use at least 8 characters")
@@ -54,11 +54,13 @@ public final class CompanyDtos {
       String createdAt,
       String deletedAt) {}
 
-  /** {@code CompanyDetail = CompanySummary & { admin }}. */
+  /** {@code CompanyDetail = CompanySummary & { mailDomain, admin }}. */
   public record CompanyDetailView(
       String id,
       String name,
       String code,
+      // The company's internal-mail domain (§8) — drives the address preview when provisioning staff.
+      String mailDomain,
       String status,
       long teamCount,
       long employeeCount,

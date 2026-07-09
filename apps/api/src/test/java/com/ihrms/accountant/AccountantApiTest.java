@@ -118,11 +118,12 @@ class AccountantApiTest {
                     .header("Authorization", "Bearer " + superToken)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(json.writeValueAsString(
-                        Map.of("name", "Casey Counts", "email", "Casey@Books.test", "password", "Ledger@2026"))))
+                        Map.of("name", "Casey Counts", "localPart", "Casey", "password", "Ledger@2026"))))
             .andExpect(status().isCreated())
             .andReturn();
     JsonNode body = json.readTree(created.getResponse().getContentAsString());
-    assertThat(body.get("accountant").get("email").asText()).isEqualTo("casey@books.test"); // lower-cased
+    // localPart@ihrms (the platform domain) IS the login email, lower-cased (§8).
+    assertThat(body.get("accountant").get("email").asText()).isEqualTo("casey@ihrms");
     assertThat(body.get("devPassword").asText()).isEqualTo("Ledger@2026"); // echoed in dev
     assertThat(users.existsByRole(UserRole.ACCOUNTS_ADMIN)).isTrue();
     assertThat(provisioningStatus(superToken).get("exists").asBoolean()).isTrue();
@@ -133,7 +134,7 @@ class AccountantApiTest {
                 .header("Authorization", "Bearer " + superToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(
-                    Map.of("name", "Second One", "email", "second@books.test", "password", "Another@2026"))))
+                    Map.of("name", "Second One", "localPart", "second", "password", "Another@2026"))))
         .andExpect(status().isConflict());
     assertThat(auditLogs.findByAction("ACCOUNTS_ADMIN_PROVISIONED")).hasSize(1);
 
@@ -143,7 +144,7 @@ class AccountantApiTest {
                 post("/auth/login")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(json.writeValueAsString(
-                        Map.of("email", "casey@books.test", "password", "Ledger@2026"))))
+                        Map.of("email", "casey@ihrms", "password", "Ledger@2026"))))
             .andExpect(status().isCreated())
             .andReturn();
     assertThat(json.readTree(login.getResponse().getContentAsString()).get("session").get("role").asText())
@@ -152,7 +153,7 @@ class AccountantApiTest {
 
   @Test
   void superAdminCanRemoveAndReplaceTheAccountsAdmin() throws Exception {
-    provision(superToken, "Casey Counts", "casey@books.test", "Ledger@2026");
+    provision(superToken, "Casey Counts", "casey", "Ledger@2026");
     assertThat(users.existsByRole(UserRole.ACCOUNTS_ADMIN)).isTrue();
 
     // Remove it -> singleton is gone (audited), so a replacement can be created.
@@ -164,8 +165,8 @@ class AccountantApiTest {
     assertThat(users.existsByRole(UserRole.ACCOUNTS_ADMIN)).isFalse();
     assertThat(auditLogs.findByAction("ACCOUNTS_ADMIN_REMOVED")).hasSize(1);
 
-    // A brand-new Accounts Admin (even reusing the freed email) can now be provisioned.
-    provision(superToken, "Dana Digits", "casey@books.test", "Ledger@2027");
+    // A brand-new Accounts Admin (even reusing the freed mailbox name) can now be provisioned.
+    provision(superToken, "Dana Digits", "casey", "Ledger@2027");
     assertThat(users.existsByRole(UserRole.ACCOUNTS_ADMIN)).isTrue();
 
     // Only SUPER_ADMIN may remove.
@@ -184,7 +185,7 @@ class AccountantApiTest {
                 .header("Authorization", "Bearer " + hrToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(
-                    Map.of("name", "X Y", "email", "x@books.test", "password", "Passw0rd!"))))
+                    Map.of("name", "X Y", "localPart", "x", "password", "Passw0rd!"))))
         .andExpect(status().isForbidden());
   }
 
@@ -328,12 +329,13 @@ class AccountantApiTest {
         .andExpect(status().isForbidden());
   }
 
-  private void provision(String token, String name, String email, String password) throws Exception {
+  private void provision(String token, String name, String localPart, String password) throws Exception {
     mvc.perform(
             post("/provisioning/accounts-admin")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("name", name, "email", email, "password", password))))
+                .content(json.writeValueAsString(
+                    Map.of("name", name, "localPart", localPart, "password", password))))
         .andExpect(status().isCreated());
   }
 

@@ -117,8 +117,7 @@ public class AccountantService {
     }
     // Platform-domain mailbox: localPart@ihrms, which IS the login email (§8).
     var address =
-        mailAddresses.resolve(
-            input.localPart(), input.email(), com.ihrms.mail.MailAddresses.PLATFORM_DOMAIN);
+        mailAddresses.resolve(input.localPart(), com.ihrms.mail.MailAddresses.PLATFORM_DOMAIN);
     accountEmails.assertAvailableForStaff(address.email()); // unique across staff + employees (§6)
 
     User user = new User();

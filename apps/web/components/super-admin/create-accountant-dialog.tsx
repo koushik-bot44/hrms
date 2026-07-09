@@ -5,12 +5,18 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Calculator, CheckCircle2, Trash2, UserPlus } from 'lucide-react';
-import { ProvisionAccountantSchema, type ProvisionAccountantInput } from '@/lib/contract';
+import {
+  PLATFORM_MAIL_DOMAIN,
+  ProvisionAccountantSchema,
+  previewAddress,
+  type ProvisionAccountantInput,
+} from '@/lib/contract';
 import { getAccountantStatus, provisionAccountant, removeAccountsAdmin } from '@/lib/api/accountant';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { generatePassword } from '@/lib/auth/password';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AddressPreview } from '@/components/mail/address-preview';
 import {
   Dialog,
   DialogContent,
@@ -30,7 +36,7 @@ const STATUS_KEY = ['accountant', 'status'] as const;
 export function CreateAccountantDialog() {
   const [open, setOpen] = React.useState(false);
   const queryClient = useQueryClient();
-  const [created, setCreated] = React.useState<{ email: string; password: string } | null>(null);
+  const [created, setCreated] = React.useState<{ address: string; password: string } | null>(null);
   const [confirmingRemove, setConfirmingRemove] = React.useState(false);
   const status = useApiQuery(STATUS_KEY, getAccountantStatus);
 
@@ -48,21 +54,26 @@ export function CreateAccountantDialog() {
     reset,
     setValue,
     setError,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<ProvisionAccountantInput>({
     resolver: zodResolver(ProvisionAccountantSchema),
-    defaultValues: { name: '', email: '', password: '' },
+    defaultValues: { name: '', localPart: '', password: '' },
   });
+
+  const localPart = watch('localPart');
 
   const mutation = useApiMutation((body: ProvisionAccountantInput) => provisionAccountant(body), {
     successMessage: 'Accounts Admin provisioned',
-    onSuccess: (_result, variables) => {
-      setCreated({ email: variables.email, password: variables.password });
+    onSuccess: (result, variables) => {
+      const address =
+        result.accountant.email ?? previewAddress(variables.localPart, PLATFORM_MAIL_DOMAIN);
+      setCreated({ address, password: variables.password });
       reset();
       void queryClient.invalidateQueries({ queryKey: STATUS_KEY });
     },
     onError: (error) => {
-      if (error.status === 409) setError('email', { message: error.message });
+      if (error.status === 409) setError('localPart', { message: error.message });
     },
   });
 
@@ -149,7 +160,7 @@ export function CreateAccountantDialog() {
         ) : created ? (
           <CredentialNotice
             title="Accounts Admin provisioned"
-            email={created.email}
+            address={created.address}
             password={created.password}
             onDismiss={() => setCreated(null)}
           />
@@ -163,17 +174,22 @@ export function CreateAccountantDialog() {
               {errors.name ? <p className="text-xs text-destructive">{errors.name.message}</p> : null}
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="acc-email" className="text-sm font-medium">
-                Email
+              <label htmlFor="acc-localpart" className="text-sm font-medium">
+                Mailbox name
               </label>
               <Input
-                id="acc-email"
-                type="email"
-                placeholder="accounts-admin@portal.com"
-                aria-invalid={Boolean(errors.email)}
-                {...register('email')}
+                id="acc-localpart"
+                placeholder="accounts"
+                autoCapitalize="none"
+                spellCheck={false}
+                aria-invalid={Boolean(errors.localPart)}
+                {...register('localPart')}
               />
-              {errors.email ? <p className="text-xs text-destructive">{errors.email.message}</p> : null}
+              {errors.localPart ? (
+                <p className="text-xs text-destructive">{errors.localPart.message}</p>
+              ) : (
+                <AddressPreview address={previewAddress(localPart, PLATFORM_MAIL_DOMAIN)} />
+              )}
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -201,7 +217,7 @@ export function CreateAccountantDialog() {
                 <p className="text-xs text-destructive">{errors.password.message}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  They sign in with email + this password and can change it later.
+                  They sign in with their address + this password and can change it later.
                 </p>
               )}
             </div>

@@ -65,7 +65,7 @@ export default function CompanyDetailPage({ params }: { params: { companyId: str
       {backLink}
       <PageHeader
         title={data.name}
-        description={`Code ${data.code}`}
+        description={`Code ${data.code} · Mail domain @${data.mailDomain}`}
         actions={<CompanyStatusBadge status={data.status} />}
       />
 
@@ -94,7 +94,7 @@ export default function CompanyDetailPage({ params }: { params: { companyId: str
               <Badge variant="success">{data.admin.status}</Badge>
             </div>
           ) : (
-            <ProvisionAdminForm companyId={data.id} />
+            <ProvisionAdminForm companyId={data.id} mailDomain={data.mailDomain} />
           )}
         </CardContent>
       </Card>
