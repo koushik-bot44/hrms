@@ -20,8 +20,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class TokenService {
 
-  /** Refresh-token claims (subject + actor kind). */
-  public record RefreshClaims(String subject, String actor) {}
+  /** Refresh-token claims (subject + actor kind + the login method, to keep the landing area stable). */
+  public record RefreshClaims(String subject, String actor, String authMethod) {}
 
   /** Thrown on a structurally-invalid token (wrong {@code typ}); signature/expiry throw JwtException. */
   public static class InvalidTokenException extends RuntimeException {
@@ -71,12 +71,13 @@ public class TokenService {
     return builder.signWith(accessKey, Jwts.SIG.HS256).compact();
   }
 
-  public String issueRefresh(IhrmsPrincipal principal) {
+  public String issueRefresh(IhrmsPrincipal principal, String authMethod) {
     Instant now = Instant.now();
     return Jwts.builder()
         .subject(principal.id())
         .claim("typ", "refresh")
         .claim("actor", principal instanceof IhrmsPrincipal.User ? "USER" : "EMPLOYEE")
+        .claim("authMethod", authMethod) // null removes the claim; carries the login door across refresh
         .issuedAt(Date.from(now))
         .expiration(Date.from(now.plus(refreshTtl)))
         .signWith(refreshKey, Jwts.SIG.HS256)
@@ -121,6 +122,9 @@ public class TokenService {
     if (!"refresh".equals(claims.get("typ", String.class))) {
       throw new InvalidTokenException("Not a refresh token");
     }
-    return new RefreshClaims(claims.getSubject(), claims.get("actor", String.class));
+    return new RefreshClaims(
+        claims.getSubject(),
+        claims.get("actor", String.class),
+        claims.get("authMethod", String.class));
   }
 }

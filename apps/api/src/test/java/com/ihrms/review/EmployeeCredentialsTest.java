@@ -106,6 +106,8 @@ class EmployeeCredentialsTest {
             .get("session");
     assertThat(session.get("type").asText()).isEqualTo("EMPLOYEE");
     assertThat(session.get("mailAddress").asText()).isEqualTo("arjun@acme");
+    // The door is tagged so the web lands them in the portal (Stage 6) and a refresh stays stable.
+    assertThat(session.get("authMethod").asText()).isEqualTo("PASSWORD");
 
     // A wrong password is a generic denial.
     mvc.perform(

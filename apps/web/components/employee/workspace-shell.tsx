@@ -1,0 +1,33 @@
+'use client';
+
+import * as React from 'react';
+import { useRouter } from 'next/navigation';
+import { Inbox } from 'lucide-react';
+import { useAuth } from '@/components/auth-provider';
+import { AppShell, type NavItem } from '@/components/app-shell';
+
+/**
+ * The employee PORTAL shell (Stage 6) — mirrors the staff `AppShell` (topbar + sidebar + Mail button)
+ * with its own growable nav. Mailbox is the only section for now; more can be added without restructuring.
+ * A credentialed EMPLOYEE reaches this; one without a mailbox is bounced to the onboarding area.
+ */
+const nav: NavItem[] = [{ label: 'Mailbox', href: '/mail', icon: Inbox }];
+
+export function WorkspaceShell({ children }: { children: React.ReactNode }) {
+  const { session } = useAuth();
+  const router = useRouter();
+  // The portal is for credentialed employees; an employee without a mailbox belongs in onboarding.
+  const noMailbox = session?.type === 'EMPLOYEE' && !session.mailAddress;
+
+  React.useEffect(() => {
+    if (noMailbox) router.replace('/employee');
+  }, [noMailbox, router]);
+
+  if (noMailbox) return null;
+
+  return (
+    <AppShell roleLabel="Employee" nav={nav}>
+      {children}
+    </AppShell>
+  );
+}

@@ -27,6 +27,9 @@ public sealed interface SessionView permits SessionView.UserSession, SessionView
       String companyId,
       // Populated once the employee has internal credentials (§8, Stage 5); null before then.
       String name,
-      String mailAddress)
+      String mailAddress,
+      // Which sign-in door was used (Stage 6): PASSWORD -> portal, OTP -> onboarding. null when unknown
+      // (e.g. /auth/me, which rebuilds from the access token, which does not carry it).
+      String authMethod)
       implements SessionView {}
 }

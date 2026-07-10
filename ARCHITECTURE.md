@@ -443,6 +443,15 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     own-record scope): `/login` (mailbox address + password — the staff resolver now also resolves an
     Employee by `mailAddress`) **and** `/employee/login` (full name + personal email + OTP, unchanged before
     and after approval). Employees WITHOUT assigned credentials can only use `/employee/login`.
+  - **The door determines the landing area** (Stage 6) — same principal, same scope, different home:
+    signing in at `/login` (credentials) lands in the **employee PORTAL** (`/workspace`); signing in at
+    `/employee/login` (name + email + OTP) lands in the **onboarding area** (`/employee`), as before. To make
+    this stable across a page refresh, the auth response + the refresh token carry an explicit
+    **`authMethod`** (`PASSWORD` | `OTP`) — the landing is never inferred from `mailAddress` alone (a
+    credentialed employee can use either door). The portal is **not** a new privilege level; it is a
+    different landing for the same EMPLOYEE. v1 contains the **mailbox** (the shared `/mail` client, contacts
+    = their onboarding HR) plus a header with the employee's name / ID / mail address, built as an extensible
+    shell so more sections can be added later. The onboarding area is unchanged and still reachable.
   - **Mailbox:** a credentialed employee enters the mail system with exactly one contact — their onboarding
     HR (the `EMPLOYEE ↔ HR` edge above, symmetric, same company). Every send/reply is still `canSendMail`,
     and thread/attachment access stays participant-scoped. `messages`/`message_recipients`/

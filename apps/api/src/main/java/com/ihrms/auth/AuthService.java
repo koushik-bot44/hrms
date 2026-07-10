@@ -88,7 +88,7 @@ public class AuthService {
           || !encoder.matches(req.password(), user.getPasswordHash())) {
         throw unauthorized("Invalid email or password");
       }
-      return issue(Principals.of(user));
+      return issue(Principals.of(user), PASSWORD);
     }
 
     Employee employee = employees.findByMailAddress(email).orElse(null);
@@ -98,7 +98,7 @@ public class AuthService {
         || !encoder.matches(req.password(), employee.getPasswordHash())) {
       throw unauthorized("Invalid email or password");
     }
-    return issue(Principals.of(employee));
+    return issue(Principals.of(employee), PASSWORD);
   }
 
   /** Staff self-service password change: verify current, rehash, audit PASSWORD_CHANGED. */
@@ -159,7 +159,7 @@ public class AuthService {
     employee.setOtpHash(null); // single-use
     employee.setOtpExpiresAt(null);
     employees.save(employee);
-    return issue(Principals.of(employee));
+    return issue(Principals.of(employee), OTP);
   }
 
   private void assertOtpValid(String otpHash, Instant expiresAt, String provided) {
@@ -187,7 +187,8 @@ public class AuthService {
     } catch (RuntimeException e) {
       throw unauthorized("Session expired");
     }
-    return issue(reloadPrincipal(claims));
+    // Preserve the door the session was opened with, so a refresh keeps the same landing area (Stage 6).
+    return issue(reloadPrincipal(claims), claims.authMethod());
   }
 
   private IhrmsPrincipal reloadPrincipal(RefreshClaims claims) {
@@ -209,11 +210,17 @@ public class AuthService {
 
   // --- Issuance -------------------------------------------------------------
 
-  private IssuedSession issue(IhrmsPrincipal principal) {
+  /** Issue tokens + the public session, tagging which door was used so the landing is stable (Stage 6). */
+  private IssuedSession issue(IhrmsPrincipal principal, String authMethod) {
     String access = tokens.issueAccess(principal);
-    String refresh = tokens.issueRefresh(principal);
-    return new IssuedSession(new AuthResult(access, Principals.toSession(principal)), refresh);
+    String refresh = tokens.issueRefresh(principal, authMethod);
+    return new IssuedSession(
+        new AuthResult(access, Principals.toSession(principal, authMethod)), refresh);
   }
+
+  /** Login methods (carried in the session + refresh token). */
+  private static final String PASSWORD = "PASSWORD";
+  private static final String OTP = "OTP";
 
   private boolean isProd() {
     return env.acceptsProfiles(Profiles.of("prod"));

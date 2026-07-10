@@ -1,9 +1,13 @@
 import { UserRole, type Session } from '@/lib/contract';
 
-/** The landing path for a session — used after login and to bounce out-of-scope users. */
+/**
+ * The landing path for a session — used after login and to bounce out-of-scope users. Same EMPLOYEE
+ * principal, two homes (Stage 6): signing in with credentials (PASSWORD) lands in the employee PORTAL;
+ * signing in with name + email + OTP lands in the ONBOARDING area (also the default when unknown).
+ */
 export function homePathForSession(session: Session): string {
   if (session.type === 'EMPLOYEE') {
-    return '/employee';
+    return session.authMethod === 'PASSWORD' ? '/workspace' : '/employee';
   }
   switch (session.role) {
     case UserRole.SUPER_ADMIN:

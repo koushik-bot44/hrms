@@ -80,6 +80,9 @@ export const SessionSchema = z.discriminatedUnion('type', [
     // mailbox address drives the Mail button + "own address"; name is their full name.
     name: z.string().nullish(),
     mailAddress: z.string().nullish(),
+    // Which sign-in door was used (Stage 6): PASSWORD -> employee portal, OTP -> onboarding. Carried in
+    // the refresh token so a page refresh keeps the same landing. Null (legacy) is treated as onboarding.
+    authMethod: z.enum(['PASSWORD', 'OTP']).nullish(),
   }),
 ]);
 export type Session = z.infer<typeof SessionSchema>;

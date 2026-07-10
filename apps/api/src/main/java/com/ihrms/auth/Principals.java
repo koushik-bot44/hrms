@@ -32,14 +32,27 @@ public final class Principals {
         employee.getMailAddress());
   }
 
+  /** The session with an unknown login method (e.g. {@code /auth/me}). */
   public static SessionView toSession(IhrmsPrincipal principal) {
+    return toSession(principal, null);
+  }
+
+  /** The session, tagging the EMPLOYEE variant with which door was used (Stage 6 landing routing). */
+  public static SessionView toSession(IhrmsPrincipal principal, String authMethod) {
     if (principal instanceof IhrmsPrincipal.User u) {
       return new SessionView.UserSession(
           "USER", u.userId(), u.email(), u.name(), u.role(), u.companyId(), u.teamId());
     }
     IhrmsPrincipal.Employee e = (IhrmsPrincipal.Employee) principal;
     return new SessionView.EmployeeSession(
-        "EMPLOYEE", e.employeeId(), e.employeeCode(), e.email(), e.companyId(), e.name(), e.mailAddress());
+        "EMPLOYEE",
+        e.employeeId(),
+        e.employeeCode(),
+        e.email(),
+        e.companyId(),
+        e.name(),
+        e.mailAddress(),
+        authMethod);
   }
 
   /** A cryptographically-random 6-digit, zero-padded OTP. */
