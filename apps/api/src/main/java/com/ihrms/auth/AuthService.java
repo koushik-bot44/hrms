@@ -71,17 +71,34 @@ public class AuthService {
 
   // --- Staff: email + password (User only) ----------------------------------
 
-  /** Resolve a User by email and verify the password. Employee/unknown email → generic denial. */
+  /**
+   * Resolve by email + verify the password. A staff {@link User} by email OR — once credentialed (§8,
+   * Stage 5) — an {@link Employee} by their MAILBOX address; either yields the matching session. Any
+   * mismatch (unknown, no password, wrong password, archived company) is a single generic denial
+   * (enumeration-safe). An employee without assigned credentials cannot sign in here.
+   */
   public IssuedSession loginStaff(StaffLoginRequest req) {
-    User user = users.findByEmail(req.email().trim().toLowerCase()).orElse(null);
-    if (user == null
-        || user.getPasswordHash() == null
-        || !"ACTIVE".equals(user.getStatus())
-        || authz.isCompanyDeleted(user.getCompanyId())
-        || !encoder.matches(req.password(), user.getPasswordHash())) {
+    String email = req.email().trim().toLowerCase();
+
+    User user = users.findByEmail(email).orElse(null);
+    if (user != null) {
+      if (user.getPasswordHash() == null
+          || !"ACTIVE".equals(user.getStatus())
+          || authz.isCompanyDeleted(user.getCompanyId())
+          || !encoder.matches(req.password(), user.getPasswordHash())) {
+        throw unauthorized("Invalid email or password");
+      }
+      return issue(Principals.of(user));
+    }
+
+    Employee employee = employees.findByMailAddress(email).orElse(null);
+    if (employee == null
+        || employee.getPasswordHash() == null
+        || authz.isCompanyDeleted(employee.getCompanyId())
+        || !encoder.matches(req.password(), employee.getPasswordHash())) {
       throw unauthorized("Invalid email or password");
     }
-    return issue(Principals.of(user));
+    return issue(Principals.of(employee));
   }
 
   /** Staff self-service password change: verify current, rehash, audit PASSWORD_CHANGED. */

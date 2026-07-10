@@ -64,7 +64,9 @@ public class TokenService {
           .claim("actor", "EMPLOYEE")
           .claim("employeeCode", e.employeeCode())
           .claim("companyId", e.companyId())
-          .claim("email", e.email());
+          .claim("email", e.email())
+          .claim("name", e.name()) // null removes the claim (present once credentialed, §8)
+          .claim("mailAddress", e.mailAddress());
     }
     return builder.signWith(accessKey, Jwts.SIG.HS256).compact();
   }
@@ -106,7 +108,9 @@ public class TokenService {
           claims.getSubject(),
           claims.get("employeeCode", String.class),
           claims.get("email", String.class),
-          claims.get("companyId", String.class));
+          claims.get("companyId", String.class),
+          claims.get("name", String.class),
+          claims.get("mailAddress", String.class));
     }
     throw new InvalidTokenException("Unknown actor");
   }

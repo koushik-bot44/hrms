@@ -22,9 +22,24 @@ public sealed interface IhrmsPrincipal permits IhrmsPrincipal.User, IhrmsPrincip
     }
   }
 
-  /** Onboarded-subject principal (own record only). */
-  record Employee(String employeeId, String employeeCode, String email, String companyId)
+  /**
+   * Onboarded-subject principal (own record only). {@code name} + {@code mailAddress} are populated once
+   * the employee has internal credentials (§8, Stage 5); null before then. The 4-arg constructor keeps
+   * pre-credential call sites unchanged.
+   */
+  record Employee(
+      String employeeId,
+      String employeeCode,
+      String email,
+      String companyId,
+      String name,
+      String mailAddress)
       implements IhrmsPrincipal {
+
+    public Employee(String employeeId, String employeeCode, String email, String companyId) {
+      this(employeeId, employeeCode, email, companyId, null, null);
+    }
+
     @Override
     public String id() {
       return employeeId;

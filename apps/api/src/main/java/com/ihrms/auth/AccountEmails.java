@@ -23,16 +23,37 @@ public class AccountEmails {
     this.employees = employees;
   }
 
-  /** Reject creating a staff account with an email already used by an employee. */
+  /** Reject creating a staff account with an email already used by an employee (personal OR mailbox). */
   public void assertAvailableForStaff(String email) {
-    if (employees.findByEmail(norm(email)).isPresent()) {
+    String e = norm(email);
+    if (employees.findByEmail(e).isPresent() || employees.findByMailAddress(e).isPresent()) {
       throw conflict();
     }
   }
 
-  /** Reject onboarding an employee with an email already used by a staff account. */
+  /** Reject onboarding an employee with an email already used by a staff account or another mailbox. */
   public void assertAvailableForEmployee(String email) {
-    if (users.findByEmail(norm(email)).isPresent()) {
+    String e = norm(email);
+    if (users.findByEmail(e).isPresent() || employees.findByMailAddress(e).isPresent()) {
+      throw conflict();
+    }
+  }
+
+  /**
+   * Reject assigning an employee mailbox address that collides with ANY login identifier — a staff email,
+   * an employee's personal email, or another employee's mailbox (§8, Stage 5). {@code exceptEmployeeId}
+   * lets an HR re-issue the SAME address to the same employee (their own current mailbox is not a clash).
+   */
+  public void assertMailAddressAvailable(String address, String exceptEmployeeId) {
+    String a = norm(address);
+    boolean taken =
+        users.findByEmail(a).isPresent()
+            || employees.findByEmail(a).isPresent()
+            || employees
+                .findByMailAddress(a)
+                .filter(e -> !e.getId().equals(exceptEmployeeId))
+                .isPresent();
+    if (taken) {
       throw conflict();
     }
   }

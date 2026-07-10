@@ -67,6 +67,10 @@ export const SessionSchema = z.discriminatedUnion('type', [
     employeeCode: z.string().nullable(),
     email: z.string(),
     companyId: z.string(),
+    // Populated once the employee has internal credentials (§8, Stage 5); null before then. Their
+    // mailbox address drives the Mail button + "own address"; name is their full name.
+    name: z.string().nullish(),
+    mailAddress: z.string().nullish(),
   }),
 ]);
 export type Session = z.infer<typeof SessionSchema>;

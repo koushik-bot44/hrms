@@ -46,7 +46,9 @@ export default function LoginPage() {
             <ShieldCheck className="size-5" />
           </div>
           <CardTitle className="text-lg">Sign in</CardTitle>
-          <CardDescription>Sign in to IHRMS with your email and password.</CardDescription>
+          <CardDescription>
+            Sign in to IHRMS with your email (or mailbox address) and password.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <StaffSignInForm />

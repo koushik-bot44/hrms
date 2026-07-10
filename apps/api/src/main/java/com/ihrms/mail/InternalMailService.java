@@ -3,14 +3,17 @@ package com.ihrms.mail;
 import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
 import com.ihrms.auth.AuthorizationService;
+import com.ihrms.auth.AuthorizationService.MailParticipant;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
+import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Message;
 import com.ihrms.domain.model.MessageAttachment;
 import com.ihrms.domain.model.MessageRecipient;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
+import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.MessageAttachmentRepository;
 import com.ihrms.domain.repository.MessageRecipientRepository;
 import com.ihrms.domain.repository.MessageRepository;
@@ -33,6 +36,7 @@ import com.ihrms.storage.StorageService;
 import com.ihrms.support.Hashing;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -51,11 +55,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Internal mail (ARCHITECTURE.md §8) — messaging between IHRMS staff accounts, organised into
- * <b>threads</b> (Stage 3). A message is DB rows, never external email. Every send AND every reply is
- * gated by the single authorization graph ({@link AuthorizationService#canSendMail}); nothing here
- * reaches across companies. Delete is a per-user soft-hide (the row is never destroyed; the counterparty
- * keeps their copy). Addresses are cosmetic display handles resolved from the account's role/company.
+ * Internal mail (ARCHITECTURE.md §8) — messaging between IHRMS accounts, organised into <b>threads</b>.
+ * A participant (sender / recipient / uploader) is a staff {@link User} OR a credentialed
+ * {@link Employee}: rows carry a user-id OR an employee-id, and since ids are globally-unique cuids the
+ * "my mail" queries match either column against the same id. Every send AND every reply is gated by the
+ * single authorization graph ({@link AuthorizationService#canSendMail}); nothing reaches across
+ * companies. Delete is a per-user soft-hide (the row is never destroyed).
  */
 @Service
 public class InternalMailService {
@@ -67,6 +72,7 @@ public class InternalMailService {
   private static final int SNIPPET = 140;
 
   private final UserRepository users;
+  private final EmployeeRepository employees;
   private final CompanyRepository companies;
   private final MessageRepository messages;
   private final MessageRecipientRepository recipients;
@@ -78,6 +84,7 @@ public class InternalMailService {
 
   public InternalMailService(
       UserRepository users,
+      EmployeeRepository employees,
       CompanyRepository companies,
       MessageRepository messages,
       MessageRecipientRepository recipients,
@@ -87,6 +94,7 @@ public class InternalMailService {
       StorageService storage,
       MailAttachments attachmentRules) {
     this.users = users;
+    this.employees = employees;
     this.companies = companies;
     this.messages = messages;
     this.recipients = recipients;
@@ -101,40 +109,55 @@ public class InternalMailService {
 
   /** The accounts the caller may message — the send graph, filtered down to a concrete list (§8). */
   @Transactional(readOnly = true)
-  public List<MailPartyView> contacts(IhrmsPrincipal.User actor) {
-    User me = requireUser(actor.userId());
+  public List<MailPartyView> contacts(IhrmsPrincipal actor) {
+    MailParticipant me = resolveActor(actor);
+    List<MailPartyView> out = new ArrayList<>();
 
-    // Narrow the candidate pool to only accounts the graph could ever connect to, then apply the
-    // authoritative check — so the UI list and the send-time gate can never disagree.
+    if (!isUser(me)) {
+      // An employee's only counterpart is their onboarding HR.
+      User hr = me.onboardingHrId() == null ? null : users.findById(me.onboardingHrId()).orElse(null);
+      if (hr != null && authz.canSendMail(me, MailParticipant.user(hr))) {
+        out.add(party(hr, domainsFor(List.of(hr))));
+      }
+      return out;
+    }
+
+    // Staff: the graph's reachable accounts, then — for an HR — their credentialed employees.
+    User meUser = users.findById(me.id()).orElseThrow(this::unauthorized);
     Set<User> candidates = new HashSet<>();
-    if (me.getCompanyId() != null) {
-      candidates.addAll(users.findByCompanyId(me.getCompanyId()));
+    if (meUser.getCompanyId() != null) {
+      candidates.addAll(users.findByCompanyId(meUser.getCompanyId()));
       candidates.addAll(users.findByRoleIn(List.of(UserRole.SUPER_ADMIN, UserRole.ACCOUNTS_ADMIN)));
     } else {
       candidates.addAll(
           users.findByRoleIn(
               List.of(UserRole.SUPER_ADMIN, UserRole.ACCOUNTS_ADMIN, UserRole.COMPANY_ADMIN)));
     }
-
     List<User> allowed =
-        candidates.stream().filter(c -> authz.canSendMail(me, c)).collect(Collectors.toList());
+        candidates.stream()
+            .filter(c -> authz.canSendMail(me, MailParticipant.user(c)))
+            .collect(Collectors.toList());
     Map<String, String> domains = domainsFor(allowed);
-    return allowed.stream()
-        .map(u -> party(u, domains))
-        .sorted(Comparator.comparing(MailPartyView::address))
-        .collect(Collectors.toList());
+    allowed.forEach(u -> out.add(party(u, domains)));
+
+    if (meUser.getRole() == UserRole.HR) {
+      for (Employee emp : employees.findByOnboardingHrIdAndMailAddressIsNotNull(me.id())) {
+        if (authz.canSendMail(me, MailParticipant.employee(emp))) {
+          out.add(employeeParty(emp));
+        }
+      }
+    }
+    out.sort(Comparator.comparing(MailPartyView::address));
+    return out;
   }
 
   // --- Send (new thread) + Reply (join a thread) --------------------------------
 
   /** Start a NEW thread to one recipient. Rejects (403) anything the send graph forbids. Audited. */
   @Transactional
-  public SendMessageResult send(IhrmsPrincipal.User actor, SendMessageRequest input, String ip) {
-    User me = requireUser(actor.userId());
-    User to =
-        users
-            .findById(input.toUserId())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Recipient not found"));
+  public SendMessageResult send(IhrmsPrincipal actor, SendMessageRequest input, String ip) {
+    MailParticipant me = resolveActor(actor);
+    MailParticipant to = resolveRecipient(input.toUserId());
     if (!authz.canSendMail(me, to)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot message this recipient");
     }
@@ -142,14 +165,14 @@ public class InternalMailService {
     String threadId = Cuids.newId(); // a fresh conversation
     Message message = new Message();
     message.setThreadId(threadId);
-    message.setSenderUserId(me.getId());
+    setSender(message, me);
     message.setSubject(input.subject().strip());
     message.setBody(input.body());
     messages.save(message);
-    saveRecipient(message.getId(), to.getId());
+    saveRecipient(message.getId(), to);
     int bound = bindAttachments(me, message.getId(), input.attachmentIds());
 
-    auditSent(me, message, to.getId(), bound, ip);
+    auditSent(me, message, to.id(), bound, ip);
     return new SendMessageResult(message.getId(), threadId);
   }
 
@@ -159,25 +182,22 @@ public class InternalMailService {
    * re-checked here (403 if the graph now forbids it). Audited {@code MAIL_SENT}.
    */
   @Transactional
-  public SendMessageResult reply(IhrmsPrincipal.User actor, String threadId, ReplyRequest input, String ip) {
-    User me = requireUser(actor.userId());
+  public SendMessageResult reply(IhrmsPrincipal actor, String threadId, ReplyRequest input, String ip) {
+    MailParticipant me = resolveActor(actor);
     List<Message> msgs = messages.findByThreadIdOrderByCreatedAtAsc(threadId);
     if (msgs.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found");
     }
     Map<String, List<MessageRecipient>> recByMsg = recipientsByMessage(msgs);
-    if (!isParticipant(me, msgs, recByMsg)) {
+    if (!isParticipant(me.id(), msgs, recByMsg)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not part of this conversation");
     }
 
-    String otherId = counterpartyId(me, msgs, recByMsg);
+    String otherId = counterpartyId(me.id(), msgs, recByMsg);
     if (otherId == null) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "This conversation has no recipient to reply to");
     }
-    User to =
-        users
-            .findById(otherId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Recipient not found"));
+    MailParticipant to = resolveRecipient(otherId);
     // The graph still governs replies — re-check every time (roles/companies can change mid-thread).
     if (!authz.canSendMail(me, to)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot message this recipient");
@@ -186,14 +206,14 @@ public class InternalMailService {
     Message reply = new Message();
     reply.setThreadId(threadId);
     reply.setParentMessageId(msgs.get(msgs.size() - 1).getId());
-    reply.setSenderUserId(me.getId());
+    setSender(reply, me);
     reply.setSubject(msgs.get(0).getSubject()); // the thread keeps its subject
     reply.setBody(input.body());
     messages.save(reply);
-    saveRecipient(reply.getId(), to.getId());
+    saveRecipient(reply.getId(), to);
     int bound = bindAttachments(me, reply.getId(), input.attachmentIds());
 
-    auditSent(me, reply, to.getId(), bound, ip);
+    auditSent(me, reply, to.id(), bound, ip);
     return new SendMessageResult(reply.getId(), threadId);
   }
 
@@ -201,18 +221,21 @@ public class InternalMailService {
 
   /**
    * Step 1 of the upload handshake: validate the file (type + extension + size, server-authoritative),
-   * allocate a storage key, create an unbound DRAFT, and return a short-lived presigned PUT. The draft is
-   * bound to a message when the caller sends/replies with its id.
+   * allocate a storage key, create an unbound DRAFT, and return a short-lived presigned PUT.
    */
   @Transactional
   public AttachmentUpload requestAttachmentUpload(
-      IhrmsPrincipal.User actor, AttachmentUploadRequest input, String ip) {
-    User me = requireUser(actor.userId());
+      IhrmsPrincipal actor, AttachmentUploadRequest input, String ip) {
+    MailParticipant me = resolveActor(actor);
     String type = attachmentRules.validate(input.fileName(), input.contentType(), input.sizeBytes());
 
-    String key = storage.buildMailAttachmentKey(me.getId(), input.fileName());
+    String key = storage.buildMailAttachmentKey(me.id(), input.fileName());
     MessageAttachment draft = new MessageAttachment();
-    draft.setUploaderUserId(me.getId());
+    if (isUser(me)) {
+      draft.setUploaderUserId(me.id());
+    } else {
+      draft.setUploaderEmployeeId(me.id());
+    }
     draft.setFileName(input.fileName());
     draft.setContentType(type);
     draft.setSizeBytes(input.sizeBytes());
@@ -221,7 +244,7 @@ public class InternalMailService {
 
     String uploadUrl = storage.presignedPutUrl(key, type, MailAttachments.UPLOAD_TTL_SECONDS);
     audit.record(
-        new AuditActor("USER", me.getId(), me.getCompanyId()),
+        actorOf(me),
         "MAIL_ATTACHMENT_UPLOAD_REQUESTED",
         "MessageAttachment",
         draft.getId(),
@@ -234,12 +257,11 @@ public class InternalMailService {
   /**
    * Download an attachment: resolve it → its message → its thread and issue a presigned GET ONLY if the
    * caller is a participant in that thread (else 403 — even a Super Admin who is not a participant).
-   * Access is thread-scoped, never company-scoped. Audited {@code MAIL_ATTACHMENT_DOWNLOADED} (a writable
-   * tx so the audit row commits).
+   * Access is thread-scoped, never company-scoped. Audited {@code MAIL_ATTACHMENT_DOWNLOADED}.
    */
   @Transactional
-  public AttachmentDownload downloadAttachment(IhrmsPrincipal.User actor, String attachmentId, String ip) {
-    User me = requireUser(actor.userId());
+  public AttachmentDownload downloadAttachment(IhrmsPrincipal actor, String attachmentId, String ip) {
+    MailParticipant me = resolveActor(actor);
     MessageAttachment att =
         attachments
             .findById(attachmentId)
@@ -251,13 +273,13 @@ public class InternalMailService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
 
     List<Message> threadMsgs = messages.findByThreadIdOrderByCreatedAtAsc(message.getThreadId());
-    if (!isParticipant(me, threadMsgs, recipientsByMessage(threadMsgs))) {
+    if (!isParticipant(me.id(), threadMsgs, recipientsByMessage(threadMsgs))) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot download this attachment");
     }
 
     String url = storage.presignedGetUrl(att.getStorageKey(), MailAttachments.DOWNLOAD_TTL_SECONDS);
     audit.record(
-        new AuditActor("USER", me.getId(), me.getCompanyId()),
+        actorOf(me),
         "MAIL_ATTACHMENT_DOWNLOADED",
         "MessageAttachment",
         att.getId(),
@@ -269,10 +291,9 @@ public class InternalMailService {
   /**
    * Bind the caller's uploaded drafts to a freshly-created message. Each draft must be theirs, still
    * unbound, and actually present in storage; its real size + sha256 are (re)computed and the limits +
-   * type are re-enforced (never trusting the client). Returns how many were bound. Drafts never referenced
-   * here are harmless orphans (no message ⇒ not downloadable; a future sweep can delete stale ones).
+   * type are re-enforced (never trusting the client). Returns how many were bound.
    */
-  private int bindAttachments(User me, String messageId, List<String> attachmentIds) {
+  private int bindAttachments(MailParticipant me, String messageId, List<String> attachmentIds) {
     if (attachmentIds == null || attachmentIds.isEmpty()) {
       return 0;
     }
@@ -287,7 +308,7 @@ public class InternalMailService {
           attachments
               .findById(id)
               .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown attachment"));
-      if (!att.getUploaderUserId().equals(me.getId()) || att.getMessageId() != null) {
+      if (!me.id().equals(att.uploaderAccountId()) || att.getMessageId() != null) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "That attachment is not available");
       }
       byte[] bytes = storage.getObjectBytes(att.getStorageKey());
@@ -309,30 +330,30 @@ public class InternalMailService {
 
   /** Inbox as threads: conversations with a message addressed to the caller, newest activity first. */
   @Transactional(readOnly = true)
-  public ThreadPage inbox(IhrmsPrincipal.User actor, Pageable pageable) {
-    User me = requireUser(actor.userId());
-    Page<String> ids = messages.findInboxThreadIds(me.getId(), pageable);
-    return page(ids, buildThreadList(me, ids.getContent()));
+  public ThreadPage inbox(IhrmsPrincipal actor, Pageable pageable) {
+    MailParticipant me = resolveActor(actor);
+    Page<String> ids = messages.findInboxThreadIds(me.id(), pageable);
+    return page(ids, buildThreadList(me.id(), ids.getContent()));
   }
 
   /** Sent as threads: conversations the caller has sent into. */
   @Transactional(readOnly = true)
-  public ThreadPage sent(IhrmsPrincipal.User actor, Pageable pageable) {
-    User me = requireUser(actor.userId());
-    Page<String> ids = messages.findSentThreadIds(me.getId(), pageable);
-    return page(ids, buildThreadList(me, ids.getContent()));
+  public ThreadPage sent(IhrmsPrincipal actor, Pageable pageable) {
+    MailParticipant me = resolveActor(actor);
+    Page<String> ids = messages.findSentThreadIds(me.id(), pageable);
+    return page(ids, buildThreadList(me.id(), ids.getContent()));
   }
 
   /** Search the caller's OWN mail (subject + body, case-insensitive). Never another mailbox (§8). */
   @Transactional(readOnly = true)
-  public ThreadPage search(IhrmsPrincipal.User actor, String q, Pageable pageable) {
-    User me = requireUser(actor.userId());
+  public ThreadPage search(IhrmsPrincipal actor, String q, Pageable pageable) {
+    MailParticipant me = resolveActor(actor);
     String term = q == null ? "" : q.strip().toLowerCase();
     if (term.isEmpty()) {
       return new ThreadPage(List.of(), 0, pageable.getPageSize(), 0, 0);
     }
-    Page<String> ids = messages.searchThreadIds(me.getId(), "%" + term + "%", pageable);
-    return page(ids, buildThreadList(me, ids.getContent()));
+    Page<String> ids = messages.searchThreadIds(me.id(), "%" + term + "%", pageable);
+    return page(ids, buildThreadList(me.id(), ids.getContent()));
   }
 
   // --- Open one thread ----------------------------------------------------------
@@ -342,19 +363,19 @@ public class InternalMailService {
    * participant may open it (else 403). Marks the caller's unread messages read; audited {@code MAIL_VIEWED}.
    */
   @Transactional
-  public ThreadDetailView thread(IhrmsPrincipal.User actor, String threadId, String ip) {
-    User me = requireUser(actor.userId());
+  public ThreadDetailView thread(IhrmsPrincipal actor, String threadId, String ip) {
+    MailParticipant me = resolveActor(actor);
     List<Message> msgs = messages.findByThreadIdOrderByCreatedAtAsc(threadId);
     if (msgs.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found");
     }
     Map<String, List<MessageRecipient>> recByMsg = recipientsByMessage(msgs);
-    Map<String, MessageRecipient> mine = myRows(me, recByMsg);
-    if (!isParticipant(me, msgs, recByMsg)) {
+    Map<String, MessageRecipient> mine = myRows(me.id(), recByMsg);
+    if (!isParticipant(me.id(), msgs, recByMsg)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot view this conversation");
     }
 
-    List<Message> visible = msgs.stream().filter(m -> visibleToMe(me, m, mine)).toList();
+    List<Message> visible = msgs.stream().filter(m -> visibleToMe(me.id(), m, mine)).toList();
     if (visible.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found");
     }
@@ -368,8 +389,7 @@ public class InternalMailService {
       recipients.saveAll(toStamp);
     }
 
-    Map<String, User> userMap = usersById(participantIds(msgs, recByMsg, null));
-    Map<String, String> domains = domainsFor(userMap.values());
+    Map<String, MailPartyView> partyMap = partiesById(participantIds(msgs, recByMsg, null));
     Map<String, List<MessageAttachment>> attByMsg = attachmentsByMessage(visible);
 
     List<ThreadMessageView> messageViews =
@@ -378,23 +398,18 @@ public class InternalMailService {
                 m ->
                     new ThreadMessageView(
                         m.getId(),
-                        party(userMap.get(m.getSenderUserId()), domains),
+                        partyMap.get(m.senderAccountId()),
                         m.getBody(),
                         m.getCreatedAt().toString(),
-                        m.getSenderUserId().equals(me.getId()),
+                        m.senderAccountId().equals(me.id()),
                         attachmentViews(attByMsg.get(m.getId()))))
             .toList();
-    List<MailPartyView> participants = otherParties(me, msgs, recByMsg, userMap, domains);
-    String otherId = counterpartyId(me, msgs, recByMsg);
-    MailPartyView counterparty = otherId == null ? null : party(userMap.get(otherId), domains);
+    List<MailPartyView> participants = otherParties(me.id(), msgs, recByMsg, partyMap);
+    String otherId = counterpartyId(me.id(), msgs, recByMsg);
+    MailPartyView counterparty = otherId == null ? null : partyMap.get(otherId);
 
     audit.record(
-        new AuditActor("USER", me.getId(), me.getCompanyId()),
-        "MAIL_VIEWED",
-        "Thread",
-        threadId,
-        Map.of("messageCount", visible.size()),
-        ip);
+        actorOf(me), "MAIL_VIEWED", "Thread", threadId, Map.of("messageCount", visible.size()), ip);
 
     return new ThreadDetailView(
         threadId, msgs.get(0).getSubject(), participants, counterparty, messageViews);
@@ -404,22 +419,22 @@ public class InternalMailService {
 
   /** Mark a whole thread read for the caller; returns the refreshed unread-thread count. */
   @Transactional
-  public UnreadCountView markRead(IhrmsPrincipal.User actor, String threadId) {
-    setReadState(actor, threadId, true);
+  public UnreadCountView markRead(IhrmsPrincipal actor, String threadId) {
+    setReadState(resolveActor(actor).id(), threadId, true);
     return unreadCount(actor);
   }
 
   /** Mark a whole thread unread for the caller; returns the refreshed unread-thread count. */
   @Transactional
-  public UnreadCountView markUnread(IhrmsPrincipal.User actor, String threadId) {
-    setReadState(actor, threadId, false);
+  public UnreadCountView markUnread(IhrmsPrincipal actor, String threadId) {
+    setReadState(resolveActor(actor).id(), threadId, false);
     return unreadCount(actor);
   }
 
   /** Thread-level unread badge (§8): how many threads have an unopened message for the caller. */
   @Transactional(readOnly = true)
-  public UnreadCountView unreadCount(IhrmsPrincipal.User actor) {
-    return new UnreadCountView(messages.countUnreadThreads(actor.userId()));
+  public UnreadCountView unreadCount(IhrmsPrincipal actor) {
+    return new UnreadCountView(messages.countUnreadThreads(resolveActor(actor).id()));
   }
 
   // --- Delete (per-user soft-hide) ----------------------------------------------
@@ -429,15 +444,15 @@ public class InternalMailService {
    * destroyed and the counterparty still sees the conversation. Idempotent; audited {@code MAIL_DELETED}.
    */
   @Transactional
-  public void delete(IhrmsPrincipal.User actor, String threadId, String ip) {
-    User me = requireUser(actor.userId());
+  public void delete(IhrmsPrincipal actor, String threadId, String ip) {
+    MailParticipant me = resolveActor(actor);
     List<Message> msgs = messages.findByThreadIdOrderByCreatedAtAsc(threadId);
     if (msgs.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found");
     }
     Map<String, List<MessageRecipient>> recByMsg = recipientsByMessage(msgs);
-    Map<String, MessageRecipient> mine = myRows(me, recByMsg);
-    if (!isParticipant(me, msgs, recByMsg)) {
+    Map<String, MessageRecipient> mine = myRows(me.id(), recByMsg);
+    if (!isParticipant(me.id(), msgs, recByMsg)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot delete this conversation");
     }
     Instant now = Instant.now();
@@ -451,7 +466,7 @@ public class InternalMailService {
 
     List<Message> hideSent =
         msgs.stream()
-            .filter(m -> m.getSenderUserId().equals(me.getId()) && m.getSenderDeletedAt() == null)
+            .filter(m -> me.id().equals(m.senderAccountId()) && m.getSenderDeletedAt() == null)
             .toList();
     hideSent.forEach(m -> m.setSenderDeletedAt(now));
     if (!hideSent.isEmpty()) {
@@ -459,7 +474,7 @@ public class InternalMailService {
     }
 
     audit.record(
-        new AuditActor("USER", me.getId(), me.getCompanyId()),
+        actorOf(me),
         "MAIL_DELETED",
         "Thread",
         threadId,
@@ -475,7 +490,7 @@ public class InternalMailService {
   }
 
   /** Build the list rows for a page of threadIds, from the viewer's perspective (batched, no N+1). */
-  private List<ThreadListItemView> buildThreadList(User me, List<String> threadIds) {
+  private List<ThreadListItemView> buildThreadList(String meId, List<String> threadIds) {
     if (threadIds.isEmpty()) {
       return List.of();
     }
@@ -485,10 +500,9 @@ public class InternalMailService {
       byThread.computeIfAbsent(m.getThreadId(), k -> new ArrayList<>()).add(m);
     }
     Map<String, List<MessageRecipient>> recByMsg = recipientsByMessage(all);
-    Map<String, MessageRecipient> mine = myRows(me, recByMsg);
+    Map<String, MessageRecipient> mine = myRows(meId, recByMsg);
 
-    Map<String, User> userMap = usersById(participantIds(all, recByMsg, null));
-    Map<String, String> domains = domainsFor(userMap.values());
+    Map<String, MailPartyView> partyMap = partiesById(participantIds(all, recByMsg, null));
     // Which of these messages carry an attachment (for the paperclip indicator).
     Set<String> messagesWithAttachments =
         attachments.findByMessageIdInOrderByCreatedAtAsc(all.stream().map(Message::getId).toList())
@@ -502,7 +516,7 @@ public class InternalMailService {
       if (msgs == null || msgs.isEmpty()) {
         continue;
       }
-      List<Message> visible = msgs.stream().filter(m -> visibleToMe(me, m, mine)).toList();
+      List<Message> visible = msgs.stream().filter(m -> visibleToMe(meId, m, mine)).toList();
       if (visible.isEmpty()) {
         continue; // fully hidden by me — defensively skip (shouldn't appear in the id page)
       }
@@ -511,12 +525,12 @@ public class InternalMailService {
           visible.stream()
               .anyMatch(
                   m ->
-                      !m.getSenderUserId().equals(me.getId())
+                      !meId.equals(m.senderAccountId())
                           && mine.get(m.getId()) != null
                           && mine.get(m.getId()).getReadAt() == null);
       boolean hasAttachments =
           visible.stream().anyMatch(m -> messagesWithAttachments.contains(m.getId()));
-      List<MailPartyView> participants = otherParties(me, msgs, recByMsg, userMap, domains);
+      List<MailPartyView> participants = otherParties(meId, msgs, recByMsg, partyMap);
       out.add(
           new ThreadListItemView(
               threadId,
@@ -531,15 +545,14 @@ public class InternalMailService {
     return out;
   }
 
-  private void setReadState(IhrmsPrincipal.User actor, String threadId, boolean read) {
-    User me = requireUser(actor.userId());
+  private void setReadState(String meId, String threadId, boolean read) {
     List<Message> msgs = messages.findByThreadIdOrderByCreatedAtAsc(threadId);
     if (msgs.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found");
     }
     Map<String, List<MessageRecipient>> recByMsg = recipientsByMessage(msgs);
-    Map<String, MessageRecipient> mine = myRows(me, recByMsg);
-    if (!isParticipant(me, msgs, recByMsg)) {
+    Map<String, MessageRecipient> mine = myRows(meId, recByMsg);
+    if (!isParticipant(meId, msgs, recByMsg)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not part of this conversation");
     }
     Instant now = Instant.now();
@@ -554,13 +567,13 @@ public class InternalMailService {
   // --- Participants / counterparty ----------------------------------------------
 
   private boolean isParticipant(
-      User me, List<Message> msgs, Map<String, List<MessageRecipient>> recByMsg) {
+      String meId, List<Message> msgs, Map<String, List<MessageRecipient>> recByMsg) {
     for (Message m : msgs) {
-      if (m.getSenderUserId().equals(me.getId())) {
+      if (meId.equals(m.senderAccountId())) {
         return true;
       }
       for (MessageRecipient r : recByMsg.getOrDefault(m.getId(), List.of())) {
-        if (r.getRecipientUserId().equals(me.getId())) {
+        if (meId.equals(r.recipientAccountId())) {
           return true;
         }
       }
@@ -570,34 +583,33 @@ public class InternalMailService {
 
   /** The other party a reply goes to — derived from the thread's first message (2-party in v1). */
   private String counterpartyId(
-      User me, List<Message> msgs, Map<String, List<MessageRecipient>> recByMsg) {
+      String meId, List<Message> msgs, Map<String, List<MessageRecipient>> recByMsg) {
     Message root = msgs.get(0);
-    if (!root.getSenderUserId().equals(me.getId())) {
-      return root.getSenderUserId();
+    if (!meId.equals(root.senderAccountId())) {
+      return root.senderAccountId();
     }
     for (MessageRecipient r : recByMsg.getOrDefault(root.getId(), List.of())) {
-      if (!r.getRecipientUserId().equals(me.getId())) {
-        return r.getRecipientUserId();
+      if (!meId.equals(r.recipientAccountId())) {
+        return r.recipientAccountId();
       }
     }
-    // Fallback: any other participant across the thread.
-    for (String id : participantIds(msgs, recByMsg, me.getId())) {
+    for (String id : participantIds(msgs, recByMsg, meId)) {
       return id;
     }
     return null;
   }
 
-  /** All participant user ids across the thread (senders + recipients), optionally excluding {@code exclude}. */
+  /** All participant account ids across the thread (senders + recipients), optionally excluding one. */
   private Set<String> participantIds(
       List<Message> msgs, Map<String, List<MessageRecipient>> recByMsg, String exclude) {
     Set<String> ids = new LinkedHashSet<>();
     for (Message m : msgs) {
-      if (exclude == null || !m.getSenderUserId().equals(exclude)) {
-        ids.add(m.getSenderUserId());
+      if (exclude == null || !exclude.equals(m.senderAccountId())) {
+        ids.add(m.senderAccountId());
       }
       for (MessageRecipient r : recByMsg.getOrDefault(m.getId(), List.of())) {
-        if (exclude == null || !r.getRecipientUserId().equals(exclude)) {
-          ids.add(r.getRecipientUserId());
+        if (exclude == null || !exclude.equals(r.recipientAccountId())) {
+          ids.add(r.recipientAccountId());
         }
       }
     }
@@ -605,18 +617,18 @@ public class InternalMailService {
   }
 
   private List<MailPartyView> otherParties(
-      User me,
+      String meId,
       List<Message> msgs,
       Map<String, List<MessageRecipient>> recByMsg,
-      Map<String, User> userMap,
-      Map<String, String> domains) {
-    return participantIds(msgs, recByMsg, me.getId()).stream()
-        .map(id -> party(userMap.get(id), domains))
+      Map<String, MailPartyView> partyMap) {
+    return participantIds(msgs, recByMsg, meId).stream()
+        .map(partyMap::get)
+        .filter(p -> p != null)
         .collect(Collectors.toList());
   }
 
-  private boolean visibleToMe(User me, Message m, Map<String, MessageRecipient> mine) {
-    if (m.getSenderUserId().equals(me.getId())) {
+  private boolean visibleToMe(String meId, Message m, Map<String, MessageRecipient> mine) {
+    if (meId.equals(m.senderAccountId())) {
       return m.getSenderDeletedAt() == null;
     }
     MessageRecipient r = mine.get(m.getId());
@@ -653,11 +665,11 @@ public class InternalMailService {
         .collect(Collectors.toList());
   }
 
-  private Map<String, MessageRecipient> myRows(User me, Map<String, List<MessageRecipient>> recByMsg) {
+  private Map<String, MessageRecipient> myRows(String meId, Map<String, List<MessageRecipient>> recByMsg) {
     Map<String, MessageRecipient> mine = new HashMap<>();
     for (List<MessageRecipient> rs : recByMsg.values()) {
       for (MessageRecipient r : rs) {
-        if (r.getRecipientUserId().equals(me.getId())) {
+        if (meId.equals(r.recipientAccountId())) {
           mine.put(r.getMessageId(), r);
         }
       }
@@ -665,26 +677,71 @@ public class InternalMailService {
     return mine;
   }
 
-  // --- Small helpers ------------------------------------------------------------
+  // --- Principals + parties -----------------------------------------------------
 
-  private void saveRecipient(String messageId, String recipientUserId) {
+  /** Resolve the acting principal to a mail participant; an employee needs an assigned mailbox (§8). */
+  private MailParticipant resolveActor(IhrmsPrincipal actor) {
+    if (actor instanceof IhrmsPrincipal.User u) {
+      User user = users.findById(u.userId()).orElseThrow(this::unauthorized);
+      return MailParticipant.user(user);
+    }
+    IhrmsPrincipal.Employee e = (IhrmsPrincipal.Employee) actor;
+    Employee employee = employees.findById(e.employeeId()).orElseThrow(this::unauthorized);
+    if (employee.getMailAddress() == null) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have a mailbox yet");
+    }
+    return MailParticipant.employee(employee);
+  }
+
+  /** Resolve a recipient id (a user OR a credentialed employee) to a participant, or 404. */
+  private MailParticipant resolveRecipient(String id) {
+    User u = users.findById(id).orElse(null);
+    if (u != null) {
+      return MailParticipant.user(u);
+    }
+    Employee e = employees.findById(id).filter(x -> x.getMailAddress() != null).orElse(null);
+    if (e != null) {
+      return MailParticipant.employee(e);
+    }
+    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Recipient not found");
+  }
+
+  private static boolean isUser(MailParticipant p) {
+    return "USER".equals(p.type());
+  }
+
+  private static AuditActor actorOf(MailParticipant me) {
+    return new AuditActor(me.type(), me.id(), me.companyId());
+  }
+
+  private void setSender(Message message, MailParticipant me) {
+    if (isUser(me)) {
+      message.setSenderUserId(me.id());
+    } else {
+      message.setSenderEmployeeId(me.id());
+    }
+  }
+
+  private void saveRecipient(String messageId, MailParticipant to) {
     MessageRecipient row = new MessageRecipient();
     row.setMessageId(messageId);
-    row.setRecipientUserId(recipientUserId);
+    if (isUser(to)) {
+      row.setRecipientUserId(to.id());
+    } else {
+      row.setRecipientEmployeeId(to.id());
+    }
     recipients.save(row);
   }
 
-  private void auditSent(User me, Message message, String toUserId, int attachmentCount, String ip) {
-    // Attribute to the sender's company (portal-level for SUPER_ADMIN); mail crosses portal↔company,
-    // never company↔company.
+  private void auditSent(MailParticipant me, Message message, String toId, int attachmentCount, String ip) {
     audit.record(
-        new AuditActor("USER", me.getId(), me.getCompanyId()),
+        actorOf(me),
         "MAIL_SENT",
         "Message",
         message.getId(),
         Map.of(
             "threadId", message.getThreadId(),
-            "toUserId", toUserId,
+            "toUserId", toId,
             "subject", message.getSubject(),
             "attachmentCount", attachmentCount),
         ip);
@@ -695,10 +752,22 @@ public class InternalMailService {
     return s.length() <= SNIPPET ? s : s.substring(0, SNIPPET - 1) + "…";
   }
 
-  private User requireUser(String id) {
-    return users
-        .findById(id)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unknown account"));
+  /** Resolve a set of account ids to display parties — each id is a User OR an Employee (§8). */
+  private Map<String, MailPartyView> partiesById(Collection<String> ids) {
+    Map<String, MailPartyView> map = new HashMap<>();
+    if (ids.isEmpty()) {
+      return map;
+    }
+    Map<String, User> us = usersById(ids);
+    Map<String, String> domains = domainsFor(us.values());
+    us.values().forEach(u -> map.put(u.getId(), party(u, domains)));
+    List<String> rest = ids.stream().filter(id -> !map.containsKey(id)).toList();
+    if (!rest.isEmpty()) {
+      for (Employee e : employees.findAllById(rest)) {
+        map.put(e.getId(), employeeParty(e));
+      }
+    }
+    return map;
   }
 
   /** Company mailDomain by companyId, for every company-scoped user in the set (batched, no N+1). */
@@ -718,7 +787,7 @@ public class InternalMailService {
     return domains;
   }
 
-  /** The display address {@code localpart@domain} — platform accounts on {@code @ihrms}, else company. */
+  /** The display address {@code localpart@domain} for a staff account — platform on {@code @ihrms}. */
   private MailPartyView party(User u, Map<String, String> domains) {
     if (u == null) {
       return new MailPartyView(null, "(unknown)", "unknown@" + MailAddresses.PLATFORM_DOMAIN, null);
@@ -734,11 +803,20 @@ public class InternalMailService {
     return new MailPartyView(u.getId(), u.getName(), local + "@" + domain, u.getRole());
   }
 
+  /** An employee's display party — their assigned mailbox address; no role. */
+  private MailPartyView employeeParty(Employee e) {
+    return new MailPartyView(e.getId(), e.getFullName(), e.getMailAddress(), null);
+  }
+
   private Map<String, User> usersById(Iterable<String> ids) {
     Map<String, User> map = new HashMap<>();
     for (User u : users.findAllById(ids)) {
       map.put(u.getId(), u);
     }
     return map;
+  }
+
+  private ResponseStatusException unauthorized() {
+    return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unknown account");
   }
 }

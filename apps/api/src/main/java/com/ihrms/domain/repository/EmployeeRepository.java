@@ -15,6 +15,12 @@ public interface EmployeeRepository
   /** Employees authenticate by email (globally unique) + full name + OTP (§6). */
   Optional<Employee> findByEmail(String email);
 
+  /** A credentialed employee by their mailbox address — the {@code /login} door for employees (§8). */
+  Optional<Employee> findByMailAddress(String mailAddress);
+
+  /** The acting HR's credentialed employees — their mail contacts (§8, Stage 5). */
+  List<Employee> findByOnboardingHrIdAndMailAddressIsNotNull(String onboardingHrId);
+
   List<Employee> findByCompanyIdAndOnboardingHrId(String companyId, String onboardingHrId);
 
   List<Employee> findByCompanyIdAndOnboardingHrIdOrderByCreatedAtDesc(

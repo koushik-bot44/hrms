@@ -35,9 +35,13 @@ public class MessageAttachment {
   @Column(name = "messageId")
   private String messageId;
 
-  /** The staff account that uploaded it (only they may bind their own drafts). */
-  @Column(name = "uploaderUserId", nullable = false)
+  /** The staff account that uploaded it; null when the uploader is an employee (§8, Stage 5). */
+  @Column(name = "uploaderUserId")
   private String uploaderUserId;
+
+  /** The employee that uploaded it; null when the uploader is staff. Exactly one uploader column is set. */
+  @Column(name = "uploaderEmployeeId")
+  private String uploaderEmployeeId;
 
   @Column(name = "fileName", nullable = false)
   private String fileName;
@@ -60,4 +64,9 @@ public class MessageAttachment {
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "createdAt", nullable = false, updatable = false)
   private Instant createdAt;
+
+  /** The uploader's account id whichever kind it is (user or employee) — ids are globally unique (§8). */
+  public String uploaderAccountId() {
+    return uploaderUserId != null ? uploaderUserId : uploaderEmployeeId;
+  }
 }

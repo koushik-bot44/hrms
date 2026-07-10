@@ -37,8 +37,13 @@ public class Message {
   @Column(name = "parentMessageId")
   private String parentMessageId;
 
-  @Column(name = "senderUserId", nullable = false)
+  /** The sender when it is a staff account; null when the sender is an employee (§8, Stage 5). */
+  @Column(name = "senderUserId")
   private String senderUserId;
+
+  /** The sender when it is an employee; null when the sender is staff. Exactly one sender column is set. */
+  @Column(name = "senderEmployeeId")
+  private String senderEmployeeId;
 
   @Column(name = "subject", nullable = false)
   private String subject;
@@ -55,4 +60,9 @@ public class Message {
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "createdAt", nullable = false, updatable = false)
   private Instant createdAt;
+
+  /** The sender's account id whichever kind it is (user or employee) — ids are globally unique (§8). */
+  public String senderAccountId() {
+    return senderUserId != null ? senderUserId : senderEmployeeId;
+  }
 }

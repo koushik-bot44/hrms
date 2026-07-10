@@ -25,12 +25,12 @@ public interface MessageRepository extends JpaRepository<Message, String> {
       value =
           "SELECT m.\"threadId\" FROM \"messages\" m"
               + " JOIN \"message_recipients\" r ON r.\"messageId\" = m.\"id\""
-              + " WHERE r.\"recipientUserId\" = :uid AND r.\"deletedAt\" IS NULL"
+              + " WHERE (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL"
               + " GROUP BY m.\"threadId\" ORDER BY MAX(m.\"createdAt\") DESC",
       countQuery =
           "SELECT count(DISTINCT m.\"threadId\") FROM \"messages\" m"
               + " JOIN \"message_recipients\" r ON r.\"messageId\" = m.\"id\""
-              + " WHERE r.\"recipientUserId\" = :uid AND r.\"deletedAt\" IS NULL",
+              + " WHERE (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL",
       nativeQuery = true)
   Page<String> findInboxThreadIds(@Param("uid") String uid, Pageable pageable);
 
@@ -38,11 +38,11 @@ public interface MessageRepository extends JpaRepository<Message, String> {
   @Query(
       value =
           "SELECT m.\"threadId\" FROM \"messages\" m"
-              + " WHERE m.\"senderUserId\" = :uid AND m.\"senderDeletedAt\" IS NULL"
+              + " WHERE (m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL"
               + " GROUP BY m.\"threadId\" ORDER BY MAX(m.\"createdAt\") DESC",
       countQuery =
           "SELECT count(DISTINCT m.\"threadId\") FROM \"messages\" m"
-              + " WHERE m.\"senderUserId\" = :uid AND m.\"senderDeletedAt\" IS NULL",
+              + " WHERE (m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL",
       nativeQuery = true)
   Page<String> findSentThreadIds(@Param("uid") String uid, Pageable pageable);
 
@@ -54,16 +54,16 @@ public interface MessageRepository extends JpaRepository<Message, String> {
   @Query(
       value =
           "SELECT m.\"threadId\" FROM \"messages\" m"
-              + " WHERE ((m.\"senderUserId\" = :uid AND m.\"senderDeletedAt\" IS NULL)"
+              + " WHERE (((m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL)"
               + "   OR EXISTS (SELECT 1 FROM \"message_recipients\" r WHERE r.\"messageId\" = m.\"id\""
-              + "     AND r.\"recipientUserId\" = :uid AND r.\"deletedAt\" IS NULL))"
+              + "     AND (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL))"
               + " AND (lower(m.\"subject\") LIKE :q OR lower(m.\"body\") LIKE :q)"
               + " GROUP BY m.\"threadId\" ORDER BY MAX(m.\"createdAt\") DESC",
       countQuery =
           "SELECT count(DISTINCT m.\"threadId\") FROM \"messages\" m"
-              + " WHERE ((m.\"senderUserId\" = :uid AND m.\"senderDeletedAt\" IS NULL)"
+              + " WHERE (((m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL)"
               + "   OR EXISTS (SELECT 1 FROM \"message_recipients\" r WHERE r.\"messageId\" = m.\"id\""
-              + "     AND r.\"recipientUserId\" = :uid AND r.\"deletedAt\" IS NULL))"
+              + "     AND (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL))"
               + " AND (lower(m.\"subject\") LIKE :q OR lower(m.\"body\") LIKE :q)",
       nativeQuery = true)
   Page<String> searchThreadIds(@Param("uid") String uid, @Param("q") String q, Pageable pageable);
@@ -73,7 +73,8 @@ public interface MessageRepository extends JpaRepository<Message, String> {
       value =
           "SELECT count(DISTINCT m.\"threadId\") FROM \"messages\" m"
               + " JOIN \"message_recipients\" r ON r.\"messageId\" = m.\"id\""
-              + " WHERE r.\"recipientUserId\" = :uid AND r.\"readAt\" IS NULL AND r.\"deletedAt\" IS NULL",
+              + " WHERE (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid)"
+              + " AND r.\"readAt\" IS NULL AND r.\"deletedAt\" IS NULL",
       nativeQuery = true)
   long countUnreadThreads(@Param("uid") String uid);
 }

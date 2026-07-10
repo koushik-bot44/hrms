@@ -1,6 +1,8 @@
 package com.ihrms.review;
 
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.review.dto.ReviewDtos.AssignCredentialsRequest;
+import com.ihrms.review.dto.ReviewDtos.AssignCredentialsResult;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
 import com.ihrms.review.dto.ReviewDtos.RevealedSensitive;
 import com.ihrms.review.dto.ReviewDtos.ReviewRequest;
@@ -31,9 +33,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReviewController {
 
   private final ReviewService review;
+  private final EmployeeCredentialsService credentials;
 
-  public ReviewController(ReviewService review) {
+  public ReviewController(ReviewService review, EmployeeCredentialsService credentials) {
     this.review = review;
+    this.credentials = credentials;
   }
 
   @GetMapping("/{id}/record")
@@ -89,5 +93,19 @@ public class ReviewController {
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     return review.routeToManager(actor, id, body, request.getRemoteAddr());
+  }
+
+  /**
+   * Assign (or re-issue) an APPROVED employee internal credentials (§8, Stage 5): a mailbox address +
+   * password, emailed to their personal address. HR-only, own onboarded employee.
+   */
+  @PostMapping("/{id}/credentials")
+  @ResponseStatus(HttpStatus.CREATED)
+  public AssignCredentialsResult assignCredentials(
+      @PathVariable String id,
+      @Valid @RequestBody AssignCredentialsRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return credentials.assign(actor, id, body, request.getRemoteAddr());
   }
 }

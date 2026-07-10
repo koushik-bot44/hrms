@@ -69,6 +69,24 @@ public class MailService {
     log.info("Selection email dispatched to {}", email);
   }
 
+  /**
+   * Internal credentials for an approved employee (§8, Stage 5): sent to their PERSONAL email — their new
+   * mailbox address IS the login email, the password, and the {@code /login} link. Dev-logged.
+   */
+  public void sendEmployeeCredentials(
+      String personalEmail, String mailAddress, String password, String loginUrl) {
+    if (noSmtp()) {
+      log.warn(
+          "[DEV CREDENTIALS] {} -> sign in at {} as {} / {}  (no SMTP configured; logging only)",
+          personalEmail,
+          loginUrl,
+          mailAddress,
+          password);
+      return;
+    }
+    log.info("Credentials email dispatched to {} (mailbox {})", personalEmail, mailAddress);
+  }
+
   /** Welcome the approved employee with their newly-minted unique ID (§3.3/§5). */
   public void sendEmployeeWelcome(String email, String fullName, String employeeCode) {
     String body =

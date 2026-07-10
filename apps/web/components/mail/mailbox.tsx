@@ -55,8 +55,11 @@ export function Mailbox() {
   const [searchTerm, setSearchTerm] = React.useState('');
   const searching = searchTerm.trim().length > 0;
 
-  const myAddress = session?.type === 'USER' ? session.email : '';
-  const myName = session?.type === 'USER' ? session.name : '';
+  // Staff: the login email IS the address. Employee: their assigned mailbox address (§8, Stage 5).
+  const myAddress =
+    session?.type === 'USER' ? session.email : (session?.mailAddress ?? session?.email ?? '');
+  const myName =
+    session?.type === 'USER' ? session.name : (session?.name ?? session?.employeeCode ?? '');
   const backHref = session ? homePathForSession(session) : '/login';
 
   const unread = useApiQuery(mailKeys.unread, getUnreadCount, {

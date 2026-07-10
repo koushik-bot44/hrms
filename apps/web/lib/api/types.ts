@@ -484,6 +484,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/{id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["assignCredentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies": {
         parameters: {
             query?: never;
@@ -1559,6 +1575,18 @@ export interface components {
             form1?: components["schemas"]["Form1View"];
             form2?: components["schemas"]["Form2View"];
             form3?: components["schemas"]["Form3EntryView"][];
+        };
+        AssignCredentialsRequest: {
+            localPart: string;
+            password?: string;
+        };
+        AssignCredentialsResult: {
+            employeeId?: string;
+            mailAddress?: string;
+            emailedTo?: string;
+            credentialsAssignedAt?: string;
+            /** @description Echoed once in dev; null in prod */
+            password?: string;
         };
         CreateCompanyRequest: {
             name: string;
@@ -2709,6 +2737,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RevealedSensitive"];
+                };
+            };
+        };
+    };
+    assignCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignCredentialsRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AssignCredentialsResult"];
                 };
             };
         };

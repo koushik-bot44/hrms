@@ -24,7 +24,12 @@ public final class Principals {
 
   public static IhrmsPrincipal.Employee of(Employee employee) {
     return new IhrmsPrincipal.Employee(
-        employee.getId(), employee.getEmployeeCode(), employee.getEmail(), employee.getCompanyId());
+        employee.getId(),
+        employee.getEmployeeCode(),
+        employee.getEmail(),
+        employee.getCompanyId(),
+        employee.getFullName(),
+        employee.getMailAddress());
   }
 
   public static SessionView toSession(IhrmsPrincipal principal) {
@@ -34,7 +39,7 @@ public final class Principals {
     }
     IhrmsPrincipal.Employee e = (IhrmsPrincipal.Employee) principal;
     return new SessionView.EmployeeSession(
-        "EMPLOYEE", e.employeeId(), e.employeeCode(), e.email(), e.companyId());
+        "EMPLOYEE", e.employeeId(), e.employeeCode(), e.email(), e.companyId(), e.name(), e.mailAddress());
   }
 
   /** A cryptographically-random 6-digit, zero-padded OTP. */

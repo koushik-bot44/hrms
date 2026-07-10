@@ -89,4 +89,27 @@ public final class ReviewDtos {
 
   public record RouteToManagerResult(
       String employeeCode, EmployeeStatus status, String approvalRequestId, String managerName) {}
+
+  /**
+   * HR assigns an APPROVED employee internal credentials (§8, Stage 5). {@code localPart} forms
+   * {@code localPart@companyDomain}; {@code password} is OPTIONAL — omit it and the system generates a
+   * strong one (the default). Re-issuing regenerates + re-emails.
+   */
+  public record AssignCredentialsRequest(
+      @NotBlank(message = "A mailbox name is required")
+          @Size(max = 64, message = "Mailbox name is too long")
+          String localPart,
+      @Size(min = 8, message = "Use at least 8 characters") String password) {}
+
+  /**
+   * The assigned mailbox address; {@code password} is echoed ONCE (dev only) so HR can hand it over —
+   * it is never stored in plaintext or returned again. {@code emailedTo} is the personal address it went to.
+   */
+  public record AssignCredentialsResult(
+      String employeeId,
+      String mailAddress,
+      String emailedTo,
+      String credentialsAssignedAt,
+      @io.swagger.v3.oas.annotations.media.Schema(description = "Echoed once in dev; null in prod")
+          String password) {}
 }

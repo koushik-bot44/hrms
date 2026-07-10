@@ -178,6 +178,11 @@ export type RouteToManagerResult = Omit<
   employeeCode: string | null;
 };
 
+/** The mailbox address HR assigned; {@code password} is echoed ONCE (dev) so HR can hand it over (§8). */
+export type AssignCredentialsResult = Omit<Required<Schemas['AssignCredentialsResult']>, 'password'> & {
+  password: string | null;
+};
+
 // --- Manager inbox (§2/§3.3) ----------------------------------------------
 
 export type NotificationItem = Omit<

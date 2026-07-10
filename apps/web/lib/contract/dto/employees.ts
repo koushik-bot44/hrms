@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MailLocalPartSchema } from './mail';
 
 /**
  * Employee onboarding REQUEST contract (ARCHITECTURE.md §3.2). HR onboards with full name, email,
@@ -6,6 +7,17 @@ import { z } from 'zod';
  * Manager approval (§5). Response shapes (EmployeeSummary, OnboardEmployeeResult) are derived from
  * the Java OpenAPI schema in `../responses.ts`.
  */
+
+/**
+ * HR assigns an APPROVED employee internal credentials (§8, Stage 5): a mailbox local part (→
+ * `localpart@companyDomain`) + a password. The password is pre-filled with a generated one (the
+ * default) but HR may type their own.
+ */
+export const AssignCredentialsSchema = z.object({
+  localPart: MailLocalPartSchema,
+  password: z.string().min(8, 'Use at least 8 characters'),
+});
+export type AssignCredentialsInput = z.infer<typeof AssignCredentialsSchema>;
 
 export const OnboardEmployeeSchema = z.object({
   fullName: z.string().trim().min(2, 'Full name is required').max(120),

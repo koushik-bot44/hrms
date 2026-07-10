@@ -66,6 +66,24 @@ public class Employee {
   @Column(name = "otpExpiresAt")
   private Instant otpExpiresAt;
 
+  // --- Internal credentials + mailbox (§8, Stage 5), assigned by HR after Manager approval ---
+
+  /** The mailbox local part; the address {@code localpart@companyDomain} IS a login email. Null until assigned. */
+  @Column(name = "mailLocalPart")
+  private String mailLocalPart;
+
+  /** The full mailbox address (unique across all accounts); null until credentials are assigned. */
+  @Column(name = "mailAddress")
+  private String mailAddress;
+
+  /** BCrypt hash of the HR-assigned/generated password; null until assigned. Enables the {@code /login} door. */
+  @Column(name = "passwordHash")
+  private String passwordHash;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "credentialsAssignedAt")
+  private Instant credentialsAssignedAt;
+
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "createdAt", nullable = false, updatable = false)

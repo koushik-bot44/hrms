@@ -32,8 +32,13 @@ public class MessageRecipient {
   @Column(name = "messageId", nullable = false)
   private String messageId;
 
-  @Column(name = "recipientUserId", nullable = false)
+  /** The recipient when it is a staff account; null when the recipient is an employee (§8, Stage 5). */
+  @Column(name = "recipientUserId")
   private String recipientUserId;
+
+  /** The recipient when it is an employee; null when staff. Exactly one recipient column is set. */
+  @Column(name = "recipientEmployeeId")
+  private String recipientEmployeeId;
 
   /** When the recipient first opened the message; null while unread. */
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
@@ -44,4 +49,9 @@ public class MessageRecipient {
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "deletedAt")
   private Instant deletedAt;
+
+  /** The recipient's account id whichever kind it is (user or employee) — ids are globally unique (§8). */
+  public String recipientAccountId() {
+    return recipientUserId != null ? recipientUserId : recipientEmployeeId;
+  }
 }

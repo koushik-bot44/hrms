@@ -15,15 +15,19 @@ import { cn } from '@/lib/utils';
  */
 export function MailButton() {
   const { session } = useAuth();
-  const isStaff = session?.type === 'USER';
+  // Every staff account has a mailbox; a credentialed EMPLOYEE does too (§8, Stage 5) — but not one
+  // without assigned credentials.
+  const canMail =
+    session?.type === 'USER' ||
+    (session?.type === 'EMPLOYEE' && Boolean(session.mailAddress));
 
   const unread = useApiQuery(mailKeys.unread, getUnreadCount, {
-    enabled: isStaff,
+    enabled: canMail,
     refetchOnWindowFocus: true,
     staleTime: 15_000,
   });
 
-  if (!isStaff) return null;
+  if (!canMail) return null;
 
   const count = unread.data?.unread ?? 0;
   const label = count > 0 ? `Mail — ${count} unread` : 'Mail';

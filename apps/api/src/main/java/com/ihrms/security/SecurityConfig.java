@@ -76,17 +76,12 @@ public class SecurityConfig {
                     .hasAnyRole("ACCOUNTS_ADMIN", "ACCOUNTANT")
                     .requestMatchers("/provisioning/**")
                     .hasRole("SUPER_ADMIN")
-                    // Internal mail (§8): any staff account reaches its OWN mailbox; the send graph
-                    // (canSendMail) is the real gate, applied per-message in the service. Employees
-                    // are excluded from mail at this stage.
+                    // Internal mail (§8): any authenticated account reaches its OWN mailbox; the send
+                    // graph (canSendMail) is the real gate, applied per-message in the service. Staff
+                    // always have a mailbox; a credentialed EMPLOYEE (§8, Stage 5) does too — the service
+                    // refuses an employee WITHOUT assigned credentials (403).
                     .requestMatchers("/mail/**")
-                    .hasAnyRole(
-                        "SUPER_ADMIN",
-                        "ACCOUNTS_ADMIN",
-                        "COMPANY_ADMIN",
-                        "HR",
-                        "MANAGER",
-                        "ACCOUNTANT")
+                    .authenticated()
                     .anyRequest()
                     .authenticated())
         // Hardened response headers (§6): nosniff, frame DENY, HSTS (prod/HTTPS), no-referrer.

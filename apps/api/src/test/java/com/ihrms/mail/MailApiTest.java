@@ -14,10 +14,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.TokenService;
+import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
+import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
+import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.UserRepository;
 import java.util.HashSet;
 import java.util.List;
@@ -54,6 +57,7 @@ class MailApiTest {
   @Autowired TokenService tokens;
   @Autowired CompanyRepository companies;
   @Autowired UserRepository users;
+  @Autowired EmployeeRepository employees;
   @Autowired JdbcTemplate jdbc;
 
   // Storage is mocked so the presigned handshake runs without a real bucket: the key is derived from the
@@ -77,8 +81,8 @@ class MailApiTest {
   @BeforeEach
   void setup() {
     jdbc.execute(
-        "TRUNCATE \"users\",\"companies\",\"messages\",\"message_recipients\",\"audit_logs\""
-            + " RESTART IDENTITY CASCADE");
+        "TRUNCATE \"users\",\"employees\",\"companies\",\"messages\",\"message_recipients\","
+            + "\"message_attachments\",\"audit_logs\" RESTART IDENTITY CASCADE");
     anvi = company("ANVI", "anvicorp");
     testco = company("TESTCO", "testco");
 
@@ -385,17 +389,45 @@ class MailApiTest {
     download(caA, a).andExpect(status().isOk());
   }
 
-  // --- Employees are excluded from mail -------------------------------------
+  // --- Employee mailbox (§8, Stage 5) ---------------------------------------
 
   @Test
-  void employeesCannotReachTheMailbox() throws Exception {
-    String empToken =
-        tokens.issueAccess(
-            new IhrmsPrincipal.Employee("emp-1", "ANVI-EMP-000001", "e@anvi.test", anvi));
-    mvc.perform(get("/mail/contacts").header("Authorization", "Bearer " + empToken))
+  void anEmployeeWithoutCredentialsIsRefusedTheMailbox() throws Exception {
+    String tok = empToken(employee(anvi, hrA, null)); // approved but no mailbox yet
+    mvc.perform(get("/mail/contacts").header("Authorization", "Bearer " + tok))
         .andExpect(status().isForbidden());
-    mvc.perform(get("/mail/inbox").header("Authorization", "Bearer " + empToken))
+    mvc.perform(get("/mail/inbox").header("Authorization", "Bearer " + tok))
         .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void aCredentialedEmployeeMailsOnlyTheirOnboardingHr() throws Exception {
+    String emp = empToken(employee(anvi, hrA, "arjun@anvicorp")); // credentialed, onboarded by hrA
+
+    // The employee's ONLY contact is their onboarding HR; the HR now also sees the employee.
+    assertThat(contactAddrs(emp)).containsExactly("hr@anvicorp");
+    assertThat(contactAddrs(token(hrA))).contains("arjun@anvicorp");
+
+    // Employee -> their HR: allowed, lands unread, and the HR can reply into the same thread.
+    JsonNode sent = json.readTree(sendT(emp, hrA.getId(), "Question", "When do I start?"));
+    String threadId = sent.get("threadId").asText();
+    assertThat(threadId).isNotBlank();
+    assertThat(getT(token(hrA), "/mail/unread-count").get("unread").asInt()).isEqualTo(1);
+    reply(hrA, threadId, "Next Monday.").andExpect(status().isOk());
+    assertThat(getT(emp, "/mail/unread-count").get("unread").asInt()).isEqualTo(1);
+
+    // Employee -> anyone else is forbidden (only their HR).
+    sendExpect(emp, hr2A.getId(), status().isForbidden()); // another HR
+    sendExpect(emp, mgrA.getId(), status().isForbidden()); // a manager
+    sendExpect(emp, caA.getId(), status().isForbidden()); // the company admin
+  }
+
+  @Test
+  void anEmployeeCannotMailAnotherCompanysHrOrAnotherEmployee() throws Exception {
+    String emp = empToken(employee(anvi, hrA, "arjun@anvicorp"));
+    Employee peer = employee(anvi, hrA, "meera@anvicorp"); // same HR — but employee<->employee is forbidden
+    sendExpect(emp, hrT.getId(), status().isForbidden()); // cross-company HR
+    sendExpect(emp, peer.getId(), status().isForbidden()); // another employee
   }
 
   // --- Address formation + uniqueness (unchanged from Stage 2) --------------
@@ -475,6 +507,70 @@ class MailApiTest {
   private String token(User u) {
     return tokens.issueAccess(
         new IhrmsPrincipal.User(u.getId(), u.getEmail(), u.getName(), u.getRole(), u.getCompanyId(), null));
+  }
+
+  /** Seed an APPROVED employee onboarded by {@code hr}; a non-null {@code mailAddress} = credentialed. */
+  private Employee employee(String companyId, User hr, String mailAddress) {
+    Employee e = new Employee();
+    e.setFullName("Emp " + (mailAddress == null ? "nomail" : mailAddress));
+    e.setEmail("personal-" + java.util.UUID.randomUUID() + "@ext.test");
+    e.setDesignation("Engineer");
+    e.setCompanyId(companyId);
+    e.setOnboardingHrId(hr.getId());
+    e.setStatus(EmployeeStatus.APPROVED);
+    if (mailAddress != null) {
+      e.setMailLocalPart(mailAddress.substring(0, mailAddress.indexOf('@')));
+      e.setMailAddress(mailAddress);
+      e.setPasswordHash("hashed"); // login is tested elsewhere; mail only needs a mailbox
+    }
+    return employees.save(e);
+  }
+
+  private String empToken(Employee e) {
+    return tokens.issueAccess(
+        new IhrmsPrincipal.Employee(
+            e.getId(), e.getEmployeeCode(), e.getEmail(), e.getCompanyId(), e.getFullName(), e.getMailAddress()));
+  }
+
+  /** GET a path with a raw bearer token (expects 200); returns the parsed body. */
+  private JsonNode getT(String token, String path) throws Exception {
+    return json.readTree(
+        mvc.perform(get(path).header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private Set<String> contactAddrs(String token) throws Exception {
+    Set<String> out = new HashSet<>();
+    getT(token, "/mail/contacts").forEach(n -> out.add(n.get("address").asText()));
+    return out;
+  }
+
+  /** Send via a raw token (expects 200); returns the body. */
+  private String sendT(String token, String toId, String subject, String body) throws Exception {
+    return mvc.perform(
+            post("/mail/messages")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    json.writeValueAsString(Map.of("toUserId", toId, "subject", subject, "body", body))))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+  }
+
+  private void sendExpect(
+      String token, String toId, org.springframework.test.web.servlet.ResultMatcher expected)
+      throws Exception {
+    mvc.perform(
+            post("/mail/messages")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("toUserId", toId, "subject", "s", "body", "b"))))
+        .andExpect(expected);
   }
 
   /** POST /mail/messages from -> to (no status assertion). */

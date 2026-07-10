@@ -45,7 +45,7 @@ public class MailController {
 
   /** The accounts the caller may message (the send graph as a concrete list). */
   @GetMapping("/contacts")
-  public List<MailPartyView> contacts(@AuthenticationPrincipal IhrmsPrincipal.User actor) {
+  public List<MailPartyView> contacts(@AuthenticationPrincipal IhrmsPrincipal actor) {
     return mail.contacts(actor);
   }
 
@@ -53,7 +53,7 @@ public class MailController {
   @PostMapping("/messages")
   public SendMessageResult send(
       @Valid @RequestBody SendMessageRequest body,
-      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
     return mail.send(actor, body, request.getRemoteAddr());
   }
@@ -63,7 +63,7 @@ public class MailController {
   public SendMessageResult reply(
       @PathVariable String id,
       @Valid @RequestBody ReplyRequest body,
-      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
     return mail.reply(actor, id, body, request.getRemoteAddr());
   }
@@ -72,7 +72,7 @@ public class MailController {
   @PostMapping("/attachments/upload-url")
   public AttachmentUpload attachmentUploadUrl(
       @Valid @RequestBody AttachmentUploadRequest body,
-      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
     return mail.requestAttachmentUpload(actor, body, request.getRemoteAddr());
   }
@@ -81,7 +81,7 @@ public class MailController {
   @GetMapping("/attachments/{id}/download")
   public AttachmentDownload attachmentDownload(
       @PathVariable String id,
-      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
     return mail.downloadAttachment(actor, id, request.getRemoteAddr());
   }
@@ -89,7 +89,7 @@ public class MailController {
   /** Inbox — conversations addressed to the caller, newest activity first. */
   @GetMapping("/inbox")
   public ThreadPage inbox(
-      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
       @PageableDefault(size = 20) Pageable pageable) {
     return mail.inbox(actor, pageable);
   }
@@ -97,7 +97,7 @@ public class MailController {
   /** Sent — conversations the caller has sent into. */
   @GetMapping("/sent")
   public ThreadPage sent(
-      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
       @PageableDefault(size = 20) Pageable pageable) {
     return mail.sent(actor, pageable);
   }
@@ -106,7 +106,7 @@ public class MailController {
   @GetMapping("/search")
   public ThreadPage search(
       @RequestParam(name = "q", required = false) String q,
-      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
       @PageableDefault(size = 20) Pageable pageable) {
     return mail.search(actor, q, pageable);
   }
@@ -115,7 +115,7 @@ public class MailController {
   @GetMapping("/threads/{id}")
   public ThreadDetailView thread(
       @PathVariable String id,
-      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
     return mail.thread(actor, id, request.getRemoteAddr());
   }
@@ -123,14 +123,14 @@ public class MailController {
   /** Mark a thread read for the caller; returns the refreshed unread count. */
   @PostMapping("/threads/{id}/read")
   public UnreadCountView markRead(
-      @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
+      @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal actor) {
     return mail.markRead(actor, id);
   }
 
   /** Mark a thread unread for the caller; returns the refreshed unread count. */
   @PostMapping("/threads/{id}/unread")
   public UnreadCountView markUnread(
-      @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
+      @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal actor) {
     return mail.markUnread(actor, id);
   }
 
@@ -138,7 +138,7 @@ public class MailController {
   @DeleteMapping("/threads/{id}")
   public ResponseEntity<Void> delete(
       @PathVariable String id,
-      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
     mail.delete(actor, id, request.getRemoteAddr());
     return ResponseEntity.noContent().build();
@@ -146,7 +146,7 @@ public class MailController {
 
   /** Thread-level unread count for the caller's inbox. */
   @GetMapping("/unread-count")
-  public UnreadCountView unreadCount(@AuthenticationPrincipal IhrmsPrincipal.User actor) {
+  public UnreadCountView unreadCount(@AuthenticationPrincipal IhrmsPrincipal actor) {
     return mail.unreadCount(actor);
   }
 }

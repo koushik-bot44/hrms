@@ -1,4 +1,6 @@
 import type {
+  AssignCredentialsInput,
+  AssignCredentialsResult,
   EmployeeRecord,
   RevealedSensitive,
   ReviewInput,
@@ -51,4 +53,15 @@ export function routeToManager(id: string, body: RouteToManagerInput): Promise<R
     `/employees/${encodeURIComponent(id)}/route-to-manager`,
     { method: 'POST', body },
   );
+}
+
+/** Assign (or re-issue) an APPROVED employee internal credentials (§8, Stage 5). HR-only. */
+export function assignEmployeeCredentials(
+  id: string,
+  body: AssignCredentialsInput,
+): Promise<AssignCredentialsResult> {
+  return apiFetch<AssignCredentialsResult>(`/employees/${encodeURIComponent(id)}/credentials`, {
+    method: 'POST',
+    body,
+  });
 }

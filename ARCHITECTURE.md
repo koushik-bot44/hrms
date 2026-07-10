@@ -369,9 +369,11 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
   - `COMPANY_ADMIN` ↔ `HR` (same company)
   - `COMPANY_ADMIN` ↔ `MANAGER` (same company)
   - `COMPANY_ADMIN` ↔ `ACCOUNTANT` (same company)
+  - `EMPLOYEE` ↔ their **onboarding HR** (same company) — added in Stage 5 (below). This is the ONLY edge
+    that includes an employee.
   - **Everything else is forbidden. Never cross-company** — a company-domain mailbox reaches only
-    same-company counterparts (plus, for a Company Admin, the Super Admin). **Employees are not in mail**
-    in this stage.
+    same-company counterparts (plus, for a Company Admin, the Super Admin). Beyond the single
+    employee↔HR edge, **no employee↔employee, employee↔manager/company-admin/super-admin**.
 - **Model:** a `Message` (sender, subject, text body, createdAt) fans out to one or more
   `MessageRecipient` rows (recipient + nullable `readAt`) — a child table so multi-recipient is possible
   later. The sender sees **Sent**, each recipient sees **Inbox**; opening a message stamps the
@@ -409,7 +411,7 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     (`message_recipients.deletedAt` for received messages, `messages.senderDeletedAt` for sent ones) —
     the rows are **never destroyed** and the counterparty still sees their copy. Deleted threads vanish
     from the viewer's lists; a later reply (an un-hidden message) resurfaces the thread. Audited
-    `MAIL_DELETED`. Employees are excluded from mail throughout.
+    `MAIL_DELETED`.
 - **Attachments (Stage 4):** a message (new send or reply) may carry files, stored in **S3 via the same
   presigned upload→confirm handshake as employee documents** (`storage.buildKey` → presigned PUT →
   server reads the bytes to compute + store the **sha256**). Attachment rows (`message_attachments`) are
@@ -429,6 +431,24 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     no attachment-only messages. Thread/list responses expose attachment metadata (id, name, type, size)
     and a paperclip indicator, never keys. Text-only threads are unaffected; per-user delete hides the
     viewer's copy but the attachment follows the message (the counterparty keeps theirs).
+- **Employee credentials + mailbox (Stage 5):** once a Manager **approves** an employee (§3.4 — the ID is
+  minted and the onboarding HR is notified `EMPLOYEE_APPROVED`), that HR may **assign the employee internal
+  credentials**: a mailbox local part (→ `localpart@companyDomain` via `MailAddresses`, unique across every
+  account through `AccountEmails`) and a password (HR **types it or the system generates** one — generate is
+  the default). The address IS a login email; the password is BCrypt-hashed. The address + password + the
+  `/login` link are **emailed to the employee's PERSONAL email** (the one HR entered at invitation;
+  dev-logged, no SMTP). Audited `EMPLOYEE_CREDENTIALS_ASSIGNED`; HR may **re-issue** (regenerate + re-email).
+  Only the employee's own onboarding HR, and only for an **APPROVED** employee, may assign.
+  - **Two sign-in doors stay open for a credentialed employee** (both yield the same EMPLOYEE session —
+    own-record scope): `/login` (mailbox address + password — the staff resolver now also resolves an
+    Employee by `mailAddress`) **and** `/employee/login` (full name + personal email + OTP, unchanged before
+    and after approval). Employees WITHOUT assigned credentials can only use `/employee/login`.
+  - **Mailbox:** a credentialed employee enters the mail system with exactly one contact — their onboarding
+    HR (the `EMPLOYEE ↔ HR` edge above, symmetric, same company). Every send/reply is still `canSendMail`,
+    and thread/attachment access stays participant-scoped. `messages`/`message_recipients`/
+    `message_attachments` gain a nullable **employee-id** column beside the user-id one (a sender/recipient/
+    uploader is a User OR an Employee); the `/mail` area opens to authenticated employees, but one WITHOUT a
+    mailbox is refused. The Mail button + the employee's own address appear once credentials exist.
 
 ---
 

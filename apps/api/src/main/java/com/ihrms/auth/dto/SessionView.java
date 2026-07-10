@@ -20,6 +20,13 @@ public sealed interface SessionView permits SessionView.UserSession, SessionView
       implements SessionView {}
 
   record EmployeeSession(
-      String type, String employeeId, String employeeCode, String email, String companyId)
+      String type,
+      String employeeId,
+      String employeeCode,
+      String email,
+      String companyId,
+      // Populated once the employee has internal credentials (§8, Stage 5); null before then.
+      String name,
+      String mailAddress)
       implements SessionView {}
 }

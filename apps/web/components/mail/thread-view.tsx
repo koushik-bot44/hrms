@@ -5,7 +5,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, MailMinus, MailOpen, Send, Trash2 } from 'lucide-react';
-import { ReplyMessageSchema, type ReplyMessageInput, type ThreadDetail } from '@/lib/contract';
+import {
+  ReplyMessageSchema,
+  type ReplyMessageInput,
+  type ThreadDetail,
+  type ThreadMessage,
+} from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import {
@@ -83,7 +88,18 @@ export function ThreadView({
       successMessage: 'Reply sent',
       onSuccess: (result, vars) => {
         // Optimistically append my reply, then reconcile (the refetch fills in attachments).
-        if (session?.type === 'USER') {
+        // Works for both a staff USER and a credentialed EMPLOYEE session (§8, Stage 5).
+        const mineParty: ThreadMessage['from'] | null = session
+          ? session.type === 'USER'
+            ? { userId: session.userId, name: session.name, address: session.email, role: session.role }
+            : {
+                userId: session.employeeId,
+                name: session.name ?? session.employeeCode ?? '',
+                address: session.mailAddress ?? session.email,
+                role: null as unknown as ThreadMessage['from']['role'],
+              }
+          : null;
+        if (mineParty) {
           queryClient.setQueryData<ThreadDetail>(mailKeys.thread(threadId as string), (prev) =>
             prev
               ? {
@@ -92,12 +108,7 @@ export function ThreadView({
                     ...prev.messages,
                     {
                       id: result.id,
-                      from: {
-                        userId: session.userId,
-                        name: session.name,
-                        address: session.email,
-                        role: session.role,
-                      },
+                      from: mineParty,
                       body: vars.body,
                       createdAt: new Date().toISOString(),
                       mine: true,

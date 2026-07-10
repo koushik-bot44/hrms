@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
 import { RouteToManagerDialog } from '@/components/hr/route-to-manager-dialog';
+import { AssignCredentialsDialog } from '@/components/hr/assign-credentials-dialog';
 
 export type ItemKind = 'form' | 'document';
 
@@ -79,6 +80,9 @@ export function RecordView({
             <StatusBadge status={record.status} />
             {editable && onRouted ? (
               <RouteToManagerDialog employeeId={record.id} disabled={!record.reviewComplete} onRouted={onRouted} />
+            ) : null}
+            {record.status === 'APPROVED' ? (
+              <AssignCredentialsDialog employeeId={record.id} personalEmail={record.email} />
             ) : null}
           </div>
         </CardHeader>

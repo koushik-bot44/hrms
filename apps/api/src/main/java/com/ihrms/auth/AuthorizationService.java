@@ -139,41 +139,85 @@ public class AuthorizationService {
   // --- Internal mail send graph (§8) ----------------------------------------
 
   /**
-   * The ONE central check for internal mail: may {@code a} and {@code b} message each other? Symmetric
-   * (both directions allowed together). The graph (§8):
+   * A mail participant — a staff account (USER) OR a credentialed employee (EMPLOYEE) — reduced to just
+   * what the send graph needs. Ids are globally-unique cuids, so identity is compared by id.
+   */
+  public record MailParticipant(
+      String type, String id, UserRole role, String companyId, String onboardingHrId) {
+    public static MailParticipant user(User u) {
+      return new MailParticipant("USER", u.getId(), u.getRole(), u.getCompanyId(), null);
+    }
+
+    public static MailParticipant employee(Employee e) {
+      return new MailParticipant("EMPLOYEE", e.getId(), null, e.getCompanyId(), e.getOnboardingHrId());
+    }
+
+    boolean isUser() {
+      return "USER".equals(type);
+    }
+  }
+
+  /**
+   * The ONE central check for internal mail: may {@code a} and {@code b} message each other? Symmetric.
+   * The graph (§8):
    *
    * <pre>
    *   SUPER_ADMIN   &lt;-&gt; COMPANY_ADMIN   (any company)
    *   SUPER_ADMIN   &lt;-&gt; ACCOUNTS_ADMIN
    *   COMPANY_ADMIN &lt;-&gt; HR | MANAGER | ACCOUNTANT   (SAME company only)
+   *   EMPLOYEE      &lt;-&gt; their onboarding HR         (SAME company only)
    * </pre>
    *
-   * Everything else — and every cross-company company-domain pair — is denied. Employees are not in mail.
+   * Everything else — and every cross-company pair — is denied. An employee's ONLY counterpart is the HR
+   * who onboarded them (no employee↔employee, no employee↔anyone-else).
    */
-  public boolean canSendMail(User a, User b) {
-    if (a == null || b == null || a.getId().equals(b.getId())) {
+  public boolean canSendMail(MailParticipant a, MailParticipant b) {
+    if (a == null || b == null || a.id().equals(b.id())) {
       return false; // no self-send
     }
-    EnumSet<UserRole> pair = EnumSet.of(a.getRole(), b.getRole());
+    if (a.isUser() && b.isUser()) {
+      return canSendStaff(a, b);
+    }
+    // Exactly one side is an employee: the only allowed edge is EMPLOYEE <-> their onboarding HR.
+    MailParticipant employee = a.isUser() ? b : a;
+    MailParticipant other = a.isUser() ? a : b;
+    return !employee.isUser() // (rejects employee<->employee: `other` would then be an employee)
+        && other.isUser()
+        && other.role() == UserRole.HR
+        && other.companyId() != null
+        && other.companyId().equals(employee.companyId()) // same company
+        && other.id().equals(employee.onboardingHrId()); // their onboarding HR specifically
+  }
 
+  /** Staff-only graph (both sides USER). */
+  private boolean canSendStaff(MailParticipant a, MailParticipant b) {
+    EnumSet<UserRole> pair = EnumSet.of(a.role(), b.role());
     // Platform-level pairs — no company constraint (SUPER_ADMIN / ACCOUNTS_ADMIN have no company).
     if (pair.equals(EnumSet.of(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN))
         || pair.equals(EnumSet.of(UserRole.SUPER_ADMIN, UserRole.ACCOUNTS_ADMIN))) {
       return true;
     }
-
     // Company Admin <-> its own company's HR / Manager / Accountant.
-    User admin = a.getRole() == UserRole.COMPANY_ADMIN ? a : b.getRole() == UserRole.COMPANY_ADMIN ? b : null;
+    MailParticipant admin =
+        a.role() == UserRole.COMPANY_ADMIN ? a : b.role() == UserRole.COMPANY_ADMIN ? b : null;
     if (admin != null) {
-      User other = admin == a ? b : a;
+      MailParticipant other = admin == a ? b : a;
       boolean companyStaff =
-          other.getRole() == UserRole.HR
-              || other.getRole() == UserRole.MANAGER
-              || other.getRole() == UserRole.ACCOUNTANT;
+          other.role() == UserRole.HR
+              || other.role() == UserRole.MANAGER
+              || other.role() == UserRole.ACCOUNTANT;
       return companyStaff
-          && admin.getCompanyId() != null
-          && admin.getCompanyId().equals(other.getCompanyId()); // never cross-company
+          && admin.companyId() != null
+          && admin.companyId().equals(other.companyId()); // never cross-company
     }
     return false;
+  }
+
+  /** Convenience for the staff-only callers (and existing tests): both sides are Users. */
+  public boolean canSendMail(User a, User b) {
+    if (a == null || b == null) {
+      return false;
+    }
+    return canSendMail(MailParticipant.user(a), MailParticipant.user(b));
   }
 }
