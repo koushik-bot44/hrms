@@ -11,7 +11,8 @@ const nav: NavItem[] = [{ label: 'My profile', href: '/employee', icon: UserRoun
 export default function EmployeeLayout({ children }: { children: ReactNode }) {
   return (
     <RequireRole actor="EMPLOYEE">
-      <AppShell roleLabel="Employee" nav={nav}>
+      {/* Onboarding area — the mailbox lives in the employee portal (/workspace), not here. */}
+      <AppShell roleLabel="Employee" nav={nav} showMail={false}>
         {children}
       </AppShell>
     </RequireRole>

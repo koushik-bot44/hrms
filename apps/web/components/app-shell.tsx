@@ -148,10 +148,13 @@ export function AppShell({
   roleLabel,
   nav,
   children,
+  showMail = true,
 }: {
   roleLabel: string;
   nav: NavItem[];
   children: React.ReactNode;
+  /** Show the topbar Mail button. Off in the onboarding area — the mailbox lives in the portal (§8). */
+  showMail?: boolean;
 }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
@@ -187,7 +190,7 @@ export function AppShell({
           </div>
           <div className="flex items-center gap-3">
             <ApiStatusIndicator className="hidden sm:inline-flex" />
-            <MailButton />
+            {showMail ? <MailButton /> : null}
             <UserMenu roleLabel={roleLabel} />
           </div>
         </header>
