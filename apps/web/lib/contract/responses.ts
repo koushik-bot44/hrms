@@ -183,6 +183,45 @@ export type AssignCredentialsResult = Omit<Required<Schemas['AssignCredentialsRe
   password: string | null;
 };
 
+// --- Attendance (§8a) ------------------------------------------------------
+
+/** Button state + today/week totals; {@code openSince} is null when not clocked in. */
+export type ClockStatus = Omit<Required<Schemas['ClockStatusView']>, 'openSince'> & {
+  openSince: string | null;
+};
+
+/** One session; {@code clockOutAt} + {@code durationSeconds} are null while the session is open. */
+export type AttendanceSessionDto = Omit<
+  Required<Schemas['AttendanceSessionView']>,
+  'clockOutAt' | 'durationSeconds'
+> & {
+  clockOutAt: string | null;
+  durationSeconds: number | null;
+};
+
+export type AttendanceDay = Omit<Required<Schemas['AttendanceDayView']>, 'sessions'> & {
+  sessions: AttendanceSessionDto[];
+};
+
+export type MyAttendancePage = Omit<Required<Schemas['MyAttendancePage']>, 'days'> & {
+  days: AttendanceDay[];
+};
+
+export type TeamAttendanceRow = Required<Schemas['TeamAttendanceRow']>;
+
+/** One clock in/out event in the Manager's activity feed. */
+export type TeamActivityEvent = Omit<
+  Required<Schemas['TeamActivityEvent']>,
+  'employeeCode' | 'fullName'
+> & {
+  employeeCode: string | null;
+  fullName: string | null;
+};
+
+export type TeamActivityPage = Omit<Required<Schemas['TeamActivityPage']>, 'content'> & {
+  content: TeamActivityEvent[];
+};
+
 // --- Manager inbox (§2/§3.3) ----------------------------------------------
 
 export type NotificationItem = Omit<

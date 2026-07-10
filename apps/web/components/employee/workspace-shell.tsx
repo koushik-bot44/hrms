@@ -2,16 +2,19 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Inbox } from 'lucide-react';
+import { Clock, Inbox } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { AppShell, type NavItem } from '@/components/app-shell';
 
 /**
  * The employee PORTAL shell (Stage 6) — mirrors the staff `AppShell` (topbar + sidebar + Mail button)
- * with its own growable nav. Mailbox is the only section for now; more can be added without restructuring.
- * A credentialed EMPLOYEE reaches this; one without a mailbox is bounced to the onboarding area.
+ * with its own growable nav. A credentialed EMPLOYEE reaches this; one without a mailbox is bounced to
+ * the onboarding area.
  */
-const nav: NavItem[] = [{ label: 'Mailbox', href: '/mail', icon: Inbox }];
+const nav: NavItem[] = [
+  { label: 'Mailbox', href: '/mail', icon: Inbox },
+  { label: 'Attendance', href: '/workspace/attendance', icon: Clock },
+];
 
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();

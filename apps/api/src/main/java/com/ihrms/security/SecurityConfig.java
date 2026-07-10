@@ -82,6 +82,13 @@ public class SecurityConfig {
                     // refuses an employee WITHOUT assigned credentials (403).
                     .requestMatchers("/mail/**")
                     .authenticated()
+                    // Attendance (§8a): the /team/** views are MANAGER-only (team-scoped in the service);
+                    // the employee clock/status endpoints are open to any authenticated principal, and the
+                    // service refuses a non-employee / an uncredentialed employee with 403.
+                    .requestMatchers("/attendance/team/**")
+                    .hasRole("MANAGER")
+                    .requestMatchers("/attendance/**")
+                    .authenticated()
                     .anyRequest()
                     .authenticated())
         // Hardened response headers (§6): nosniff, frame DENY, HSTS (prod/HTTPS), no-referrer.

@@ -8,12 +8,21 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth-provider';
 import { ChangePasswordDialog } from '@/components/change-password-dialog';
 import { Button } from '@/components/ui/button';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { clockOut as apiClockOut, attendanceKeys } from '@/lib/api/attendance';
+import {
+  useBeforeUnloadWhenClockedIn,
+  useClockStatus,
+} from '@/components/attendance/use-clock-status';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,8 +98,16 @@ function Brand({ roleLabel }: { roleLabel: string }) {
 function UserMenu({ roleLabel }: { roleLabel: string }) {
   const { session, logout } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [changingPassword, setChangingPassword] = React.useState(false);
+  const [confirmClockOut, setConfirmClockOut] = React.useState(false);
+  const [clockingOut, setClockingOut] = React.useState(false);
   const isStaff = session?.type === 'USER';
+
+  // Clock-out reminders (§8a): while an employee has an open session, warn on sign-out + tab close.
+  const status = useClockStatus();
+  const clockedIn = status.data?.open ?? false;
+  useBeforeUnloadWhenClockedIn(clockedIn);
 
   const displayName =
     session?.type === 'USER'
@@ -104,6 +121,29 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
     const wasEmployee = session?.type === 'EMPLOYEE';
     await logout();
     router.replace(wasEmployee ? '/employee/login' : '/login');
+  };
+
+  // Intercept sign-out: if still clocked in, confirm first (reliable, unlike the tab-close nudge).
+  const requestSignOut = () => {
+    if (clockedIn) {
+      setConfirmClockOut(true);
+    } else {
+      void onSignOut();
+    }
+  };
+
+  const clockOutAndSignOut = async () => {
+    setClockingOut(true);
+    try {
+      await apiClockOut();
+      void queryClient.invalidateQueries({ queryKey: attendanceKeys.status });
+    } catch {
+      toast.error('Could not clock out — signing out anyway');
+    } finally {
+      setClockingOut(false);
+      setConfirmClockOut(false);
+      void onSignOut();
+    }
   };
 
   return (
@@ -131,7 +171,7 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
               Change password
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuItem onSelect={() => void onSignOut()}>
+          <DropdownMenuItem onSelect={requestSignOut}>
             <LogOut className="size-4" />
             Sign out
           </DropdownMenuItem>
@@ -140,6 +180,36 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
       {isStaff ? (
         <ChangePasswordDialog open={changingPassword} onOpenChange={setChangingPassword} />
       ) : null}
+
+      {/* Still-clocked-in confirm on sign-out (§8a). */}
+      <Dialog open={confirmClockOut} onOpenChange={setConfirmClockOut}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>You&rsquo;re still clocked in</DialogTitle>
+            <DialogDescription>
+              You have an open attendance session. Clock out before you sign out?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+            <Button variant="ghost" onClick={() => setConfirmClockOut(false)} disabled={clockingOut}>
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setConfirmClockOut(false);
+                void onSignOut();
+              }}
+              disabled={clockingOut}
+            >
+              Sign out anyway
+            </Button>
+            <Button onClick={() => void clockOutAndSignOut()} disabled={clockingOut}>
+              {clockingOut ? 'Clocking out…' : 'Clock out & sign out'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

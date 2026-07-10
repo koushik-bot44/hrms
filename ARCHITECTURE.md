@@ -461,6 +461,44 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
 
 ---
 
+## 8a. Attendance (clock in / clock out)
+
+A credentialed employee records working time from the portal (`/workspace`); a Manager sees his team's
+attendance. **View-only in v1** — no editing or correction of past punches.
+
+- **Who:** only a **credentialed** employee (the `/workspace` principal — `mailAddress` assigned) has
+  attendance. An OTP-only onboarding employee has none (403 on every attendance endpoint). A Manager reads
+  his team-scope employees' attendance (below); no one else gets the manager endpoints.
+- **Actions + one open session:** the buttons are **Clock In** / **Clock Out**. Exactly **one open session
+  at a time** per employee — clocking in with an open session is a **409**; clocking out with none open is a
+  **409**. Multiple **completed** sessions per day are allowed (in → out → in → out). The single-open rule is
+  enforced BOTH in the service AND by a **partial unique index** `(employee_id) WHERE clock_out_at IS NULL`,
+  so a double-click cannot create two open sessions (the constraint violation is surfaced as a clean 409).
+- **Time source = the SERVER, always.** A client timestamp is never trusted. Instants are stored in **UTC**
+  (`timestamptz`); all display, day grouping, and totals are computed in **Asia/Kolkata**.
+- **Forgot to clock out:** an open session stays **open**, is shown as *In progress*, is **never
+  auto-closed**, and contributes **0** to totals until it is closed. Daily/period totals sum **completed**
+  sessions only.
+- **Working hours:** per-day total (sum of that day's completed sessions) + a this-week / period total. A
+  session is attributed to the **IST calendar day of its clock-in**, and its whole duration counts to that
+  day (a session crossing midnight is **not split**). No overtime, shifts, or leave interaction.
+- **Manager view (team-scope):** a Manager sees attendance ONLY for employees in his team scope — those whose
+  onboarding HR is the HR on the Manager's team (the SAME set he approves; the existing scope resolution is
+  reused). Cross-team / cross-company is denied. A roster (who's clocked in, today + period hours) plus a
+  read-only per-employee day-grouped history.
+- **Attendance activity feed (pull-based, NO bell):** punches do **not** create notification-bell entries.
+  Instead the Manager has a dedicated **activity feed** — a flat, reverse-chronological list of his team's
+  clock-in/out events (name + ID, IN/OUT, time), derived from the **audit log** and refetched when he opens
+  or focuses the page. It is checked, never interruptive.
+- **Clock-out reminders (best-effort):** on app **sign-out**, if a session is open the UI confirms
+  *"You're still clocked in — clock out first?"* (Clock out & sign out / Sign out anyway / Cancel) — reliable.
+  On **tab/browser close**, a `beforeunload` handler (registered only while clocked in) triggers the browser's
+  generic leave prompt — a nudge only; its text isn't customizable and leaving can't be prevented.
+- **Audit:** every punch is audited `ATTENDANCE_CLOCK_IN` / `ATTENDANCE_CLOCK_OUT` with `companyId` set.
+  `attendance_sessions` carries a denormalized `company_id` so every query filters by tenant.
+
+---
+
 ## 9. Deployment Architecture (existing shell — keep as-is)
 
 The project is built into the already-deployed monorepo shell. **Do not change the deployment
