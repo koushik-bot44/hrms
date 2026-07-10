@@ -46,9 +46,7 @@ export default function LoginPage() {
             <ShieldCheck className="size-5" />
           </div>
           <CardTitle className="text-lg">Sign in</CardTitle>
-          <CardDescription>
-            Sign in to IHRMS with your email (or mailbox address) and password.
-          </CardDescription>
+          <CardDescription>Sign in to IHRMS with your email and password.</CardDescription>
         </CardHeader>
         <CardContent>
           <StaffSignInForm />
@@ -86,11 +84,7 @@ function StaffSignInForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      <Field
-        id="staff-email"
-        label="Email or mailbox address"
-        error={form.formState.errors.email?.message}
-      >
+      <Field id="staff-email" label="Email" error={form.formState.errors.email?.message}>
         <Input
           id="staff-email"
           type="text"
@@ -98,7 +92,7 @@ function StaffSignInForm() {
           autoCapitalize="none"
           autoComplete="username"
           spellCheck={false}
-          placeholder="you@company.com or you@yourteam"
+          placeholder="you@company.com"
           aria-invalid={Boolean(form.formState.errors.email)}
           {...form.register('email')}
         />

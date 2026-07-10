@@ -25,8 +25,9 @@ export const StaffLoginSchema = z.object({
     .string()
     .trim()
     .toLowerCase()
-    .min(1, 'Email or mailbox address is required')
-    .regex(/^[^\s@]+@[^\s@]+$/, 'Enter your email or mailbox address'),
+    .min(1, 'Email is required')
+    // Accept a mailbox address (localpart@domain, no TLD) too — the server resolves it.
+    .regex(/^[^\s@]+@[^\s@]+$/, 'Enter a valid email'),
   password: z.string().min(1, 'Password is required'),
 });
 export type StaffLoginInput = z.infer<typeof StaffLoginSchema>;
