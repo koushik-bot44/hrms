@@ -15,9 +15,18 @@ export const MIN_PASSWORD_LENGTH = 8;
 // Requests
 // ---------------------------------------------------------------------------
 
-/** Staff sign-in: email + password. */
+/**
+ * Sign-in at /login: a login identifier + password. The identifier is a staff email OR an internal
+ * mailbox address (§8) like {@code arjun@anvicorp} — the latter has no TLD, so we accept any
+ * {@code localpart@domain} handle rather than a strict RFC email (the server resolves it).
+ */
 export const StaffLoginSchema = z.object({
-  email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, 'Email or mailbox address is required')
+    .regex(/^[^\s@]+@[^\s@]+$/, 'Enter your email or mailbox address'),
   password: z.string().min(1, 'Password is required'),
 });
 export type StaffLoginInput = z.infer<typeof StaffLoginSchema>;

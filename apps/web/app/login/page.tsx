@@ -86,12 +86,19 @@ function StaffSignInForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      <Field id="staff-email" label="Email" error={form.formState.errors.email?.message}>
+      <Field
+        id="staff-email"
+        label="Email or mailbox address"
+        error={form.formState.errors.email?.message}
+      >
         <Input
           id="staff-email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@company.com"
+          type="text"
+          inputMode="email"
+          autoCapitalize="none"
+          autoComplete="username"
+          spellCheck={false}
+          placeholder="you@company.com or you@yourteam"
           aria-invalid={Boolean(form.formState.errors.email)}
           {...form.register('email')}
         />
