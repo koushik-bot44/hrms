@@ -12,12 +12,26 @@ interface RequireRoleProps {
   roles?: UserRole[];
   /** Restrict to a principal kind (e.g. EMPLOYEE area). */
   actor?: Session['type'];
+  /**
+   * Also admit a credentialed EMPLOYEE (one with a mailbox), alongside the staff `roles`. Used by the
+   * shared internal mailbox (§8), which staff AND credentialed employees both reach; an uncredentialed
+   * employee still falls through and is bounced to their own area.
+   */
+  allowCredentialedEmployee?: boolean;
   children: React.ReactNode;
 }
 
-function isAllowed(session: Session, roles?: UserRole[], actor?: Session['type']): boolean {
+function isAllowed(
+  session: Session,
+  roles?: UserRole[],
+  actor?: Session['type'],
+  allowCredentialedEmployee?: boolean,
+): boolean {
   if (actor && session.type !== actor) {
     return false;
+  }
+  if (allowCredentialedEmployee && session.type === 'EMPLOYEE' && Boolean(session.mailAddress)) {
+    return true;
   }
   if (roles && roles.length > 0) {
     return session.type === 'USER' && roles.includes(session.role);
@@ -31,11 +45,11 @@ function isAllowed(session: Session, roles?: UserRole[], actor?: Session['type']
  * Authenticated-but-out-of-scope users are bounced to their own area. The server still enforces §6 —
  * this is for UX, not security.
  */
-export function RequireRole({ roles, actor, children }: RequireRoleProps) {
+export function RequireRole({ roles, actor, allowCredentialedEmployee, children }: RequireRoleProps) {
   const { session, status } = useAuth();
   const router = useRouter();
 
-  const allowed = session ? isAllowed(session, roles, actor) : false;
+  const allowed = session ? isAllowed(session, roles, actor, allowCredentialedEmployee) : false;
   const signInPath = actor === 'EMPLOYEE' ? '/employee/login' : '/login';
 
   React.useEffect(() => {
