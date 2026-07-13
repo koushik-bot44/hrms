@@ -48,7 +48,7 @@ export default function EmployeeLoginPage() {
           <div className="mb-1 flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <UserRound className="size-5" />
           </div>
-          <CardTitle className="text-lg">Employee sign-in</CardTitle>
+          <CardTitle className="text-lg">Onboarding employee sign-in</CardTitle>
           <CardDescription>
             Enter your full name and email and we&apos;ll send you a one-time code.
           </CardDescription>
