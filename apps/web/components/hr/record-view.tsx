@@ -86,11 +86,16 @@ export function RecordView({
               record.credentialsAssigned ? (
                 <MailboxAssigned
                   address={record.mailAddress}
+                  mailDomain={record.mailDomain}
                   employeeId={record.id}
                   personalEmail={record.email}
                 />
               ) : (
-                <AssignCredentialsDialog employeeId={record.id} personalEmail={record.email} />
+                <AssignCredentialsDialog
+                  employeeId={record.id}
+                  personalEmail={record.email}
+                  mailDomain={record.mailDomain}
+                />
               )
             ) : null}
           </div>
@@ -229,10 +234,12 @@ export function RecordView({
  */
 function MailboxAssigned({
   address,
+  mailDomain,
   employeeId,
   personalEmail,
 }: {
   address: string | null;
+  mailDomain: string | null;
   employeeId: string;
   personalEmail: string;
 }) {
@@ -249,6 +256,7 @@ function MailboxAssigned({
         mode="reset"
         employeeId={employeeId}
         personalEmail={personalEmail}
+        mailDomain={mailDomain}
         initialLocalPart={address ? (address.split('@')[0] ?? '') : ''}
       />
     </div>

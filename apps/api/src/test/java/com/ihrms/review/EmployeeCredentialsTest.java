@@ -138,6 +138,9 @@ class EmployeeCredentialsTest {
     assertThat(before.get("credentialsAssigned").asBoolean()).isFalse();
     assertThat(before.path("mailAddress").isNull() || before.path("mailAddress").isMissingNode())
         .isTrue();
+    // The record carries the COMPANY mail domain so the assign preview matches the address the server
+    // will build (localpart@mailDomain) — not a guess from the acting HR's own login email.
+    assertThat(before.get("mailDomain").asText()).isEqualTo("acme");
 
     assign(emp, Map.of("localPart", "arjun"));
 

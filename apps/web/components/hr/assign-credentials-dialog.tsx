@@ -41,11 +41,14 @@ import {
 export function AssignCredentialsDialog({
   employeeId,
   personalEmail,
+  mailDomain,
   mode = 'assign',
   initialLocalPart = '',
 }: {
   employeeId: string;
   personalEmail: string;
+  /** The company's mail domain (the address the server will actually create). */
+  mailDomain?: string | null;
   mode?: 'assign' | 'reset';
   /** For reset: pre-fill the existing mailbox name so HR keeps the same address by default. */
   initialLocalPart?: string;
@@ -56,8 +59,11 @@ export function AssignCredentialsDialog({
   const [open, setOpen] = React.useState(false);
   const [created, setCreated] = React.useState<{ address: string; password: string } | null>(null);
 
-  // Every mailbox in a company shares its domain — the acting HR's own address carries it.
-  const domain = session?.type === 'USER' ? (session.email.split('@')[1] ?? '') : '';
+  // Preview the address the server will ACTUALLY create — the company's mail domain (localpart@mailDomain).
+  // Only if it's somehow absent do we fall back to guessing from the acting HR's own login email domain,
+  // which is wrong whenever the HR's email domain differs from the company's configured mail domain.
+  const domain =
+    mailDomain || (session?.type === 'USER' ? (session.email.split('@')[1] ?? '') : '');
 
   const {
     register,

@@ -8,7 +8,9 @@ import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Form1Personal;
 import com.ihrms.domain.model.Form2Info;
 import com.ihrms.domain.model.Form3PrevEmployment;
+import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.GeneratedDocument;
+import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.Form1PersonalRepository;
 import com.ihrms.domain.repository.Form2InfoRepository;
@@ -40,6 +42,7 @@ public class EmployeeRecordAssembler {
   private final Form3PrevEmploymentRepository form3s;
   private final DocumentRepository documents;
   private final GeneratedDocumentRepository generated;
+  private final CompanyRepository companies;
   private final StorageService storage;
 
   public EmployeeRecordAssembler(
@@ -48,12 +51,14 @@ public class EmployeeRecordAssembler {
       Form3PrevEmploymentRepository form3s,
       DocumentRepository documents,
       GeneratedDocumentRepository generated,
+      CompanyRepository companies,
       StorageService storage) {
     this.form1s = form1s;
     this.form2s = form2s;
     this.form3s = form3s;
     this.documents = documents;
     this.generated = generated;
+    this.companies = companies;
     this.storage = storage;
   }
 
@@ -69,6 +74,8 @@ public class EmployeeRecordAssembler {
 
     boolean complete = reviewComplete(employee, f1, f2, f3, docs);
     boolean revealable = f1 != null || f2 != null || !f3.isEmpty();
+    String mailDomain =
+        companies.findById(employee.getCompanyId()).map(Company::getMailDomain).orElse(null);
 
     return new EmployeeRecordView(
         employee.getId(),
@@ -82,6 +89,7 @@ public class EmployeeRecordAssembler {
         revealable,
         employee.getCredentialsAssignedAt() != null,
         employee.getMailAddress(),
+        mailDomain,
         f1 == null ? null : FormMappers.form1View(f1, FormMappers.Mode.MASKED),
         f2 == null ? null : FormMappers.form2View(f2, employee.getEmployeeCode(), FormMappers.Mode.MASKED),
         f3.stream().map(e -> FormMappers.form3View(e, FormMappers.Mode.MASKED)).toList(),

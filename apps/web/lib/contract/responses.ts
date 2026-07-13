@@ -151,6 +151,7 @@ export type EmployeeRecord = Omit<
   | 'employeeCode'
   | 'dateOfJoining'
   | 'mailAddress'
+  | 'mailDomain'
   | 'form1'
   | 'form2'
   | 'form3'
@@ -162,6 +163,8 @@ export type EmployeeRecord = Omit<
   dateOfJoining: string | null;
   // Read-only mailbox state (§8, Stage 5): null until credentials are assigned (credentialsAssigned=false).
   mailAddress: string | null;
+  // The company's mail domain — drives the assign-mailbox preview so it matches the real address.
+  mailDomain: string | null;
   form1: Form1View | null;
   form2: Form2View | null;
   form3: Form3EntryView[];

@@ -82,6 +82,9 @@ public final class ReviewDtos {
       // the assigned address. The password/hash is NEVER exposed here — only via the one-time assign result.
       boolean credentialsAssigned,
       String mailAddress,
+      // The company's mail domain — so the HR "Assign mailbox" preview shows the address that will ACTUALLY
+      // be created (localpart@mailDomain), not a guess from the acting HR's own login email.
+      String mailDomain,
       Form1View form1,
       Form2View form2,
       List<Form3EntryView> form3,
