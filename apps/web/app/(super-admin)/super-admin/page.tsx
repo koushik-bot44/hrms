@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Archive, Building2, MoreHorizontal, RotateCcw, Trash2, XOctagon } from 'lucide-react';
 import type { CompanySummary } from '@/lib/contract';
@@ -33,17 +34,29 @@ import { cn } from '@/lib/utils';
 type View = 'active' | 'archived';
 
 export default function CompaniesPage() {
-  const [view, setView] = React.useState<View>('active');
+  // useSearchParams() needs a Suspense boundary on this statically-rendered route.
+  return (
+    <React.Suspense fallback={null}>
+      <CompaniesView />
+    </React.Suspense>
+  );
+}
+
+function CompaniesView() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // The URL query is the source of truth for the tab, so a dashboard drill-down (?view=archived) switches
+  // the view via SOFT navigation too — the old mount-only effect never re-ran on client navigation, so
+  // clicking the stat cards changed nothing.
+  const view: View = searchParams.get('view') === 'archived' ? 'archived' : 'active';
+  const setView = (next: View) =>
+    router.replace(next === 'archived' ? '/super-admin?view=archived' : '/super-admin', {
+      scroll: false,
+    });
+
   const [deleting, setDeleting] = React.useState<CompanySummary | null>(null);
   const [restoring, setRestoring] = React.useState<CompanySummary | null>(null);
   const [purging, setPurging] = React.useState<CompanySummary | null>(null);
-
-  // Drill-down from the dashboard: ?view=archived opens the Archived tab.
-  React.useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('view') === 'archived') {
-      setView('archived');
-    }
-  }, []);
 
   const active = useApiQuery(['companies'], listCompanies, { enabled: view === 'active' });
   const archived = useApiQuery(['companies', 'deleted'], listDeletedCompanies, {
