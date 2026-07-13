@@ -160,6 +160,36 @@ class EmployeeCredentialsTest {
   }
 
   @Test
+  void readOnlyAndOtherRolesCannotAssignResetOrRevealViaTheHrEndpoints() throws Exception {
+    Employee emp = approved(acme, hr1);
+    assign(emp, Map.of("localPart", "arjun")); // give it a mailbox so "reset" is exercised too
+
+    // Read-only viewers (Accountant, cross-company Accounts Admin) + the Manager share the record view but
+    // must NEVER assign/reset credentials (HR-only write) nor use the HR reveal endpoint. The Accountant /
+    // Accounts Admin keep their OWN audited reveal at /accountant/** (§2) — that is not this endpoint.
+    User accountant = user(acme, UserRole.ACCOUNTANT, "acct@acme");
+    User accountsAdmin = user(null, UserRole.ACCOUNTS_ADMIN, "aa@platform"); // companyId null, like Super Admin
+    User manager = user(acme, UserRole.MANAGER, "mgr@acme");
+
+    for (User u : new User[] {accountant, accountsAdmin, manager}) {
+      String t = token(u);
+      // Assign / reset mailbox credentials -> 403.
+      mvc.perform(
+              post("/employees/" + emp.getId() + "/credentials")
+                  .header("Authorization", "Bearer " + t)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(json.writeValueAsString(Map.of("localPart", "x"))))
+          .andExpect(status().isForbidden());
+      // HR reveal endpoint -> 403.
+      mvc.perform(post("/employees/" + emp.getId() + "/reveal").header("Authorization", "Bearer " + t))
+          .andExpect(status().isForbidden());
+    }
+
+    // The employee was NOT mutated by any of those denied calls — still the original mailbox.
+    assertThat(employees.findById(emp.getId()).orElseThrow().getMailAddress()).isEqualTo("arjun@acme");
+  }
+
+  @Test
   void onlyTheOnboardingHrAndOnlyAfterApprovalMayAssign() throws Exception {
     Employee mine = approved(acme, hr1);
     // A different HR (didn't onboard) -> 403.

@@ -11,7 +11,8 @@ import type {
   RouteToManagerResult,
   SectionStatus,
 } from '@/lib/contract';
-import { DOCUMENT_TYPE_LABELS } from '@/lib/contract';
+import { DOCUMENT_TYPE_LABELS, UserRole } from '@/lib/contract';
+import { useAuth } from '@/components/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,7 +45,13 @@ export function RecordView({
   onSendBack,
   onRouted,
 }: RecordViewProps) {
+  const { session } = useAuth();
   const canAct = editable && Boolean(onVerify) && Boolean(onSendBack);
+  // Assigning/resetting a mailbox is an HR-only WRITE (§8, Stage 5). Read-only viewers (Accountant,
+  // Accounts Admin) and the Manager share this record view — they must never see these controls (the API
+  // already 403s them; this stops the buttons even appearing). Reveal is separate: each role uses its own
+  // audited reveal endpoint via `onReveal`, so it is intentionally not gated here.
+  const viewerIsHr = session?.type === 'USER' && session.role === UserRole.HR;
   const f1 = revealed?.form1 ?? record.form1;
   const f2 = revealed?.form2 ?? record.form2;
   const f3 = revealed ? revealed.form3 : record.form3;
@@ -82,7 +89,7 @@ export function RecordView({
             {editable && onRouted ? (
               <RouteToManagerDialog employeeId={record.id} disabled={!record.reviewComplete} onRouted={onRouted} />
             ) : null}
-            {record.status === 'APPROVED' ? (
+            {viewerIsHr && record.status === 'APPROVED' ? (
               record.credentialsAssigned ? (
                 <MailboxAssigned
                   address={record.mailAddress}
