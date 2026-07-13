@@ -13,6 +13,7 @@ import type {
 } from '@/lib/contract';
 import { DOCUMENT_TYPE_LABELS } from '@/lib/contract';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
 import { RouteToManagerDialog } from '@/components/hr/route-to-manager-dialog';
@@ -82,7 +83,15 @@ export function RecordView({
               <RouteToManagerDialog employeeId={record.id} disabled={!record.reviewComplete} onRouted={onRouted} />
             ) : null}
             {record.status === 'APPROVED' ? (
-              <AssignCredentialsDialog employeeId={record.id} personalEmail={record.email} />
+              record.credentialsAssigned ? (
+                <MailboxAssigned
+                  address={record.mailAddress}
+                  employeeId={record.id}
+                  personalEmail={record.email}
+                />
+              ) : (
+                <AssignCredentialsDialog employeeId={record.id} personalEmail={record.email} />
+              )
             ) : null}
           </div>
         </CardHeader>
@@ -209,6 +218,39 @@ export function RecordView({
           </div>
         </section>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The mailbox-assigned state (§8, Stage 5): a status pill (Approved/Verified badge style) + the assigned
+ * address, replacing the primary "Assign mailbox" button once credentials exist. Re-issue stays reachable
+ * only via the demoted "Reset credentials" action — not the primary path.
+ */
+function MailboxAssigned({
+  address,
+  employeeId,
+  personalEmail,
+}: {
+  address: string | null;
+  employeeId: string;
+  personalEmail: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <Badge variant="success" title={address ?? undefined}>
+        <span className="size-1.5 rounded-full bg-current" aria-hidden />
+        Mailbox assigned
+      </Badge>
+      {address ? (
+        <span className="font-mono text-xs text-muted-foreground">{address}</span>
+      ) : null}
+      <AssignCredentialsDialog
+        mode="reset"
+        employeeId={employeeId}
+        personalEmail={personalEmail}
+        initialLocalPart={address ? (address.split('@')[0] ?? '') : ''}
+      />
     </div>
   );
 }

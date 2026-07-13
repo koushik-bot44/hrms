@@ -1802,6 +1802,8 @@ export interface components {
             status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             reviewComplete?: boolean;
             sensitiveRevealable?: boolean;
+            credentialsAssigned?: boolean;
+            mailAddress?: string;
             form1?: components["schemas"]["Form1View"];
             form2?: components["schemas"]["Form2View"];
             form3?: components["schemas"]["Form3EntryView"][];

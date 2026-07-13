@@ -1,6 +1,7 @@
 package com.ihrms.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -129,6 +130,33 @@ class EmployeeCredentialsTest {
   }
 
   @Test
+  void theRecordExposesReadOnlyMailboxStateAndNeverThePassword() throws Exception {
+    Employee emp = approved(acme, hr1);
+
+    // Before assignment: the HR view drives the "Assign mailbox" button — not assigned, no address.
+    JsonNode before = getRecord(emp);
+    assertThat(before.get("credentialsAssigned").asBoolean()).isFalse();
+    assertThat(before.path("mailAddress").isNull() || before.path("mailAddress").isMissingNode())
+        .isTrue();
+
+    assign(emp, Map.of("localPart", "arjun"));
+
+    // After assignment: the view flips to the "Mailbox assigned" pill + address. The password/hash is
+    // NEVER exposed on the record — only the one-time assign result echoes it (dev).
+    JsonNode after = getRecord(emp);
+    assertThat(after.get("credentialsAssigned").asBoolean()).isTrue();
+    assertThat(after.get("mailAddress").asText()).isEqualTo("arjun@acme");
+    assertThat(after.has("password")).isFalse();
+    assertThat(after.toString()).doesNotContain("passwordHash").doesNotContain("password");
+
+    // Reset (re-issue) keeps it assigned and reflects the new address.
+    assign(emp, Map.of("localPart", "arjun.k"));
+    JsonNode afterReset = getRecord(emp);
+    assertThat(afterReset.get("credentialsAssigned").asBoolean()).isTrue();
+    assertThat(afterReset.get("mailAddress").asText()).isEqualTo("arjun.k@acme");
+  }
+
+  @Test
   void onlyTheOnboardingHrAndOnlyAfterApprovalMayAssign() throws Exception {
     Employee mine = approved(acme, hr1);
     // A different HR (didn't onboard) -> 403.
@@ -156,6 +184,17 @@ class EmployeeCredentialsTest {
   }
 
   // --- helpers --------------------------------------------------------------
+
+  private JsonNode getRecord(Employee emp) throws Exception {
+    return json.readTree(
+        mvc.perform(
+                get("/employees/" + emp.getId() + "/record")
+                    .header("Authorization", "Bearer " + hr1Token))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
 
   private JsonNode assign(Employee emp, Map<String, String> body) throws Exception {
     return json.readTree(

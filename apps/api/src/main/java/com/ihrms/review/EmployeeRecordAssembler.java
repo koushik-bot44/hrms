@@ -80,6 +80,8 @@ public class EmployeeRecordAssembler {
         employee.getStatus(),
         complete,
         revealable,
+        employee.getCredentialsAssignedAt() != null,
+        employee.getMailAddress(),
         f1 == null ? null : FormMappers.form1View(f1, FormMappers.Mode.MASKED),
         f2 == null ? null : FormMappers.form2View(f2, employee.getEmployeeCode(), FormMappers.Mode.MASKED),
         f3.stream().map(e -> FormMappers.form3View(e, FormMappers.Mode.MASKED)).toList(),

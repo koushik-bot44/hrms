@@ -78,6 +78,10 @@ public final class ReviewDtos {
       EmployeeStatus status,
       boolean reviewComplete,
       boolean sensitiveRevealable,
+      // Read-only mailbox state (§8, Stage 5): whether internal credentials have been assigned and, if so,
+      // the assigned address. The password/hash is NEVER exposed here — only via the one-time assign result.
+      boolean credentialsAssigned,
+      String mailAddress,
       Form1View form1,
       Form2View form2,
       List<Form3EntryView> form3,

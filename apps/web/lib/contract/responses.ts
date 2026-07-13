@@ -148,11 +148,20 @@ export type RecordGeneratedDocument = Omit<Required<Schemas['RecordGeneratedDocu
 
 export type EmployeeRecord = Omit<
   Required<Schemas['EmployeeRecordView']>,
-  'employeeCode' | 'dateOfJoining' | 'form1' | 'form2' | 'form3' | 'documents' | 'generatedDocuments'
+  | 'employeeCode'
+  | 'dateOfJoining'
+  | 'mailAddress'
+  | 'form1'
+  | 'form2'
+  | 'form3'
+  | 'documents'
+  | 'generatedDocuments'
 > & {
   // employeeCode is null until approval (§5); dateOfJoining may be absent on legacy rows.
   employeeCode: string | null;
   dateOfJoining: string | null;
+  // Read-only mailbox state (§8, Stage 5): null until credentials are assigned (credentialsAssigned=false).
+  mailAddress: string | null;
   form1: Form1View | null;
   form2: Form2View | null;
   form3: Form3EntryView[];

@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { KeyRound } from 'lucide-react';
+import { KeyRound, RotateCcw } from 'lucide-react';
 import {
   AssignCredentialsSchema,
   previewAddress,
@@ -31,15 +31,26 @@ import {
  * HR assigns an APPROVED employee internal credentials (§8, Stage 5): a mailbox address + password.
  * The address forms `localpart@companyDomain` (the HR's own domain); the password is pre-filled with a
  * generated one (the default) but can be typed. On success the credentials are shown once and emailed to
- * the employee's personal address. Opening it again re-issues.
+ * the employee's personal address.
+ *
+ * Two modes over the SAME endpoint (re-issue = re-POST): {@code assign} is first assignment (the primary
+ * button, shown only while the employee has no mailbox yet); {@code reset} is the demoted recovery action
+ * shown once a mailbox exists — it regenerates the password and re-emails it (the current one stops
+ * working), so its copy makes clear this is recovery, not a fresh assignment.
  */
 export function AssignCredentialsDialog({
   employeeId,
   personalEmail,
+  mode = 'assign',
+  initialLocalPart = '',
 }: {
   employeeId: string;
   personalEmail: string;
+  mode?: 'assign' | 'reset';
+  /** For reset: pre-fill the existing mailbox name so HR keeps the same address by default. */
+  initialLocalPart?: string;
 }) {
+  const isReset = mode === 'reset';
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = React.useState(false);
@@ -65,8 +76,9 @@ export function AssignCredentialsDialog({
   const openChange = (next: boolean) => {
     setOpen(next);
     if (next) {
-      // Generate is the default — pre-fill a strong password (HR may overwrite it).
-      reset({ localPart: '', password: generatePassword() });
+      // Generate is the default — pre-fill a strong password (HR may overwrite it). For reset, keep the
+      // existing mailbox name so the address stays the same unless HR deliberately changes it.
+      reset({ localPart: isReset ? initialLocalPart : '', password: generatePassword() });
       setCreated(null);
     }
   };
@@ -74,7 +86,8 @@ export function AssignCredentialsDialog({
   const mutation = useApiMutation(
     (body: AssignCredentialsInput) => assignEmployeeCredentials(employeeId, body),
     {
-      successMessage: (result) => `Mailbox ${result.mailAddress} assigned`,
+      successMessage: (result) =>
+        isReset ? `New password sent for ${result.mailAddress}` : `Mailbox ${result.mailAddress} assigned`,
       onSuccess: (result, variables) => {
         setCreated({ address: result.mailAddress, password: variables.password });
         void queryClient.invalidateQueries({ queryKey: ['hr-record', employeeId] });
@@ -90,24 +103,47 @@ export function AssignCredentialsDialog({
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
-          <KeyRound className="size-4" />
-          Assign mailbox
-        </Button>
+        {isReset ? (
+          // Demoted recovery action — a quiet link, not a primary button.
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="size-3.5" />
+            Reset credentials
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" size="sm">
+            <KeyRound className="size-4" />
+            Assign mailbox
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Assign mailbox credentials</DialogTitle>
+          <DialogTitle>{isReset ? 'Reset mailbox credentials' : 'Assign mailbox credentials'}</DialogTitle>
           <DialogDescription>
-            Give this approved employee an internal mailbox + password. It is emailed to their personal
-            address ({personalEmail}); they can then sign in and message you.
+            {isReset ? (
+              <>
+                Generate a <span className="font-medium text-foreground">new password</span> and re-email it
+                to {personalEmail}. This is for recovery — the employee&rsquo;s current password will stop
+                working. Keep the mailbox name to keep the same address.
+              </>
+            ) : (
+              <>
+                Give this approved employee an internal mailbox + password. It is emailed to their personal
+                address ({personalEmail}); they can then sign in and message you.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         {created ? (
           <div className="space-y-4">
             <CredentialNotice
-              title="Mailbox assigned"
+              title={isReset ? 'New password issued' : 'Mailbox assigned'}
               address={created.address}
               password={created.password}
               onDismiss={() => setCreated(null)}
@@ -175,8 +211,14 @@ export function AssignCredentialsDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                <KeyRound />
-                {isSubmitting ? 'Assigning…' : 'Assign mailbox'}
+                {isReset ? <RotateCcw /> : <KeyRound />}
+                {isReset
+                  ? isSubmitting
+                    ? 'Resetting…'
+                    : 'Reset credentials'
+                  : isSubmitting
+                    ? 'Assigning…'
+                    : 'Assign mailbox'}
               </Button>
             </div>
           </form>
