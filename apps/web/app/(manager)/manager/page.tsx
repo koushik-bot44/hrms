@@ -13,11 +13,14 @@ export default function ManagerApprovalsPage() {
         title="Manager workspace"
         description="Your team at a glance — approve verified employees and review past decisions."
       />
-      <RoleDashboard />
+      {/* Stats up top, then approvals, then the activity feed below — both dashboard sections share the
+          one deduped ['dashboard'] query. */}
+      <RoleDashboard show="stats" />
       {/* ApprovalsWorkspace reads the query string (tab/status) → needs a Suspense boundary. */}
       <Suspense>
         <ApprovalsWorkspace />
       </Suspense>
+      <RoleDashboard show="activity" />
     </div>
   );
 }
