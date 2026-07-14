@@ -94,7 +94,7 @@ export function ClockCard() {
             className="w-full sm:w-auto"
           >
             <LogOut />
-            {outMut.isPending ? 'Clocking out…' : 'Clock Out'}
+            {outMut.isPending ? 'Logging out…' : 'Log Out'}
           </Button>
         ) : (
           <Button
@@ -104,7 +104,7 @@ export function ClockCard() {
             className="w-full sm:w-auto"
           >
             <LogIn />
-            {inMut.isPending ? 'Clocking in…' : 'Clock In'}
+            {inMut.isPending ? 'Logging in…' : 'Log In'}
           </Button>
         )}
       </CardContent>
