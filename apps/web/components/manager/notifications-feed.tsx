@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Bell,
+  CalendarDays,
   CheckCheck,
   ClipboardCheck,
   FileCheck2,
@@ -28,6 +29,7 @@ const ICONS: Record<string, LucideIcon> = {
   APPROVAL_REQUESTED: ClipboardCheck,
   EMPLOYEE_APPROVED: ThumbsUp,
   EMPLOYEE_REJECTED: ThumbsDown,
+  LEAVE_REQUESTED: CalendarDays,
 };
 
 function message(n: NotificationItem): string {
@@ -43,6 +45,8 @@ function message(n: NotificationItem): string {
       return `${who} was approved`;
     case 'EMPLOYEE_REJECTED':
       return `${who} was rejected`;
+    case 'LEAVE_REQUESTED':
+      return `${who} requested leave`;
     default:
       return `Update for ${who}`;
   }

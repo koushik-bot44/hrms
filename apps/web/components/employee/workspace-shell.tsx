@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, Inbox } from 'lucide-react';
+import { CalendarDays, Clock, Inbox } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { AppShell, type NavItem } from '@/components/app-shell';
 
@@ -14,6 +14,7 @@ import { AppShell, type NavItem } from '@/components/app-shell';
 const nav: NavItem[] = [
   { label: 'Mailbox', href: '/mail', icon: Inbox },
   { label: 'Attendance', href: '/workspace/attendance', icon: Clock },
+  { label: 'Leave', href: '/workspace/leave', icon: CalendarDays },
 ];
 
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {

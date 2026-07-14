@@ -8,3 +8,4 @@ export * from './review';
 export * from './manager';
 export * from './accountant';
 export * from './mail';
+export * from './leave';

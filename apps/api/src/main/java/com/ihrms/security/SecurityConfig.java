@@ -89,6 +89,13 @@ public class SecurityConfig {
                     .hasRole("MANAGER")
                     .requestMatchers("/attendance/**")
                     .authenticated()
+                    // Leave (§8b): /team/** decisions + queue are MANAGER-only (approver-scoped in the
+                    // service); the employee submit/history/cancel endpoints are open to any authenticated
+                    // principal, and the service refuses a non-employee / uncredentialed employee with 403.
+                    .requestMatchers("/leave/team/**")
+                    .hasRole("MANAGER")
+                    .requestMatchers("/leave/**")
+                    .authenticated()
                     .anyRequest()
                     .authenticated())
         // Hardened response headers (§6): nosniff, frame DENY, HSTS (prod/HTTPS), no-referrer.

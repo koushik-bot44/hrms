@@ -89,8 +89,25 @@ export const NotificationType = {
   APPROVAL_REQUESTED: 'APPROVAL_REQUESTED',
   EMPLOYEE_APPROVED: 'EMPLOYEE_APPROVED',
   EMPLOYEE_REJECTED: 'EMPLOYEE_REJECTED',
+  LEAVE_REQUESTED: 'LEAVE_REQUESTED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
+
+// Leave requests (§8b).
+export const LeaveType = {
+  CASUAL: 'CASUAL',
+  SICK: 'SICK',
+  UNPAID: 'UNPAID',
+} as const;
+export type LeaveType = (typeof LeaveType)[keyof typeof LeaveType];
+
+export const LeaveStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type LeaveStatus = (typeof LeaveStatus)[keyof typeof LeaveStatus];
 
 /**
  * Registry of every shared enum, keyed by name. The API's enum-parity test iterates
@@ -105,6 +122,8 @@ export const SHARED_ENUMS = {
   GeneratedDocumentKind,
   ApprovalStatus,
   NotificationType,
+  LeaveType,
+  LeaveStatus,
 } as const;
 
 export type SharedEnumName = keyof typeof SHARED_ENUMS;

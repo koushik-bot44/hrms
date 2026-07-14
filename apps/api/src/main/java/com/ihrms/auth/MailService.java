@@ -98,6 +98,18 @@ public class MailService {
     log.info("Welcome email dispatched to {} (ID {})", email, employeeCode);
   }
 
+  /** Leave decision notice to the employee (§8b) — the employee has no notification bell. */
+  public void sendLeaveDecision(String email, boolean approved, String note) {
+    String outcome = approved ? "approved" : "rejected";
+    String body =
+        "Your leave request was " + outcome + (note == null || note.isBlank() ? "." : ". Note: " + note);
+    if (noSmtp()) {
+      log.warn("[DEV LEAVE] {} -> {}  (no SMTP configured; logging only)", email, body);
+      return;
+    }
+    log.info("Leave decision email dispatched to {} ({})", email, outcome);
+  }
+
   private boolean noSmtp() {
     String host = props.mail() == null ? null : props.mail().host();
     return host == null || host.isBlank();

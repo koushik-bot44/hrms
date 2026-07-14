@@ -3,6 +3,7 @@ import type {
   ApprovalStatus,
   DocumentStatus,
   EmployeeStatus,
+  LeaveStatus,
   SectionStatus,
 } from '@/lib/contract';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -14,7 +15,12 @@ import { cn } from '@/lib/utils';
  * enum gains/renames a member, this fails to compile until updated. Color roles are
  * assigned per status value so the same status always reads the same.
  */
-type StatusValue = EmployeeStatus | DocumentStatus | SectionStatus | ApprovalStatus;
+type StatusValue =
+  | EmployeeStatus
+  | DocumentStatus
+  | SectionStatus
+  | ApprovalStatus
+  | LeaveStatus;
 type Tone = NonNullable<BadgeProps['variant']>;
 
 const STATUS_MAP: Record<StatusValue, { label: string; tone: Tone }> = {
@@ -33,6 +39,8 @@ const STATUS_MAP: Record<StatusValue, { label: string; tone: Tone }> = {
   DRAFT: { label: 'Draft', tone: 'neutral' },
   // ApprovalStatus extras
   PENDING: { label: 'Pending', tone: 'warning' },
+  // LeaveStatus extra (§8b) — PENDING/APPROVED/REJECTED reuse the values above.
+  CANCELLED: { label: 'Cancelled', tone: 'neutral' },
 };
 
 export interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {

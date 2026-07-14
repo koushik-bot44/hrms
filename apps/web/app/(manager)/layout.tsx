@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Bell, ClipboardCheck, Clock } from 'lucide-react';
+import { Bell, CalendarDays, ClipboardCheck, Clock } from 'lucide-react';
 import { UserRole } from '@/lib/contract';
 import { AppShell, type NavItem } from '@/components/app-shell';
 import { RequireRole } from '@/components/require-role';
@@ -10,6 +10,7 @@ import { RequireRole } from '@/components/require-role';
 const nav: NavItem[] = [
   { label: 'Approvals', href: '/manager', icon: ClipboardCheck },
   { label: 'Attendance', href: '/manager/attendance', icon: Clock },
+  { label: 'Leave', href: '/manager/leave', icon: CalendarDays },
   { label: 'Notifications', href: '/manager/notifications', icon: Bell },
 ];
 

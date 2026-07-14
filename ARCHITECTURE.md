@@ -231,8 +231,10 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
   re-upload)_, `REJECTED`
 - **GeneratedDocumentKind**: `FORM1`, `FORM2`, `FORM3`, `FORM4_MANIFEST`, `MERGED`
 - **ApprovalStatus**: `PENDING`, `APPROVED`, `REJECTED`
+- **LeaveType** _(§8b)_: `CASUAL`, `SICK`, `UNPAID`
+- **LeaveStatus** _(§8b)_: `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`
 - **NotificationType**: `EMPLOYEE_ONBOARDED`, `EMPLOYEE_SUBMITTED`, `APPROVAL_REQUESTED`,
-  `EMPLOYEE_APPROVED`, `EMPLOYEE_REJECTED`
+  `EMPLOYEE_APPROVED`, `EMPLOYEE_REJECTED`, `LEAVE_REQUESTED` _(§8b — Manager bell on a leave submission)_
 
 ---
 
@@ -496,6 +498,37 @@ attendance. **View-only in v1** — no editing or correction of past punches.
   generic leave prompt — a nudge only; its text isn't customizable and leaving can't be prevented.
 - **Audit:** every punch is audited `ATTENDANCE_CLOCK_IN` / `ATTENDANCE_CLOCK_OUT` with `companyId` set.
   `attendance_sessions` carries a denormalized `company_id` so every query filters by tenant.
+
+---
+
+## 8b. Leave requests
+
+A credentialed employee requests time off from the portal (`/workspace`); the request routes to the
+**Manager who approved them** — the Manager on the employee's onboarding-HR's team — who approves or rejects
+it. **v1 is request → route → decide: there are NO leave balances / quota / accrual** (history only;
+balances are a future feature).
+
+- **Who can request:** only a **credentialed** employee (the `/workspace` principal — `mailAddress`
+  assigned). An OTP-only onboarding employee has no leave → `403` on every leave endpoint.
+- **Routing (reuses the approval resolution):** the approver is `employee.onboardingHr → that HR's team →
+  team.managerUser` — the SAME Manager who approved the employee. There is **no** company-level manager; if
+  the team has no Manager yet, the request is refused (`409`). The resolved `managerUserId` is stored on the
+  request, and the Manager lists/decides by it (mirroring `ApprovalRequest`).
+- **Request:** `startDate`, `endDate` (dates, not times), `leaveType` (`CASUAL` | `SICK` | `UNPAID`),
+  `reason`. `endDate >= startDate` (else `400`). Overlapping requests are allowed in v1 (no conflict
+  detection).
+- **Lifecycle:** `PENDING → APPROVED | REJECTED`. A Manager decision may carry a note (**required on
+  reject**). The employee may **cancel their own PENDING** request (→ `CANCELLED`); once decided it can't be
+  cancelled.
+- **Notifications:** leave is low-frequency and needs a decision, so — unlike attendance — it **does** use
+  the notification model. On submit the **Manager** gets a real bell entry (`LEAVE_REQUESTED`). On decision
+  the **employee** (who has no notification inbox) sees the outcome + note in their own **leave history** and
+  is emailed (dev-logged, like the welcome email) — the existing employee-facing channel.
+- **Scope:** an employee sees ONLY their own requests; a Manager sees ONLY his team-scope requests (those
+  routed to him) and can decide only the requests he is the resolved approver for — cross-team / cross-company
+  is denied. Every action is audited `LEAVE_REQUESTED` / `LEAVE_APPROVED` / `LEAVE_REJECTED` /
+  `LEAVE_CANCELLED` with `companyId` set; `leave_requests` carries a denormalized `company_id` so every query
+  filters by tenant.
 
 ---
 

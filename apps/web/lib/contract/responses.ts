@@ -195,6 +195,36 @@ export type AssignCredentialsResult = Omit<Required<Schemas['AssignCredentialsRe
   password: string | null;
 };
 
+// --- Leave (§8b) -----------------------------------------------------------
+
+/** The employee's own leave request; decision fields are null until decided. */
+export type LeaveRequest = Omit<
+  Required<Schemas['LeaveRequestView']>,
+  'decisionNote' | 'decidedAt'
+> & {
+  decisionNote: string | null;
+  decidedAt: string | null;
+};
+
+/** A row in the Manager's leave queue — carries the employee's identity. */
+export type TeamLeaveRow = Omit<
+  Required<Schemas['TeamLeaveRow']>,
+  'employeeCode' | 'employeeName' | 'decisionNote' | 'decidedAt'
+> & {
+  employeeCode: string | null;
+  employeeName: string | null;
+  decisionNote: string | null;
+  decidedAt: string | null;
+};
+
+export type LeaveMinePage = Omit<Required<Schemas['LeaveMinePage']>, 'content'> & {
+  content: LeaveRequest[];
+};
+
+export type TeamLeavePage = Omit<Required<Schemas['TeamLeavePage']>, 'content'> & {
+  content: TeamLeaveRow[];
+};
+
 // --- Attendance (§8a) ------------------------------------------------------
 
 /** Button state + today/week totals; {@code openSince} is null when not clocked in. */

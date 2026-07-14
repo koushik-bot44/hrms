@@ -6,5 +6,7 @@ public enum NotificationType {
   EMPLOYEE_SUBMITTED,
   APPROVAL_REQUESTED,
   EMPLOYEE_APPROVED,
-  EMPLOYEE_REJECTED
+  EMPLOYEE_REJECTED,
+  // §8b — a Manager bell entry when one of his team's employees submits a leave request.
+  LEAVE_REQUESTED
 }
