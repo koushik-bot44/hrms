@@ -41,7 +41,11 @@ const COLUMNS: ColumnDef<AuditLogEntry>[] = [
       row.original.targetType ? (
         <span className="text-sm">
           {row.original.targetType}
-          {row.original.targetId ? (
+          {/* Prefer the resolved name (e.g. the employee's full name); fall back to the short id when the
+              target has no human label (e.g. a mail thread). */}
+          {row.original.targetLabel ? (
+            <span className="text-muted-foreground"> · {row.original.targetLabel}</span>
+          ) : row.original.targetId ? (
             <span className="text-muted-foreground"> ·{row.original.targetId.slice(-6)}</span>
           ) : null}
         </span>
