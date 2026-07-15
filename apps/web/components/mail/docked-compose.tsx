@@ -137,7 +137,7 @@ export function DockedCompose({
         'fixed z-40 flex flex-col overflow-hidden border bg-card shadow-2xl',
         maximised
           ? 'inset-3 rounded-lg md:inset-10'
-          : 'bottom-0 right-3 w-[min(30rem,calc(100vw-1.5rem))] rounded-t-lg md:right-6',
+          : 'bottom-0 right-3 w-[min(36rem,calc(100vw-1.5rem))] rounded-t-lg md:right-6',
       )}
     >
       {/* Title bar (click to toggle minimise) */}
@@ -163,7 +163,7 @@ export function DockedCompose({
         <div
           className={cn(
             'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3',
-            !maximised && 'max-h-[70vh]',
+            !maximised && 'max-h-[82vh]',
           )}
         >
           {state.mode === 'new' ? (
@@ -240,7 +240,7 @@ export function DockedCompose({
             placeholder="Write your message…"
             className={cn(
               'w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm',
-              maximised ? 'min-h-40' : 'min-h-28',
+              maximised ? 'min-h-56' : 'min-h-44',
               'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             )}
           />
