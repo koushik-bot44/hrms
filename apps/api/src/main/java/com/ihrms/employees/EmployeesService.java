@@ -7,6 +7,7 @@ import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
 import com.ihrms.config.AppProperties;
 import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Team;
@@ -177,7 +178,11 @@ public class EmployeesService {
         (root, q, cb) -> {
           List<Predicate> p = new ArrayList<>();
           p.add(cb.equal(root.get("companyId"), companyId));
-          p.add(cb.equal(root.get("onboardingHrId"), actor.userId())); // own onboarded only (§6)
+          // HR sees only their own onboarded employees (§6); a COMPANY_ADMIN sees the whole company.
+          // No other role reaches this method (URL rule + @PreAuthorize gate it to HR / COMPANY_ADMIN).
+          if (actor.role() == UserRole.HR) {
+            p.add(cb.equal(root.get("onboardingHrId"), actor.userId()));
+          }
           if (status != null) {
             p.add(cb.equal(root.get("status"), status));
           }

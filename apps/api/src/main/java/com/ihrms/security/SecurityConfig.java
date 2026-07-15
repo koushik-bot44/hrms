@@ -62,6 +62,17 @@ public class SecurityConfig {
                     .hasRole("SUPER_ADMIN")
                     .requestMatchers("/teams/**")
                     .hasRole("COMPANY_ADMIN")
+                    // Mailbox credentials (§6): a COMPANY_ADMIN may assign/reset for ANY approved
+                    // employee in their company, alongside the onboarding HR. That needs the employee
+                    // LIST (company-wide search) + the READ record + the credentials write opened to
+                    // COMPANY_ADMIN too; the service scopes each to the actor's own company. Everything
+                    // else under /employees/** (onboard, verify, route, reveal, lookup) stays HR-only.
+                    .requestMatchers(HttpMethod.GET, "/employees")
+                    .hasAnyRole("HR", "COMPANY_ADMIN")
+                    .requestMatchers(HttpMethod.GET, "/employees/*/record")
+                    .hasAnyRole("HR", "COMPANY_ADMIN")
+                    .requestMatchers(HttpMethod.POST, "/employees/*/credentials")
+                    .hasAnyRole("HR", "COMPANY_ADMIN")
                     .requestMatchers("/employees/**")
                     .hasRole("HR")
                     .requestMatchers("/me/onboarding/**")

@@ -42,8 +42,13 @@ public class EmployeesController {
     return employees.onboard(body, actor, request.getRemoteAddr());
   }
 
-  /** The HR's onboarding queue: own onboarded employees, search (name/email) + status, paginated. */
+  /**
+   * The employee list: for HR their own onboarded queue; for a COMPANY_ADMIN the whole company (§6) —
+   * so the admin can find any approved employee to manage their mailbox. Search (name/email/ID) +
+   * status, paginated. Overrides the class-level HR-only rule.
+   */
   @GetMapping
+  @PreAuthorize("hasAnyRole('HR','COMPANY_ADMIN')")
   public EmployeePage list(
       @RequestParam(required = false) String search,
       @RequestParam(required = false) EmployeeStatus status,

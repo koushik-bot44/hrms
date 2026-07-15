@@ -74,7 +74,9 @@ public class EmployeeCredentialsService {
   @Transactional
   public AssignCredentialsResult assign(
       IhrmsPrincipal.User actor, String employeeId, AssignCredentialsRequest input, String ip) {
-    // HR access gate (§6): only the acting HR's OWN onboarded employee, same company.
+    // Access gate (§6): the acting HR's OWN onboarded employee, OR a COMPANY_ADMIN of the same
+    // company (company-wide). canAccessEmployee already encodes exactly that; the URL rule +
+    // @PreAuthorize keep every other role off this endpoint.
     authz.assertCanAccessEmployee(actor, employeeId);
     Employee employee =
         employees

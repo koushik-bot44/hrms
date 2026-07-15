@@ -40,7 +40,11 @@ public class ReviewController {
     this.credentials = credentials;
   }
 
+  // Reading a record is open to the onboarding HR OR the employee's COMPANY_ADMIN (same company) so
+  // the admin's employee view can reach it; the service (canAccessEmployee) scopes it. Overrides the
+  // class-level HR-only rule.
   @GetMapping("/{id}/record")
+  @PreAuthorize("hasAnyRole('HR','COMPANY_ADMIN')")
   public EmployeeRecordView record(
       @PathVariable String id,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
@@ -97,9 +101,12 @@ public class ReviewController {
 
   /**
    * Assign (or re-issue) an APPROVED employee internal credentials (§8, Stage 5): a mailbox address +
-   * password, emailed to their personal address. HR-only, own onboarded employee.
+   * password, emailed to their personal address. Allowed for the employee's ONBOARDING HR OR a
+   * COMPANY_ADMIN of the same company (§6) — the service enforces that scope via canAccessEmployee.
+   * Overrides the class-level HR-only rule.
    */
   @PostMapping("/{id}/credentials")
+  @PreAuthorize("hasAnyRole('HR','COMPANY_ADMIN')")
   @ResponseStatus(HttpStatus.CREATED)
   public AssignCredentialsResult assignCredentials(
       @PathVariable String id,

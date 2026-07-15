@@ -177,12 +177,14 @@ class EmployeesApiTest {
   }
 
   @Test
-  void nonHrIsForbidden() throws Exception {
-    String adminToken =
+  void nonHrNonAdminIsForbiddenFromTheEmployeeList() throws Exception {
+    // The list is HR (own onboarded) + COMPANY_ADMIN (company-wide, §6). A MANAGER — like any other
+    // role — is denied. (COMPANY_ADMIN's company-wide access is covered in EmployeeCredentialsTest.)
+    String managerToken =
         tokens.issueAccess(
             new IhrmsPrincipal.User(
-                "ca-1", "ca@acme.test", "CA", UserRole.COMPANY_ADMIN, companyId, null));
-    mvc.perform(get("/employees").header("Authorization", "Bearer " + adminToken))
+                "mgr-1", "mgr@acme.test", "Mgr", UserRole.MANAGER, companyId, null));
+    mvc.perform(get("/employees").header("Authorization", "Bearer " + managerToken))
         .andExpect(status().isForbidden());
   }
 

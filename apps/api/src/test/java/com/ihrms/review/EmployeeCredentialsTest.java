@@ -32,7 +32,8 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * HR assigns an APPROVED employee internal credentials (§8, Stage 5): a mailbox address + password
  * (typed OR generated), emailed to their personal address; the employee can then sign in at {@code
- * /login}. Scoped to the acting HR's own onboarded employee; audited.
+ * /login}. Allowed for the onboarding HR (own onboarded) OR a COMPANY_ADMIN of the same company
+ * (company-wide, §6); every other role is denied. Audited.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -214,6 +215,96 @@ class EmployeeCredentialsTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("localPart", "p"))))
         .andExpect(status().isConflict());
+  }
+
+  @Test
+  void companyAdminAssignsAndResetsAnyApprovedEmployeeInTheirCompany() throws Exception {
+    // Onboarded by hr1; the acting admin is NOT the onboarding HR -> proves company-wide scope (§6).
+    Employee emp = approved(acme, hr1);
+    User admin = user(acme, UserRole.COMPANY_ADMIN, "admin@acme");
+    String adminToken = token(admin);
+
+    // The admin finds the employee in the COMPANY-WIDE list (not limited to own-onboarded like HR).
+    JsonNode list =
+        json.readTree(
+            mvc.perform(
+                    get("/employees")
+                        .param("search", "Arjun")
+                        .param("status", "APPROVED")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(list.get("totalElements").asInt()).isEqualTo(1);
+
+    // Assign a mailbox -> 201: address formed, hashed (never plaintext stored), emailed, audited.
+    JsonNode result =
+        json.readTree(
+            mvc.perform(
+                    post("/employees/" + emp.getId() + "/credentials")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("localPart", "arjun"))))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(result.get("mailAddress").asText()).isEqualTo("arjun@acme");
+    assertThat(result.get("emailedTo").asText()).isEqualTo(emp.getEmail());
+    String password = result.get("password").asText();
+    assertThat(password).isNotBlank();
+    assertThat(auditLogs.findByAction("EMPLOYEE_CREDENTIALS_ASSIGNED")).hasSize(1);
+
+    Employee saved = employees.findById(emp.getId()).orElseThrow();
+    assertThat(saved.getMailAddress()).isEqualTo("arjun@acme");
+    assertThat(saved.getPasswordHash()).isNotBlank().isNotEqualTo(password);
+
+    // The admin can read the record (company-scoped) — it shows the mailbox as assigned, no password.
+    JsonNode record =
+        json.readTree(
+            mvc.perform(
+                    get("/employees/" + emp.getId() + "/record")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(record.get("credentialsAssigned").asBoolean()).isTrue();
+    assertThat(record.get("mailAddress").asText()).isEqualTo("arjun@acme");
+    assertThat(record.toString()).doesNotContain("passwordHash").doesNotContain("password");
+
+    // ...and RESET (re-issue) it -> new address, re-emailed, audited again.
+    mvc.perform(
+            post("/employees/" + emp.getId() + "/credentials")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("localPart", "arjun.k"))))
+        .andExpect(status().isCreated());
+    assertThat(employees.findById(emp.getId()).orElseThrow().getMailAddress()).isEqualTo("arjun.k@acme");
+    assertThat(auditLogs.findByAction("EMPLOYEE_CREDENTIALS_ASSIGNED")).hasSize(2);
+  }
+
+  @Test
+  void aCompanyAdminOfAnotherCompanyCannotAssign() throws Exception {
+    Employee emp = approved(acme, hr1);
+    String beta = company("BETA", "beta");
+    User betaAdmin = user(beta, UserRole.COMPANY_ADMIN, "admin@beta");
+
+    // Passes the role gate (is a COMPANY_ADMIN) but fails the service scope (different company) -> 403.
+    mvc.perform(
+            post("/employees/" + emp.getId() + "/credentials")
+                .header("Authorization", "Bearer " + token(betaAdmin))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("localPart", "x"))))
+        .andExpect(status().isForbidden());
+    // ...and cannot read the record either (the read deliberately 404s out-of-scope, anti-enumeration).
+    mvc.perform(
+            get("/employees/" + emp.getId() + "/record")
+                .header("Authorization", "Bearer " + token(betaAdmin)))
+        .andExpect(status().isNotFound());
+
+    assertThat(employees.findById(emp.getId()).orElseThrow().getMailAddress()).isNull();
   }
 
   // --- helpers --------------------------------------------------------------

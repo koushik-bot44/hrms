@@ -37,7 +37,7 @@ Super Admin
 |------|-------|--------|
 | **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **provision the single Accounts Admin**; **archive (soft-delete) a company and restore it**; **manage teams in any company** (create / rename / reassign HR + Manager + Accountant) and **onboard employees into any company** (selecting company → team → HR); view **all** companies' audit logs (separated per company), including archived companies'. |
 | **Accounts Admin** | Entire portal — **read-only** | A central, cross-company **viewer** (`companyId = null`, like Super Admin but never writes). Sees **approved** employees across **all** companies and their **full records** (the four forms + documents/PDFs) with sensitive fields **masked by default** and an **audited reveal** — the exact HR mechanism; and an **approval-only** audit trail across companies. **No onboarding / verify / approve / edit / archive / delete / provisioning — GET-only.** In-flight (non-approved) employees are **not** visible. **Exactly one** may exist; provisioned by Super Admin. |
-| **Company Admin** | One company | Create teams and assign the team's HR, Manager and Accountant (one each); view **own company's** audit logs. |
+| **Company Admin** | One company | Create teams and assign the team's HR, Manager and Accountant (one each); **assign/reset the mailbox credentials of any APPROVED employee in the company** (§6, alongside the onboarding HR); view **own company's** audit logs. |
 | **HR** | Own team / own onboarded employees | Trigger onboarding (email + unique ID); look up an employee by ID and see all their forms/documents; verify documents; route the approval request to the team's Manager. |
 | **Manager** | Own team | Workspace inbox/notifications (who was onboarded, who was verified, pending approvals); **approve** verified employees. Approval is the **final step** _[parked: post-approval actions]_. |
 | **Accountant** | Own team — **read-only** | A **team-scoped** viewer (a staff `User` with a `teamId`, like HR/Manager, but never writes). Sees the **approved** employees of **its own team** (those onboarded by that team's HR) and their **full records** — masked by default with the same **audited reveal** as HR — plus an **approval-only** audit trail for **its team**. **No writes — GET-only.** Cannot see other teams' or other companies' employees. |
@@ -262,8 +262,11 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
     (`companyId = null`) that may only issue GET/read operations, and only over **approved**
     employees + their records + an approval-only audit view. No handler that mutates state (onboard,
     verify, approve, edit, archive, purge, provision, …) accepts an Accounts Admin.
-  - Company Admin → only their `companyId`.
-  - HR → only employees they onboarded (`onboardingHrId == self`) within their company.
+  - Company Admin → only their `companyId` — but **company-wide** within it: may read **any** employee's
+    record in the company and **assign/reset any APPROVED employee's mailbox credentials** (Stage 5),
+    alongside the onboarding HR. (Verify / route-to-Manager / reveal remain HR-only.)
+  - HR → only employees they onboarded (`onboardingHrId == self`) within their company — including
+    assigning/resetting their mailbox credentials (Stage 5).
   - Manager → only employees in their team's scope (onboarded by their team's HR) + their own
     notifications/approvals.
   - **Accountant → its own team, READ-ONLY and APPROVED-only.** A team-scoped principal (has a
@@ -464,13 +467,20 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     and a paperclip indicator, never keys. Text-only threads are unaffected; per-user delete hides the
     viewer's copy but the attachment follows the message (the counterparty keeps theirs).
 - **Employee credentials + mailbox (Stage 5):** once a Manager **approves** an employee (§3.4 — the ID is
-  minted and the onboarding HR is notified `EMPLOYEE_APPROVED`), that HR may **assign the employee internal
-  credentials**: a mailbox local part (→ `localpart@companyDomain` via `MailAddresses`, unique across every
-  account through `AccountEmails`) and a password (HR **types it or the system generates** one — generate is
-  the default). The address IS a login email; the password is BCrypt-hashed. The address + password + the
-  `/login` link are **emailed to the employee's PERSONAL email** (the one HR entered at invitation;
-  dev-logged, no SMTP). Audited `EMPLOYEE_CREDENTIALS_ASSIGNED`; HR may **re-issue** (regenerate + re-email).
-  Only the employee's own onboarding HR, and only for an **APPROVED** employee, may assign.
+  minted and the onboarding HR is notified `EMPLOYEE_APPROVED`), the employee's **onboarding HR** — or a
+  **`COMPANY_ADMIN` of the same company** (§6) — may **assign the employee internal credentials**: a mailbox
+  local part (→ `localpart@companyDomain` via `MailAddresses`, unique across every account through
+  `AccountEmails`) and a password (**typed or system-generated** — generate is the default). The address IS a
+  login email; the password is BCrypt-hashed. The address + password + the `/login` link are **emailed to the
+  employee's PERSONAL email** (the one HR entered at invitation; dev-logged, no SMTP). Audited
+  `EMPLOYEE_CREDENTIALS_ASSIGNED`; may be **re-issued** (regenerate + re-email).
+  - **Who may assign/reset:** the acting user must be **either** the employee's onboarding HR (own-onboarded
+    scope) **or** a `COMPANY_ADMIN` of the employee's company (company-wide scope) — and only for an
+    **APPROVED** employee (else `409`). Every other role is denied `403` (Accountant, Accounts Admin, Manager,
+    an HR who didn't onboard them, a Company Admin of another company, Super Admin). The Company Admin reaches
+    this from a company-wide **Employees** view (search → record → Assign/Reset), which reuses HR's read-only
+    record view; the employee **list** and **record read** open to `COMPANY_ADMIN` too (company-scoped), while
+    verify / route / reveal stay HR-only.
   - **Two sign-in doors stay open for a credentialed employee** (both yield the same EMPLOYEE session —
     own-record scope): `/login` (mailbox address + password — the staff resolver now also resolves an
     Employee by `mailAddress`) **and** `/employee/login` (full name + personal email + OTP, unchanged before
