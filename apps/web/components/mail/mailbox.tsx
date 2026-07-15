@@ -155,10 +155,10 @@ export function Mailbox() {
             className="hidden items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground md:inline-flex"
           >
             <ExternalLink className="size-4" />
-            Open in new tab
+            Pop out
           </a>
           <Button variant="ghost" size="sm" asChild>
-            <Link href={backHref}>Back to portal</Link>
+            <Link href={backHref}>Back</Link>
           </Button>
         </div>
       </header>
