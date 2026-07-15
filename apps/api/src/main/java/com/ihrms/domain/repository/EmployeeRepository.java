@@ -21,6 +21,9 @@ public interface EmployeeRepository
   /** The acting HR's credentialed employees — their mail contacts (§8, Stage 5). */
   List<Employee> findByOnboardingHrIdAndMailAddressIsNotNull(String onboardingHrId);
 
+  /** All CREDENTIALED employees in a company — the Company Admin's employee mail contacts (§8). */
+  List<Employee> findByCompanyIdAndMailAddressIsNotNull(String companyId);
+
   List<Employee> findByCompanyIdAndOnboardingHrId(String companyId, String onboardingHrId);
 
   List<Employee> findByCompanyIdAndOnboardingHrIdOrderByCreatedAtDesc(

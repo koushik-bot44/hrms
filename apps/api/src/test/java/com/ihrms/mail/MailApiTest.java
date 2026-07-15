@@ -18,9 +18,11 @@ import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import java.util.HashSet;
 import java.util.List;
@@ -58,6 +60,7 @@ class MailApiTest {
   @Autowired CompanyRepository companies;
   @Autowired UserRepository users;
   @Autowired EmployeeRepository employees;
+  @Autowired TeamRepository teams;
   @Autowired JdbcTemplate jdbc;
 
   // Storage is mocked so the presigned handshake runs without a real bucket: the key is derived from the
@@ -71,18 +74,24 @@ class MailApiTest {
   private User sa; // SUPER_ADMIN     superadmin@ihrms
   private User aa; // ACCOUNTS_ADMIN  books@ihrms
   private User caA; // COMPANY_ADMIN  admin@anvicorp
-  private User hrA; // HR             hr@anvicorp
-  private User hr2A; // HR            hr2@anvicorp
-  private User mgrA; // MANAGER       mgr@anvicorp
-  private User accA; // ACCOUNTANT    acc@anvicorp
+  private User hrA; // HR    hr@anvicorp   — TEAM A
+  private User mgrA; // MANAGER mgr@anvicorp — TEAM A
+  private User hr2A; // HR    hr2@anvicorp  — TEAM B
+  private User mgr2A; // MANAGER mgr2@anvicorp — TEAM B
+  private User accA; // ACCOUNTANT acc@anvicorp — TEAM A's accountant (NOT in team mail)
   private User caT; // COMPANY_ADMIN  admin@testco (other company)
   private User hrT; // HR             hr@testco    (other company)
+
+  // Team A employees (onboarded by hrA) + a Team B employee (onboarded by hr2A).
+  private Employee empA1; // arjun@anvicorp
+  private Employee empA2; // meera@anvicorp
+  private Employee empB1; // bhavya@anvicorp
 
   @BeforeEach
   void setup() {
     jdbc.execute(
-        "TRUNCATE \"users\",\"employees\",\"companies\",\"messages\",\"message_recipients\","
-            + "\"message_attachments\",\"audit_logs\" RESTART IDENTITY CASCADE");
+        "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\",\"messages\","
+            + "\"message_recipients\",\"message_attachments\",\"audit_logs\" RESTART IDENTITY CASCADE");
     anvi = company("ANVI", "anvicorp");
     testco = company("TESTCO", "testco");
 
@@ -90,11 +99,20 @@ class MailApiTest {
     aa = user(null, UserRole.ACCOUNTS_ADMIN, "books@ihrms", "books");
     caA = user(anvi, UserRole.COMPANY_ADMIN, "admin@anvicorp", "admin");
     hrA = user(anvi, UserRole.HR, "hr@anvicorp", "hr");
-    hr2A = user(anvi, UserRole.HR, "hr2@anvicorp", "hr2");
     mgrA = user(anvi, UserRole.MANAGER, "mgr@anvicorp", "mgr");
+    hr2A = user(anvi, UserRole.HR, "hr2@anvicorp", "hr2");
+    mgr2A = user(anvi, UserRole.MANAGER, "mgr2@anvicorp", "mgr2");
     accA = user(anvi, UserRole.ACCOUNTANT, "acc@anvicorp", "acc");
     caT = user(testco, UserRole.COMPANY_ADMIN, "admin@testco", "admin");
     hrT = user(testco, UserRole.HR, "hr@testco", "hr");
+
+    // Team A = { hrA, mgrA, accountant accA }; Team B = { hr2A, mgr2A }.
+    team(anvi, hrA, mgrA, accA);
+    team(anvi, hr2A, mgr2A, null);
+
+    empA1 = employee(anvi, hrA, "arjun@anvicorp"); // Team A
+    empA2 = employee(anvi, hrA, "meera@anvicorp"); // Team A
+    empB1 = employee(anvi, hr2A, "bhavya@anvicorp"); // Team B
 
     // Storage stubs: key = "mail/att/<fileName>"; every stored object is small unless a test overrides
     // getObjectBytes for a specific key (used to prove bind re-checks the ACTUAL size).
@@ -126,15 +144,21 @@ class MailApiTest {
   void crossCompanyIsAlwaysForbidden() throws Exception {
     send(caA, hrT).andExpect(status().isForbidden()); // anvi admin -> testco HR
     send(caT, hrA).andExpect(status().isForbidden()); // testco admin -> anvi HR
+    sendExpect(empToken(empA1), hrT.getId(), status().isForbidden()); // anvi employee -> testco HR
     assertThat(audit("MAIL_SENT")).isZero();
   }
 
   @Test
-  void peersAndOffGraphPairsAreForbidden() throws Exception {
-    send(hrA, hr2A).andExpect(status().isForbidden()); // HR -> HR (peer)
-    send(hrA, mgrA).andExpect(status().isForbidden()); // HR -> MANAGER (not an edge)
-    send(caA, aa).andExpect(status().isForbidden()); // COMPANY_ADMIN -> ACCOUNTS_ADMIN (not an edge)
-    send(hrA, sa).andExpect(status().isForbidden()); // HR -> SUPER_ADMIN (not an edge)
+  void offGraphAndAccountantPairsAreForbidden() throws Exception {
+    send(hrA, hr2A).andExpect(status().isForbidden()); // HR <-> HR on a DIFFERENT team
+    send(hrA, mgr2A).andExpect(status().isForbidden()); // HR <-> a DIFFERENT team's Manager
+    send(caA, aa).andExpect(status().isForbidden()); // COMPANY_ADMIN <-> ACCOUNTS_ADMIN (not an edge)
+    send(hrA, sa).andExpect(status().isForbidden()); // HR <-> SUPER_ADMIN (not an edge)
+    // The Accountant is NOT in team mail — only its Company Admin.
+    send(accA, hrA).andExpect(status().isForbidden()); // ACCOUNTANT <-> its team's HR
+    send(accA, mgrA).andExpect(status().isForbidden()); // ACCOUNTANT <-> its team's Manager
+    send(accA, sa).andExpect(status().isForbidden()); // ACCOUNTANT <-> SUPER_ADMIN
+    sendExpect(empToken(empA1), accA.getId(), status().isForbidden()); // employee <-> team Accountant
     assertThat(audit("MAIL_SENT")).isZero();
   }
 
@@ -146,10 +170,10 @@ class MailApiTest {
     startThread(aa, sa, "s", "b");
     startThread(caA, hrA, "s", "b"); // COMPANY_ADMIN <-> HR
     startThread(hrA, caA, "s", "b");
-    startThread(caA, mgrA, "s", "b"); // COMPANY_ADMIN <-> MANAGER
-    startThread(mgrA, caA, "s", "b");
     startThread(caA, accA, "s", "b"); // COMPANY_ADMIN <-> ACCOUNTANT
     startThread(accA, caA, "s", "b");
+    startThread(hrA, mgrA, "s", "b"); // TEAM: HR <-> its Manager
+    startThread(mgrA, hrA, "s", "b");
     assertThat(audit("MAIL_SENT")).isEqualTo(10);
   }
 
@@ -157,10 +181,23 @@ class MailApiTest {
 
   @Test
   void contactsAreExactlyTheReachableAccounts() throws Exception {
+    // Company Admin: everyone in the company (all staff + all credentialed employees) + Super Admin.
     assertThat(contactAddresses(caA))
         .containsExactlyInAnyOrder(
-            "hr@anvicorp", "hr2@anvicorp", "mgr@anvicorp", "acc@anvicorp", "superadmin@ihrms");
-    assertThat(contactAddresses(hrA)).containsExactly("admin@anvicorp");
+            "hr@anvicorp", "hr2@anvicorp", "mgr@anvicorp", "mgr2@anvicorp", "acc@anvicorp",
+            "arjun@anvicorp", "meera@anvicorp", "bhavya@anvicorp", "superadmin@ihrms");
+    // HR: its team (its employees + its Manager) + the Company Admin. Not the accountant, not team B.
+    assertThat(contactAddresses(hrA))
+        .containsExactlyInAnyOrder("mgr@anvicorp", "arjun@anvicorp", "meera@anvicorp", "admin@anvicorp");
+    // Manager: its team (the HR + that HR's employees) + the Company Admin.
+    assertThat(contactAddresses(mgrA))
+        .containsExactlyInAnyOrder("hr@anvicorp", "arjun@anvicorp", "meera@anvicorp", "admin@anvicorp");
+    // Employee: their teammates (HR, Manager, other employees) + the Company Admin. Not the accountant.
+    assertThat(contactAddrs(empToken(empA1)))
+        .containsExactlyInAnyOrder("hr@anvicorp", "mgr@anvicorp", "meera@anvicorp", "admin@anvicorp");
+    // Accountant: only the Company Admin.
+    assertThat(contactAddresses(accA)).containsExactly("admin@anvicorp");
+    // Platform roles unchanged.
     assertThat(contactAddresses(sa))
         .containsExactlyInAnyOrder("books@ihrms", "admin@anvicorp", "admin@testco");
     assertThat(contactAddresses(aa)).containsExactly("superadmin@ihrms");
@@ -401,33 +438,37 @@ class MailApiTest {
   }
 
   @Test
-  void aCredentialedEmployeeMailsOnlyTheirOnboardingHr() throws Exception {
-    String emp = empToken(employee(anvi, hrA, "arjun@anvicorp")); // credentialed, onboarded by hrA
+  void aCredentialedEmployeeMailsTheirTeamAndCompanyAdmin() throws Exception {
+    String emp = empToken(empA1); // credentialed, Team A (onboarded by hrA)
 
-    // The employee's ONLY contact is their onboarding HR; the HR now also sees the employee.
-    assertThat(contactAddrs(emp)).containsExactly("hr@anvicorp");
-    assertThat(contactAddrs(token(hrA))).contains("arjun@anvicorp");
+    // Allowed: their HR, their Manager, a SAME-TEAM employee, and the Company Admin.
+    sendExpect(emp, hrA.getId(), status().isOk());
+    sendExpect(emp, mgrA.getId(), status().isOk());
+    sendExpect(emp, empA2.getId(), status().isOk());
+    sendExpect(emp, caA.getId(), status().isOk());
 
-    // Employee -> their HR: allowed, lands unread, and the HR can reply into the same thread.
-    JsonNode sent = json.readTree(sendT(emp, hrA.getId(), "Question", "When do I start?"));
-    String threadId = sent.get("threadId").asText();
-    assertThat(threadId).isNotBlank();
-    assertThat(getT(token(hrA), "/mail/unread-count").get("unread").asInt()).isEqualTo(1);
+    // Denied: the team's Accountant, another team's HR/Manager/employee, platform admins.
+    sendExpect(emp, accA.getId(), status().isForbidden());
+    sendExpect(emp, hr2A.getId(), status().isForbidden());
+    sendExpect(emp, mgr2A.getId(), status().isForbidden());
+    sendExpect(emp, empB1.getId(), status().isForbidden());
+    sendExpect(emp, sa.getId(), status().isForbidden());
+
+    // A reply into the thread the employee started with their HR still works (recipient derived).
+    String threadId =
+        json.readTree(sendT(emp, hrA.getId(), "Question", "When do I start?")).get("threadId").asText();
     reply(hrA, threadId, "Next Monday.").andExpect(status().isOk());
     assertThat(getT(emp, "/mail/unread-count").get("unread").asInt()).isEqualTo(1);
-
-    // Employee -> anyone else is forbidden (only their HR).
-    sendExpect(emp, hr2A.getId(), status().isForbidden()); // another HR
-    sendExpect(emp, mgrA.getId(), status().isForbidden()); // a manager
-    sendExpect(emp, caA.getId(), status().isForbidden()); // the company admin
   }
 
   @Test
-  void anEmployeeCannotMailAnotherCompanysHrOrAnotherEmployee() throws Exception {
-    String emp = empToken(employee(anvi, hrA, "arjun@anvicorp"));
-    Employee peer = employee(anvi, hrA, "meera@anvicorp"); // same HR — but employee<->employee is forbidden
-    sendExpect(emp, hrT.getId(), status().isForbidden()); // cross-company HR
-    sendExpect(emp, peer.getId(), status().isForbidden()); // another employee
+  void twoEmployeesOnDifferentTeamsCannotMailButBothReachTheCompanyAdmin() throws Exception {
+    // Same company, different onboarding HR => different teams => denied both ways.
+    sendExpect(empToken(empA1), empB1.getId(), status().isForbidden());
+    sendExpect(empToken(empB1), empA1.getId(), status().isForbidden());
+    // ...but each can mail the shared Company Admin.
+    sendExpect(empToken(empA1), caA.getId(), status().isOk());
+    sendExpect(empToken(empB1), caA.getId(), status().isOk());
   }
 
   // --- Address formation + uniqueness (unchanged from Stage 2) --------------
@@ -488,6 +529,18 @@ class MailApiTest {
     c.setCode(code);
     c.setMailDomain(mailDomain);
     return companies.save(c).getId();
+  }
+
+  private void team(String companyId, User hr, User manager, User accountant) {
+    Team t = new Team();
+    t.setName("Team " + hr.getMailLocalPart());
+    t.setCompanyId(companyId);
+    t.setHrUserId(hr.getId());
+    t.setManagerUserId(manager.getId());
+    if (accountant != null) {
+      t.setAccountantUserId(accountant.getId());
+    }
+    teams.save(t);
   }
 
   private User newUser(String companyId, UserRole role, String email, String localPart) {

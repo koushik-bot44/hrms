@@ -364,18 +364,24 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
   `localpart@domain`, and sets it as **both** the user's `mailLocalPart` and login `email`. Because the
   address is the login email, uniqueness "within a domain" is enforced by the **existing global
   email-unique index** (a duplicate `localpart@domain` is a duplicate email).
-- **Send graph — who may message whom (enforced server-side as ONE central check, symmetric both
-  directions):**
-  - `SUPER_ADMIN` ↔ `COMPANY_ADMIN` (any company)
-  - `SUPER_ADMIN` ↔ `ACCOUNTS_ADMIN`
-  - `COMPANY_ADMIN` ↔ `HR` (same company)
-  - `COMPANY_ADMIN` ↔ `MANAGER` (same company)
-  - `COMPANY_ADMIN` ↔ `ACCOUNTANT` (same company)
-  - `EMPLOYEE` ↔ their **onboarding HR** (same company) — added in Stage 5 (below). This is the ONLY edge
-    that includes an employee.
-  - **Everything else is forbidden. Never cross-company** — a company-domain mailbox reaches only
-    same-company counterparts (plus, for a Company Admin, the Super Admin). Beyond the single
-    employee↔HR edge, **no employee↔employee, employee↔manager/company-admin/super-admin**.
+- **Send graph — who may message whom (relationship-based; ONE central check, `canSendMail`; symmetric
+  both directions; only CREDENTIALED employees participate; every pair is SAME-COMPANY unless a platform
+  row says otherwise, and cross-company is ALWAYS forbidden):**
+  - A **team's mail members** = the team's **HR** + the team's **Manager** + the **employees onboarded by
+    that HR**. (The team's **Accountant is deliberately NOT** part of team mail.)
+  - `EMPLOYEE` ↔ the members of **their** team (their onboarding-HR's team): their HR, their Manager, the
+    **other employees on that team**; **AND** their `COMPANY_ADMIN`.
+  - `HR` ↔ the members of their team (their employees, their Manager); **AND** their `COMPANY_ADMIN`.
+  - `MANAGER` ↔ the members of their team(s) (the HR, the employees); **AND** their `COMPANY_ADMIN`.
+  - `COMPANY_ADMIN` ↔ **anyone in their company** — all HRs, Managers, Accountants, **all employees**;
+    **AND** `SUPER_ADMIN`.
+  - `ACCOUNTANT` ↔ their `COMPANY_ADMIN` **only** (not team mail).
+  - `ACCOUNTS_ADMIN` ↔ `SUPER_ADMIN` only.
+  - `SUPER_ADMIN` ↔ all `COMPANY_ADMIN`s + `ACCOUNTS_ADMIN`.
+  - **Everything not listed — and EVERY cross-company pair — is forbidden.** Resolution reuses the
+    existing team/company queries: an employee's team is their **onboarding HR's** team; "employees of a
+    team" are those whose `onboardingHr` is that team's HR (the same set approvals/attendance scope to);
+    "anyone in a company" is all users + all credentialed employees with that `companyId`.
 - **Model:** a `Message` (sender, subject, text body, createdAt) fans out to one or more
   `MessageRecipient` rows (recipient + nullable `readAt`) — a child table so multi-recipient is possible
   later. The sender sees **Sent**, each recipient sees **Inbox**; opening a message stamps the
@@ -452,10 +458,11 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     **`authMethod`** (`PASSWORD` | `OTP`) — the landing is never inferred from `mailAddress` alone (a
     credentialed employee can use either door). The portal is **not** a new privilege level; it is a
     different landing for the same EMPLOYEE. v1 contains the **mailbox** (the shared `/mail` client, contacts
-    = their onboarding HR) plus a header with the employee's name / ID / mail address, built as an extensible
-    shell so more sections can be added later. The onboarding area is unchanged and still reachable.
-  - **Mailbox:** a credentialed employee enters the mail system with exactly one contact — their onboarding
-    HR (the `EMPLOYEE ↔ HR` edge above, symmetric, same company). Every send/reply is still `canSendMail`,
+    = their **team** — HR, Manager, teammates — plus their Company Admin) plus a header with the employee's
+    name / ID / mail address, built as an extensible shell so more sections can be added later. The
+    onboarding area is unchanged and still reachable.
+  - **Mailbox:** a credentialed employee enters the mail system with their **team-and-company** contacts (the
+    send graph above, symmetric, same company). Every send/reply is still `canSendMail`,
     and thread/attachment access stays participant-scoped. `messages`/`message_recipients`/
     `message_attachments` gain a nullable **employee-id** column beside the user-id one (a sender/recipient/
     uploader is a User OR an Employee); the `/mail` area opens to authenticated employees, but one WITHOUT a

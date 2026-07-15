@@ -2,12 +2,16 @@ package com.ihrms.auth;
 
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.TeamRepository;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -158,59 +162,89 @@ public class AuthorizationService {
   }
 
   /**
-   * The ONE central check for internal mail: may {@code a} and {@code b} message each other? Symmetric.
-   * The graph (§8):
+   * The ONE central check for internal mail (§8): may {@code a} and {@code b} message each other?
+   * Symmetric, relationship-based, SAME-COMPANY unless a platform row applies; cross-company always
+   * denied. Only credentialed employees are ever participants (the mail service resolves them).
    *
-   * <pre>
-   *   SUPER_ADMIN   &lt;-&gt; COMPANY_ADMIN   (any company)
-   *   SUPER_ADMIN   &lt;-&gt; ACCOUNTS_ADMIN
-   *   COMPANY_ADMIN &lt;-&gt; HR | MANAGER | ACCOUNTANT   (SAME company only)
-   *   EMPLOYEE      &lt;-&gt; their onboarding HR         (SAME company only)
-   * </pre>
+   * <p>The graph is the union of three edges:
    *
-   * Everything else — and every cross-company pair — is denied. An employee's ONLY counterpart is the HR
-   * who onboarded them (no employee↔employee, no employee↔anyone-else).
+   * <ul>
+   *   <li><b>Platform</b> (no company constraint): {@code SUPER_ADMIN ↔ COMPANY_ADMIN},
+   *       {@code SUPER_ADMIN ↔ ACCOUNTS_ADMIN}.
+   *   <li><b>Company-admin</b>: a {@code COMPANY_ADMIN} ↔ anyone in the SAME company (any staff role or a
+   *       credentialed employee). This is the ONLY edge for an {@code ACCOUNTANT} (→ its Company Admin).
+   *   <li><b>Team</b>: SAME company and a shared team — where a team is identified by its <b>HR's user
+   *       id</b>: an employee belongs to {@code {onboardingHr}}, an HR to {@code {ownId}}, a manager to the
+   *       HR ids of the teams they manage; every other role has no team membership (so an Accountant has
+   *       no team edge). Overlap ⇒ teammates: HR ↔ Manager ↔ that HR's employees, and those employees to
+   *       each other.
+   * </ul>
    */
   public boolean canSendMail(MailParticipant a, MailParticipant b) {
+    return canSendMail(a, mailTeamKeys(a), b, mailTeamKeys(b));
+  }
+
+  /**
+   * The pure send decision given each side's precomputed team keys (no DB) — so {@code contacts} can
+   * resolve the acting principal's keys ONCE and avoid an N+1 over candidates. {@link #canSendMail} is the
+   * DB-resolving entry point used by send/reply.
+   */
+  public boolean canSendMail(
+      MailParticipant a, Set<String> aKeys, MailParticipant b, Set<String> bKeys) {
     if (a == null || b == null || a.id().equals(b.id())) {
       return false; // no self-send
     }
-    if (a.isUser() && b.isUser()) {
-      return canSendStaff(a, b);
-    }
-    // Exactly one side is an employee: the only allowed edge is EMPLOYEE <-> their onboarding HR.
-    MailParticipant employee = a.isUser() ? b : a;
-    MailParticipant other = a.isUser() ? a : b;
-    return !employee.isUser() // (rejects employee<->employee: `other` would then be an employee)
-        && other.isUser()
-        && other.role() == UserRole.HR
-        && other.companyId() != null
-        && other.companyId().equals(employee.companyId()) // same company
-        && other.id().equals(employee.onboardingHrId()); // their onboarding HR specifically
-  }
-
-  /** Staff-only graph (both sides USER). */
-  private boolean canSendStaff(MailParticipant a, MailParticipant b) {
-    EnumSet<UserRole> pair = EnumSet.of(a.role(), b.role());
-    // Platform-level pairs — no company constraint (SUPER_ADMIN / ACCOUNTS_ADMIN have no company).
-    if (pair.equals(EnumSet.of(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN))
-        || pair.equals(EnumSet.of(UserRole.SUPER_ADMIN, UserRole.ACCOUNTS_ADMIN))) {
+    // (A) Platform staff pairs — no company constraint (SUPER_ADMIN / ACCOUNTS_ADMIN have no company).
+    if (a.isUser() && b.isUser() && isPlatformPair(a.role(), b.role())) {
       return true;
     }
-    // Company Admin <-> its own company's HR / Manager / Accountant.
-    MailParticipant admin =
-        a.role() == UserRole.COMPANY_ADMIN ? a : b.role() == UserRole.COMPANY_ADMIN ? b : null;
-    if (admin != null) {
-      MailParticipant other = admin == a ? b : a;
-      boolean companyStaff =
-          other.role() == UserRole.HR
-              || other.role() == UserRole.MANAGER
-              || other.role() == UserRole.ACCOUNTANT;
-      return companyStaff
-          && admin.companyId() != null
-          && admin.companyId().equals(other.companyId()); // never cross-company
+    // (B) Company Admin ↔ anyone in the SAME company (any staff role or a credentialed employee).
+    if ((isRole(a, UserRole.COMPANY_ADMIN) || isRole(b, UserRole.COMPANY_ADMIN)) && sameCompany(a, b)) {
+      return true;
     }
-    return false;
+    // (C) Team edge — SAME company and a shared team (HR-keyed membership).
+    return sameCompany(a, b)
+        && aKeys != null
+        && bKeys != null
+        && !aKeys.isEmpty()
+        && !Collections.disjoint(aKeys, bKeys);
+  }
+
+  /**
+   * A participant's team memberships, each keyed by the team's HR user id. One team query only for a
+   * MANAGER (who may run several teams); everyone else is resolved without a query.
+   */
+  public Set<String> mailTeamKeys(MailParticipant p) {
+    if (p == null) {
+      return Set.of();
+    }
+    if (!p.isUser()) {
+      return p.onboardingHrId() == null ? Set.of() : Set.of(p.onboardingHrId());
+    }
+    return switch (p.role()) {
+      case HR -> Set.of(p.id());
+      case MANAGER ->
+          teams.findByManagerUserId(p.id()).stream()
+              .filter(t -> p.companyId() != null && p.companyId().equals(t.getCompanyId()))
+              .map(Team::getHrUserId)
+              .filter(Objects::nonNull)
+              .collect(Collectors.toSet());
+      default -> Set.of(); // COMPANY_ADMIN / ACCOUNTANT / SUPER_ADMIN / ACCOUNTS_ADMIN: no team membership
+    };
+  }
+
+  private static boolean isPlatformPair(UserRole x, UserRole y) {
+    EnumSet<UserRole> pair = EnumSet.of(x, y);
+    return pair.equals(EnumSet.of(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN))
+        || pair.equals(EnumSet.of(UserRole.SUPER_ADMIN, UserRole.ACCOUNTS_ADMIN));
+  }
+
+  private static boolean isRole(MailParticipant p, UserRole role) {
+    return p.isUser() && p.role() == role;
+  }
+
+  private static boolean sameCompany(MailParticipant a, MailParticipant b) {
+    return a.companyId() != null && a.companyId().equals(b.companyId());
   }
 
   /** Convenience for the staff-only callers (and existing tests): both sides are Users. */

@@ -107,44 +107,48 @@ public class InternalMailService {
 
   // --- Contacts -----------------------------------------------------------------
 
-  /** The accounts the caller may message — the send graph, filtered down to a concrete list (§8). */
+  /**
+   * The accounts the caller may message — the send graph resolved to a concrete list (§8). Gathers a
+   * batched candidate SUPERSET (the caller's company staff + credentialed employees + the platform users,
+   * or just the platform users when the caller is a platform admin) and filters each through the ONE
+   * central {@link AuthorizationService#canSendMail} — so the compose list can never offer a disallowed
+   * recipient and always mirrors the graph exactly. The caller's team keys are resolved ONCE (no N+1).
+   */
   @Transactional(readOnly = true)
   public List<MailPartyView> contacts(IhrmsPrincipal actor) {
     MailParticipant me = resolveActor(actor);
-    List<MailPartyView> out = new ArrayList<>();
+    Set<String> myKeys = authz.mailTeamKeys(me);
 
-    if (!isUser(me)) {
-      // An employee's only counterpart is their onboarding HR.
-      User hr = me.onboardingHrId() == null ? null : users.findById(me.onboardingHrId()).orElse(null);
-      if (hr != null && authz.canSendMail(me, MailParticipant.user(hr))) {
-        out.add(party(hr, domainsFor(List.of(hr))));
-      }
-      return out;
-    }
-
-    // Staff: the graph's reachable accounts, then — for an HR — their credentialed employees.
-    User meUser = users.findById(me.id()).orElseThrow(this::unauthorized);
-    Set<User> candidates = new HashSet<>();
-    if (meUser.getCompanyId() != null) {
-      candidates.addAll(users.findByCompanyId(meUser.getCompanyId()));
-      candidates.addAll(users.findByRoleIn(List.of(UserRole.SUPER_ADMIN, UserRole.ACCOUNTS_ADMIN)));
+    Set<User> userCandidates = new LinkedHashSet<>();
+    List<Employee> employeeCandidates = new ArrayList<>();
+    if (me.companyId() != null) {
+      // Company-scoped: the company's staff + credentialed employees, plus the platform roles (only a
+      // Company Admin actually reaches the Super Admin — the graph filter drops it for everyone else).
+      userCandidates.addAll(users.findByCompanyId(me.companyId()));
+      userCandidates.addAll(users.findByRoleIn(PLATFORM));
+      employeeCandidates.addAll(employees.findByCompanyIdAndMailAddressIsNotNull(me.companyId()));
     } else {
-      candidates.addAll(
+      // Platform actor (Super / Accounts Admin): only company admins + the platform roles.
+      userCandidates.addAll(
           users.findByRoleIn(
               List.of(UserRole.SUPER_ADMIN, UserRole.ACCOUNTS_ADMIN, UserRole.COMPANY_ADMIN)));
     }
-    List<User> allowed =
-        candidates.stream()
-            .filter(c -> authz.canSendMail(me, MailParticipant.user(c)))
-            .collect(Collectors.toList());
-    Map<String, String> domains = domainsFor(allowed);
-    allowed.forEach(u -> out.add(party(u, domains)));
 
-    if (meUser.getRole() == UserRole.HR) {
-      for (Employee emp : employees.findByOnboardingHrIdAndMailAddressIsNotNull(me.id())) {
-        if (authz.canSendMail(me, MailParticipant.employee(emp))) {
-          out.add(employeeParty(emp));
-        }
+    List<User> allowedUsers = new ArrayList<>();
+    for (User u : userCandidates) {
+      MailParticipant p = MailParticipant.user(u);
+      if (authz.canSendMail(me, myKeys, p, authz.mailTeamKeys(p))) {
+        allowedUsers.add(u);
+      }
+    }
+    Map<String, String> domains = domainsFor(allowedUsers);
+    List<MailPartyView> out = new ArrayList<>();
+    allowedUsers.forEach(u -> out.add(party(u, domains)));
+
+    for (Employee e : employeeCandidates) {
+      MailParticipant p = MailParticipant.employee(e);
+      if (authz.canSendMail(me, myKeys, p, authz.mailTeamKeys(p))) {
+        out.add(employeeParty(e));
       }
     }
     out.sort(Comparator.comparing(MailPartyView::address));
