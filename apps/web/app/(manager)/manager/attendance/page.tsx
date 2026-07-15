@@ -11,7 +11,7 @@ export default function ManagerAttendancePage() {
     <div className="space-y-6">
       <PageHeader
         title="Attendance"
-        description="Your team's clock-ins and working hours. Times are in India Standard Time (IST)."
+        description="Your team's log-ins and working hours. Times are in India Standard Time (IST)."
       />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

@@ -62,7 +62,7 @@ export function TeamAttendance() {
           row.original.onBreak ? (
             <Badge variant="warning">On break</Badge>
           ) : row.original.clockedIn ? (
-            <Badge variant="success">Clocked in</Badge>
+            <Badge variant="success">Logged in</Badge>
           ) : (
             <Badge variant="neutral">Out</Badge>
           ),

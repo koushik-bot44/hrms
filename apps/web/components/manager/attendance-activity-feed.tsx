@@ -12,8 +12,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 const PAGE = 30;
 
 const EVENT: Record<string, { icon: LucideIcon; label: string; tint: string }> = {
-  IN: { icon: LogIn, label: 'clocked in', tint: 'bg-success/10 text-success' },
-  OUT: { icon: LogOut, label: 'clocked out', tint: 'bg-muted text-muted-foreground' },
+  IN: { icon: LogIn, label: 'logged in', tint: 'bg-success/10 text-success' },
+  OUT: { icon: LogOut, label: 'logged out', tint: 'bg-muted text-muted-foreground' },
   BREAK_START: { icon: Coffee, label: 'started a break', tint: 'bg-warning/10 text-warning' },
   BREAK_END: { icon: Play, label: 'ended a break', tint: 'bg-primary/10 text-primary' },
 };
@@ -40,7 +40,7 @@ export function AttendanceActivityFeed() {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Attendance activity</CardTitle>
-        <CardDescription>Recent clock-ins and clock-outs across your team.</CardDescription>
+        <CardDescription>Recent log-ins and log-outs across your team.</CardDescription>
       </CardHeader>
       <CardContent>
         {query.isLoading ? (

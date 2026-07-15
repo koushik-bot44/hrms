@@ -40,8 +40,8 @@ export function ClockCard() {
     void queryClient.invalidateQueries({ queryKey: ['attendance', 'me'] });
   };
 
-  const inMut = useApiMutation(clockIn, { successMessage: 'Clocked in', onSettled: refresh });
-  const outMut = useApiMutation(clockOut, { successMessage: 'Clocked out', onSettled: refresh });
+  const inMut = useApiMutation(clockIn, { successMessage: 'Logged in', onSettled: refresh });
+  const outMut = useApiMutation(clockOut, { successMessage: 'Logged out', onSettled: refresh });
   const breakInMut = useApiMutation(startBreak, { successMessage: 'Break started', onSettled: refresh });
   const breakOutMut = useApiMutation(endBreak, { successMessage: 'Break ended', onSettled: refresh });
   const busy =
@@ -68,7 +68,7 @@ export function ClockCard() {
         <div className="space-y-1">
           {!open ? (
             <>
-              <div className="text-sm text-muted-foreground">You&rsquo;re clocked out</div>
+              <div className="text-sm text-muted-foreground">You&rsquo;re logged out</div>
               <div className="text-3xl font-medium">Ready to start</div>
             </>
           ) : onBreak ? (
@@ -85,7 +85,7 @@ export function ClockCard() {
             <>
               <div className="flex flex-wrap items-center gap-2 text-sm text-success">
                 <span className="size-2 rounded-full bg-success" />
-                Clocked in since {istTime(openSince!)}
+                Logged in since {istTime(openSince!)}
                 {isLateToday ? (
                   <Badge variant="warning" className="ml-1">
                     LATE

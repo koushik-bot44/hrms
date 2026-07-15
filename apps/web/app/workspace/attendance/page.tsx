@@ -11,7 +11,7 @@ export default function AttendancePage() {
     <div className="space-y-6">
       <PageHeader
         title="Attendance"
-        description="Clock in and out. Times are shown in India Standard Time (IST)."
+        description="Log in and out. Times are shown in India Standard Time (IST)."
       />
       <ClockCard />
       <AttendanceHistory

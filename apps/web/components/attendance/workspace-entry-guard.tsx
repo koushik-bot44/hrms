@@ -46,7 +46,7 @@ export function WorkspaceEntryGuard() {
   }, [queryClient]);
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: attendanceKeys.status });
-  const inMut = useApiMutation(clockIn, { successMessage: 'Clocked in', onSettled: refresh });
+  const inMut = useApiMutation(clockIn, { successMessage: 'Logged in', onSettled: refresh });
   const breakOutMut = useApiMutation(endBreak, { successMessage: 'Break ended', onSettled: refresh });
 
   // Nothing to prompt until we have status (the hook is disabled for non-credentialed sessions).
@@ -62,10 +62,10 @@ export function WorkspaceEntryGuard() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarClock className="size-5" />
-              Clock in to start your shift
+              Log in to start your shift
             </DialogTitle>
             <DialogDescription>
-              You&rsquo;re not clocked in. Clock in now to start recording your working time.
+              You&rsquo;re not logged in. Log in now to start recording your working time.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 pt-2">
@@ -73,7 +73,7 @@ export function WorkspaceEntryGuard() {
               Skip
             </Button>
             <Button onClick={() => inMut.mutate()} disabled={inMut.isPending}>
-              {inMut.isPending ? 'Clocking in…' : 'Clock In'}
+              {inMut.isPending ? 'Logging in…' : 'Log In'}
             </Button>
           </div>
         </DialogContent>

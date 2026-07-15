@@ -138,7 +138,7 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
       await apiClockOut();
       void queryClient.invalidateQueries({ queryKey: attendanceKeys.status });
     } catch {
-      toast.error('Could not clock out — signing out anyway');
+      toast.error('Could not log out — signing out anyway');
     } finally {
       setClockingOut(false);
       setConfirmClockOut(false);
@@ -185,9 +185,9 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
       <Dialog open={confirmClockOut} onOpenChange={setConfirmClockOut}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>You&rsquo;re still clocked in</DialogTitle>
+            <DialogTitle>You&rsquo;re still logged in</DialogTitle>
             <DialogDescription>
-              You have an open attendance session. Clock out before you sign out?
+              You have an open attendance session. Log out before you sign out?
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
@@ -205,7 +205,7 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
               Sign out anyway
             </Button>
             <Button onClick={() => void clockOutAndSignOut()} disabled={clockingOut}>
-              {clockingOut ? 'Clocking out…' : 'Clock out & sign out'}
+              {clockingOut ? 'Logging out…' : 'Log out & sign out'}
             </Button>
           </div>
         </DialogContent>
