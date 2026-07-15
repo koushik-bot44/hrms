@@ -1,5 +1,8 @@
 import { z } from 'zod';
+import { istTodayIso } from '@/lib/date';
 import { MailLocalPartSchema } from './mail';
+
+const DATE_ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Employee onboarding REQUEST contract (ARCHITECTURE.md §3.2). HR onboards with full name, email,
@@ -23,7 +26,11 @@ export const OnboardEmployeeSchema = z.object({
   fullName: z.string().trim().min(2, 'Full name is required').max(120),
   email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
   designation: z.string().trim().min(2, 'Designation is required').max(120),
-  dateOfJoining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Select a date of joining'),
+  // Must be today or a future date — you can't onboard someone with a past joining date.
+  dateOfJoining: z
+    .string()
+    .regex(DATE_ISO, 'Select a date of joining')
+    .refine((v) => !DATE_ISO.test(v) || v >= istTodayIso(), 'Date of joining must be today or later'),
 });
 export type OnboardEmployeeInput = z.infer<typeof OnboardEmployeeSchema>;
 

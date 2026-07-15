@@ -12,6 +12,7 @@ import {
 } from '@/lib/contract';
 import { onboardEmployee } from '@/lib/api/employees';
 import { useApiMutation } from '@/lib/api/hooks';
+import { istTodayIso } from '@/lib/date';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -147,6 +148,7 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
                 <Input
                   id="onb-doj"
                   type="date"
+                  min={istTodayIso()}
                   aria-invalid={Boolean(errors.dateOfJoining)}
                   {...register('dateOfJoining')}
                 />

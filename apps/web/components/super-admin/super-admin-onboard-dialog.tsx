@@ -10,6 +10,7 @@ import { listCompanies } from '@/lib/api/companies';
 import { listTeams, teamsKey } from '@/lib/api/teams';
 import { onboardForCompany } from '@/lib/api/employees';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
+import { istTodayIso } from '@/lib/date';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -228,6 +229,7 @@ export function SuperAdminOnboardDialog() {
                 <Input
                   id="sa-onb-doj"
                   type="date"
+                  min={istTodayIso()}
                   aria-invalid={Boolean(errors.dateOfJoining)}
                   {...register('dateOfJoining')}
                 />
