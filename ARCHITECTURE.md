@@ -412,8 +412,10 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
   snippet, relative time, unread emphasis, attachment + count hints), and a reading pane; it collapses to
   list→detail on narrow widths. **Compose is a docked bottom-right window** (minimise / expand / close),
   and recipient entry is **type-to-search**: To / Cc / Bcc are chip inputs that filter the graph-derived
-  `/mail/contacts` list, so only allowed people are selectable — a free-typed non-match can never become a
-  recipient. **Reply / Reply All** open the same docked composer prefilled from the thread. The page also
+  `/mail/contacts` list. The dropdown is **hidden while a field is empty** (no pre-populated list) and opens
+  only once ≥1 character is typed, so only allowed people are selectable — a free-typed non-match shows "No
+  matches" and can never become a recipient. **Reply / Reply All** open the same docked composer prefilled
+  from the thread. The page also
   offers **Open in new tab**. This is a pure UI layer — the send graph, BCC privacy, and all endpoints are
   unchanged.
 - **Provisioning assigns the local part:** every staff-create flow (Company Admin, Accounts Admin,

@@ -8,10 +8,12 @@ import { cn } from '@/lib/utils';
 const MAX_SHOWN = 8;
 
 /**
- * A type-to-search recipient chip input (§8 redesign). The user types a name or address; results filter
- * the ALLOWED contacts (the fetched `/mail/contacts` set) — a non-matching free-typed string yields no
- * option, so only graph-permitted people can ever become recipients. Selected people show as removable
- * chips. Keyboard: ↑/↓ to move, Enter to add, Esc to close, Backspace (empty) removes the last chip.
+ * A type-to-search recipient chip input (§8 redesign). The dropdown stays hidden while the field is
+ * empty (no pre-populated contact list); it opens once the user types ≥1 character, filtering the
+ * ALLOWED contacts (the fetched `/mail/contacts` set) by name or address. A string that matches no
+ * allowed contact shows a non-selectable "No matches" state — never an add-anything option — so only
+ * graph-permitted people can ever become recipients. Selected people show as removable chips.
+ * Keyboard: ↑/↓ to move, Enter to add, Esc to close, Backspace (empty) removes the last chip.
  */
 export function RecipientAutocomplete({
   id,
@@ -43,11 +45,13 @@ export function RecipientAutocomplete({
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const selectedIds = React.useMemo(() => new Set(selected.map((s) => s.userId)), [selected]);
+  const hasQuery = query.trim() !== '';
   const matches = React.useMemo(() => {
     const q = query.trim().toLowerCase();
+    if (q === '') return []; // empty field → no dropdown, no pre-populated list
     return options
       .filter((o) => o.userId && !excludeIds.has(o.userId) && !selectedIds.has(o.userId))
-      .filter((o) => q === '' || o.name.toLowerCase().includes(q) || o.address.toLowerCase().includes(q))
+      .filter((o) => o.name.toLowerCase().includes(q) || o.address.toLowerCase().includes(q))
       .slice(0, MAX_SHOWN);
   }, [options, excludeIds, selectedIds, query]);
 
@@ -142,12 +146,16 @@ export function RecipientAutocomplete({
           />
         </div>
 
-        {open && matches.length > 0 ? (
+        {open && hasQuery ? (
           <ul
             id={listId}
             role="listbox"
             className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-card py-1 shadow-md"
           >
+            {matches.length === 0 ? (
+              // No allowed contact matches — a free-typed address can never be added.
+              <li className="px-3 py-1.5 text-sm text-muted-foreground">No matches</li>
+            ) : null}
             {matches.map((o, i) => (
               <li key={o.userId} role="option" aria-selected={i === highlight}>
                 <button
