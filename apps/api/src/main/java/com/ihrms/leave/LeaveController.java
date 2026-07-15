@@ -47,7 +47,10 @@ public class LeaveController {
       @Valid @RequestBody SubmitLeaveRequest body,
       @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
-    return leave.submit(actor, body, request.getRemoteAddr());
+    LeaveRequestView view = leave.submit(actor, body, request.getRemoteAddr());
+    // Post-commit courtesy mail to the Manager (best-effort; never blocks the request). §8b
+    leave.mailManagerAfterSubmit(actor, view.id(), request.getRemoteAddr());
+    return view;
   }
 
   @GetMapping("/me")
@@ -82,7 +85,10 @@ public class LeaveController {
       @RequestBody(required = false) LeaveDecisionRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User manager,
       HttpServletRequest request) {
-    return leave.decide(manager, id, true, body == null ? null : body.note(), request.getRemoteAddr());
+    TeamLeaveRow row =
+        leave.decide(manager, id, true, body == null ? null : body.note(), request.getRemoteAddr());
+    leave.mailEmployeeAfterDecision(manager, id, request.getRemoteAddr()); // best-effort §8b
+    return row;
   }
 
   @PostMapping("/team/{id}/reject")
@@ -91,6 +97,8 @@ public class LeaveController {
       @Valid @RequestBody LeaveDecisionRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User manager,
       HttpServletRequest request) {
-    return leave.decide(manager, id, false, body.note(), request.getRemoteAddr());
+    TeamLeaveRow row = leave.decide(manager, id, false, body.note(), request.getRemoteAddr());
+    leave.mailEmployeeAfterDecision(manager, id, request.getRemoteAddr()); // best-effort §8b
+    return row;
   }
 }

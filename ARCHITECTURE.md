@@ -387,7 +387,9 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
   `readAt`, and its own soft-delete. The sender sees **Sent**, each recipient sees **Inbox**; opening a
   message stamps that recipient's `readAt`. Sending is a mutation → audited (`MAIL_SENT`); opening is an
   audited read. The send check lives in the authorization component (`canSendMail`) so it can never be
-  bypassed or duplicated.
+  bypassed or duplicated. The **same send path** is reused programmatically for system courtesy mail —
+  e.g. leave submit/decision auto-mails (§8b) go through `canSendMail` exactly like a user-composed message,
+  land as ordinary repliable threads, and are audited `MAIL_SENT`.
 - **Multiple recipients — TO / CC / BCC (§8):** a message needs **at least one TO**; CC and BCC are
   optional. **Every** recipient across TO+CC+BCC is individually permission-checked through the ONE
   `canSendMail` graph — if **any** single recipient is disallowed the **whole send is rejected** as a
@@ -576,6 +578,13 @@ balances are a future feature).
   the notification model. On submit the **Manager** gets a real bell entry (`LEAVE_REQUESTED`). On decision
   the **employee** (who has no notification inbox) sees the outcome + note in their own **leave history** and
   is emailed (dev-logged, like the welcome email) — the existing employee-facing channel.
+- **Courtesy internal mail (§8):** _in addition_ to the above, a real repliable **internal mail** is dropped
+  into both mailboxes through the ordinary `canSendMail`-guarded send path (§8) — on **submit**, employee →
+  resolved Manager (summarizing type, dates, reason); on **decision**, deciding Manager → employee (outcome +
+  any note). It's therefore audited `MAIL_SENT` as well. Sent by the **controller AFTER the leave tx commits**
+  (so the send opens its own transaction) and **best-effort**: if the mail isn't permitted / the recipient
+  isn't credentialed / delivery fails, it is logged and skipped — the leave submit/decision still succeeds.
+  Exactly one mail per submission and one per decision.
 - **Scope:** an employee sees ONLY their own requests; a Manager sees ONLY his team-scope requests (those
   routed to him) and can decide only the requests he is the resolved approver for — cross-team / cross-company
   is denied. Every action is audited `LEAVE_REQUESTED` / `LEAVE_APPROVED` / `LEAVE_REJECTED` /

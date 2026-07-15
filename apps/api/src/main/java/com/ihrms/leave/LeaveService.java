@@ -19,14 +19,19 @@ import com.ihrms.leave.dto.LeaveDtos.LeaveRequestView;
 import com.ihrms.leave.dto.LeaveDtos.SubmitLeaveRequest;
 import com.ihrms.leave.dto.LeaveDtos.TeamLeavePage;
 import com.ihrms.leave.dto.LeaveDtos.TeamLeaveRow;
+import com.ihrms.mail.InternalMailService;
+import com.ihrms.mail.dto.MailDtos.SendMessageRequest;
 import jakarta.persistence.criteria.Predicate;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -43,11 +48,15 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class LeaveService {
 
+  private static final Logger log = LoggerFactory.getLogger(LeaveService.class);
+  private static final DateTimeFormatter LEAVE_DATE = DateTimeFormatter.ofPattern("d MMM yyyy");
+
   private final LeaveRequestRepository leaves;
   private final EmployeeRepository employees;
   private final TeamRepository teams;
   private final NotificationRepository notifications;
   private final MailService mail;
+  private final InternalMailService internalMail;
   private final AuditService audit;
 
   public LeaveService(
@@ -56,12 +65,14 @@ public class LeaveService {
       TeamRepository teams,
       NotificationRepository notifications,
       MailService mail,
+      InternalMailService internalMail,
       AuditService audit) {
     this.leaves = leaves;
     this.employees = employees;
     this.teams = teams;
     this.notifications = notifications;
     this.mail = mail;
+    this.internalMail = internalMail;
     this.audit = audit;
   }
 
@@ -104,6 +115,8 @@ public class LeaveService {
             "managerUserId", managerUserId,
             "leaveType", leave.getLeaveType().name()),
         ip);
+    // A courtesy internal mail to the Manager is sent by the controller AFTER this tx commits
+    // (best-effort) — see mailManagerAfterSubmit.
     return view(leave);
   }
 
@@ -197,10 +210,84 @@ public class LeaveService {
             ? Map.<String, Object>of("employeeId", leave.getEmployeeId())
             : Map.<String, Object>of("employeeId", leave.getEmployeeId(), "note", cleanNote),
         ip);
+    // A courtesy internal mail to the employee is sent by the controller AFTER this tx commits
+    // (best-effort) — see mailEmployeeAfterDecision.
     return teamRow(leave, employee);
   }
 
   // --- helpers -------------------------------------------------------------
+
+  // --- Courtesy internal mail (§8/§8b) --------------------------------------
+  //
+  // On top of the in-app bell / leave-history / dev-logged email, we drop a real, repliable internal
+  // mail into both parties' mailboxes via the ordinary canSendMail-guarded InternalMailService path.
+  // These run from the CONTROLLER, AFTER the leave transaction has committed, so InternalMailService's
+  // own @Transactional opens a fresh transaction that actually commits (a send registered inside the
+  // leave tx would silently join the already-committed tx and never flush). Best-effort: swallowed on
+  // failure so a mail hiccup (not permitted, recipient not credentialed, transport error) can never
+  // roll back — or fail — the leave action itself. Exactly one mail per submission / per decision.
+
+  /** Employee → resolved Manager, summarizing a just-submitted request. Best-effort. */
+  public void mailManagerAfterSubmit(IhrmsPrincipal actor, String leaveId, String ip) {
+    try {
+      LeaveRequest leave = leaves.findById(leaveId).orElse(null);
+      if (leave == null || leave.getManagerUserId() == null) {
+        return;
+      }
+      Employee me = employees.findById(leave.getEmployeeId()).orElse(null);
+      String employeeName = me != null ? me.getFullName() : "An employee";
+      String subject = "Leave request: " + employeeName + " (" + leave.getLeaveType().name() + ")";
+      StringBuilder body = new StringBuilder();
+      body
+          .append(employeeName)
+          .append(" has requested ")
+          .append(leave.getLeaveType().name())
+          .append(" leave.\n\n");
+      body.append("Dates: ").append(dateRange(leave)).append("\n");
+      if (leave.getReason() != null && !leave.getReason().isBlank()) {
+        body.append("Reason: ").append(leave.getReason().trim()).append("\n");
+      }
+      body.append("\nPlease review this request in the Leave workspace.");
+      internalMail.send(actor, mailTo(leave.getManagerUserId(), subject, body.toString()), ip);
+    } catch (RuntimeException e) {
+      log.warn("Leave submit courtesy mail skipped (best-effort): {}", e.getMessage());
+    }
+  }
+
+  /** Deciding Manager → employee, stating the outcome + any note. Best-effort. */
+  public void mailEmployeeAfterDecision(IhrmsPrincipal.User manager, String leaveId, String ip) {
+    try {
+      LeaveRequest leave = leaves.findById(leaveId).orElse(null);
+      if (leave == null) {
+        return;
+      }
+      String outcome = leave.getStatus() == LeaveStatus.APPROVED ? "approved" : "rejected";
+      String subject = "Leave request " + outcome;
+      StringBuilder body = new StringBuilder();
+      body
+          .append("Your ")
+          .append(leave.getLeaveType().name())
+          .append(" leave request for ")
+          .append(dateRange(leave))
+          .append(" has been ")
+          .append(outcome)
+          .append(".\n");
+      if (leave.getDecisionNote() != null) {
+        body.append("\nNote from your manager: ").append(leave.getDecisionNote()).append("\n");
+      }
+      internalMail.send(manager, mailTo(leave.getEmployeeId(), subject, body.toString()), ip);
+    } catch (RuntimeException e) {
+      log.warn("Leave decision courtesy mail skipped (best-effort): {}", e.getMessage());
+    }
+  }
+
+  private String dateRange(LeaveRequest leave) {
+    return leave.getStartDate().format(LEAVE_DATE) + " – " + leave.getEndDate().format(LEAVE_DATE);
+  }
+
+  private static SendMessageRequest mailTo(String toId, String subject, String body) {
+    return new SendMessageRequest(List.of(toId), List.of(), List.of(), subject, body, List.of());
+  }
 
   /** Approver = employee.onboardingHr → that HR's team → team.manager (reuses the approval resolution). */
   private String resolveApprover(Employee me) {
