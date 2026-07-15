@@ -2,6 +2,7 @@ package com.ihrms.domain.repository;
 
 import com.ihrms.domain.model.AttendanceSession;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -13,6 +14,12 @@ public interface AttendanceSessionRepository extends JpaRepository<AttendanceSes
 
   /** The employee's currently-open session, if any (drives clock-in/out + status). */
   Optional<AttendanceSession> findByEmployeeIdAndClockOutAtIsNull(String employeeId);
+
+  /** Whether the employee already has a session on a shift-day (→ this clock-in is not the first). */
+  boolean existsByEmployeeIdAndShiftDate(String employeeId, LocalDate shiftDate);
+
+  /** Whether the employee's shift-day is flagged late (its first session was late) — drives isLateToday. */
+  boolean existsByEmployeeIdAndShiftDateAndLateTrue(String employeeId, LocalDate shiftDate);
 
   /** Completed sessions since {@code from} — for today/week totals (upper bound is "now", all in the past). */
   List<AttendanceSession> findByEmployeeIdAndClockOutAtIsNotNullAndClockInAtGreaterThanEqual(

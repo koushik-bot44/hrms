@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Activity, LogIn, LogOut } from 'lucide-react';
+import { Activity, Coffee, LogIn, LogOut, Play, type LucideIcon } from 'lucide-react';
 import { attendanceKeys, getTeamActivity } from '@/lib/api/attendance';
 import { useApiQuery } from '@/lib/api/hooks';
 import { absoluteTime, istDateTime, relativeTime } from '@/lib/date';
@@ -10,6 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const PAGE = 30;
+
+const EVENT: Record<string, { icon: LucideIcon; label: string; tint: string }> = {
+  IN: { icon: LogIn, label: 'clocked in', tint: 'bg-success/10 text-success' },
+  OUT: { icon: LogOut, label: 'clocked out', tint: 'bg-muted text-muted-foreground' },
+  BREAK_START: { icon: Coffee, label: 'started a break', tint: 'bg-warning/10 text-warning' },
+  BREAK_END: { icon: Play, label: 'ended a break', tint: 'bg-primary/10 text-primary' },
+};
 
 /**
  * Pull-based "Attendance activity" feed (§8a): the manager's team clock-in/out punches, newest first,
@@ -58,24 +65,19 @@ export function AttendanceActivityFeed() {
           <>
             <ul className="space-y-3">
               {data.content.map((e, i) => {
-                const isIn = e.type === 'IN';
+                const meta = EVENT[e.type] ?? EVENT.OUT;
+                const Icon = meta.icon;
                 return (
                   <li key={`${e.at}-${e.employeeId}-${i}`} className="flex items-start gap-3 text-sm">
                     <span
-                      className={
-                        isIn
-                          ? 'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-success/10 text-success'
-                          : 'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground'
-                      }
+                      className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full ${meta.tint}`}
                     >
-                      {isIn ? <LogIn className="size-3.5" /> : <LogOut className="size-3.5" />}
+                      <Icon className="size-3.5" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate">
                         <span className="font-medium">{e.fullName ?? e.employeeCode ?? 'Employee'}</span>{' '}
-                        <span className="text-muted-foreground">
-                          {isIn ? 'clocked in' : 'clocked out'}
-                        </span>
+                        <span className="text-muted-foreground">{meta.label}</span>
                       </p>
                       <p className="text-xs text-muted-foreground" title={absoluteTime(e.at)}>
                         {relativeTime(e.at)} · {istDateTime(e.at)}

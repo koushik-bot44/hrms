@@ -465,8 +465,12 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
 
 ## 8a. Attendance (clock in / clock out)
 
-A credentialed employee records working time from the portal (`/workspace`); a Manager sees his team's
-attendance. **View-only in v1** — no editing or correction of past punches.
+A credentialed employee records working time from the portal (`/workspace`) against a **fixed overnight
+shift**, with **breaks** excluded from worked hours; a Manager sees his team's attendance including late
+arrivals and break time. Past punches are **view-only** (no editing/correction).
+
+**Shift constants (centralized in `ShiftConfig`, easy to change later):** shift **19:00 → 04:00** (next day),
+**LATE** after **19:20**, timezone **Asia/Kolkata**.
 
 - **Who:** only a **credentialed** employee (the `/workspace` principal — `mailAddress` assigned) has
   attendance. An OTP-only onboarding employee has none (403 on every attendance endpoint). A Manager reads
@@ -481,22 +485,43 @@ attendance. **View-only in v1** — no editing or correction of past punches.
 - **Forgot to clock out:** an open session stays **open**, is shown as *In progress*, is **never
   auto-closed**, and contributes **0** to totals until it is closed. Daily/period totals sum **completed**
   sessions only.
-- **Working hours:** per-day total (sum of that day's completed sessions) + a this-week / period total. A
-  session is attributed to the **IST calendar day of its clock-in**, and its whole duration counts to that
-  day (a session crossing midnight is **not split**). No overtime, shifts, or leave interaction.
+- **Shift-day attribution (overnight):** a session belongs to the **date its shift started**, not the calendar
+  date. Rule: take the clock-in's **IST date**; **if the IST time is before 04:00, subtract one day**. So a
+  19:00 Mon → 04:00 Tue session is **Monday**; an early 18:30 Mon clock-in is **Monday**; a 02:00 Tue clock-in
+  is **Monday** (the tail of Monday's shift); a 05:00 Tue clock-in is **Tuesday**. History + totals group by
+  this **shift-day** (`shift_date`, persisted on the session), not the calendar day; a session's whole span
+  counts to its shift-day (not split at midnight).
+- **Late:** the **first** clock-in of a shift-day **after 19:20 IST** is **LATE** (at/before 19:20 is on-time).
+  `is_late` + `late_minutes` are computed at clock-in and **persisted on that first session**, so the Manager
+  sees lateness without recomputing. Later sessions of the same shift-day are not themselves late.
+- **Working hours = worked time, breaks excluded:** per-shift-day total + a this-week / period total, each the
+  sum of **completed** sessions' duration **minus their break time**. No overtime or leave interaction.
+- **Breaks:** within an OPEN session an employee can **Start Break / End Break**. A session is `clock in →
+  (start break → end break)* → clock out`. **One open break at a time** — starting a second, or ending with
+  none open, is a **409** (enforced in the service AND by a partial unique index `(session_id) WHERE
+  break_end_at IS NULL`). **Clocking out requires ending an open break first** (else 409). Break time is
+  **excluded** from worked hours.
+- **Workspace entry prompts (server-state-driven).** Employee machines sleep, so the two prompts are evaluated
+  from **server state** (`/attendance/me/status`) on `/workspace` **entry and on window focus/visibility** —
+  never a live page timer. If the employee is **not clocked in**, a **clock-in dialog** appears ("Clock in to
+  start your shift") with **Clock In** and **Skip** (Skip dismisses for the session). If a **break is still
+  open**, a **return-from-break reminder** appears ("You're on break — end your break to resume working") with
+  **End Break**. Both survive a slept machine because they read server state, not a timer.
 - **Manager view (team-scope):** a Manager sees attendance ONLY for employees in his team scope — those whose
   onboarding HR is the HR on the Manager's team (the SAME set he approves; the existing scope resolution is
-  reused). Cross-team / cross-company is denied. A roster (who's clocked in, today + period hours) plus a
-  read-only per-employee day-grouped history.
+  reused). Cross-team / cross-company is denied. A roster (who's clocked in, **late-today**, today + period
+  **worked** hours) with a **late** filter, plus a read-only per-employee **shift-day** history showing each
+  session's breaks + worked time + late tag.
 - **Attendance activity feed (pull-based, NO bell):** punches do **not** create notification-bell entries.
   Instead the Manager has a dedicated **activity feed** — a flat, reverse-chronological list of his team's
-  clock-in/out events (name + ID, IN/OUT, time), derived from the **audit log** and refetched when he opens
-  or focuses the page. It is checked, never interruptive.
+  clock-in/out **and break start/end** events (name + ID, event, time), derived from the **audit log** and
+  refetched when he opens or focuses the page. It is checked, never interruptive.
 - **Clock-out reminders (best-effort):** on app **sign-out**, if a session is open the UI confirms
   *"You're still clocked in — clock out first?"* (Clock out & sign out / Sign out anyway / Cancel) — reliable.
   On **tab/browser close**, a `beforeunload` handler (registered only while clocked in) triggers the browser's
   generic leave prompt — a nudge only; its text isn't customizable and leaving can't be prevented.
-- **Audit:** every punch is audited `ATTENDANCE_CLOCK_IN` / `ATTENDANCE_CLOCK_OUT` with `companyId` set.
+- **Audit:** every punch is audited `ATTENDANCE_CLOCK_IN` / `ATTENDANCE_CLOCK_OUT`, and every break
+  `ATTENDANCE_BREAK_START` / `ATTENDANCE_BREAK_END`, with `companyId` set.
   `attendance_sessions` carries a denormalized `company_id` so every query filters by tenant.
 
 ---

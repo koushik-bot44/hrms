@@ -227,18 +227,33 @@ export type TeamLeavePage = Omit<Required<Schemas['TeamLeavePage']>, 'content'> 
 
 // --- Attendance (§8a) ------------------------------------------------------
 
-/** Button state + today/week totals; {@code openSince} is null when not clocked in. */
-export type ClockStatus = Omit<Required<Schemas['ClockStatusView']>, 'openSince'> & {
+/** Button + prompt state + worked totals (§8a v2); nullable fields are null when the state is absent. */
+export type ClockStatus = Omit<
+  Required<Schemas['ClockStatusView']>,
+  'openSince' | 'breakOpenSince'
+> & {
   openSince: string | null;
+  breakOpenSince: string | null;
 };
 
-/** One session; {@code clockOutAt} + {@code durationSeconds} are null while the session is open. */
+/** One break within a session; {@code breakEndAt} + {@code durationSeconds} are null while open. */
+export type AttendanceBreakDto = Omit<
+  Required<Schemas['AttendanceBreakView']>,
+  'breakEndAt' | 'durationSeconds'
+> & {
+  breakEndAt: string | null;
+  durationSeconds: number | null;
+};
+
+/** One session; {@code workedSeconds} (duration minus breaks) is null while open; breaks are nested. */
 export type AttendanceSessionDto = Omit<
   Required<Schemas['AttendanceSessionView']>,
-  'clockOutAt' | 'durationSeconds'
+  'clockOutAt' | 'workedSeconds' | 'lateMinutes' | 'breaks'
 > & {
   clockOutAt: string | null;
-  durationSeconds: number | null;
+  workedSeconds: number | null;
+  lateMinutes: number | null;
+  breaks: AttendanceBreakDto[];
 };
 
 export type AttendanceDay = Omit<Required<Schemas['AttendanceDayView']>, 'sessions'> & {

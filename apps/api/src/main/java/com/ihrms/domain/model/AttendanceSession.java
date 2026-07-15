@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -46,6 +47,18 @@ public class AttendanceSession {
   @JdbcTypeCode(SqlTypes.TIMESTAMP_WITH_TIMEZONE)
   @Column(name = "clockOutAt")
   private Instant clockOutAt;
+
+  /** The shift-day this session is attributed to (§8a v2) — 19:00→04:00, the day the shift started. */
+  @Column(name = "shiftDate", nullable = false)
+  private LocalDate shiftDate;
+
+  /** True on the FIRST session of a shift-day whose clock-in was after 19:20 IST. */
+  @Column(name = "isLate", nullable = false)
+  private boolean late = false;
+
+  /** Whole minutes past 19:20 (only set when {@code late}); null otherwise. */
+  @Column(name = "lateMinutes")
+  private Integer lateMinutes;
 
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP_WITH_TIMEZONE)

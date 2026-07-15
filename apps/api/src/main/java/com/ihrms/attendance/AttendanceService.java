@@ -1,5 +1,6 @@
 package com.ihrms.attendance;
 
+import com.ihrms.attendance.dto.AttendanceDtos.AttendanceBreakView;
 import com.ihrms.attendance.dto.AttendanceDtos.AttendanceDayView;
 import com.ihrms.attendance.dto.AttendanceDtos.AttendanceSessionView;
 import com.ihrms.attendance.dto.AttendanceDtos.ClockStatusView;
@@ -11,10 +12,12 @@ import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
 import com.ihrms.auth.AuthorizationService;
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.domain.model.AttendanceBreak;
 import com.ihrms.domain.model.AttendanceSession;
 import com.ihrms.domain.model.AuditLog;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Team;
+import com.ihrms.domain.repository.AttendanceBreakRepository;
 import com.ihrms.domain.repository.AttendanceSessionRepository;
 import com.ihrms.domain.repository.AuditLogRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
@@ -32,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -43,21 +47,27 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Attendance (§8a): clock in / clock out, own history, and the Manager's team-scope views. The SERVER is
- * the time source (never a client timestamp); instants are UTC and all grouping/totals are computed in
- * Asia/Kolkata. A session is attributed to the IST day of its clock-in and its whole duration counts to
- * that day (not split at midnight); totals sum COMPLETED sessions only — an open session adds 0.
+ * Attendance (§8a v2): clock in / clock out with a fixed overnight shift (19:00→04:00, late after 19:20),
+ * breaks excluded from worked hours, own history, and the Manager's team-scope views. The SERVER is the
+ * time source (never a client timestamp); instants are UTC and all grouping/totals are in Asia/Kolkata.
+ * A session is attributed to its SHIFT-DAY (persisted); worked time = completed sessions' duration minus
+ * their break time. Shift constants + the shift-day/late rules live in {@link ShiftConfig}.
  */
 @Service
 public class AttendanceService {
 
-  private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
+  private static final ZoneId IST = ShiftConfig.ZONE;
   private static final int DEFAULT_RANGE_DAYS = 14;
   private static final int MAX_RANGE_DAYS = 92;
-  private static final List<String> CLOCK_ACTIONS =
-      List.of("ATTENDANCE_CLOCK_IN", "ATTENDANCE_CLOCK_OUT");
+  private static final List<String> ACTIVITY_ACTIONS =
+      List.of(
+          "ATTENDANCE_CLOCK_IN",
+          "ATTENDANCE_CLOCK_OUT",
+          "ATTENDANCE_BREAK_START",
+          "ATTENDANCE_BREAK_END");
 
   private final AttendanceSessionRepository sessions;
+  private final AttendanceBreakRepository breaks;
   private final EmployeeRepository employees;
   private final TeamRepository teams;
   private final AuditLogRepository auditLogs;
@@ -66,12 +76,14 @@ public class AttendanceService {
 
   public AttendanceService(
       AttendanceSessionRepository sessions,
+      AttendanceBreakRepository breaks,
       EmployeeRepository employees,
       TeamRepository teams,
       AuditLogRepository auditLogs,
       AuthorizationService authz,
       AuditService audit) {
     this.sessions = sessions;
+    this.breaks = breaks;
     this.employees = employees;
     this.teams = teams;
     this.auditLogs = auditLogs;
@@ -79,23 +91,32 @@ public class AttendanceService {
     this.audit = audit;
   }
 
-  // --- Employee: clock in / out + status --------------------------------------
+  // --- Employee: clock in / out + breaks + status -----------------------------
 
-  /** Clock in. 409 if a session is already open (checked + DB partial-unique). Audited. */
+  /** Clock in. 409 if a session is already open (checked + DB partial-unique). Late/shift-day persisted. */
   @Transactional
   public ClockStatusView clockIn(IhrmsPrincipal actor, String ip) {
     Employee me = requireCredentialedEmployee(actor);
     if (sessions.findByEmployeeIdAndClockOutAtIsNull(me.getId()).isPresent()) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "You are already clocked in");
     }
+    Instant now = Instant.now(); // SERVER time, always
+    LocalDate shiftDate = ShiftConfig.shiftDateOf(now);
+    boolean firstOfShiftDay = !sessions.existsByEmployeeIdAndShiftDate(me.getId(), shiftDate);
+
     AttendanceSession session = new AttendanceSession();
     session.setEmployeeId(me.getId());
     session.setCompanyId(me.getCompanyId());
-    session.setClockInAt(Instant.now()); // SERVER time, always
+    session.setClockInAt(now);
+    session.setShiftDate(shiftDate);
+    // The FIRST clock-in of a shift-day after 19:20 IST is late; persisted so the Manager needn't recompute.
+    if (firstOfShiftDay && ShiftConfig.isLate(now, shiftDate)) {
+      session.setLate(true);
+      session.setLateMinutes((int) ShiftConfig.lateMinutes(now, shiftDate));
+    }
     try {
       sessions.saveAndFlush(session);
     } catch (DataIntegrityViolationException e) {
-      // The partial-unique index caught a concurrent second open session — surface a clean 409, not 500.
       throw new ResponseStatusException(HttpStatus.CONFLICT, "You are already clocked in");
     }
     ClockStatusView status = statusFor(me);
@@ -104,26 +125,70 @@ public class AttendanceService {
     return status;
   }
 
-  /** Clock out. 409 if no open session. Audited (with the completed duration). */
+  /** Clock out. 409 if no open session, or if a break is still open. Audited (with the completed duration). */
   @Transactional
   public ClockStatusView clockOut(IhrmsPrincipal actor, String ip) {
     Employee me = requireCredentialedEmployee(actor);
-    AttendanceSession open =
-        sessions
-            .findByEmployeeIdAndClockOutAtIsNull(me.getId())
-            .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.CONFLICT, "You are not clocked in"));
+    AttendanceSession open = requireOpenSession(me);
+    if (breaks.findBySessionIdAndBreakEndAtIsNull(open.getId()).isPresent()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "End your break before clocking out");
+    }
     open.setClockOutAt(Instant.now()); // SERVER time
     sessions.save(open);
-    long duration = durationSeconds(open);
+    long duration = Duration.between(open.getClockInAt(), open.getClockOutAt()).getSeconds();
     ClockStatusView status = statusFor(me);
-    // Audit metadata values are STRINGS: a numeric (Long) value round-trips through the jsonb column on
-    // Hibernate's dirty-check and is seen as changed, which would spuriously UPDATE the append-only row.
+    // Audit metadata values are STRINGS: a numeric jsonb value re-dirties the append-only row on flush.
     audit.record(
         AuditActor.from(actor),
         "ATTENDANCE_CLOCK_OUT",
         "AttendanceSession",
         open.getId(),
+        Map.of("durationSeconds", String.valueOf(duration)),
+        ip);
+    return status;
+  }
+
+  /** Start a break within the open session. 409 if not clocked in, or a break is already open. */
+  @Transactional
+  public ClockStatusView startBreak(IhrmsPrincipal actor, String ip) {
+    Employee me = requireCredentialedEmployee(actor);
+    AttendanceSession open = requireOpenSession(me);
+    if (breaks.findBySessionIdAndBreakEndAtIsNull(open.getId()).isPresent()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "You are already on a break");
+    }
+    AttendanceBreak b = new AttendanceBreak();
+    b.setSessionId(open.getId());
+    b.setCompanyId(me.getCompanyId());
+    b.setBreakStartAt(Instant.now());
+    try {
+      breaks.saveAndFlush(b);
+    } catch (DataIntegrityViolationException e) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "You are already on a break");
+    }
+    ClockStatusView status = statusFor(me);
+    audit.record(
+        AuditActor.from(actor), "ATTENDANCE_BREAK_START", "AttendanceBreak", b.getId(), Map.of(), ip);
+    return status;
+  }
+
+  /** End the open break. 409 if not clocked in, or no break is open. Audited (with the break duration). */
+  @Transactional
+  public ClockStatusView endBreak(IhrmsPrincipal actor, String ip) {
+    Employee me = requireCredentialedEmployee(actor);
+    AttendanceSession open = requireOpenSession(me);
+    AttendanceBreak b =
+        breaks
+            .findBySessionIdAndBreakEndAtIsNull(open.getId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "You are not on a break"));
+    b.setBreakEndAt(Instant.now());
+    breaks.save(b);
+    long duration = Duration.between(b.getBreakStartAt(), b.getBreakEndAt()).getSeconds();
+    ClockStatusView status = statusFor(me);
+    audit.record(
+        AuditActor.from(actor),
+        "ATTENDANCE_BREAK_END",
+        "AttendanceBreak",
+        b.getId(),
         Map.of("durationSeconds", String.valueOf(duration)),
         ip);
     return status;
@@ -135,25 +200,41 @@ public class AttendanceService {
   }
 
   private ClockStatusView statusFor(Employee me) {
-    var open = sessions.findByEmployeeIdAndClockOutAtIsNull(me.getId());
-    LocalDate today = LocalDate.now(IST);
-    Instant weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).atStartOfDay(IST).toInstant();
+    Optional<AttendanceSession> open = sessions.findByEmployeeIdAndClockOutAtIsNull(me.getId());
+    Optional<AttendanceBreak> openBreak =
+        open.flatMap(s -> breaks.findBySessionIdAndBreakEndAtIsNull(s.getId()));
+    LocalDate currentShiftDay = ShiftConfig.shiftDateOf(Instant.now());
+    boolean isLateToday =
+        sessions.existsByEmployeeIdAndShiftDateAndLateTrue(me.getId(), currentShiftDay);
+
+    // "This week" spans shift-days from the currentShiftDay's Monday; a shift-day's earliest clock-in is at
+    // 04:00 IST of that day, so bounding clock-in at Monday 04:00 IST captures exactly that week's sessions.
+    Instant weekStart =
+        currentShiftDay
+            .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+            .atTime(ShiftConfig.SHIFT_END)
+            .atZone(IST)
+            .toInstant();
     List<AttendanceSession> completedThisWeek =
         sessions.findByEmployeeIdAndClockOutAtIsNotNullAndClockInAtGreaterThanEqual(me.getId(), weekStart);
-    long weekSeconds = completedThisWeek.stream().mapToLong(this::durationSeconds).sum();
+    Map<String, List<AttendanceBreak>> byId = breaksBySession(completedThisWeek);
+    long weekSeconds = completedThisWeek.stream().mapToLong(s -> workedSeconds(s, byId)).sum();
     long todaySeconds =
         completedThisWeek.stream()
-            .filter(s -> istDate(s.getClockInAt()).equals(today))
-            .mapToLong(this::durationSeconds)
+            .filter(s -> currentShiftDay.equals(s.getShiftDate()))
+            .mapToLong(s -> workedSeconds(s, byId))
             .sum();
     return new ClockStatusView(
         open.isPresent(),
         open.map(s -> s.getClockInAt().toString()).orElse(null),
+        openBreak.isPresent(),
+        openBreak.map(b -> b.getBreakStartAt().toString()).orElse(null),
+        isLateToday,
         todaySeconds,
         weekSeconds);
   }
 
-  /** The caller's own history, day-grouped (Asia/Kolkata), paginated by session; total for the range. */
+  /** The caller's own history, grouped by SHIFT-DAY, paginated by session; worked total for the range. */
   @Transactional(readOnly = true)
   public MyAttendancePage myHistory(IhrmsPrincipal actor, String from, String to, Pageable pageable) {
     Employee me = requireCredentialedEmployee(actor);
@@ -162,7 +243,7 @@ public class AttendanceService {
 
   // --- Manager: team-scope views ---------------------------------------------
 
-  /** Roster of the Manager's team-scope employees with who's clocked in + today/period hours. */
+  /** Roster of the Manager's team-scope employees: state (clocked-in / on-break / late-today) + worked hours. */
   @Transactional(readOnly = true)
   public List<TeamAttendanceRow> teamSummary(IhrmsPrincipal.User manager, String from, String to) {
     List<Employee> scoped = scopedEmployees(manager);
@@ -170,24 +251,38 @@ public class AttendanceService {
       return List.of();
     }
     List<String> ids = scoped.stream().map(Employee::getId).toList();
+
+    List<AttendanceSession> openSessions = sessions.findByEmployeeIdInAndClockOutAtIsNull(ids);
     Set<String> clockedIn =
-        sessions.findByEmployeeIdInAndClockOutAtIsNull(ids).stream()
-            .map(AttendanceSession::getEmployeeId)
+        openSessions.stream().map(AttendanceSession::getEmployeeId).collect(Collectors.toSet());
+    Map<String, String> openSessionToEmp =
+        openSessions.stream()
+            .collect(Collectors.toMap(AttendanceSession::getId, AttendanceSession::getEmployeeId, (a, b) -> a));
+    Set<String> onBreak =
+        breaks.findBySessionIdInOrderByBreakStartAtAsc(openSessionToEmp.keySet()).stream()
+            .filter(AttendanceBreak::isOpen)
+            .map(b -> openSessionToEmp.get(b.getSessionId()))
+            .filter(Objects::nonNull)
             .collect(Collectors.toSet());
 
+    LocalDate currentShiftDay = ShiftConfig.shiftDateOf(Instant.now());
     Instant[] range = resolveRange(from, to);
-    LocalDate today = LocalDate.now(IST);
     List<AttendanceSession> windowCompleted =
         sessions
             .findByCompanyIdAndEmployeeIdInAndClockOutAtIsNotNullAndClockInAtGreaterThanEqualAndClockInAtLessThan(
                 manager.companyId(), ids, range[0], range[1]);
+    Map<String, List<AttendanceBreak>> breaksById = breaksBySession(windowCompleted);
     Map<String, Long> periodByEmp =
         windowCompleted.stream()
-            .collect(Collectors.groupingBy(AttendanceSession::getEmployeeId, Collectors.summingLong(this::durationSeconds)));
+            .collect(
+                Collectors.groupingBy(
+                    AttendanceSession::getEmployeeId, Collectors.summingLong(s -> workedSeconds(s, breaksById))));
     Map<String, Long> todayByEmp =
         windowCompleted.stream()
-            .filter(s -> istDate(s.getClockInAt()).equals(today))
-            .collect(Collectors.groupingBy(AttendanceSession::getEmployeeId, Collectors.summingLong(this::durationSeconds)));
+            .filter(s -> currentShiftDay.equals(s.getShiftDate()))
+            .collect(
+                Collectors.groupingBy(
+                    AttendanceSession::getEmployeeId, Collectors.summingLong(s -> workedSeconds(s, breaksById))));
 
     return scoped.stream()
         .map(
@@ -197,13 +292,15 @@ public class AttendanceService {
                     e.getEmployeeCode(),
                     e.getFullName(),
                     clockedIn.contains(e.getId()),
+                    onBreak.contains(e.getId()),
+                    sessions.existsByEmployeeIdAndShiftDateAndLateTrue(e.getId(), currentShiftDay),
                     todayByEmp.getOrDefault(e.getId(), 0L),
                     periodByEmp.getOrDefault(e.getId(), 0L)))
         .sorted(Comparator.comparing(r -> r.fullName() == null ? "" : r.fullName().toLowerCase()))
         .collect(Collectors.toList());
   }
 
-  /** One team-scope employee's day-grouped history (drill-down). Cross-scope employeeId -> 403. */
+  /** One team-scope employee's shift-day history (drill-down). Cross-scope employeeId -> 403. */
   @Transactional(readOnly = true)
   public MyAttendancePage teamEmployeeHistory(
       IhrmsPrincipal.User manager, String employeeId, String from, String to, Pageable pageable) {
@@ -211,7 +308,7 @@ public class AttendanceService {
     return historyFor(employeeId, from, to, pageable);
   }
 
-  /** The Manager's pull-based activity feed: team-scope clock in/out events, newest first (audit-derived). */
+  /** The Manager's pull-based activity feed: team-scope clock in/out + break events, newest first. */
   @Transactional(readOnly = true)
   public TeamActivityPage teamActivity(IhrmsPrincipal.User manager, Pageable pageable) {
     List<Employee> scoped = scopedEmployees(manager);
@@ -223,7 +320,7 @@ public class AttendanceService {
         scoped.stream().collect(Collectors.toMap(Employee::getId, e -> e, (a, b) -> a));
     Page<AuditLog> page =
         auditLogs.findByCompanyIdAndActionInAndActorIdInOrderByCreatedAtDesc(
-            manager.companyId(), CLOCK_ACTIONS, ids, pageable);
+            manager.companyId(), ACTIVITY_ACTIONS, ids, pageable);
     List<TeamActivityEvent> events =
         page.getContent().stream()
             .map(
@@ -233,12 +330,22 @@ public class AttendanceService {
                       a.getActorId(),
                       e == null ? null : e.getEmployeeCode(),
                       e == null ? null : e.getFullName(),
-                      "ATTENDANCE_CLOCK_IN".equals(a.getAction()) ? "IN" : "OUT",
+                      activityType(a.getAction()),
                       a.getCreatedAt().toString());
                 })
             .collect(Collectors.toList());
     return new TeamActivityPage(
         events, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+  }
+
+  private static String activityType(String action) {
+    return switch (action) {
+      case "ATTENDANCE_CLOCK_IN" -> "IN";
+      case "ATTENDANCE_CLOCK_OUT" -> "OUT";
+      case "ATTENDANCE_BREAK_START" -> "BREAK_START";
+      case "ATTENDANCE_BREAK_END" -> "BREAK_END";
+      default -> action;
+    };
   }
 
   // --- Helpers ----------------------------------------------------------------
@@ -248,51 +355,87 @@ public class AttendanceService {
     Page<AttendanceSession> page =
         sessions.findByEmployeeIdAndClockInAtGreaterThanEqualAndClockInAtLessThan(
             employeeId, range[0], range[1], pageable);
-    List<AttendanceDayView> days = groupByDay(page.getContent());
-    long periodSeconds =
-        sessions
-            .findByEmployeeIdAndClockOutAtIsNotNullAndClockInAtGreaterThanEqualAndClockInAtLessThan(
-                employeeId, range[0], range[1])
-            .stream()
-            .mapToLong(this::durationSeconds)
-            .sum();
+    Map<String, List<AttendanceBreak>> pageBreaks = breaksBySession(page.getContent());
+    List<AttendanceDayView> days = groupByShiftDay(page.getContent(), pageBreaks);
+
+    List<AttendanceSession> completed =
+        sessions.findByEmployeeIdAndClockOutAtIsNotNullAndClockInAtGreaterThanEqualAndClockInAtLessThan(
+            employeeId, range[0], range[1]);
+    Map<String, List<AttendanceBreak>> completedBreaks = breaksBySession(completed);
+    long periodSeconds = completed.stream().mapToLong(s -> workedSeconds(s, completedBreaks)).sum();
     return new MyAttendancePage(
         days, periodSeconds, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
   }
 
-  /** Group a page of sessions into IST days (preserving the incoming newest-first order). */
-  private List<AttendanceDayView> groupByDay(List<AttendanceSession> list) {
+  /** Group a page of sessions into SHIFT-DAYs (preserving the incoming newest-first order). */
+  private List<AttendanceDayView> groupByShiftDay(
+      List<AttendanceSession> list, Map<String, List<AttendanceBreak>> byId) {
     Map<LocalDate, List<AttendanceSession>> byDay = new LinkedHashMap<>();
     for (AttendanceSession s : list) {
-      byDay.computeIfAbsent(istDate(s.getClockInAt()), k -> new ArrayList<>()).add(s);
+      byDay.computeIfAbsent(s.getShiftDate(), k -> new ArrayList<>()).add(s);
     }
     List<AttendanceDayView> out = new ArrayList<>();
     for (var entry : byDay.entrySet()) {
       long total =
-          entry.getValue().stream().filter(s -> !s.isOpen()).mapToLong(this::durationSeconds).sum();
+          entry.getValue().stream().filter(s -> !s.isOpen()).mapToLong(s -> workedSeconds(s, byId)).sum();
+      boolean late = entry.getValue().stream().anyMatch(AttendanceSession::isLate);
       out.add(
           new AttendanceDayView(
               entry.getKey().toString(),
-              entry.getValue().stream().map(this::view).collect(Collectors.toList()),
-              total));
+              entry.getValue().stream().map(s -> view(s, byId)).collect(Collectors.toList()),
+              total,
+              late));
     }
     return out;
   }
 
-  private AttendanceSessionView view(AttendanceSession s) {
+  private AttendanceSessionView view(AttendanceSession s, Map<String, List<AttendanceBreak>> byId) {
+    List<AttendanceBreak> bs = byId.getOrDefault(s.getId(), List.of());
     return new AttendanceSessionView(
         s.getId(),
         s.getClockInAt().toString(),
         s.getClockOutAt() == null ? null : s.getClockOutAt().toString(),
-        s.isOpen() ? null : durationSeconds(s));
+        s.isOpen() ? null : workedSeconds(s, byId),
+        s.isLate(),
+        s.getLateMinutes(),
+        bs.stream().map(this::breakView).collect(Collectors.toList()));
   }
 
-  private long durationSeconds(AttendanceSession s) {
-    return s.isOpen() ? 0 : Duration.between(s.getClockInAt(), s.getClockOutAt()).getSeconds();
+  private AttendanceBreakView breakView(AttendanceBreak b) {
+    return new AttendanceBreakView(
+        b.getId(),
+        b.getBreakStartAt().toString(),
+        b.getBreakEndAt() == null ? null : b.getBreakEndAt().toString(),
+        b.isOpen() ? null : Duration.between(b.getBreakStartAt(), b.getBreakEndAt()).getSeconds());
   }
 
-  private LocalDate istDate(Instant instant) {
-    return instant.atZone(IST).toLocalDate();
+  private Map<String, List<AttendanceBreak>> breaksBySession(List<AttendanceSession> list) {
+    List<String> ids = list.stream().map(AttendanceSession::getId).toList();
+    if (ids.isEmpty()) {
+      return Map.of();
+    }
+    return breaks.findBySessionIdInOrderByBreakStartAtAsc(ids).stream()
+        .collect(Collectors.groupingBy(AttendanceBreak::getSessionId));
+  }
+
+  /** Worked seconds for a completed session = its duration minus the sum of its COMPLETED breaks. */
+  private long workedSeconds(AttendanceSession s, Map<String, List<AttendanceBreak>> byId) {
+    if (s.isOpen()) {
+      return 0;
+    }
+    long duration = Duration.between(s.getClockInAt(), s.getClockOutAt()).getSeconds();
+    long breakSeconds =
+        byId.getOrDefault(s.getId(), List.of()).stream()
+            .filter(b -> !b.isOpen())
+            .mapToLong(b -> Duration.between(b.getBreakStartAt(), b.getBreakEndAt()).getSeconds())
+            .sum();
+    return Math.max(0, duration - breakSeconds);
+  }
+
+  private AttendanceSession requireOpenSession(Employee me) {
+    return sessions
+        .findByEmployeeIdAndClockOutAtIsNull(me.getId())
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "You are not clocked in"));
   }
 
   /** Parse from/to (yyyy-MM-dd, IST) into a [start, endExclusive) instant range with sane defaults + cap. */

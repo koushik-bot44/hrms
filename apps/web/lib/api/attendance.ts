@@ -32,9 +32,19 @@ export function clockIn(): Promise<ClockStatus> {
   return apiFetch<ClockStatus>('/attendance/clock-in', { method: 'POST' });
 }
 
-/** Clock out — rejects with a 409 if not clocked in. */
+/** Clock out — rejects with a 409 if not clocked in, or a break is still open. */
 export function clockOut(): Promise<ClockStatus> {
   return apiFetch<ClockStatus>('/attendance/clock-out', { method: 'POST' });
+}
+
+/** Start a break — 409 if not clocked in or already on a break. */
+export function startBreak(): Promise<ClockStatus> {
+  return apiFetch<ClockStatus>('/attendance/break/start', { method: 'POST' });
+}
+
+/** End the open break — 409 if not clocked in or not on a break. */
+export function endBreak(): Promise<ClockStatus> {
+  return apiFetch<ClockStatus>('/attendance/break/end', { method: 'POST' });
 }
 
 export function getMyAttendance(

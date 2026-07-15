@@ -772,6 +772,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/break/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["startBreak"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attendance/break/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["endBreak"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accountant/employees/{id}/reveal": {
         parameters: {
             query?: never;
@@ -1915,9 +1947,20 @@ export interface components {
             open?: boolean;
             /** @description Clock-in time of the open session (ISO UTC); null when not clocked in */
             openSince?: string;
-            /** Format: int64 */
+            onBreak?: boolean;
+            /** @description Start time of the open break (ISO UTC); null when not on a break */
+            breakOpenSince?: string;
+            /** @description Whether the first clock-in of the current shift-day was late (after 19:20 IST) */
+            isLateToday?: boolean;
+            /**
+             * Format: int64
+             * @description Worked seconds today (this shift-day), completed sessions minus breaks
+             */
             todaySeconds?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Worked seconds this week, completed sessions minus breaks
+             */
             weekSeconds?: number;
         };
         UpdateTeamRequest: {
@@ -2163,19 +2206,34 @@ export interface components {
             totalPages?: number;
             companyDeleted?: boolean;
         };
+        AttendanceBreakView: {
+            id?: string;
+            breakStartAt?: string;
+            breakEndAt?: string;
+            /** Format: int64 */
+            durationSeconds?: number;
+        };
         AttendanceDayView: {
-            /** @description yyyy-MM-dd in Asia/Kolkata */
+            /** @description shift-day yyyy-MM-dd in Asia/Kolkata (the day the shift started) */
             date?: string;
             sessions?: components["schemas"]["AttendanceSessionView"][];
             /** Format: int64 */
             totalSeconds?: number;
+            late?: boolean;
         };
         AttendanceSessionView: {
             id?: string;
             clockInAt?: string;
             clockOutAt?: string;
-            /** Format: int64 */
-            durationSeconds?: number;
+            /**
+             * Format: int64
+             * @description Worked seconds = duration minus breaks; null while the session is open
+             */
+            workedSeconds?: number;
+            isLate?: boolean;
+            /** Format: int32 */
+            lateMinutes?: number;
+            breaks?: components["schemas"]["AttendanceBreakView"][];
         };
         MyAttendancePage: {
             days?: components["schemas"]["AttendanceDayView"][];
@@ -2195,6 +2253,8 @@ export interface components {
             employeeCode?: string;
             fullName?: string;
             clockedIn?: boolean;
+            onBreak?: boolean;
+            lateToday?: boolean;
             /** Format: int64 */
             todaySeconds?: number;
             /** Format: int64 */
@@ -2204,7 +2264,7 @@ export interface components {
             employeeId?: string;
             employeeCode?: string;
             fullName?: string;
-            /** @description IN | OUT */
+            /** @description IN | OUT | BREAK_START | BREAK_END */
             type?: string;
             at?: string;
         };
@@ -3531,6 +3591,46 @@ export interface operations {
         };
     };
     clockIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ClockStatusView"];
+                };
+            };
+        };
+    };
+    startBreak: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ClockStatusView"];
+                };
+            };
+        };
+    };
+    endBreak: {
         parameters: {
             query?: never;
             header?: never;

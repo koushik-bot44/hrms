@@ -14,6 +14,7 @@ import {
 } from '@/lib/date';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -106,29 +107,54 @@ export function AttendanceHistory({ fetchPage, queryKey, title = 'History' }: Pr
             {data.days.map((day) => (
               <div key={day.date} className="space-y-2">
                 <div className="flex items-baseline justify-between">
-                  <h3 className="text-sm font-medium">{istDayLabel(day.date)}</h3>
+                  <h3 className="flex items-center gap-2 text-sm font-medium">
+                    {istDayLabel(day.date)}
+                    {day.late ? (
+                      <Badge variant="warning" className="text-[10px]">
+                        LATE
+                      </Badge>
+                    ) : null}
+                  </h3>
                   <span className="text-xs font-medium text-muted-foreground">
-                    {formatDuration(day.totalSeconds)}
+                    {formatDuration(day.totalSeconds)} worked
                   </span>
                 </div>
                 <ul className="divide-y rounded-md border">
                   {day.sessions.map((s) => (
-                    <li
-                      key={s.id}
-                      className="flex items-center justify-between px-3 py-2 text-sm"
-                    >
-                      <span className="tabular-nums">
-                        {istTime(s.clockInAt)}
-                        <span className="px-1.5 text-muted-foreground">→</span>
-                        {s.clockOutAt ? (
-                          istTime(s.clockOutAt)
-                        ) : (
-                          <span className="text-success">In progress</span>
-                        )}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {s.durationSeconds != null ? formatDuration(s.durationSeconds) : '—'}
-                      </span>
+                    <li key={s.id} className="space-y-1 px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-2 tabular-nums">
+                          {istTime(s.clockInAt)}
+                          <span className="text-muted-foreground">→</span>
+                          {s.clockOutAt ? (
+                            istTime(s.clockOutAt)
+                          ) : (
+                            <span className="text-success">In progress</span>
+                          )}
+                          {s.isLate ? (
+                            <Badge variant="warning" className="text-[10px]">
+                              {s.lateMinutes != null ? `LATE ${s.lateMinutes}m` : 'LATE'}
+                            </Badge>
+                          ) : null}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {s.workedSeconds != null ? formatDuration(s.workedSeconds) : '—'}
+                        </span>
+                      </div>
+                      {s.breaks.length > 0 ? (
+                        <ul className="ml-1 space-y-0.5 border-l pl-3 text-xs text-muted-foreground">
+                          {s.breaks.map((b) => (
+                            <li key={b.id} className="flex items-center gap-1.5">
+                              <span className="tabular-nums">
+                                {istTime(b.breakStartAt)}
+                                <span className="px-1">–</span>
+                                {b.breakEndAt ? istTime(b.breakEndAt) : 'open'}
+                              </span>
+                              <span>· break {b.durationSeconds != null ? formatDuration(b.durationSeconds) : ''}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

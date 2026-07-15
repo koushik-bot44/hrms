@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CalendarDays, Clock, Inbox } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { AppShell, type NavItem } from '@/components/app-shell';
+import { WorkspaceEntryGuard } from '@/components/attendance/workspace-entry-guard';
 
 /**
  * The employee PORTAL shell (Stage 6) — mirrors the staff `AppShell` (topbar + sidebar + Mail button)
@@ -31,6 +32,8 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AppShell roleLabel="Employee" nav={nav}>
+      {/* Server-state-driven clock-in / return-from-break prompts (§8a v2), evaluated on entry + focus. */}
+      <WorkspaceEntryGuard />
       {children}
     </AppShell>
   );

@@ -42,11 +42,25 @@ public class AttendanceController {
     return attendance.clockIn(actor, request.getRemoteAddr());
   }
 
-  /** Clock out — 409 if not clocked in. */
+  /** Clock out — 409 if not clocked in, or a break is still open. */
   @PostMapping("/clock-out")
   public ClockStatusView clockOut(
       @AuthenticationPrincipal IhrmsPrincipal actor, HttpServletRequest request) {
     return attendance.clockOut(actor, request.getRemoteAddr());
+  }
+
+  /** Start a break — 409 if not clocked in or already on a break. */
+  @PostMapping("/break/start")
+  public ClockStatusView startBreak(
+      @AuthenticationPrincipal IhrmsPrincipal actor, HttpServletRequest request) {
+    return attendance.startBreak(actor, request.getRemoteAddr());
+  }
+
+  /** End the open break — 409 if not clocked in or not on a break. */
+  @PostMapping("/break/end")
+  public ClockStatusView endBreak(
+      @AuthenticationPrincipal IhrmsPrincipal actor, HttpServletRequest request) {
+    return attendance.endBreak(actor, request.getRemoteAddr());
   }
 
   /** Button state + today/week totals (drives the toggle + live display). */

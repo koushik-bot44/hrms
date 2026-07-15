@@ -24,6 +24,7 @@ import { TableSkeleton } from '@/components/loading-skeleton';
 export function TeamAttendance() {
   const [from, setFrom] = React.useState(() => istDaysAgoIso(13));
   const [to, setTo] = React.useState(() => istTodayIso());
+  const [lateOnly, setLateOnly] = React.useState(false);
   const [selected, setSelected] = React.useState<TeamAttendanceRow | null>(null);
 
   const query = useApiQuery(
@@ -58,15 +59,27 @@ export function TeamAttendance() {
         accessorKey: 'clockedIn',
         header: 'Now',
         cell: ({ row }) =>
-          row.original.clockedIn ? (
+          row.original.onBreak ? (
+            <Badge variant="warning">On break</Badge>
+          ) : row.original.clockedIn ? (
             <Badge variant="success">Clocked in</Badge>
           ) : (
             <Badge variant="neutral">Out</Badge>
           ),
       },
       {
+        accessorKey: 'lateToday',
+        header: 'Late today',
+        cell: ({ row }) =>
+          row.original.lateToday ? (
+            <Badge variant="warning">Late</Badge>
+          ) : (
+            <span className="text-xs text-muted-foreground">On time</span>
+          ),
+      },
+      {
         accessorKey: 'todaySeconds',
-        header: 'Today',
+        header: 'Today (worked)',
         cell: ({ row }) => (
           <span className="tabular-nums">{formatDuration(row.original.todaySeconds)}</span>
         ),
@@ -105,8 +118,18 @@ export function TeamAttendance() {
           className="h-9 w-auto"
         />
       </label>
+      <Button
+        type="button"
+        variant={lateOnly ? 'default' : 'outline'}
+        size="sm"
+        onClick={() => setLateOnly((v) => !v)}
+      >
+        Late today
+      </Button>
     </div>
   );
+
+  const rows = (query.data ?? []).filter((r) => !lateOnly || r.lateToday);
 
   return (
     <div className="space-y-6">
@@ -116,7 +139,7 @@ export function TeamAttendance() {
         </CardHeader>
         <CardContent>
           {query.isLoading ? (
-            <TableSkeleton rows={5} cols={5} />
+            <TableSkeleton rows={5} cols={6} />
           ) : query.isError ? (
             <EmptyState
               icon={Users}
@@ -126,7 +149,7 @@ export function TeamAttendance() {
           ) : (
             <DataTable
               columns={columns}
-              data={query.data ?? []}
+              data={rows}
               searchPlaceholder="Filter by name or ID…"
               toolbar={rangeToolbar}
               emptyState={
