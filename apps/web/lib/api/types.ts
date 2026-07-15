@@ -388,6 +388,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mail/threads/{id}/reply-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["replyAll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mail/threads/{id}/read": {
         parameters: {
             query?: never;
@@ -1758,7 +1774,9 @@ export interface components {
             threadId?: string;
         };
         SendMessageRequest: {
-            toUserId: string;
+            toUserIds: string[];
+            ccUserIds?: string[];
+            bccUserIds?: string[];
             subject: string;
             body: string;
             attachmentIds?: string[];
@@ -2063,6 +2081,9 @@ export interface components {
         ThreadMessageView: {
             id?: string;
             from?: components["schemas"]["MailPartyView"];
+            to?: components["schemas"]["MailPartyView"][];
+            cc?: components["schemas"]["MailPartyView"][];
+            bcc?: components["schemas"]["MailPartyView"][];
             body?: string;
             createdAt?: string;
             mine?: boolean;
@@ -2949,6 +2970,32 @@ export interface operations {
         };
     };
     reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SendMessageResult"];
+                };
+            };
+        };
+    };
+    replyAll: {
         parameters: {
             query?: never;
             header?: never;

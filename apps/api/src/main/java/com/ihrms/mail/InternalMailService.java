@@ -5,6 +5,7 @@ import com.ihrms.audit.AuditService;
 import com.ihrms.auth.AuthorizationService;
 import com.ihrms.auth.AuthorizationService.MailParticipant;
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.domain.enums.RecipientType;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
@@ -45,6 +46,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
@@ -157,14 +159,22 @@ public class InternalMailService {
 
   // --- Send (new thread) + Reply (join a thread) --------------------------------
 
-  /** Start a NEW thread to one recipient. Rejects (403) anything the send graph forbids. Audited. */
+  /**
+   * Start a NEW thread with one or more recipients (TO + CC + BCC). EVERY recipient is re-checked through
+   * the send graph — if ANY is disallowed the WHOLE send is rejected (403), never silently dropped. BCC
+   * recipients are delivered but hidden from other recipients (enforced when the thread is rendered).
+   * Audited.
+   */
   @Transactional
   public SendMessageResult send(IhrmsPrincipal actor, SendMessageRequest input, String ip) {
     MailParticipant me = resolveActor(actor);
-    MailParticipant to = resolveRecipient(input.toUserId());
-    if (!authz.canSendMail(me, to)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot message this recipient");
+    // Typed recipient set, de-duped across fields (first/highest-visibility placement wins).
+    LinkedHashMap<String, RecipientType> typed =
+        typedRecipients(input.toUserIds(), input.ccUserIds(), input.bccUserIds());
+    if (typed.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one recipient is required");
     }
+    Map<String, MailParticipant> resolved = resolveAndAuthorize(me, typed.keySet());
 
     String threadId = Cuids.newId(); // a fresh conversation
     Message message = new Message();
@@ -173,20 +183,35 @@ public class InternalMailService {
     message.setSubject(input.subject().strip());
     message.setBody(input.body());
     messages.save(message);
-    saveRecipient(message.getId(), to);
+    typed.forEach((id, type) -> saveRecipient(message.getId(), resolved.get(id), type));
     int bound = bindAttachments(me, message.getId(), input.attachmentIds());
 
-    auditSent(me, message, to.id(), bound, ip);
+    auditSent(me, message, typed.size(), bound, ip);
     return new SendMessageResult(message.getId(), threadId);
   }
 
   /**
-   * Reply within a thread. The recipient is DERIVED from the thread (the other participant) — never
-   * supplied by the caller — and a reply IS a send, so {@link AuthorizationService#canSendMail} is
-   * re-checked here (403 if the graph now forbids it). Audited {@code MAIL_SENT}.
+   * Reply within a thread — to the ORIGINAL SENDER only. The recipient is DERIVED from the thread (never
+   * supplied), and a reply IS a send, so {@link AuthorizationService#canSendMail} is re-checked (403 if
+   * the graph now forbids it). Audited {@code MAIL_SENT}.
    */
   @Transactional
   public SendMessageResult reply(IhrmsPrincipal actor, String threadId, ReplyRequest input, String ip) {
+    return replyInternal(actor, threadId, input, false, ip);
+  }
+
+  /**
+   * Reply ALL within a thread — to the original sender + all TO + all CC, EXCLUDING the actor and NEVER
+   * any BCC (BCC is not propagated, and a BCC recipient's status is never revealed). Each derived recipient
+   * is re-checked through the graph. Audited {@code MAIL_SENT}.
+   */
+  @Transactional
+  public SendMessageResult replyAll(IhrmsPrincipal actor, String threadId, ReplyRequest input, String ip) {
+    return replyInternal(actor, threadId, input, true, ip);
+  }
+
+  private SendMessageResult replyInternal(
+      IhrmsPrincipal actor, String threadId, ReplyRequest input, boolean all, String ip) {
     MailParticipant me = resolveActor(actor);
     List<Message> msgs = messages.findByThreadIdOrderByCreatedAtAsc(threadId);
     if (msgs.isEmpty()) {
@@ -197,15 +222,14 @@ public class InternalMailService {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not part of this conversation");
     }
 
-    String otherId = counterpartyId(me.id(), msgs, recByMsg);
-    if (otherId == null) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "This conversation has no recipient to reply to");
+    // Derive the recipient set from the thread — never free-typed.
+    Set<String> recipientIds =
+        all ? replyAllRecipientIds(me.id(), msgs, recByMsg) : replyToSender(me.id(), msgs, recByMsg);
+    if (recipientIds.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "This conversation has no one to reply to");
     }
-    MailParticipant to = resolveRecipient(otherId);
-    // The graph still governs replies — re-check every time (roles/companies can change mid-thread).
-    if (!authz.canSendMail(me, to)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot message this recipient");
-    }
+    // The graph still governs replies — re-check EVERY recipient (roles/companies can change mid-thread).
+    Map<String, MailParticipant> resolved = resolveAndAuthorize(me, recipientIds);
 
     Message reply = new Message();
     reply.setThreadId(threadId);
@@ -214,10 +238,10 @@ public class InternalMailService {
     reply.setSubject(msgs.get(0).getSubject()); // the thread keeps its subject
     reply.setBody(input.body());
     messages.save(reply);
-    saveRecipient(reply.getId(), to);
+    resolved.values().forEach(to -> saveRecipient(reply.getId(), to, RecipientType.TO)); // replies address TO
     int bound = bindAttachments(me, reply.getId(), input.attachmentIds());
 
-    auditSent(me, reply, to.id(), bound, ip);
+    auditSent(me, reply, resolved.size(), bound, ip);
     return new SendMessageResult(reply.getId(), threadId);
   }
 
@@ -393,23 +417,37 @@ public class InternalMailService {
       recipients.saveAll(toStamp);
     }
 
-    Map<String, MailPartyView> partyMap = partiesById(participantIds(msgs, recByMsg, null));
+    // partyMap resolves ONLY the accounts this viewer may see (hidden BCCs never enter it) — a hard
+    // boundary against leaking a BCC identity into any part of the response.
+    Map<String, MailPartyView> partyMap =
+        partiesById(visibleParticipantIds(me.id(), msgs, recByMsg, null));
     Map<String, List<MessageAttachment>> attByMsg = attachmentsByMessage(visible);
 
     List<ThreadMessageView> messageViews =
         visible.stream()
             .map(
-                m ->
-                    new ThreadMessageView(
-                        m.getId(),
-                        partyMap.get(m.senderAccountId()),
-                        m.getBody(),
-                        m.getCreatedAt().toString(),
-                        m.senderAccountId().equals(me.id()),
-                        attachmentViews(attByMsg.get(m.getId()))))
+                m -> {
+                  List<MessageRecipient> rs = recByMsg.getOrDefault(m.getId(), List.of());
+                  List<MailPartyView> bcc =
+                      rs.stream()
+                          .filter(r -> r.getRecipientType() == RecipientType.BCC && bccVisible(me.id(), m, r))
+                          .map(r -> partyMap.get(r.recipientAccountId()))
+                          .filter(Objects::nonNull)
+                          .collect(Collectors.toList());
+                  return new ThreadMessageView(
+                      m.getId(),
+                      partyMap.get(m.senderAccountId()),
+                      partiesOfType(rs, RecipientType.TO, partyMap),
+                      partiesOfType(rs, RecipientType.CC, partyMap),
+                      bcc,
+                      m.getBody(),
+                      m.getCreatedAt().toString(),
+                      m.senderAccountId().equals(me.id()),
+                      attachmentViews(attByMsg.get(m.getId())));
+                })
             .toList();
     List<MailPartyView> participants = otherParties(me.id(), msgs, recByMsg, partyMap);
-    String otherId = counterpartyId(me.id(), msgs, recByMsg);
+    String otherId = replyToSender(me.id(), msgs, recByMsg).stream().findFirst().orElse(null);
     MailPartyView counterparty = otherId == null ? null : partyMap.get(otherId);
 
     audit.record(
@@ -506,7 +544,8 @@ public class InternalMailService {
     Map<String, List<MessageRecipient>> recByMsg = recipientsByMessage(all);
     Map<String, MessageRecipient> mine = myRows(meId, recByMsg);
 
-    Map<String, MailPartyView> partyMap = partiesById(participantIds(all, recByMsg, null));
+    Map<String, MailPartyView> partyMap =
+        partiesById(visibleParticipantIds(meId, all, recByMsg, null));
     // Which of these messages carry an attachment (for the paperclip indicator).
     Set<String> messagesWithAttachments =
         attachments.findByMessageIdInOrderByCreatedAtAsc(all.stream().map(Message::getId).toList())
@@ -585,35 +624,29 @@ public class InternalMailService {
     return false;
   }
 
-  /** The other party a reply goes to — derived from the thread's first message (2-party in v1). */
-  private String counterpartyId(
-      String meId, List<Message> msgs, Map<String, List<MessageRecipient>> recByMsg) {
-    Message root = msgs.get(0);
-    if (!meId.equals(root.senderAccountId())) {
-      return root.senderAccountId();
-    }
-    for (MessageRecipient r : recByMsg.getOrDefault(root.getId(), List.of())) {
-      if (!meId.equals(r.recipientAccountId())) {
-        return r.recipientAccountId();
-      }
-    }
-    for (String id : participantIds(msgs, recByMsg, meId)) {
-      return id;
-    }
-    return null;
-  }
-
-  /** All participant account ids across the thread (senders + recipients), optionally excluding one. */
-  private Set<String> participantIds(
-      List<Message> msgs, Map<String, List<MessageRecipient>> recByMsg, String exclude) {
+  /**
+   * The account ids a VIEWER may see across the thread (senders + TO/CC recipients + only the BCC rows
+   * visible to them), optionally excluding one id. This is the BCC-privacy boundary: a BCC recipient that
+   * isn't the viewer or the message's sender is never included, so it can never reach the response.
+   */
+  private Set<String> visibleParticipantIds(
+      String meId,
+      List<Message> msgs,
+      Map<String, List<MessageRecipient>> recByMsg,
+      String exclude) {
     Set<String> ids = new LinkedHashSet<>();
     for (Message m : msgs) {
-      if (exclude == null || !exclude.equals(m.senderAccountId())) {
-        ids.add(m.senderAccountId());
+      String sender = m.senderAccountId();
+      if (exclude == null || !exclude.equals(sender)) {
+        ids.add(sender);
       }
       for (MessageRecipient r : recByMsg.getOrDefault(m.getId(), List.of())) {
-        if (exclude == null || !exclude.equals(r.recipientAccountId())) {
-          ids.add(r.recipientAccountId());
+        if (r.getRecipientType() == RecipientType.BCC && !bccVisible(meId, m, r)) {
+          continue; // another recipient's BCC — hidden from this viewer
+        }
+        String rid = r.recipientAccountId();
+        if (exclude == null || !exclude.equals(rid)) {
+          ids.add(rid);
         }
       }
     }
@@ -625,9 +658,9 @@ public class InternalMailService {
       List<Message> msgs,
       Map<String, List<MessageRecipient>> recByMsg,
       Map<String, MailPartyView> partyMap) {
-    return participantIds(msgs, recByMsg, meId).stream()
+    return visibleParticipantIds(meId, msgs, recByMsg, meId).stream()
         .map(partyMap::get)
-        .filter(p -> p != null)
+        .filter(Objects::nonNull)
         .collect(Collectors.toList());
   }
 
@@ -726,7 +759,7 @@ public class InternalMailService {
     }
   }
 
-  private void saveRecipient(String messageId, MailParticipant to) {
+  private void saveRecipient(String messageId, MailParticipant to, RecipientType type) {
     MessageRecipient row = new MessageRecipient();
     row.setMessageId(messageId);
     if (isUser(to)) {
@@ -734,10 +767,12 @@ public class InternalMailService {
     } else {
       row.setRecipientEmployeeId(to.id());
     }
+    row.setRecipientType(type);
     recipients.save(row);
   }
 
-  private void auditSent(MailParticipant me, Message message, String toId, int attachmentCount, String ip) {
+  private void auditSent(
+      MailParticipant me, Message message, int recipientCount, int attachmentCount, String ip) {
     audit.record(
         actorOf(me),
         "MAIL_SENT",
@@ -745,10 +780,110 @@ public class InternalMailService {
         message.getId(),
         Map.of(
             "threadId", message.getThreadId(),
-            "toUserId", toId,
+            "recipientCount", recipientCount,
             "subject", message.getSubject(),
             "attachmentCount", attachmentCount),
         ip);
+  }
+
+  // --- Recipient sets: typing, authorization, reply derivation --------------------
+
+  /** Build the ordered TO/CC/BCC map, de-duping across fields (first placement wins → TO beats CC beats BCC). */
+  private LinkedHashMap<String, RecipientType> typedRecipients(
+      List<String> to, List<String> cc, List<String> bcc) {
+    LinkedHashMap<String, RecipientType> map = new LinkedHashMap<>();
+    addTyped(map, to, RecipientType.TO);
+    addTyped(map, cc, RecipientType.CC);
+    addTyped(map, bcc, RecipientType.BCC);
+    return map;
+  }
+
+  private void addTyped(
+      LinkedHashMap<String, RecipientType> map, List<String> ids, RecipientType type) {
+    if (ids == null) {
+      return;
+    }
+    for (String id : ids) {
+      if (id != null && !id.isBlank()) {
+        map.putIfAbsent(id.trim(), type);
+      }
+    }
+  }
+
+  /**
+   * Resolve every recipient id and re-check it through the ONE send graph. If ANY is disallowed the whole
+   * send is rejected (403) — never silently dropped. The actor's team keys are resolved once (no N+1).
+   */
+  private Map<String, MailParticipant> resolveAndAuthorize(MailParticipant me, Set<String> ids) {
+    Set<String> myKeys = authz.mailTeamKeys(me);
+    Map<String, MailParticipant> resolved = new LinkedHashMap<>();
+    for (String id : ids) {
+      if (me.id().equals(id)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "You cannot message yourself");
+      }
+      MailParticipant to = resolveRecipient(id);
+      if (!authz.canSendMail(me, myKeys, to, authz.mailTeamKeys(to))) {
+        throw new ResponseStatusException(
+            HttpStatus.FORBIDDEN, "You are not allowed to message one of the recipients");
+      }
+      resolved.put(id, to);
+    }
+    return resolved;
+  }
+
+  /**
+   * Reply target: the sender of the latest message NOT authored by me (whom I am replying to). If I
+   * authored every message so far (following up on my own thread), reply continues to the recipients I
+   * addressed as TO — never a BCC.
+   */
+  private Set<String> replyToSender(
+      String meId, List<Message> msgs, Map<String, List<MessageRecipient>> recByMsg) {
+    for (int i = msgs.size() - 1; i >= 0; i--) {
+      String sender = msgs.get(i).senderAccountId();
+      if (!meId.equals(sender)) {
+        return new LinkedHashSet<>(List.of(sender));
+      }
+    }
+    LinkedHashSet<String> to = new LinkedHashSet<>();
+    for (Message m : msgs) {
+      for (MessageRecipient r : recByMsg.getOrDefault(m.getId(), List.of())) {
+        if (r.getRecipientType() == RecipientType.TO && !meId.equals(r.recipientAccountId())) {
+          to.add(r.recipientAccountId());
+        }
+      }
+    }
+    return to;
+  }
+
+  /** Reply-all: every sender + TO/CC recipient across the thread, minus me, NEVER any BCC. De-duped. */
+  private Set<String> replyAllRecipientIds(
+      String meId, List<Message> msgs, Map<String, List<MessageRecipient>> recByMsg) {
+    LinkedHashSet<String> ids = new LinkedHashSet<>();
+    for (Message m : msgs) {
+      ids.add(m.senderAccountId());
+      for (MessageRecipient r : recByMsg.getOrDefault(m.getId(), List.of())) {
+        if (r.getRecipientType() != RecipientType.BCC) {
+          ids.add(r.recipientAccountId());
+        }
+      }
+    }
+    ids.remove(meId);
+    return ids;
+  }
+
+  /** Whether a BCC row is visible to this viewer: only the message's sender, or the BCC recipient itself. */
+  private boolean bccVisible(String meId, Message m, MessageRecipient r) {
+    return meId.equals(m.senderAccountId()) || meId.equals(r.recipientAccountId());
+  }
+
+  /** Recipient parties of one type on a message (BCC callers must pre-filter for visibility). */
+  private List<MailPartyView> partiesOfType(
+      List<MessageRecipient> rs, RecipientType type, Map<String, MailPartyView> partyMap) {
+    return rs.stream()
+        .filter(r -> r.getRecipientType() == type)
+        .map(r -> partyMap.get(r.recipientAccountId()))
+        .filter(Objects::nonNull)
+        .collect(Collectors.toList());
   }
 
   private static String snippet(String body) {

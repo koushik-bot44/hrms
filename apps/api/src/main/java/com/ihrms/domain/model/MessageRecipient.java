@@ -1,8 +1,11 @@
 package com.ihrms.domain.model;
 
+import com.ihrms.domain.enums.RecipientType;
 import com.ihrms.domain.support.CuidId;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -39,6 +42,12 @@ public class MessageRecipient {
   /** The recipient when it is an employee; null when staff. Exactly one recipient column is set. */
   @Column(name = "recipientEmployeeId")
   private String recipientEmployeeId;
+
+  /** How this recipient was addressed (§8): TO / CC / BCC. BCC is hidden from other recipients. */
+  @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+  @Column(name = "recipientType", nullable = false)
+  private RecipientType recipientType = RecipientType.TO;
 
   /** When the recipient first opened the message; null while unread. */
   @JdbcTypeCode(SqlTypes.TIMESTAMP)

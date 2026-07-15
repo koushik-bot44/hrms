@@ -75,6 +75,14 @@ export function replyToThread(threadId: string, body: ReplyMessageInput): Promis
   });
 }
 
+/** Reply All — to the original sender + TO + CC (never BCC); each re-validated server-side. */
+export function replyAllToThread(threadId: string, body: ReplyMessageInput): Promise<SendMessageResult> {
+  return apiFetch<SendMessageResult>(`/mail/threads/${encodeURIComponent(threadId)}/reply-all`, {
+    method: 'POST',
+    body,
+  });
+}
+
 export function markThreadRead(id: string): Promise<MailUnreadCount> {
   return apiFetch<MailUnreadCount>(`/mail/threads/${encodeURIComponent(id)}/read`, { method: 'POST' });
 }

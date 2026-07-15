@@ -203,6 +203,92 @@ class MailApiTest {
     assertThat(contactAddresses(aa)).containsExactly("superadmin@ihrms");
   }
 
+  // --- CC / BCC + Reply / Reply All -----------------------------------------
+
+  @Test
+  void sendWithToCcBcc_allAllowed_isDeliveredToEveryone() throws Exception {
+    // Company Admin may mail anyone in the company, so TO hr, CC mgr, BCC accountant are all allowed.
+    compose(caA, List.of(hrA.getId()), List.of(mgrA.getId()), List.of(accA.getId()), "All hands", "Read this.");
+    assertThat(unread(hrA)).isEqualTo(1);
+    assertThat(unread(mgrA)).isEqualTo(1);
+    assertThat(unread(accA)).isEqualTo(1); // the BCC recipient IS delivered the message
+  }
+
+  @Test
+  void permissionBackstop_aDisallowedCcOrBccRejectsTheWholeSend() throws Exception {
+    // HR may mail its own employee (TO), but not another team's HR (CC) — the whole send is rejected.
+    composeRaw(token(hrA), List.of(empA1.getId()), List.of(hr2A.getId()), List.of())
+        .andExpect(status().isForbidden());
+    // ...nor the team's Accountant as a BCC.
+    composeRaw(token(hrA), List.of(empA1.getId()), List.of(), List.of(accA.getId()))
+        .andExpect(status().isForbidden());
+    assertThat(audit("MAIL_SENT")).isZero(); // nothing was delivered
+  }
+
+  @Test
+  void bccPrivacy_visibleRecipientsAreComputedPerViewer() throws Exception {
+    String threadId =
+        compose(caA, List.of(hrA.getId()), List.of(mgrA.getId()), List.of(accA.getId()), "Notice", "Hi.");
+
+    // A TO recipient (hrA) and a CC recipient (mgrA) see To+Cc and NO Bcc at all — the response to them
+    // must not contain the BCC's identity ANYWHERE (not just hidden in the UI).
+    for (User viewer : List.of(hrA, mgrA)) {
+      String raw = openThreadRaw(viewer, threadId);
+      JsonNode msg = json.readTree(raw).get("messages").get(0);
+      assertThat(addressesOf(msg.get("to"))).containsExactly("hr@anvicorp");
+      assertThat(addressesOf(msg.get("cc"))).containsExactly("mgr@anvicorp");
+      assertThat(addressesOf(msg.get("bcc"))).isEmpty();
+      assertThat(raw).doesNotContain("acc@anvicorp").doesNotContain(accA.getId());
+    }
+
+    // The SENDER sees all BCC on their sent copy.
+    JsonNode sentMsg = openThreadJson(caA, threadId).get("messages").get(0);
+    assertThat(addressesOf(sentMsg.get("bcc"))).containsExactly("acc@anvicorp");
+
+    // A BCC recipient sees To+Cc + THEMSELVES only (never other BCCs — there are none here, but they see
+    // their own membership and nobody else's).
+    JsonNode bccMsg = openThreadJson(accA, threadId).get("messages").get(0);
+    assertThat(addressesOf(bccMsg.get("to"))).containsExactly("hr@anvicorp");
+    assertThat(addressesOf(bccMsg.get("cc"))).containsExactly("mgr@anvicorp");
+    assertThat(addressesOf(bccMsg.get("bcc"))).containsExactly("acc@anvicorp");
+  }
+
+  @Test
+  void reply_goesToSenderOnly_replyAll_addsToAndCc_excludingActorAndBcc() throws Exception {
+    String threadId =
+        compose(caA, List.of(hrA.getId()), List.of(mgrA.getId()), List.of(accA.getId()), "Kickoff", "Hi.");
+
+    reply(hrA, threadId, "Thanks.").andExpect(status().isOk()); // -> the sender (caA) only
+    replyAll(hrA, threadId, "On it.").andExpect(status().isOk()); // -> caA + CC mgrA (not hrA, not BCC accA)
+
+    // Each viewer sees exactly the messages they SENT or RECEIVED:
+    assertThat(openThreadJson(caA, threadId).get("messages")).hasSize(3); // sent original + reply + reply-all
+    assertThat(openThreadJson(hrA, threadId).get("messages")).hasSize(3); // original + sent reply + reply-all
+    // mgrA (CC) got the original + the reply-all, but NOT the sender-only reply.
+    assertThat(openThreadJson(mgrA, threadId).get("messages")).hasSize(2);
+    // accA (BCC) got ONLY the original — reply and reply-all never reach a BCC.
+    assertThat(openThreadJson(accA, threadId).get("messages")).hasSize(1);
+  }
+
+  @Test
+  void replyAll_revalidatesEveryRecipient_403WhenOneBecomesCrossCompany() throws Exception {
+    String threadId = compose(caA, List.of(hrA.getId()), List.of(mgrA.getId()), List.of(), "Hi", "Hello.");
+    // mgrA moves to another company AFTER the thread started. Reply All would target caA + mgrA; the
+    // graph re-check makes hrA<->mgrA (now testco) cross-company -> the whole reply-all is rejected.
+    mgrA.setCompanyId(testco);
+    users.saveAndFlush(mgrA);
+    replyAll(hrA, threadId, "Hi all").andExpect(status().isForbidden());
+  }
+
+  @Test
+  void perRecipientReadStateIsIndependentAcrossToAndCc() throws Exception {
+    String threadId = compose(caA, List.of(hrA.getId()), List.of(mgrA.getId()), List.of(), "Sync", "Hi.");
+    // hrA opening marks only hrA's own copy read; mgrA's CC copy stays unread.
+    openThreadJson(hrA, threadId);
+    assertThat(unread(hrA)).isZero();
+    assertThat(unread(mgrA)).isEqualTo(1);
+  }
+
   // --- Threads + reply ------------------------------------------------------
 
   @Test
@@ -384,7 +470,7 @@ class MailApiTest {
                 .content(
                     json.writeValueAsString(
                         Map.of(
-                            "toUserId", hrA.getId(), "subject", "s", "body", "b",
+                            "toUserIds", List.of(hrA.getId()), "subject", "s", "body", "b",
                             "attachmentIds", List.of("a", "b", "c", "d", "e", "f")))))
         .andExpect(status().isBadRequest());
   }
@@ -401,7 +487,7 @@ class MailApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     json.writeValueAsString(
-                        Map.of("toUserId", hrA.getId(), "subject", "s", "body", "b", "attachmentIds", List.of(a)))))
+                        Map.of("toUserIds", List.of(hrA.getId()), "subject", "s", "body", "b", "attachmentIds", List.of(a)))))
         .andExpect(status().isPayloadTooLarge());
   }
 
@@ -608,7 +694,7 @@ class MailApiTest {
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
-                    json.writeValueAsString(Map.of("toUserId", toId, "subject", subject, "body", body))))
+                    json.writeValueAsString(Map.of("toUserIds", List.of(toId), "subject", subject, "body", body))))
         .andExpect(status().isOk())
         .andReturn()
         .getResponse()
@@ -622,7 +708,7 @@ class MailApiTest {
             post("/mail/messages")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("toUserId", toId, "subject", "s", "body", "b"))))
+                .content(json.writeValueAsString(Map.of("toUserIds", List.of(toId), "subject", "s", "body", "b"))))
         .andExpect(expected);
   }
 
@@ -632,7 +718,7 @@ class MailApiTest {
         post("/mail/messages")
             .header("Authorization", "Bearer " + token(from))
             .contentType(MediaType.APPLICATION_JSON)
-            .content(json.writeValueAsString(Map.of("toUserId", to.getId(), "subject", "s", "body", "b"))));
+            .content(json.writeValueAsString(Map.of("toUserIds", List.of(to.getId()), "subject", "s", "body", "b"))));
   }
 
   /** Start a new thread (expects 200); returns the threadId. */
@@ -644,7 +730,7 @@ class MailApiTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         json.writeValueAsString(
-                            Map.of("toUserId", to.getId(), "subject", subject, "body", body))))
+                            Map.of("toUserIds", List.of(to.getId()), "subject", subject, "body", body))))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -658,6 +744,65 @@ class MailApiTest {
             .header("Authorization", "Bearer " + token(who))
             .contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(Map.of("body", body))));
+  }
+
+  private ResultActions replyAll(User who, String threadId, String body) throws Exception {
+    return mvc.perform(
+        post("/mail/threads/" + threadId + "/reply-all")
+            .header("Authorization", "Bearer " + token(who))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("body", body))));
+  }
+
+  /** Compose to TO+CC+BCC lists (expects 200); returns the threadId. */
+  private String compose(
+      User from, List<String> to, List<String> cc, List<String> bcc, String subject, String body)
+      throws Exception {
+    String out =
+        composeRaw(token(from), to, cc, bcc, subject, body)
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    return json.readTree(out).get("threadId").asText();
+  }
+
+  private ResultActions composeRaw(String token, List<String> to, List<String> cc, List<String> bcc)
+      throws Exception {
+    return composeRaw(token, to, cc, bcc, "s", "b");
+  }
+
+  private ResultActions composeRaw(
+      String token, List<String> to, List<String> cc, List<String> bcc, String subject, String body)
+      throws Exception {
+    return mvc.perform(
+        post("/mail/messages")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                json.writeValueAsString(
+                    Map.of(
+                        "toUserIds", to,
+                        "ccUserIds", cc,
+                        "bccUserIds", bcc,
+                        "subject", subject,
+                        "body", body))));
+  }
+
+  private String openThreadRaw(User who, String threadId) throws Exception {
+    return mvc.perform(get("/mail/threads/" + threadId).header("Authorization", "Bearer " + token(who)))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+  }
+
+  private Set<String> addressesOf(JsonNode partyArray) {
+    Set<String> out = new HashSet<>();
+    if (partyArray != null) {
+      partyArray.forEach(p -> out.add(p.get("address").asText()));
+    }
+    return out;
   }
 
   private JsonNode replyOk(User who, String threadId, String body) throws Exception {
@@ -710,7 +855,7 @@ class MailApiTest {
                     .content(
                         json.writeValueAsString(
                             Map.of(
-                                "toUserId", to.getId(), "subject", subject, "body", body,
+                                "toUserIds", List.of(to.getId()), "subject", subject, "body", body,
                                 "attachmentIds", attachmentIds))))
             .andExpect(status().isOk())
             .andReturn()

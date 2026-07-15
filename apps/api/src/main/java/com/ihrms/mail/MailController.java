@@ -58,7 +58,7 @@ public class MailController {
     return mail.send(actor, body, request.getRemoteAddr());
   }
 
-  /** Reply within a thread — recipient derived from the thread, still graph-checked (403 if forbidden). */
+  /** Reply within a thread — to the original SENDER only; still graph-checked (403 if forbidden). */
   @PostMapping("/threads/{id}/reply")
   public SendMessageResult reply(
       @PathVariable String id,
@@ -66,6 +66,16 @@ public class MailController {
       @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
     return mail.reply(actor, id, body, request.getRemoteAddr());
+  }
+
+  /** Reply ALL — sender + original TO + CC (never BCC, never the actor); each graph-checked. */
+  @PostMapping("/threads/{id}/reply-all")
+  public SendMessageResult replyAll(
+      @PathVariable String id,
+      @Valid @RequestBody ReplyRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    return mail.replyAll(actor, id, body, request.getRemoteAddr());
   }
 
   /** Step 1 of attaching a file: validate + get a short-lived presigned PUT (+ a draft attachment id). */

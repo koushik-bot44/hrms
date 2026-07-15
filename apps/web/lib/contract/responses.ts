@@ -386,9 +386,19 @@ export type ThreadPage = Omit<Required<Schemas['ThreadPage']>, 'content'> & {
   content: ThreadListItem[];
 };
 
-/** One message inside an open thread; `mine` marks the viewer's own messages. */
-export type ThreadMessage = Omit<Required<Schemas['ThreadMessageView']>, 'from' | 'attachments'> & {
+/**
+ * One message inside an open thread; `mine` marks the viewer's own messages. `to`/`cc`/`bcc` are the
+ * recipients VISIBLE to this viewer (the server hides other recipients' BCC — `bcc` is non-empty only on
+ * the sender's own copy, or shows a BCC recipient themselves).
+ */
+export type ThreadMessage = Omit<
+  Required<Schemas['ThreadMessageView']>,
+  'from' | 'to' | 'cc' | 'bcc' | 'attachments'
+> & {
   from: MailParty;
+  to: MailParty[];
+  cc: MailParty[];
+  bcc: MailParty[];
   attachments: MailAttachment[];
 };
 

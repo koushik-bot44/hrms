@@ -37,9 +37,15 @@ export const MailDomainSchema = z
     'Use lowercase letters, digits or hyphen — no spaces or @',
   );
 
-/** Compose a NEW thread. The recipient is chosen from `/mail/contacts` (graph-derived, never free-typed). */
+/**
+ * Compose a NEW thread with one or more recipients (§8). Recipients (TO/CC/BCC) are chosen from
+ * `/mail/contacts` (graph-derived, never free-typed); at least one TO. The server re-checks EVERY
+ * recipient and rejects the whole send if any is disallowed.
+ */
 export const SendMessageSchema = z.object({
-  toUserId: z.string().min(1, 'Choose a recipient'),
+  toUserIds: z.array(z.string()).min(1, 'Add at least one recipient'),
+  ccUserIds: z.array(z.string()).optional(),
+  bccUserIds: z.array(z.string()).optional(),
   subject: z.string().trim().min(1, 'Subject is required').max(200, 'Subject is too long'),
   body: z.string().trim().min(1, 'Write a message').max(10000, 'Message is too long'),
   // Ids of already-uploaded attachment drafts (§8); the server re-checks type/size/count on bind.

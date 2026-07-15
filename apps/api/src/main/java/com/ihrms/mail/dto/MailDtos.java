@@ -2,6 +2,7 @@ package com.ihrms.mail.dto;
 
 import com.ihrms.domain.enums.UserRole;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -20,9 +21,14 @@ public final class MailDtos {
   /** A mail participant — a staff account, shown by name + address. */
   public record MailPartyView(String userId, String name, String address, UserRole role) {}
 
-  /** Compose a NEW thread. The recipient is chosen from {@code /mail/contacts}; the graph is re-checked. */
+  /**
+   * Compose a NEW thread with one or more recipients (§8). At least one TO; CC/BCC optional. Recipients are
+   * chosen from {@code /mail/contacts}; EVERY recipient across TO+CC+BCC is re-checked by the graph.
+   */
   public record SendMessageRequest(
-      @NotBlank(message = "Recipient is required") String toUserId,
+      @NotEmpty(message = "At least one recipient is required") List<String> toUserIds,
+      List<String> ccUserIds,
+      List<String> bccUserIds,
       @NotBlank(message = "Subject is required") @Size(max = 200, message = "Subject is too long")
           String subject,
       @NotBlank(message = "Message body is required") @Size(max = 10000, message = "Message is too long")
@@ -78,10 +84,18 @@ public final class MailDtos {
   public record ThreadPage(
       List<ThreadListItemView> content, int page, int size, long totalElements, int totalPages) {}
 
-  /** One message inside an open thread. {@code mine} marks the viewer's own messages. */
+  /**
+   * One message inside an open thread. {@code mine} marks the viewer's own messages. {@code to} / {@code
+   * cc} are all TO/CC recipients; {@code bcc} is the BCC recipients VISIBLE to this viewer only (the
+   * sender sees all BCC; a BCC recipient sees only themselves; everyone else sees none — computed
+   * server-side, never leaked).
+   */
   public record ThreadMessageView(
       String id,
       MailPartyView from,
+      List<MailPartyView> to,
+      List<MailPartyView> cc,
+      List<MailPartyView> bcc,
       String body,
       String createdAt,
       boolean mine,

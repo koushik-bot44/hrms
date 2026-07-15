@@ -19,6 +19,7 @@ import {
   mailKeys,
   markThreadUnread,
   replyToThread,
+  replyAllToThread,
 } from '@/lib/api/mail';
 import { absoluteTime, relativeTime } from '@/lib/date';
 import { cn } from '@/lib/utils';
@@ -82,50 +83,58 @@ export function ThreadView({
     replyForm.reset({ body: '' });
   }, [threadId, replyForm]);
 
+  // Shared success for both Reply and Reply All: optimistically append my message, then reconcile.
+  const onReplySuccess = React.useCallback(
+    (result: { id: string }, vars: ReplyMessageInput) => {
+      const mineParty: ThreadMessage['from'] | null = session
+        ? session.type === 'USER'
+          ? { userId: session.userId, name: session.name, address: session.email, role: session.role }
+          : {
+              userId: session.employeeId,
+              name: session.name ?? session.employeeCode ?? '',
+              address: session.mailAddress ?? session.email,
+              role: null as unknown as ThreadMessage['from']['role'],
+            }
+        : null;
+      if (mineParty) {
+        queryClient.setQueryData<ThreadDetail>(mailKeys.thread(threadId as string), (prev) =>
+          prev
+            ? {
+                ...prev,
+                messages: [
+                  ...prev.messages,
+                  {
+                    id: result.id,
+                    from: mineParty,
+                    to: [],
+                    cc: [],
+                    bcc: [],
+                    body: vars.body,
+                    createdAt: new Date().toISOString(),
+                    mine: true,
+                    attachments: [],
+                  },
+                ],
+              }
+            : prev,
+        );
+      }
+      replyForm.reset();
+      setStaged([]);
+      void queryClient.invalidateQueries({ queryKey: mailKeys.thread(threadId as string) });
+      refreshLists();
+      onChanged?.();
+    },
+    [session, queryClient, threadId, replyForm, refreshLists, onChanged],
+  );
+
   const replyMutation = useApiMutation(
     (body: ReplyMessageInput) => replyToThread(threadId as string, body),
-    {
-      successMessage: 'Reply sent',
-      onSuccess: (result, vars) => {
-        // Optimistically append my reply, then reconcile (the refetch fills in attachments).
-        // Works for both a staff USER and a credentialed EMPLOYEE session (§8, Stage 5).
-        const mineParty: ThreadMessage['from'] | null = session
-          ? session.type === 'USER'
-            ? { userId: session.userId, name: session.name, address: session.email, role: session.role }
-            : {
-                userId: session.employeeId,
-                name: session.name ?? session.employeeCode ?? '',
-                address: session.mailAddress ?? session.email,
-                role: null as unknown as ThreadMessage['from']['role'],
-              }
-          : null;
-        if (mineParty) {
-          queryClient.setQueryData<ThreadDetail>(mailKeys.thread(threadId as string), (prev) =>
-            prev
-              ? {
-                  ...prev,
-                  messages: [
-                    ...prev.messages,
-                    {
-                      id: result.id,
-                      from: mineParty,
-                      body: vars.body,
-                      createdAt: new Date().toISOString(),
-                      mine: true,
-                      attachments: [],
-                    },
-                  ],
-                }
-              : prev,
-          );
-        }
-        replyForm.reset();
-        setStaged([]);
-        void queryClient.invalidateQueries({ queryKey: mailKeys.thread(threadId as string) });
-        refreshLists();
-        onChanged?.();
-      },
-    },
+    { successMessage: 'Reply sent', onSuccess: onReplySuccess },
+  );
+  const replyAllMutation = useApiMutation(
+    (body: ReplyMessageInput) => replyAllToThread(threadId as string, body),
+    { successMessage: 'Reply sent to everyone', onSuccess: onReplySuccess },
   );
 
   const unreadMutation = useApiMutation(() => markThreadUnread(threadId as string), {
@@ -179,6 +188,8 @@ export function ThreadView({
 
   const thread = query.data;
   const canReply = Boolean(thread.counterparty);
+  const replyBusy =
+    replyMutation.isPending || replyAllMutation.isPending || attachmentsUploading(staged);
 
   return (
     <div className="flex h-full flex-col">
@@ -240,13 +251,21 @@ export function ThreadView({
                 {relativeTime(m.createdAt)}
               </span>
             </div>
+            {m.to.length > 0 || m.cc.length > 0 || m.bcc.length > 0 ? (
+              <p className="mb-1.5 text-[11px] text-muted-foreground">
+                {m.to.length > 0 ? <>To: {m.to.map((p) => p.name).join(', ')}</> : null}
+                {m.cc.length > 0 ? <> · Cc: {m.cc.map((p) => p.name).join(', ')}</> : null}
+                {/* Bcc only ever populated for the sender's own copy (or a Bcc recipient themselves). */}
+                {m.bcc.length > 0 ? <> · Bcc: {m.bcc.map((p) => p.name).join(', ')}</> : null}
+              </p>
+            ) : null}
             <p className="whitespace-pre-wrap break-words leading-relaxed">{m.body}</p>
             <AttachmentChips attachments={m.attachments} />
           </article>
         ))}
       </div>
 
-      {/* Inline reply — recipient is implicit (the other participant). */}
+      {/* Inline reply — recipients are implicit (derived from the thread; re-checked server-side). */}
       <form
         onSubmit={replyForm.handleSubmit((v) =>
           replyMutation.mutate({ ...v, attachmentIds: stagedAttachmentIds(staged) }),
@@ -282,14 +301,36 @@ export function ThreadView({
           ) : (
             <span />
           )}
-          <Button
-            type="submit"
-            size="sm"
-            disabled={!canReply || replyMutation.isPending || attachmentsUploading(staged)}
-          >
-            <Send />
-            {attachmentsUploading(staged) ? 'Uploading…' : replyMutation.isPending ? 'Sending…' : 'Reply'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {canReply && thread.participants.length > 1 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={replyBusy}
+                onClick={() =>
+                  replyForm.handleSubmit((v) =>
+                    replyAllMutation.mutate({ ...v, attachmentIds: stagedAttachmentIds(staged) }),
+                  )()
+                }
+              >
+                {replyAllMutation.isPending ? 'Sending…' : 'Reply All'}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              disabled={!canReply || replyBusy}
+              onClick={() =>
+                replyForm.handleSubmit((v) =>
+                  replyMutation.mutate({ ...v, attachmentIds: stagedAttachmentIds(staged) }),
+                )()
+              }
+            >
+              <Send />
+              {attachmentsUploading(staged) ? 'Uploading…' : replyMutation.isPending ? 'Sending…' : 'Reply'}
+            </Button>
+          </div>
         </div>
       </form>
     </div>

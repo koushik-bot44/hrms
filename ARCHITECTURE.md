@@ -383,11 +383,26 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     team" are those whose `onboardingHr` is that team's HR (the same set approvals/attendance scope to);
     "anyone in a company" is all users + all credentialed employees with that `companyId`.
 - **Model:** a `Message` (sender, subject, text body, createdAt) fans out to one or more
-  `MessageRecipient` rows (recipient + nullable `readAt`) — a child table so multi-recipient is possible
-  later. The sender sees **Sent**, each recipient sees **Inbox**; opening a message stamps the
-  recipient's `readAt`. **Text only in v1** (no attachments). Sending is a mutation → audited
-  (`MAIL_SENT`); opening is an audited read. The send check lives in the authorization component
-  (`canSendMail`) so it can never be bypassed or duplicated.
+  `MessageRecipient` rows — each carries a **`recipientType` (`TO` | `CC` | `BCC`)**, its own nullable
+  `readAt`, and its own soft-delete. The sender sees **Sent**, each recipient sees **Inbox**; opening a
+  message stamps that recipient's `readAt`. Sending is a mutation → audited (`MAIL_SENT`); opening is an
+  audited read. The send check lives in the authorization component (`canSendMail`) so it can never be
+  bypassed or duplicated.
+- **Multiple recipients — TO / CC / BCC (§8):** a message needs **at least one TO**; CC and BCC are
+  optional. **Every** recipient across TO+CC+BCC is individually permission-checked through the ONE
+  `canSendMail` graph — if **any** single recipient is disallowed the **whole send is rejected** as a
+  permission failure (never silently dropped; the compose contacts list already offers only allowed
+  people, so this is the server-side backstop). Cross-company is impossible for any recipient type.
+- **BCC privacy (load-bearing).** A BCC recipient is delivered the message and sees it in their inbox, but
+  is **NEVER** visible to any other recipient. The visible recipient set is computed **server-side, per
+  viewer**: everyone sees all **TO + CC**; the **sender** additionally sees all **BCC**; a **BCC**
+  recipient additionally sees **only themselves** (never other BCCs). TO/CC recipients see no BCC at all.
+  A response to a viewer who isn't entitled contains **no BCC identities whatsoever**.
+- **Reply vs Reply All.** **Reply** goes to the **original message's sender only**. **Reply All** goes to
+  the original **sender + all TO + all CC**, **excluding the actor** and **excluding all BCC** (BCC is
+  never propagated), de-duplicated, as TO. Both are sends: **every** resulting recipient is re-validated
+  through `canSendMail` (403 if a relationship is no longer allowed). A BCC recipient replying never
+  reveals their BCC status.
 - **Webmail UI (Stage 2):** every staff portal's topbar carries a **Mail** control with a live unread
   badge (`GET /mail/unread-count`, refetched on focus + after send/open); employees never see it. It
   opens the mailbox **in-session at `/mail`** — a Gmail-style full-page client (Inbox / Sent, a message
@@ -406,9 +421,10 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     each row shows the other participant(s), the subject, a snippet, the latest message time, the message
     count, and is **unread if ANY message in the thread is unread for the viewer**. Opening a thread shows
     its messages in chronological order and marks the viewer's unread messages read.
-  - **Reply.** From an open thread the recipient is **derived** from the thread (the other participant) —
-    never free-typed — and a reply **is a send**, so it is re-validated through `canSendMail` every time
-    (403 if the graph would now forbid it, e.g. a participant changed company/role after the thread
+  - **Reply / Reply All.** Recipients are **derived** from the thread (never free-typed): **Reply** →
+    the original sender only; **Reply All** → the original sender + all TO + all CC, minus the actor, minus
+    all BCC. A reply **is a send**, so every derived recipient is re-validated through `canSendMail` every
+    time (403 if the graph would now forbid it, e.g. a participant changed company/role after the thread
     started). Audited `MAIL_SENT`.
   - **Search** (`GET /mail/search?q=`) runs over the viewer's **own mail only** (threads with a message
     they sent or received), matching **subject + body** case-insensitively — never another mailbox, never
