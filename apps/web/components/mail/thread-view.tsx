@@ -1,57 +1,36 @@
 'use client';
 
 import * as React from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, MailMinus, MailOpen, Send, Trash2 } from 'lucide-react';
-import {
-  ReplyMessageSchema,
-  type ReplyMessageInput,
-  type ThreadDetail,
-  type ThreadMessage,
-} from '@/lib/contract';
-import { useAuth } from '@/components/auth-provider';
+import { ArrowLeft, MailMinus, MailOpen, Reply, ReplyAll, Trash2 } from 'lucide-react';
+import { getThread, deleteThread, mailKeys, markThreadUnread } from '@/lib/api/mail';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
-import {
-  deleteThread,
-  getThread,
-  mailKeys,
-  markThreadUnread,
-  replyToThread,
-  replyAllToThread,
-} from '@/lib/api/mail';
 import { absoluteTime, relativeTime } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AttachmentChips } from '@/components/mail/attachment-chips';
-import {
-  AttachmentPicker,
-  attachmentsUploading,
-  stagedAttachmentIds,
-  type StagedAttachment,
-} from '@/components/mail/attachment-picker';
+import type { ComposeState } from '@/components/mail/docked-compose';
 
 /**
- * The reading pane (§8, Stage 3): a thread's messages in order + an inline reply box (the recipient is
- * implicit — derived from the thread) + mark-unread / delete. Opening a thread stamps read server-side,
- * so on load we refresh the unread badge + lists.
+ * The reading pane (§8 redesign): a thread's messages in order (mine vs theirs) with per-message To/Cc
+ * (and Bcc only where the API returns it — the sender's own copy), attachment chips, and Reply / Reply
+ * All actions that open the docked composer prefilled. Opening a thread stamps read server-side, so on
+ * load we refresh the unread badge + lists.
  */
 export function ThreadView({
   threadId,
   onBack,
   onDeleted,
-  onChanged,
+  onReply,
 }: {
   threadId: string | null;
   onBack?: () => void;
   onDeleted?: () => void;
-  onChanged?: () => void;
+  onReply: (state: ComposeState) => void;
 }) {
   const queryClient = useQueryClient();
-  const { session } = useAuth();
   const query = useApiQuery(
     mailKeys.thread(threadId ?? '__none__'),
     (signal) => getThread(threadId as string, signal),
@@ -70,72 +49,6 @@ export function ThreadView({
   React.useEffect(() => {
     if (loadedId) refreshLists();
   }, [loadedId, refreshLists]);
-
-  const replyForm = useForm<ReplyMessageInput>({
-    resolver: zodResolver(ReplyMessageSchema),
-    defaultValues: { body: '' },
-  });
-  const [staged, setStaged] = React.useState<StagedAttachment[]>([]);
-
-  // Clear staged files when switching threads.
-  React.useEffect(() => {
-    setStaged([]);
-    replyForm.reset({ body: '' });
-  }, [threadId, replyForm]);
-
-  // Shared success for both Reply and Reply All: optimistically append my message, then reconcile.
-  const onReplySuccess = React.useCallback(
-    (result: { id: string }, vars: ReplyMessageInput) => {
-      const mineParty: ThreadMessage['from'] | null = session
-        ? session.type === 'USER'
-          ? { userId: session.userId, name: session.name, address: session.email, role: session.role }
-          : {
-              userId: session.employeeId,
-              name: session.name ?? session.employeeCode ?? '',
-              address: session.mailAddress ?? session.email,
-              role: null as unknown as ThreadMessage['from']['role'],
-            }
-        : null;
-      if (mineParty) {
-        queryClient.setQueryData<ThreadDetail>(mailKeys.thread(threadId as string), (prev) =>
-          prev
-            ? {
-                ...prev,
-                messages: [
-                  ...prev.messages,
-                  {
-                    id: result.id,
-                    from: mineParty,
-                    to: [],
-                    cc: [],
-                    bcc: [],
-                    body: vars.body,
-                    createdAt: new Date().toISOString(),
-                    mine: true,
-                    attachments: [],
-                  },
-                ],
-              }
-            : prev,
-        );
-      }
-      replyForm.reset();
-      setStaged([]);
-      void queryClient.invalidateQueries({ queryKey: mailKeys.thread(threadId as string) });
-      refreshLists();
-      onChanged?.();
-    },
-    [session, queryClient, threadId, replyForm, refreshLists, onChanged],
-  );
-
-  const replyMutation = useApiMutation(
-    (body: ReplyMessageInput) => replyToThread(threadId as string, body),
-    { successMessage: 'Reply sent', onSuccess: onReplySuccess },
-  );
-  const replyAllMutation = useApiMutation(
-    (body: ReplyMessageInput) => replyAllToThread(threadId as string, body),
-    { successMessage: 'Reply sent to everyone', onSuccess: onReplySuccess },
-  );
 
   const unreadMutation = useApiMutation(() => markThreadUnread(threadId as string), {
     successMessage: 'Marked unread',
@@ -188,8 +101,22 @@ export function ThreadView({
 
   const thread = query.data;
   const canReply = Boolean(thread.counterparty);
-  const replyBusy =
-    replyMutation.isPending || replyAllMutation.isPending || attachmentsUploading(staged);
+  const canReplyAll = thread.participants.length > 1;
+
+  const openReply = () =>
+    onReply({
+      mode: 'reply',
+      threadId: thread.threadId,
+      subject: thread.subject,
+      recipients: thread.counterparty ? [thread.counterparty] : [],
+    });
+  const openReplyAll = () =>
+    onReply({
+      mode: 'replyAll',
+      threadId: thread.threadId,
+      subject: thread.subject,
+      recipients: thread.participants,
+    });
 
   return (
     <div className="flex h-full flex-col">
@@ -255,7 +182,7 @@ export function ThreadView({
               <p className="mb-1.5 text-[11px] text-muted-foreground">
                 {m.to.length > 0 ? <>To: {m.to.map((p) => p.name).join(', ')}</> : null}
                 {m.cc.length > 0 ? <> · Cc: {m.cc.map((p) => p.name).join(', ')}</> : null}
-                {/* Bcc only ever populated for the sender's own copy (or a Bcc recipient themselves). */}
+                {/* Bcc is only ever populated for the sender's own copy (or a Bcc recipient themselves). */}
                 {m.bcc.length > 0 ? <> · Bcc: {m.bcc.map((p) => p.name).join(', ')}</> : null}
               </p>
             ) : null}
@@ -265,74 +192,25 @@ export function ThreadView({
         ))}
       </div>
 
-      {/* Inline reply — recipients are implicit (derived from the thread; re-checked server-side). */}
-      <form
-        onSubmit={replyForm.handleSubmit((v) =>
-          replyMutation.mutate({ ...v, attachmentIds: stagedAttachmentIds(staged) }),
-        )}
-        className="border-t p-3 md:p-4"
-        noValidate
-      >
+      {/* Reply actions open the docked composer prefilled (recipients derived from the thread). */}
+      <div className="flex items-center gap-2 border-t p-3 md:p-4">
         {canReply ? (
-          <p className="mb-1.5 text-xs text-muted-foreground">
-            Reply to <span className="font-medium text-foreground">{thread.counterparty?.address}</span>
-          </p>
-        ) : null}
-        <textarea
-          rows={3}
-          placeholder={canReply ? 'Write a reply…' : 'You cannot reply to this conversation.'}
-          disabled={!canReply}
-          aria-invalid={Boolean(replyForm.formState.errors.body)}
-          className={cn(
-            'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm',
-            'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            'disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive',
-          )}
-          {...replyForm.register('body')}
-        />
-        {canReply ? (
-          <div className="mt-1.5">
-            <AttachmentPicker staged={staged} setStaged={setStaged} />
-          </div>
-        ) : null}
-        <div className="mt-2 flex items-center justify-between">
-          {replyForm.formState.errors.body ? (
-            <p className="text-xs text-destructive">{replyForm.formState.errors.body.message}</p>
-          ) : (
-            <span />
-          )}
-          <div className="flex items-center gap-2">
-            {canReply && thread.participants.length > 1 ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={replyBusy}
-                onClick={() =>
-                  replyForm.handleSubmit((v) =>
-                    replyAllMutation.mutate({ ...v, attachmentIds: stagedAttachmentIds(staged) }),
-                  )()
-                }
-              >
-                {replyAllMutation.isPending ? 'Sending…' : 'Reply All'}
+          <>
+            <Button size="sm" onClick={openReply}>
+              <Reply />
+              Reply
+            </Button>
+            {canReplyAll ? (
+              <Button size="sm" variant="outline" onClick={openReplyAll}>
+                <ReplyAll />
+                Reply all
               </Button>
             ) : null}
-            <Button
-              type="button"
-              size="sm"
-              disabled={!canReply || replyBusy}
-              onClick={() =>
-                replyForm.handleSubmit((v) =>
-                  replyMutation.mutate({ ...v, attachmentIds: stagedAttachmentIds(staged) }),
-                )()
-              }
-            >
-              <Send />
-              {attachmentsUploading(staged) ? 'Uploading…' : replyMutation.isPending ? 'Sending…' : 'Reply'}
-            </Button>
-          </div>
-        </div>
-      </form>
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">You cannot reply to this conversation.</p>
+        )}
+      </div>
     </div>
   );
 }

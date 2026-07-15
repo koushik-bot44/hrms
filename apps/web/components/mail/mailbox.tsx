@@ -39,7 +39,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ComposeDialog } from '@/components/mail/compose-dialog';
+import { DockedCompose, type ComposeState } from '@/components/mail/docked-compose';
 import { ThreadView } from '@/components/mail/thread-view';
 
 type Folder = 'inbox' | 'sent';
@@ -50,7 +50,13 @@ export function Mailbox() {
   const [folder, setFolder] = React.useState<Folder>('inbox');
   const [page, setPage] = React.useState(0);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [composeOpen, setComposeOpen] = React.useState(false);
+  // One docked compose window at a time; `seq` forces a fresh window (state reset) each time it opens.
+  const [compose, setCompose] = React.useState<ComposeState | null>(null);
+  const [composeSeq, setComposeSeq] = React.useState(0);
+  const openCompose = React.useCallback((next: ComposeState) => {
+    setCompose(next);
+    setComposeSeq((s) => s + 1);
+  }, []);
   const [searchInput, setSearchInput] = React.useState('');
   const [searchTerm, setSearchTerm] = React.useState('');
   const searching = searchTerm.trim().length > 0;
@@ -161,7 +167,7 @@ export function Mailbox() {
       <div className="flex min-h-0 flex-1">
         {/* Left rail */}
         <aside className="hidden w-52 shrink-0 flex-col gap-1 border-r bg-card p-3 md:flex">
-          <Button className="mb-2 justify-start" onClick={() => setComposeOpen(true)}>
+          <Button className="mb-2 justify-start" onClick={() => openCompose({ mode: 'new' })}>
             <SquarePen />
             Compose
           </Button>
@@ -207,7 +213,7 @@ export function Mailbox() {
               <Send />
               Sent
             </Button>
-            <Button size="sm" className="ml-auto" onClick={() => setComposeOpen(true)}>
+            <Button size="sm" className="ml-auto" onClick={() => openCompose({ mode: 'new' })}>
               <SquarePen />
               New
             </Button>
@@ -229,6 +235,7 @@ export function Mailbox() {
             active={active}
             page={page}
             setPage={setPage}
+            onReply={openCompose}
           />
         </div>
 
@@ -248,19 +255,25 @@ export function Mailbox() {
               threadId={selectedId}
               onBack={() => setSelectedId(null)}
               onDeleted={() => setSelectedId(null)}
+              onReply={openCompose}
             />
           </div>
         </div>
       </div>
 
-      <ComposeDialog
-        open={composeOpen}
-        onOpenChange={setComposeOpen}
-        onSent={(threadId) => {
-          switchFolder('sent');
-          setSelectedId(threadId);
-        }}
-      />
+      {compose ? (
+        <DockedCompose
+          key={composeSeq}
+          state={compose}
+          onClose={() => setCompose(null)}
+          onSent={(threadId) => {
+            if (compose.mode === 'new') {
+              switchFolder('sent');
+            }
+            setSelectedId(threadId);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -501,6 +514,7 @@ function MobilePanes({
   active,
   page,
   setPage,
+  onReply,
 }: {
   mode: ListMode;
   selectedId: string | null;
@@ -508,6 +522,7 @@ function MobilePanes({
   active: ListQuery;
   page: number;
   setPage: (n: number) => void;
+  onReply: (state: ComposeState) => void;
 }) {
   if (selectedId) {
     return (
@@ -515,6 +530,7 @@ function MobilePanes({
         threadId={selectedId}
         onBack={() => setSelectedId(null)}
         onDeleted={() => setSelectedId(null)}
+        onReply={onReply}
       />
     );
   }

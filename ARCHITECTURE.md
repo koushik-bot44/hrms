@@ -403,13 +403,17 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
   never propagated), de-duplicated, as TO. Both are sends: **every** resulting recipient is re-validated
   through `canSendMail` (403 if a relationship is no longer allowed). A BCC recipient replying never
   reveals their BCC status.
-- **Webmail UI (Stage 2):** every staff portal's topbar carries a **Mail** control with a live unread
-  badge (`GET /mail/unread-count`, refetched on focus + after send/open); employees never see it. It
-  opens the mailbox **in-session at `/mail`** — a Gmail-style full-page client (Inbox / Sent, a message
-  list with unread emphasis, a reading pane, and a **Compose** dialog whose recipient dropdown is the
-  graph-derived `/mail/contacts` list — never a free-typed address). The `/mail` page also offers
-  **Open in new tab** so it can be popped out while working elsewhere (same session/auth). The sender's
-  own address is shown as their identity. Threading / search / mark-unread are deferred.
+- **Webmail UI:** every portal's topbar (staff **and** the employee `/workspace`) carries a **Mail**
+  control with a live unread badge (`GET /mail/unread-count`, refetched on focus + after send/open). It
+  opens the mailbox **in-session at `/mail`** — a **Gmail-style three-region client** in the IHRMS theme:
+  a left rail (Compose + Inbox/Sent with the unread count), a dense thread list (participants, subject +
+  snippet, relative time, unread emphasis, attachment + count hints), and a reading pane; it collapses to
+  list→detail on narrow widths. **Compose is a docked bottom-right window** (minimise / expand / close),
+  and recipient entry is **type-to-search**: To / Cc / Bcc are chip inputs that filter the graph-derived
+  `/mail/contacts` list, so only allowed people are selectable — a free-typed non-match can never become a
+  recipient. **Reply / Reply All** open the same docked composer prefilled from the thread. The page also
+  offers **Open in new tab**. This is a pure UI layer — the send graph, BCC privacy, and all endpoints are
+  unchanged.
 - **Provisioning assigns the local part:** every staff-create flow (Company Admin, Accounts Admin,
   HR/Manager/Accountant) takes a **mailbox local part** (with a live `localpart@domain` preview) instead
   of a raw email; the Super Admin sets each company's mail **domain** at creation (prefilled from the
