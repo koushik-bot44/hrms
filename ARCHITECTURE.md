@@ -657,9 +657,10 @@ clicking it focuses/opens the app.
   will call from mail events.
 - **VAPID keys are env secrets.** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:`)
   come from the environment (set in Railway; generate with `npx web-push generate-vapid-keys`) — **never
-  generated in code, hardcoded, or committed**. Absent keys **disable** push in dev (logged) and **refuse
-  startup in the `prod` profile** (fail-fast). The Service Worker `sw.js` **must** be served at the site
-  root scope on the web origin (Next.js serves `public/sw.js` at `/sw.js`).
+  generated in code, hardcoded, or committed**. Push is an **optional add-on**: absent/invalid keys simply
+  **disable** it (logged loudly) in **every** environment and **never block startup** — a missing key for an
+  optional feature must not take down login/mail/etc. The Service Worker `sw.js` **must** be served at the
+  site root scope on the web origin (Next.js serves `public/sw.js` at `/sw.js`).
 
 ---
 

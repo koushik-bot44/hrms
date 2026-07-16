@@ -100,7 +100,7 @@ app:
     # Max accepted upload size for the db blob endpoint (bytes); matches the 10 MiB request cap.
     max-bytes: ${STORAGE_MAX_BYTES:10485760}
   # Web Push (VAPID) — OS-level notifications (§ Web Push). SECRETS from env, never committed. Blank ->
-  # push is disabled in dev (logged) and REFUSED at startup in prod. Generate: npx web-push generate-vapid-keys
+  # push is simply DISABLED (logged); it never blocks startup. Generate: npx web-push generate-vapid-keys
   vapid:
     public-key: ${VAPID_PUBLIC_KEY:}
     private-key: ${VAPID_PRIVATE_KEY:}

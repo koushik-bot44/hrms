@@ -24,8 +24,6 @@ import org.apache.http.HttpResponse;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,7 +45,6 @@ public class PushService {
   private final PushSubscriptionRepository subscriptions;
   private final AuditService audit;
   private final ObjectMapper json;
-  private final Environment env;
 
   /** The web-push library client — null when VAPID is not configured (push disabled). */
   private nl.martijndwars.webpush.PushService webPush;
@@ -56,27 +53,24 @@ public class PushService {
       AppProperties props,
       PushSubscriptionRepository subscriptions,
       AuditService audit,
-      ObjectMapper json,
-      Environment env) {
+      ObjectMapper json) {
     this.props = props;
     this.subscriptions = subscriptions;
     this.audit = audit;
     this.json = json;
-    this.env = env;
   }
 
   @PostConstruct
   void init() {
+    // Web Push is an ADDITIVE, optional feature: a missing/invalid VAPID config must NEVER stop the app
+    // from booting (an outage of login/mail/etc. for an optional feature is unacceptable). We log loudly
+    // and leave push DISABLED until the keys are set — in every environment, including prod.
     AppProperties.Vapid v = props.vapid();
     if (!v.isConfigured()) {
-      if (isProd()) {
-        throw new IllegalStateException(
-            "Web Push misconfigured: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT must be set"
-                + " in production. Generate a keypair with: npx web-push generate-vapid-keys");
-      }
       log.warn(
-          "Web Push DISABLED — VAPID_* not set. OS notifications will be skipped. Set VAPID_PUBLIC_KEY /"
-              + " VAPID_PRIVATE_KEY / VAPID_SUBJECT to enable (npx web-push generate-vapid-keys).");
+          "Web Push DISABLED — VAPID_* not set. OS notifications are skipped; the rest of the app runs"
+              + " normally. Set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT to enable (generate"
+              + " with: npx web-push generate-vapid-keys).");
       return;
     }
     if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
@@ -87,15 +81,8 @@ public class PushService {
           new nl.martijndwars.webpush.PushService(v.publicKey(), v.privateKey(), v.subject());
       log.info("Web Push ENABLED (VAPID configured; subject {}).", v.subject());
     } catch (GeneralSecurityException e) {
-      if (isProd()) {
-        throw new IllegalStateException("Invalid VAPID keys: " + e.getMessage(), e);
-      }
-      log.warn("Web Push DISABLED — invalid VAPID keys: {}", e.getMessage());
+      log.warn("Web Push DISABLED — invalid VAPID keys, push left off: {}", e.getMessage());
     }
-  }
-
-  private boolean isProd() {
-    return env.acceptsProfiles(Profiles.of("prod"));
   }
 
   /** True when the server can actually deliver Web Push (VAPID configured + client built). */
