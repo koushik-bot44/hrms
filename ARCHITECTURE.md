@@ -110,7 +110,7 @@ Accounts Admin, own team for Accountant).
 3. **Employee** logs in with **full name + email → OTP** (the OTP to that email is the security
    factor) and lands on their **dashboard**.
 4. Employee completes a **guided four-form stepper** under their own record:
-   - **Form 1 — Personal Details** (identity, addresses, character references, education, work
+   - **Form 1 — Personal Details** (identity, addresses, conduct references, education, work
      experience, family, declaration)
    - **Form 2 — Employee Info** (employment + government/bank details; `employeeId` is read-only and
      blank until approval)

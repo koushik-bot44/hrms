@@ -325,7 +325,7 @@ export function Form1Step({
           />
 
           <ArraySection
-            title="Character References (at least two)"
+            title="Conduct References (at least two)"
             rows={refs.fields}
             onAdd={() => refs.append({ name: '', address: '', phone: '' })}
             onRemove={refs.remove}

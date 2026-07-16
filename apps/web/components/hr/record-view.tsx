@@ -355,7 +355,7 @@ function Form1Body({ form1 }: { form1: Form1View }) {
         rows={(form1.familyDetails ?? []).map((f) => [f.name, f.age, f.relation, f.occupation])}
       />
       <MiniTable
-        title="Character References"
+        title="Conduct References"
         cols={['Name', 'Address', 'Phone']}
         rows={(form1.characterReferences ?? []).map((r) => [r.name, r.address, r.phone])}
       />

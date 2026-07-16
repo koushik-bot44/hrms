@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * The submission gate for the four-form stepper (§3.2): Form 1 + Form 2 filled, at least two
- * character references, the required identity documents uploaded, and a signature captured. Returns
+ * conduct references, the required identity documents uploaded, and a signature captured. Returns
  * the list of missing items ({@code empty} = ready to submit). The web mirrors these rules for its
  * progress/CTA state; this is the authoritative server-side gate.
  */
@@ -37,7 +37,7 @@ public final class OnboardingCompleteness {
               ? 0
               : v.characterReferences().stream().filter(OnboardingCompleteness::refFilled).count();
       if (refs < 2) {
-        missing.add("Form 1 — add at least two character references");
+        missing.add("Form 1 — add at least two conduct references");
       }
     }
 

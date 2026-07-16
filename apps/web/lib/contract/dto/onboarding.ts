@@ -218,7 +218,7 @@ export function evaluateOnboarding(
     missing.push('Complete Form 1 — Personal Details');
   } else {
     const refs = (form1.characterReferences ?? []).filter((r) => r.name && r.name.trim().length > 0);
-    if (refs.length < 2) missing.push('Form 1 — add at least two character references');
+    if (refs.length < 2) missing.push('Form 1 — add at least two conduct references');
     if (!form1.declaration || form1.declaration.trim().length === 0) {
       missing.push('Form 1 — confirm the declaration');
     }
