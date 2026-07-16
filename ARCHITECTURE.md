@@ -608,9 +608,11 @@ balances are a future feature).
 ## 8c. OS notifications (Web Push)
 
 OS-level notifications are delivered with **Web Push (VAPID)** — the browser standard for background
-notifications that appear even when the IHRMS tab is closed or unfocused. Built in stages: **N1 (this
-stage)** is the delivery backend only; **N2** adds the real opt-in UX + a fuller Service Worker; **N3**
-triggers pushes from mail/notification events.
+notifications that appear even when the IHRMS tab is closed or unfocused. Built in stages: **N1** is the
+delivery backend + subscription storage; **N2 (this stage)** is the Service Worker + opt-in permission
+flow; **N3** triggers pushes from mail/notification events. As of N2 a push (e.g. `POST /push/test`)
+surfaces a **real OS notification** — including when the IHRMS tab is minimized or fully closed — and
+clicking it focuses/opens the app.
 
 - **How Web Push works.** In the browser, a **Service Worker** (`/sw.js`, served at the web origin root)
   creates a **`PushSubscription`** — an `endpoint` URL at the browser vendor's push service (Google /
@@ -619,6 +621,20 @@ triggers pushes from mail/notification events.
   delivers it to the browser, which fires the Service Worker's `push` event → an OS notification. IHRMS
   never talks to the browser directly — only outbound HTTPS to the push services (works behind Railway; no
   inbound socket).
+- **Service Worker (N2, `public/sw.js` → served at `/sw.js`).** A **push-only** worker: it handles `push`
+  (render the JSON `{title, body, url}` as `showNotification`, with sane defaults) and `notificationclick`
+  (focus an open IHRMS window, else open one at the payload url). It **does not intercept fetch or cache**
+  — IHRMS is deliberately not turned into an offline/PWA app. `install`→`skipWaiting` + `activate`→
+  `clients.claim` so an updated worker applies predictably. **Requires HTTPS** (or `localhost`); the root
+  scope means one registration covers the whole app.
+- **Opt-in flow (N2).** A **Notifications** control (in the portal user menu, shown to any mailbox
+  principal — staff + credentialed employees) drives it, requesting permission **only on an explicit
+  click** — never auto-prompting on load. Enable → `Notification.requestPermission()`; on grant, fetch the
+  VAPID public key, `pushManager.subscribe({ userVisibleOnly: true })`, and POST the subscription. Off →
+  `pushManager.unsubscribe()` + `DELETE /push/unsubscribe`. States are explicit: **unsupported** (feature-
+  detected, hidden/disabled), **default** (offer Enable), **granted + subscribed** (on, with a way to turn
+  off + a self-test), and **denied** — where the browser blocks re-prompting, so we show guidance to re-
+  enable in browser settings rather than nagging.
 - **Subscriptions (`push_subscriptions`, additive V20).** One row per browser/device — the `endpoint` is
   **unique**, so subscribe is an upsert. Owned by **exactly one principal**: a staff `userId` **OR** a
   credentialed `employeeId` (the same nullable-either polymorphism as `message_recipients`), with a
@@ -631,9 +647,9 @@ triggers pushes from mail/notification events.
     `PUSH_SUBSCRIBED`.
   - `DELETE /push/unsubscribe {endpoint}` — remove the caller's subscription (idempotent); audited
     `PUSH_UNSUBSCRIBED`.
-  - `POST /push/test` — **N1 verification only**: sends a test notification to the CALLER's own
-    subscriptions. N3 replaces this trigger with real mail events; it's kept for debugging and never
-    notifies anyone but the caller.
+  - `POST /push/test` — **N1/N2 verification**: sends a test notification to the CALLER's own
+    subscriptions (the "Send test" button). N3 replaces this trigger with real mail events; it's kept for
+    debugging and never notifies anyone but the caller.
 - **Sending is best-effort.** `PushService.sendToPrincipal(ref, title, body, url)` loads that principal's
   subscriptions and POSTs an encrypted, VAPID-signed payload to each via the `nl.martijndwars:web-push`
   library (BouncyCastle crypto). Failures are **logged, never thrown** to callers; a `404/410` from the

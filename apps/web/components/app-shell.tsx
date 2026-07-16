@@ -7,7 +7,7 @@ import { Bell, KeyRound, LogOut, Menu, ShieldCheck, UserRound } from 'lucide-rea
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth-provider';
 import { ChangePasswordDialog } from '@/components/change-password-dialog';
-import { PushBetaDialog } from '@/components/push/push-beta-dialog';
+import { NotificationsDialog } from '@/components/push/notifications-dialog';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -101,10 +101,13 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [changingPassword, setChangingPassword] = React.useState(false);
-  const [pushBeta, setPushBeta] = React.useState(false);
+  const [notificationsOpen, setNotificationsOpen] = React.useState(false);
   const [confirmClockOut, setConfirmClockOut] = React.useState(false);
   const [clockingOut, setClockingOut] = React.useState(false);
   const isStaff = session?.type === 'USER';
+  // Web Push (§ Web Push): only a mailbox principal can subscribe — staff always, an employee once
+  // credentialed. An uncredentialed (OTP-only) employee can't, so we don't offer the control to them.
+  const hasMailbox = isStaff || (session?.type === 'EMPLOYEE' && Boolean(session.mailAddress));
 
   // Clock-out reminders (§8a): while an employee has an open session, warn on sign-out + tab close.
   const status = useClockStatus();
@@ -173,10 +176,12 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
               Change password
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuItem onSelect={() => setPushBeta(true)}>
-            <Bell className="size-4" />
-            OS notifications (beta)
-          </DropdownMenuItem>
+          {hasMailbox ? (
+            <DropdownMenuItem onSelect={() => setNotificationsOpen(true)}>
+              <Bell className="size-4" />
+              Notifications
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem onSelect={requestSignOut}>
             <LogOut className="size-4" />
             Sign out
@@ -186,7 +191,9 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
       {isStaff ? (
         <ChangePasswordDialog open={changingPassword} onOpenChange={setChangingPassword} />
       ) : null}
-      <PushBetaDialog open={pushBeta} onOpenChange={setPushBeta} />
+      {hasMailbox ? (
+        <NotificationsDialog open={notificationsOpen} onOpenChange={setNotificationsOpen} />
+      ) : null}
 
       {/* Still-clocked-in confirm on sign-out (§8a). */}
       <Dialog open={confirmClockOut} onOpenChange={setConfirmClockOut}>
