@@ -45,6 +45,18 @@ async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
   return reg;
 }
 
+/** True when an existing browser subscription was created with the given applicationServerKey. */
+function boundToKey(sub: PushSubscription, serverKey: Uint8Array): boolean {
+  const bound = sub.options?.applicationServerKey;
+  if (!bound) return false; // unknown binding — treat as stale and re-subscribe fresh
+  const a = new Uint8Array(bound);
+  if (a.length !== serverKey.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== serverKey[i]) return false;
+  }
+  return true;
+}
+
 /** Current permission + whether this browser already has an active subscription. Never prompts. */
 export async function getPushState(): Promise<PushState> {
   if (!isPushSupported()) return UNSUPPORTED;
@@ -76,14 +88,21 @@ export async function enablePush(): Promise<PushState> {
     throw new Error('Push is not configured on the server yet.');
   }
   const reg = await registerServiceWorker();
-  // Reuse an existing subscription for this browser if present; otherwise create one.
-  const existing = await reg.pushManager.getSubscription();
-  const sub =
-    existing ??
-    (await reg.pushManager.subscribe({
+  const serverKey = urlBase64ToUint8Array(key.publicKey);
+  // Reuse an existing subscription ONLY if it is bound to the CURRENT server key. After a VAPID key
+  // rotation the old subscription can never be delivered to (the push service 410s it), so re-enabling
+  // must drop it and subscribe fresh — otherwise Enable would keep re-registering a dead endpoint.
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && !boundToKey(sub, serverKey)) {
+    await sub.unsubscribe().catch(() => {});
+    sub = null;
+  }
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(key.publicKey),
-    }));
+      applicationServerKey: serverKey,
+    });
+  }
   const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
   await subscribePush({
     endpoint: json.endpoint ?? sub.endpoint,
