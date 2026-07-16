@@ -38,9 +38,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MailController {
 
   private final InternalMailService mail;
+  private final MailPushNotifier pushNotifier;
 
-  public MailController(InternalMailService mail) {
+  public MailController(InternalMailService mail, MailPushNotifier pushNotifier) {
     this.mail = mail;
+    this.pushNotifier = pushNotifier;
   }
 
   /** The accounts the caller may message (the send graph as a concrete list). */
@@ -55,7 +57,10 @@ public class MailController {
       @Valid @RequestBody SendMessageRequest body,
       @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
-    return mail.send(actor, body, request.getRemoteAddr());
+    SendMessageResult result = mail.send(actor, body, request.getRemoteAddr());
+    // Post-commit OS push to every recipient except the sender (§ Web Push N3; best-effort).
+    pushNotifier.notifyRecipients(result.id());
+    return result;
   }
 
   /** Reply within a thread — to the original SENDER only; still graph-checked (403 if forbidden). */
@@ -65,7 +70,9 @@ public class MailController {
       @Valid @RequestBody ReplyRequest body,
       @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
-    return mail.reply(actor, id, body, request.getRemoteAddr());
+    SendMessageResult result = mail.reply(actor, id, body, request.getRemoteAddr());
+    pushNotifier.notifyRecipients(result.id()); // post-commit, best-effort (§ Web Push N3)
+    return result;
   }
 
   /** Reply ALL — sender + original TO + CC (never BCC, never the actor); each graph-checked. */
@@ -75,7 +82,9 @@ public class MailController {
       @Valid @RequestBody ReplyRequest body,
       @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
-    return mail.replyAll(actor, id, body, request.getRemoteAddr());
+    SendMessageResult result = mail.replyAll(actor, id, body, request.getRemoteAddr());
+    pushNotifier.notifyRecipients(result.id()); // post-commit, best-effort (§ Web Push N3)
+    return result;
   }
 
   /** Step 1 of attaching a file: validate + get a short-lived presigned PUT (+ a draft attachment id). */

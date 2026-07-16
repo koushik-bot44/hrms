@@ -20,7 +20,9 @@ import com.ihrms.leave.dto.LeaveDtos.SubmitLeaveRequest;
 import com.ihrms.leave.dto.LeaveDtos.TeamLeavePage;
 import com.ihrms.leave.dto.LeaveDtos.TeamLeaveRow;
 import com.ihrms.mail.InternalMailService;
+import com.ihrms.mail.MailPushNotifier;
 import com.ihrms.mail.dto.MailDtos.SendMessageRequest;
+import com.ihrms.mail.dto.MailDtos.SendMessageResult;
 import jakarta.persistence.criteria.Predicate;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -57,6 +59,7 @@ public class LeaveService {
   private final NotificationRepository notifications;
   private final MailService mail;
   private final InternalMailService internalMail;
+  private final MailPushNotifier pushNotifier;
   private final AuditService audit;
 
   public LeaveService(
@@ -66,6 +69,7 @@ public class LeaveService {
       NotificationRepository notifications,
       MailService mail,
       InternalMailService internalMail,
+      MailPushNotifier pushNotifier,
       AuditService audit) {
     this.leaves = leaves;
     this.employees = employees;
@@ -73,6 +77,7 @@ public class LeaveService {
     this.notifications = notifications;
     this.mail = mail;
     this.internalMail = internalMail;
+    this.pushNotifier = pushNotifier;
     this.audit = audit;
   }
 
@@ -248,7 +253,10 @@ public class LeaveService {
         body.append("Reason: ").append(leave.getReason().trim()).append("\n");
       }
       body.append("\nPlease review this request in the Leave workspace.");
-      internalMail.send(actor, mailTo(leave.getManagerUserId(), subject, body.toString()), ip);
+      SendMessageResult sent =
+          internalMail.send(actor, mailTo(leave.getManagerUserId(), subject, body.toString()), ip);
+      // The courtesy mail is real internal mail — the recipient also gets the OS push (§ Web Push N3).
+      pushNotifier.notifyRecipients(sent.id());
     } catch (RuntimeException e) {
       log.warn("Leave submit courtesy mail skipped (best-effort): {}", e.getMessage());
     }
@@ -275,7 +283,9 @@ public class LeaveService {
       if (leave.getDecisionNote() != null) {
         body.append("\nNote from your manager: ").append(leave.getDecisionNote()).append("\n");
       }
-      internalMail.send(manager, mailTo(leave.getEmployeeId(), subject, body.toString()), ip);
+      SendMessageResult sent =
+          internalMail.send(manager, mailTo(leave.getEmployeeId(), subject, body.toString()), ip);
+      pushNotifier.notifyRecipients(sent.id()); // OS push to the employee too (§ Web Push N3)
     } catch (RuntimeException e) {
       log.warn("Leave decision courtesy mail skipped (best-effort): {}", e.getMessage());
     }

@@ -392,7 +392,9 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
   audited read. The send check lives in the authorization component (`canSendMail`) so it can never be
   bypassed or duplicated. The **same send path** is reused programmatically for system courtesy mail —
   e.g. leave submit/decision auto-mails (§8b) go through `canSendMail` exactly like a user-composed message,
-  land as ordinary repliable threads, and are audited `MAIL_SENT`.
+  land as ordinary repliable threads, and are audited `MAIL_SENT`. **Delivery also fires an OS push** (§8c
+  N3) to every recipient except the sender — best-effort, post-commit, and BCC-privacy-preserving (the
+  payload is only sender + subject + `/mail`, never a recipient list).
 - **Multiple recipients — TO / CC / BCC (§8):** a message needs **at least one TO**; CC and BCC are
   optional. **Every** recipient across TO+CC+BCC is individually permission-checked through the ONE
   `canSendMail` graph — if **any** single recipient is disallowed the **whole send is rejected** as a
@@ -609,10 +611,19 @@ balances are a future feature).
 
 OS-level notifications are delivered with **Web Push (VAPID)** — the browser standard for background
 notifications that appear even when the IHRMS tab is closed or unfocused. Built in stages: **N1** is the
-delivery backend + subscription storage; **N2 (this stage)** is the Service Worker + opt-in permission
-flow; **N3** triggers pushes from mail/notification events. As of N2 a push (e.g. `POST /push/test`)
-surfaces a **real OS notification** — including when the IHRMS tab is minimized or fully closed — and
-clicking it focuses/opens the app.
+delivery backend + subscription storage; **N2** is the Service Worker + opt-in permission flow; **N3
+(this stage)** triggers a push on **new internal mail**. A push surfaces a **real OS notification** —
+including when the IHRMS tab is minimized or fully closed — and clicking it focuses/opens the app.
+
+- **New-mail trigger (N3).** Every path that DELIVERS a message (compose, reply, reply-all — including the
+  leave courtesy mails, which are real internal mail) notifies **each recipient (TO + CC + BCC) except the
+  sender**: title `New message from {sender}`, body = the subject (snippet fallback), url `/mail`. The
+  payload carries **no recipient information**, so a BCC recipient's notification reveals nothing about who
+  else got the message and nothing ever leaks the BCC list (BCC privacy, §8). Fired from the controller
+  **after the send transaction commits** (the same post-commit pattern as the leave auto-mail, via
+  `MailPushNotifier`) and **best-effort**: any failure is logged and swallowed — mail delivery is never
+  affected. Recipients without a subscription simply get nothing (they see it in-app); exactly one push per
+  recipient per delivered message.
 
 - **How Web Push works.** In the browser, a **Service Worker** (`/sw.js`, served at the web origin root)
   creates a **`PushSubscription`** — an `endpoint` URL at the browser vendor's push service (Google /
@@ -647,14 +658,14 @@ clicking it focuses/opens the app.
     `PUSH_SUBSCRIBED`.
   - `DELETE /push/unsubscribe {endpoint}` — remove the caller's subscription (idempotent); audited
     `PUSH_UNSUBSCRIBED`.
-  - `POST /push/test` — **N1/N2 verification**: sends a test notification to the CALLER's own
-    subscriptions (the "Send test" button). N3 replaces this trigger with real mail events; it's kept for
-    debugging and never notifies anyone but the caller.
+  - `POST /push/test` — sends a test notification to the CALLER's own subscriptions (the "Send test"
+    button). Kept for debugging alongside the real N3 new-mail trigger; it never notifies anyone but the
+    caller.
 - **Sending is best-effort.** `PushService.sendToPrincipal(ref, title, body, url)` loads that principal's
   subscriptions and POSTs an encrypted, VAPID-signed payload to each via the `nl.martijndwars:web-push`
   library (BouncyCastle crypto). Failures are **logged, never thrown** to callers; a `404/410` from the
-  push service means the subscription is gone, so that row is **pruned**. `sendToPrincipal` is the seam N3
-  will call from mail events.
+  push service means the subscription is gone, so that row is **pruned**. `sendToPrincipal` is the seam the
+  N3 new-mail trigger calls; future events reuse it the same way.
 - **VAPID keys are env secrets.** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:`)
   come from the environment (set in Railway; generate with `npx web-push generate-vapid-keys`) — **never
   generated in code, hardcoded, or committed**. Push is an **optional add-on**: absent/invalid keys simply
