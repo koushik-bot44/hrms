@@ -73,6 +73,12 @@ public final class OnboardingDtos {
       @Size(max = 60) String offeredCtc,
       @Size(max = 300) String currentAddress,
       @Size(max = 300) String permanentAddress,
+      // Relocated from Form 2 (presentation only — stored on form2_info exactly as before; PAN +
+      // account number keep their encryption at rest and masked/audited-reveal handling).
+      @Size(max = 30) String alternateNumber,
+      @Size(max = 40) String vehicleNo2W4W,
+      @Size(max = 20) String panNumber,
+      @Size(max = 40) String axisAccountNumber,
       @Size(max = 40) String maritalStatus,
       @Size(max = 10) String bloodGroup,
       @Size(max = 150) String closestRelativeName,
@@ -94,6 +100,10 @@ public final class OnboardingDtos {
       String offeredCtc,
       String currentAddress,
       String permanentAddress,
+      String alternateNumber,
+      String vehicleNo2W4W,
+      String panNumber,
+      String axisAccountNumber,
       String maritalStatus,
       String bloodGroup,
       String closestRelativeName,
@@ -111,6 +121,8 @@ public final class OnboardingDtos {
 
   // --- Form 2: Employee Info ------------------------------------------------
 
+  // alternate number, vehicle no, PAN, account number and the two addresses moved to Form 1's
+  // PRESENTATION (§3.2) — their storage stays on form2_info and is written through by Form 1.
   public record Form2Request(
       @Size(max = 150) String fullName,
       @Size(max = 150) String fatherName,
@@ -118,16 +130,10 @@ public final class OnboardingDtos {
       @Pattern(regexp = "|\\d{4}-\\d{2}-\\d{2}", message = "Use YYYY-MM-DD") String dateOfJoining,
       @Size(max = 10) String bloodGroup,
       @Size(max = 30) String mobile,
-      @Size(max = 30) String alternateNumber,
       @Size(max = 180) String officialEmail,
       @Size(max = 180) String personalEmail,
       @Size(max = 150) String designation,
-      @Size(max = 60) String documentSubmitted,
-      @Size(max = 40) String vehicleNo2W4W,
-      @Size(max = 20) String panNumber,
-      @Size(max = 40) String axisAccountNumber,
-      @Size(max = 300) String currentAddress,
-      @Size(max = 300) String permanentAddress) {}
+      @Size(max = 60) String documentSubmitted) {}
 
   /** {@code employeeId} is the system-assigned code (null until Manager approval); read-only. */
   public record Form2View(
@@ -138,17 +144,11 @@ public final class OnboardingDtos {
       String dateOfJoining,
       String bloodGroup,
       String mobile,
-      String alternateNumber,
       String officialEmail,
       String personalEmail,
       String designation,
       String sparkId,
       String documentSubmitted,
-      String vehicleNo2W4W,
-      String panNumber,
-      String axisAccountNumber,
-      String currentAddress,
-      String permanentAddress,
       SectionStatus status,
       String revisionNote,
       String updatedAt) {}

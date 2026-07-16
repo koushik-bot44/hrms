@@ -323,7 +323,11 @@ const F1_FIELDS: Array<[keyof Form1View, string]> = [
   ['name', 'Name'], ['dateOfBirth', 'Date of birth'], ['email', 'Email'], ['mobile', 'Mobile'],
   ['designation', 'Designation'], ['offeredCtc', 'Offered CTC'], ['maritalStatus', 'Marital status'],
   ['bloodGroup', 'Blood group'], ['city', 'City'], ['currentAddress', 'Current address'],
-  ['permanentAddress', 'Permanent address'], ['closestRelativeName', 'Closest relative'],
+  ['permanentAddress', 'Permanent address'],
+  // Relocated from Form 2 (§3.2) — PAN/account arrive masked; the audited reveal unmasks them.
+  ['alternateNumber', 'Alternate number'], ['vehicleNo2W4W', 'Vehicle no'],
+  ['panNumber', 'PAN number'], ['axisAccountNumber', 'Axis account'],
+  ['closestRelativeName', 'Closest relative'],
   ['closestRelativePhone', 'Relative phone'], ['relationship', 'Relationship'],
 ];
 
@@ -363,13 +367,13 @@ function Form1Body({ form1 }: { form1: Form1View }) {
   );
 }
 
+// alternate number, vehicle no, PAN, account number + addresses moved to Form 1 (§3.2).
 const F2_FIELDS: Array<[keyof Form2View, string]> = [
   ['fullName', 'Full name'], ['fatherName', "Father's name"], ['employeeId', 'Employee ID'],
   ['sparkId', 'Spark ID'], ['dateOfBirth', 'Date of birth'], ['dateOfJoining', 'Date of joining'],
-  ['bloodGroup', 'Blood group'], ['mobile', 'Mobile'], ['alternateNumber', 'Alternate number'],
+  ['bloodGroup', 'Blood group'], ['mobile', 'Mobile'],
   ['officialEmail', 'Official email'], ['personalEmail', 'Personal email'], ['designation', 'Designation'],
-  ['documentSubmitted', 'Documents submitted'], ['vehicleNo2W4W', 'Vehicle no'], ['panNumber', 'PAN number'],
-  ['axisAccountNumber', 'Axis account'], ['currentAddress', 'Current address'], ['permanentAddress', 'Permanent address'],
+  ['documentSubmitted', 'Documents submitted'],
 ];
 
 function Form2Body({ form2 }: { form2: Form2View }) {

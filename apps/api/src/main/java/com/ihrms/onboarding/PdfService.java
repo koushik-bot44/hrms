@@ -110,8 +110,9 @@ public class PdfService {
     }
     String signatureDataUri = signatureDataUri(sigImage);
 
-    Form1View v1 = f1 == null ? null : FormMappers.form1View(f1, FormMappers.Mode.PLAIN);
-    Form2View v2 = f2 == null ? null : FormMappers.form2View(f2, employeeCode, FormMappers.Mode.PLAIN);
+    // The PDF renders real values (existing policy); Form 1's view carries the relocated fields.
+    Form1View v1 = f1 == null ? null : FormMappers.form1View(f1, f2, FormMappers.Mode.PLAIN);
+    Form2View v2 = f2 == null ? null : FormMappers.form2View(f2, employeeCode);
     List<Form3EntryView> v3 =
         f3.stream().map(e -> FormMappers.form3View(e, FormMappers.Mode.PLAIN)).toList();
 
@@ -155,6 +156,11 @@ public class PdfService {
     m.put("offeredCtc", nn(v == null ? null : v.offeredCtc()));
     m.put("currentAddress", nn(v == null ? null : v.currentAddress()));
     m.put("permanentAddress", nn(v == null ? null : v.permanentAddress()));
+    // Relocated from Form 2 (§3.2) — the PDF renders real values, per the existing PDF policy.
+    m.put("alternateNumber", nn(v == null ? null : v.alternateNumber()));
+    m.put("vehicleNo2W4W", nn(v == null ? null : v.vehicleNo2W4W()));
+    m.put("panNumber", nn(v == null ? null : v.panNumber()));
+    m.put("axisAccountNumber", nn(v == null ? null : v.axisAccountNumber()));
     m.put("maritalStatus", nn(v == null ? null : v.maritalStatus()));
     m.put("bloodGroup", nn(v == null ? null : v.bloodGroup()));
     m.put("closestRelativeName", nn(v == null ? null : v.closestRelativeName()));
@@ -215,17 +221,11 @@ public class PdfService {
     m.put("doj", date(v == null ? null : v.dateOfJoining()));
     m.put("bloodGroup", nn(v == null ? null : v.bloodGroup()));
     m.put("mobile", nn(v == null ? null : v.mobile()));
-    m.put("alternateNumber", nn(v == null ? null : v.alternateNumber()));
     m.put("officialEmail", nn(v == null ? null : v.officialEmail()));
     m.put("personalEmail", nn(v == null ? null : v.personalEmail()));
     m.put("designation", nn(v == null ? null : v.designation()));
     m.put("sparkId", nn(v == null ? null : v.sparkId()));
     m.put("documentSubmitted", nn(v == null ? null : v.documentSubmitted()));
-    m.put("vehicleNo2W4W", nn(v == null ? null : v.vehicleNo2W4W()));
-    m.put("panNumber", nn(v == null ? null : v.panNumber()));
-    m.put("axisAccountNumber", nn(v == null ? null : v.axisAccountNumber()));
-    m.put("currentAddress", nn(v == null ? null : v.currentAddress()));
-    m.put("permanentAddress", nn(v == null ? null : v.permanentAddress()));
     m.put("signatureDataUri", signatureDataUri);
     m.put("signedDate", nn(signedDate));
     return m;

@@ -28,7 +28,7 @@ public final class OnboardingCompleteness {
     if (form1 == null) {
       missing.add("Complete Form 1 — Personal Details");
     } else {
-      Form1View v = FormMappers.form1View(form1, FormMappers.Mode.PLAIN);
+      Form1View v = FormMappers.form1View(form1, form2, FormMappers.Mode.PLAIN);
       if (isBlank(v.name())) {
         missing.add("Form 1 — enter your name");
       }

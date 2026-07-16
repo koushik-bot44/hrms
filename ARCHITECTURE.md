@@ -110,10 +110,15 @@ Accounts Admin, own team for Accountant).
 3. **Employee** logs in with **full name + email → OTP** (the OTP to that email is the security
    factor) and lands on their **dashboard**.
 4. Employee completes a **guided four-form stepper** under their own record:
-   - **Form 1 — Personal Details** (identity, addresses, conduct references, education, work
+   - **Form 1 — Personal Details** (identity, addresses, alternate number, vehicle no, **PAN + bank
+     account** (encrypted at rest, masked with audited reveal), conduct references, education, work
      experience, family, declaration)
-   - **Form 2 — Employee Info** (employment + government/bank details; `employeeId` is read-only and
-     blank until approval)
+   - **Form 2 — Employee Info** (employment details — full/father name, DOJ, emails, designation,
+     Spark ID, documents submitted; `employeeId` is read-only and blank until approval). _Note:
+     alternate number, vehicle no, PAN, account number and the two addresses moved to Form 1's
+     PRESENTATION; their storage stayed on `form2_info` (encrypted columns + data keys) — Form 1
+     writes them through and reads them back, so pre-move employee data surfaces under Form 1
+     unchanged (no migration, no column changes)._
    - **Form 3 — Previous Employment** (one block per prior employer — **repeatable**)
    - **Form 4 — Documents** (a grouped upload checklist: educational, per-employment, identity proofs,
      other)

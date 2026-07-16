@@ -46,6 +46,11 @@ class HtmlPdfRendererTest {
     m.put("offeredCtc", "Rs. 14,50,000"); // SENSITIVE — must appear in full
     m.put("currentAddress", "12 Marine Drive, Mumbai");
     m.put("permanentAddress", "44 Hill Road, Pune");
+    // Relocated from Form 2 (§3.2) — the Form 1 document now carries them (real values, PDF policy).
+    m.put("alternateNumber", "9812300000");
+    m.put("vehicleNo2W4W", "MH12XY9999");
+    m.put("panNumber", "ZZZPN1234Q"); // SENSITIVE — must appear in full
+    m.put("axisAccountNumber", "918020099887766"); // SENSITIVE — must appear in full
     m.put("maritalStatus", "Married");
     m.put("bloodGroup", "O+");
     m.put("closestRelativeName", "Arjun Nair");
@@ -78,6 +83,8 @@ class HtmlPdfRendererTest {
     assertThat(t).doesNotContain("Acme Technologies"); // template placeholder replaced
     assertThat(t).doesNotContain("JOINING COMPANY"); // demo sub-label removed
     assertThat(t).contains("Meera Nair").contains("QA Lead").contains("Rs. 14,50,000"); // incl. SENSITIVE
+    // Relocated from Form 2 (§3.2): the Form 1 document now carries these — PAN/account in full.
+    assertThat(t).contains("9812300000").contains("MH12XY9999").contains("ZZZPN1234Q").contains("918020099887766");
     assertThat(t).contains("M.Tech").contains("IIT Bombay").contains("B.Tech").contains("HSC"); // all edu rows
     assertThat(t).contains("Wipro").contains("Zoho").contains("12 LPA"); // all experience rows (+ SENSITIVE salary)
     assertThat(t).contains("Kavya Nair"); // second family row
@@ -95,17 +102,11 @@ class HtmlPdfRendererTest {
     base.put("doj", "01/08/2026");
     base.put("bloodGroup", "O+");
     base.put("mobile", "9812345678");
-    base.put("alternateNumber", "9812300000");
     base.put("officialEmail", "meera@globex.test");
     base.put("personalEmail", "meera@personal.test");
     base.put("designation", "QA Lead");
     base.put("sparkId", "SPRK-9001");
     base.put("documentSubmitted", "Aadhaar, PAN");
-    base.put("vehicleNo2W4W", "MH12XY9999");
-    base.put("panNumber", "ZZZPN1234Q"); // SENSITIVE
-    base.put("axisAccountNumber", "918020099887766"); // SENSITIVE
-    base.put("currentAddress", "12 Marine Drive, Mumbai");
-    base.put("permanentAddress", "44 Hill Road, Pune");
     base.put("signatureDataUri", PNG_1X1);
     base.put("signedDate", "01/08/2026");
 
@@ -113,7 +114,9 @@ class HtmlPdfRendererTest {
     Map<String, Object> pre = new java.util.LinkedHashMap<>(base);
     pre.put("employeeId", "");
     String preText = text(renderer.render("form2", pre));
-    assertThat(preText).contains("Globex Corporation").contains("ZZZPN1234Q").contains("918020099887766");
+    assertThat(preText).contains("Globex Corporation");
+    // PAN/account/addresses/vehicle/alternate moved to the Form 1 document (§3.2) — gone from Form 2.
+    assertThat(preText).doesNotContain("ZZZPN1234Q").doesNotContain("918020099887766");
     assertThat(preText).contains("Employee ID"); // the label is present...
     assertThat(preText).doesNotContain("GLOBEX-EMP"); // ...but no minted code yet
 

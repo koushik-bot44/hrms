@@ -1610,16 +1610,10 @@ export interface components {
             dateOfJoining?: string;
             bloodGroup?: string;
             mobile?: string;
-            alternateNumber?: string;
             officialEmail?: string;
             personalEmail?: string;
             designation?: string;
             documentSubmitted?: string;
-            vehicleNo2W4W?: string;
-            panNumber?: string;
-            axisAccountNumber?: string;
-            currentAddress?: string;
-            permanentAddress?: string;
         };
         Form2View: {
             fullName?: string;
@@ -1629,17 +1623,11 @@ export interface components {
             dateOfJoining?: string;
             bloodGroup?: string;
             mobile?: string;
-            alternateNumber?: string;
             officialEmail?: string;
             personalEmail?: string;
             designation?: string;
             sparkId?: string;
             documentSubmitted?: string;
-            vehicleNo2W4W?: string;
-            panNumber?: string;
-            axisAccountNumber?: string;
-            currentAddress?: string;
-            permanentAddress?: string;
             /** @enum {string} */
             status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";
             revisionNote?: string;
@@ -1671,6 +1659,10 @@ export interface components {
             offeredCtc?: string;
             currentAddress?: string;
             permanentAddress?: string;
+            alternateNumber?: string;
+            vehicleNo2W4W?: string;
+            panNumber?: string;
+            axisAccountNumber?: string;
             maritalStatus?: string;
             bloodGroup?: string;
             closestRelativeName?: string;
@@ -1699,6 +1691,10 @@ export interface components {
             offeredCtc?: string;
             currentAddress?: string;
             permanentAddress?: string;
+            alternateNumber?: string;
+            vehicleNo2W4W?: string;
+            panNumber?: string;
+            axisAccountNumber?: string;
             maritalStatus?: string;
             bloodGroup?: string;
             closestRelativeName?: string;

@@ -183,6 +183,10 @@ function form1Defaults(f: Form1View | null): Form1Values {
     offeredCtc: s(f?.offeredCtc),
     currentAddress: s(f?.currentAddress),
     permanentAddress: s(f?.permanentAddress),
+    alternateNumber: s(f?.alternateNumber),
+    vehicleNo2W4W: s(f?.vehicleNo2W4W),
+    panNumber: s(f?.panNumber),
+    axisAccountNumber: s(f?.axisAccountNumber),
     maritalStatus: s(f?.maritalStatus),
     bloodGroup: s(f?.bloodGroup),
     closestRelativeName: s(f?.closestRelativeName),
@@ -270,6 +274,11 @@ export function Form1Step({
             <Field label="City"><Input {...register('city')} disabled={disabled} /></Field>
             <Field label="Current address"><Input {...register('currentAddress')} disabled={disabled} /></Field>
             <Field label="Permanent address"><Input {...register('permanentAddress')} disabled={disabled} /></Field>
+            {/* Relocated from Form 2 (§3.2) — same fields, same validation; PAN/account stay confidential. */}
+            <Field label="Alternate number"><Input {...register('alternateNumber')} disabled={disabled} /></Field>
+            <Field label="Vehicle no (2W/4W)"><Input {...register('vehicleNo2W4W')} disabled={disabled} /></Field>
+            <Field label="PAN number (confidential)"><Input {...register('panNumber')} disabled={disabled} /></Field>
+            <Field label="Axis account number (confidential)"><Input {...register('axisAccountNumber')} disabled={disabled} /></Field>
             <Field label="Closest relative"><Input {...register('closestRelativeName')} disabled={disabled} /></Field>
             <Field label="Relative phone"><Input {...register('closestRelativePhone')} disabled={disabled} /></Field>
             <Field label="Relationship"><Input {...register('relationship')} disabled={disabled} /></Field>
@@ -446,16 +455,10 @@ function form2Defaults(f: Form2View | null): Form2Values {
     dateOfJoining: s(f?.dateOfJoining),
     bloodGroup: s(f?.bloodGroup),
     mobile: s(f?.mobile),
-    alternateNumber: s(f?.alternateNumber),
     officialEmail: s(f?.officialEmail),
     personalEmail: s(f?.personalEmail),
     designation: s(f?.designation),
     documentSubmitted: s(f?.documentSubmitted),
-    vehicleNo2W4W: s(f?.vehicleNo2W4W),
-    panNumber: s(f?.panNumber),
-    axisAccountNumber: s(f?.axisAccountNumber),
-    currentAddress: s(f?.currentAddress),
-    permanentAddress: s(f?.permanentAddress),
   };
 }
 
@@ -508,16 +511,11 @@ export function Form2Step({
             <Field label="Date of joining"><Input type="date" {...register('dateOfJoining')} disabled={disabled} /></Field>
             <Field label="Blood group"><Input {...register('bloodGroup')} disabled={disabled} /></Field>
             <Field label="Mobile"><Input {...register('mobile')} disabled={disabled} /></Field>
-            <Field label="Alternate number"><Input {...register('alternateNumber')} disabled={disabled} /></Field>
             <Field label="Official email"><Input type="email" {...register('officialEmail')} disabled={disabled} /></Field>
             <Field label="Personal email"><Input type="email" {...register('personalEmail')} disabled={disabled} /></Field>
             <Field label="Designation"><Input {...register('designation')} disabled={disabled} /></Field>
             <Field label="Documents submitted"><Input {...register('documentSubmitted')} disabled={disabled} /></Field>
-            <Field label="Vehicle no (2W/4W)"><Input {...register('vehicleNo2W4W')} disabled={disabled} /></Field>
-            <Field label="PAN number (confidential)"><Input {...register('panNumber')} disabled={disabled} /></Field>
-            <Field label="Axis account number (confidential)"><Input {...register('axisAccountNumber')} disabled={disabled} /></Field>
-            <Field label="Current address"><Input {...register('currentAddress')} disabled={disabled} /></Field>
-            <Field label="Permanent address"><Input {...register('permanentAddress')} disabled={disabled} /></Field>
+            {/* alternate number, vehicle no, PAN, account number + addresses moved to Form 1 (§3.2). */}
           </div>
           <StepActions onBack={onBack} saving={save.isPending} nextLabel={submitLabel} />
         </CardContent>

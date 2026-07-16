@@ -142,10 +142,21 @@ public class OnboardingService {
     clearRevision(f1);
     f1.setStatus(SectionStatus.DRAFT);
     form1s.save(f1);
+
+    // Form 1 now CAPTURES the fields relocated from Form 2 (§3.2) — write them through to their
+    // unchanged form2_info storage (PAN/account stay encrypted columns; alternate/vehicle stay data
+    // keys). Only those fields are touched: Form 2's own values, status and revision are untouched.
+    Form2Info f2 = form2s.findByEmployeeId(emp.employeeId()).orElse(null);
+    if (f2 == null) {
+      f2 = new Form2Info();
+      f2.setEmployeeId(emp.employeeId());
+    }
+    FormMappers.applyForm1RelocatedFields(f2, body);
+    form2s.save(f2);
     markInProgress(employee);
 
     audit(emp, "FORM1_SAVED", "Form1Personal", f1.getId(), null, ip);
-    return FormMappers.form1View(f1, FormMappers.Mode.PLAIN);
+    return FormMappers.form1View(f1, f2, FormMappers.Mode.PLAIN);
   }
 
   // --- Form 2 ---------------------------------------------------------------
@@ -160,16 +171,16 @@ public class OnboardingService {
       f2 = new Form2Info();
       f2.setEmployeeId(emp.employeeId());
     }
-    f2.setData(FormMappers.toForm2Data(body));
-    f2.setPanNumber(body.panNumber());
-    f2.setAxisAccountNumber(body.axisAccountNumber());
+    // Carry over the keys relocated to Form 1 (§3.2) — a Form 2 re-save must not wipe them; the
+    // PAN/account encrypted columns are simply no longer touched here (Form 1 writes them).
+    f2.setData(FormMappers.toForm2Data(body, f2.getData()));
     clearRevision(f2);
     f2.setStatus(SectionStatus.DRAFT);
     form2s.save(f2);
     markInProgress(employee);
 
     audit(emp, "FORM2_SAVED", "Form2Info", f2.getId(), null, ip);
-    return FormMappers.form2View(f2, employee.getEmployeeCode(), FormMappers.Mode.PLAIN);
+    return FormMappers.form2View(f2, employee.getEmployeeCode());
   }
 
   // --- Form 3 ---------------------------------------------------------------
@@ -496,16 +507,14 @@ public class OnboardingService {
   // --- internals ------------------------------------------------------------
 
   private OnboardingDashboard dashboardOf(Employee employee) {
+    // Form 1's view surfaces the relocated fields from their form2_info storage (§3.2).
+    Form2Info f2 = form2s.findByEmployeeId(employee.getId()).orElse(null);
     Form1View form1 =
         form1s
             .findByEmployeeId(employee.getId())
-            .map(f -> FormMappers.form1View(f, FormMappers.Mode.PLAIN))
+            .map(f -> FormMappers.form1View(f, f2, FormMappers.Mode.PLAIN))
             .orElse(null);
-    Form2View form2 =
-        form2s
-            .findByEmployeeId(employee.getId())
-            .map(f -> FormMappers.form2View(f, employee.getEmployeeCode(), FormMappers.Mode.PLAIN))
-            .orElse(null);
+    Form2View form2 = f2 == null ? null : FormMappers.form2View(f2, employee.getEmployeeCode());
     List<Form3EntryView> form3 = form3Views(employee.getId(), FormMappers.Mode.PLAIN);
     List<DocumentView> docs =
         documents.findByEmployeeIdOrderByUploadedAtDesc(employee.getId()).stream()

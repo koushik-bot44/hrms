@@ -65,8 +65,15 @@ public final class FormMappers {
     return m;
   }
 
-  public static Form1View form1View(Form1Personal e, Mode mode) {
+  /**
+   * Form 1's view now also SURFACES the fields relocated from Form 2 (§3.2): alternate number,
+   * vehicle no, PAN and account number — read from their unchanged {@code form2_info} storage
+   * ({@code f2} may be null when nothing was stored yet). PAN + account keep the same
+   * masked/PLAIN handling they always had.
+   */
+  public static Form1View form1View(Form1Personal e, Form2Info f2, Mode mode) {
     Map<String, Object> d = e.getData() == null ? Map.of() : e.getData();
+    Map<String, Object> d2 = f2 == null || f2.getData() == null ? Map.of() : f2.getData();
     return new Form1View(
         str(d, "name"),
         str(d, "dateOfBirth"),
@@ -76,6 +83,10 @@ public final class FormMappers {
         sensitive(e.getOfferedCtc(), mode),
         str(d, "currentAddress"),
         str(d, "permanentAddress"),
+        str(d2, "alternateNumber"),
+        str(d2, "vehicleNo2W4W"),
+        sensitive(f2 == null ? null : f2.getPanNumber(), mode),
+        sensitive(f2 == null ? null : f2.getAxisAccountNumber(), mode),
         str(d, "maritalStatus"),
         str(d, "bloodGroup"),
         str(d, "closestRelativeName"),
@@ -94,7 +105,17 @@ public final class FormMappers {
 
   // --- Form 2 ---------------------------------------------------------------
 
-  public static Map<String, Object> toForm2Data(Form2Request r) {
+  /** Keys relocated to Form 1's presentation but still STORED in form2_info.data (§3.2). */
+  private static final String[] RELOCATED_DATA_KEYS = {
+    "alternateNumber", "vehicleNo2W4W", "currentAddress", "permanentAddress"
+  };
+
+  /**
+   * Rebuild Form 2's {@code data} map from the request, CARRYING OVER the keys that now belong to
+   * Form 1's presentation (Form 2 no longer submits them) — a Form 2 re-save must never wipe the
+   * relocated values that Form 1 reads/writes in this same map.
+   */
+  public static Map<String, Object> toForm2Data(Form2Request r, Map<String, Object> previous) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("fullName", r.fullName());
     m.put("fatherName", r.fatherName());
@@ -102,19 +123,39 @@ public final class FormMappers {
     m.put("dateOfJoining", r.dateOfJoining());
     m.put("bloodGroup", r.bloodGroup());
     m.put("mobile", r.mobile());
-    m.put("alternateNumber", r.alternateNumber());
     m.put("officialEmail", r.officialEmail());
     m.put("personalEmail", r.personalEmail());
     m.put("designation", r.designation());
     m.put("documentSubmitted", r.documentSubmitted());
-    m.put("vehicleNo2W4W", r.vehicleNo2W4W());
-    m.put("currentAddress", r.currentAddress());
-    m.put("permanentAddress", r.permanentAddress());
+    if (previous != null) {
+      for (String key : RELOCATED_DATA_KEYS) {
+        if (previous.get(key) != null) {
+          m.put(key, previous.get(key));
+        }
+      }
+    }
     return m;
   }
 
-  /** {@code employeeId} is the minted employee code (system-assigned; null until approval). */
-  public static Form2View form2View(Form2Info e, String employeeCode, Mode mode) {
+  /**
+   * Write-through for the fields Form 1 now CAPTURES but whose storage stays on form2_info: the two
+   * encrypted columns (PAN, account number) and the alternate-number / vehicle keys in {@code data}.
+   * Only these are touched — Form 2's own fields, status and revision state are left alone.
+   */
+  public static void applyForm1RelocatedFields(Form2Info f2, Form1Request r) {
+    f2.setPanNumber(r.panNumber());
+    f2.setAxisAccountNumber(r.axisAccountNumber());
+    Map<String, Object> d = new LinkedHashMap<>(f2.getData() == null ? Map.of() : f2.getData());
+    d.put("alternateNumber", r.alternateNumber());
+    d.put("vehicleNo2W4W", r.vehicleNo2W4W());
+    f2.setData(d);
+  }
+
+  /**
+   * {@code employeeId} is the minted employee code (system-assigned; null until approval). No mode:
+   * Form 2 no longer carries sensitive fields — PAN + account number surface under Form 1 (§3.2).
+   */
+  public static Form2View form2View(Form2Info e, String employeeCode) {
     Map<String, Object> d = e.getData() == null ? Map.of() : e.getData();
     return new Form2View(
         str(d, "fullName"),
@@ -124,17 +165,11 @@ public final class FormMappers {
         str(d, "dateOfJoining"),
         str(d, "bloodGroup"),
         str(d, "mobile"),
-        str(d, "alternateNumber"),
         str(d, "officialEmail"),
         str(d, "personalEmail"),
         str(d, "designation"),
         e.getSparkId(),
         str(d, "documentSubmitted"),
-        str(d, "vehicleNo2W4W"),
-        sensitive(e.getPanNumber(), mode),
-        sensitive(e.getAxisAccountNumber(), mode),
-        str(d, "currentAddress"),
-        str(d, "permanentAddress"),
         e.getStatus(),
         e.getRevisionNote(),
         e.getUpdatedAt() == null ? null : e.getUpdatedAt().toString());

@@ -127,6 +127,11 @@ export const Form1Schema = z.object({
   offeredCtc: optional(60),
   currentAddress: optional(300),
   permanentAddress: optional(300),
+  // Relocated from Form 2 (§3.2) — same validation they had there; PAN/account stay sensitive.
+  alternateNumber: optional(30),
+  vehicleNo2W4W: optional(40),
+  panNumber: optional(20),
+  axisAccountNumber: optional(40),
   maritalStatus: optional(40),
   bloodGroup: optional(10),
   closestRelativeName: optional(150),
@@ -147,6 +152,7 @@ export type Form1Values = z.output<typeof Form1Schema>;
 // Form 2 — Employee Info (employeeId is system-assigned/read-only; sparkId is HR-set)
 // ---------------------------------------------------------------------------
 
+// alternate number, vehicle no, PAN, account number and the addresses moved to Form 1 (§3.2).
 export const Form2Schema = z.object({
   fullName: z.string().trim().min(2, 'Full name is required').max(150),
   fatherName: optional(150),
@@ -154,16 +160,10 @@ export const Form2Schema = z.object({
   dateOfJoining: dateish,
   bloodGroup: optional(10),
   mobile: optional(30),
-  alternateNumber: optional(30),
   officialEmail: optional(180),
   personalEmail: optional(180),
   designation: optional(150),
   documentSubmitted: optional(60),
-  vehicleNo2W4W: optional(40),
-  panNumber: optional(20),
-  axisAccountNumber: optional(40),
-  currentAddress: optional(300),
-  permanentAddress: optional(300),
 });
 export type Form2Values = z.output<typeof Form2Schema>;
 

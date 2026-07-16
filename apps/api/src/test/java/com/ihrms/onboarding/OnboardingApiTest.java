@@ -70,6 +70,7 @@ class OnboardingApiTest {
   @Autowired UserRepository users;
   @Autowired EmployeeRepository employees;
   @Autowired Form1PersonalRepository form1s;
+  @Autowired com.ihrms.domain.repository.Form2InfoRepository form2s;
   @Autowired DocumentRepository documents;
   @Autowired NotificationRepository notifications;
   @Autowired AuditLogRepository auditLogs;
@@ -117,6 +118,23 @@ class OnboardingApiTest {
     assertThat(form1.get("name").asText()).isEqualTo("Alex Doe");
     assertThat(form1.get("status").asText()).isEqualTo("DRAFT");
     assertThat(form1.get("characterReferences")).hasSize(2);
+    // Relocated fields (§3.2): the OWN view echoes them PLAIN, and they persist to their UNCHANGED
+    // form2_info storage (PAN in the encrypted column, alternate number in the data JSON).
+    assertThat(form1.get("panNumber").asText()).isEqualTo("ABCDE1234F");
+    assertThat(form1.get("alternateNumber").asText()).isEqualTo("5559999");
+    var f2Row = form2s.findByEmployeeId(empId).orElseThrow();
+    assertThat(f2Row.getPanNumber()).isEqualTo("ABCDE1234F"); // decrypted by the converter
+    assertThat(f2Row.getData().get("alternateNumber")).isEqualTo("5559999");
+    // The raw column holds ciphertext, not the plaintext PAN (encryption at rest preserved).
+    String rawPan = jdbc.queryForObject(
+        "SELECT \"panNumber\" FROM \"form2_info\" WHERE \"employeeId\" = ?", String.class, empId);
+    assertThat(rawPan).isNotBlank().isNotEqualTo("ABCDE1234F");
+
+    // A Form 2 re-save must NOT wipe the relocated values (the carry-over guarantee).
+    saveForm2();
+    var f2After = form2s.findByEmployeeId(empId).orElseThrow();
+    assertThat(f2After.getPanNumber()).isEqualTo("ABCDE1234F");
+    assertThat(f2After.getData().get("alternateNumber")).isEqualTo("5559999");
 
     assertThat(dashboard().get("status").asText()).isEqualTo("IN_PROGRESS");
     assertThat(auditLogs.findByAction("FORM1_SAVED")).hasSize(1);
@@ -366,6 +384,8 @@ class OnboardingApiTest {
   }
 
   private Map<String, Object> form1Body() {
+    // panNumber/axisAccountNumber/alternateNumber/vehicleNo2W4W are captured by Form 1 now (§3.2);
+    // storage stays on form2_info (write-through).
     return Map.of(
         "name", "Alex Doe",
         "dateOfBirth", "1990-01-01",
@@ -374,6 +394,8 @@ class OnboardingApiTest {
         "designation", "Engineer",
         "offeredCtc", "1200000",
         "city", "Metro",
+        "panNumber", "ABCDE1234F",
+        "alternateNumber", "5559999",
         "characterReferences",
             List.of(
                 Map.of("name", "Ref One", "phone", "5550001"),
@@ -396,8 +418,7 @@ class OnboardingApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     json.writeValueAsString(
-                        Map.of("fullName", "Alex Doe", "designation", "Engineer",
-                            "panNumber", "ABCDE1234F"))))
+                        Map.of("fullName", "Alex Doe", "designation", "Engineer"))))
         .andExpect(status().isOk());
   }
 

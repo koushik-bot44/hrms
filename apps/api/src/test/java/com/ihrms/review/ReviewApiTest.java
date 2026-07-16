@@ -117,7 +117,7 @@ class ReviewApiTest {
     assertThat(body.get("form2").get("fullName").asText()).isEqualTo("Evan Stone");
     // Sensitive values are MASKED in the default view (§6).
     assertThat(body.get("form1").get("offeredCtc").asText()).isEqualTo("********");
-    assertThat(body.get("form2").get("panNumber").asText()).isEqualTo("********");
+    assertThat(body.get("form1").get("panNumber").asText()).isEqualTo("********"); // PAN surfaces under Form 1 (§3.2)
     assertThat(body.get("documents")).hasSize(1);
     assertThat(body.get("documents").get(0).get("viewUrl").asText()).startsWith("http");
     assertThat(res.getResponse().getContentAsString()).doesNotContain("storageKey");
@@ -143,7 +143,7 @@ class ReviewApiTest {
             .andReturn();
     JsonNode body = json.readTree(res.getResponse().getContentAsString());
     assertThat(body.get("form1").get("offeredCtc").asText()).isEqualTo("1500000");
-    assertThat(body.get("form2").get("panNumber").asText()).isEqualTo("ABCDE1234F");
+    assertThat(body.get("form1").get("panNumber").asText()).isEqualTo("ABCDE1234F");
     assertThat(auditLogs.findByAction("SENSITIVE_FIELD_REVEALED")).hasSize(1);
   }
 
