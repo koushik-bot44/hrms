@@ -22,7 +22,6 @@ import com.ihrms.onboarding.dto.OnboardingDtos.FamilyDetail;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1View;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form3EntryView;
-import com.ihrms.onboarding.dto.OnboardingDtos.WorkingExperience;
 import com.ihrms.storage.StorageService;
 import com.ihrms.support.Hashing;
 import java.time.LocalDate;
@@ -152,8 +151,6 @@ public class PdfService {
     m.put("dob", date(v == null ? null : v.dateOfBirth()));
     m.put("email", nn(v == null ? null : v.email()));
     m.put("mobile", nn(v == null ? null : v.mobile()));
-    m.put("designation", nn(v == null ? null : v.designation()));
-    m.put("offeredCtc", nn(v == null ? null : v.offeredCtc()));
     m.put("currentAddress", nn(v == null ? null : v.currentAddress()));
     m.put("permanentAddress", nn(v == null ? null : v.permanentAddress()));
     // Relocated from Form 2 (§3.2) — the PDF renders real values, per the existing PDF policy.
@@ -164,9 +161,7 @@ public class PdfService {
     m.put("maritalStatus", nn(v == null ? null : v.maritalStatus()));
     m.put("bloodGroup", nn(v == null ? null : v.bloodGroup()));
     m.put("closestRelativeName", nn(v == null ? null : v.closestRelativeName()));
-    m.put("closestRelativePhone", nn(v == null ? null : v.closestRelativePhone()));
     m.put("city", nn(v == null ? null : v.city()));
-    m.put("relationship", nn(v == null ? null : v.relationship()));
     m.put("declaration", nn(v == null ? null : v.declaration()));
 
     List<CharacterReference> refs = v == null ? List.of() : safe(v.characterReferences());
@@ -182,17 +177,6 @@ public class PdfService {
           "percentage", e.percentage()));
     }
     m.put("educations", educations);
-
-    List<Map<String, Object>> experiences = new ArrayList<>();
-    for (WorkingExperience w : v == null ? List.<WorkingExperience>of() : safe(v.workingExperiences())) {
-      experiences.add(row(
-          "organization", w.organization(),
-          "period", w.period(),
-          "designation", w.designation(),
-          "salaryCtc", w.salaryCtc(),
-          "reasonForLeaving", w.reasonForLeaving()));
-    }
-    m.put("experiences", experiences);
 
     List<Map<String, Object>> families = new ArrayList<>();
     for (FamilyDetail f : v == null ? List.<FamilyDetail>of() : safe(v.familyDetails())) {

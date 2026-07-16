@@ -179,8 +179,6 @@ function form1Defaults(f: Form1View | null): Form1Values {
     dateOfBirth: s(f?.dateOfBirth),
     email: s(f?.email),
     mobile: s(f?.mobile),
-    designation: s(f?.designation),
-    offeredCtc: s(f?.offeredCtc),
     currentAddress: s(f?.currentAddress),
     permanentAddress: s(f?.permanentAddress),
     alternateNumber: s(f?.alternateNumber),
@@ -190,22 +188,13 @@ function form1Defaults(f: Form1View | null): Form1Values {
     maritalStatus: s(f?.maritalStatus),
     bloodGroup: s(f?.bloodGroup),
     closestRelativeName: s(f?.closestRelativeName),
-    closestRelativePhone: s(f?.closestRelativePhone),
     city: s(f?.city),
-    relationship: s(f?.relationship),
     declaration: s(f?.declaration),
     educationalQualifications: (f?.educationalQualifications ?? []).map((e) => ({
       qualification: s(e.qualification),
       university: s(e.university),
       yearOfPassing: s(e.yearOfPassing),
       percentage: s(e.percentage),
-    })),
-    workingExperiences: (f?.workingExperiences ?? []).map((w) => ({
-      organization: s(w.organization),
-      period: s(w.period),
-      designation: s(w.designation),
-      salaryCtc: s(w.salaryCtc),
-      reasonForLeaving: s(w.reasonForLeaving),
     })),
     familyDetails: (f?.familyDetails ?? []).map((x) => ({
       name: s(x.name),
@@ -237,7 +226,6 @@ export function Form1Step({
   const declarationAccepted = (watch('declaration') ?? '').trim().length > 0;
   const errors = formState.errors;
   const edu = useFieldArray({ control, name: 'educationalQualifications' });
-  const work = useFieldArray({ control, name: 'workingExperiences' });
   const fam = useFieldArray({ control, name: 'familyDetails' });
   const refs = useFieldArray({ control, name: 'characterReferences' });
 
@@ -265,10 +253,6 @@ export function Form1Step({
             </Field>
             <Field label="Email"><Input type="email" {...register('email')} disabled={disabled} /></Field>
             <Field label="Mobile"><Input {...register('mobile')} disabled={disabled} /></Field>
-            <Field label="Designation"><Input {...register('designation')} disabled={disabled} /></Field>
-            <Field label="Offered CTC (confidential)">
-              <Input {...register('offeredCtc')} disabled={disabled} placeholder="e.g. 1200000" />
-            </Field>
             <Field label="Marital status"><Input {...register('maritalStatus')} disabled={disabled} /></Field>
             <Field label="Blood group"><Input {...register('bloodGroup')} disabled={disabled} /></Field>
             <Field label="City"><Input {...register('city')} disabled={disabled} /></Field>
@@ -279,9 +263,8 @@ export function Form1Step({
             <Field label="Vehicle no (2W/4W)"><Input {...register('vehicleNo2W4W')} disabled={disabled} /></Field>
             <Field label="PAN number (confidential)"><Input {...register('panNumber')} disabled={disabled} /></Field>
             <Field label="Axis account number (confidential)"><Input {...register('axisAccountNumber')} disabled={disabled} /></Field>
-            <Field label="Closest relative"><Input {...register('closestRelativeName')} disabled={disabled} /></Field>
-            <Field label="Relative phone"><Input {...register('closestRelativePhone')} disabled={disabled} /></Field>
-            <Field label="Relationship"><Input {...register('relationship')} disabled={disabled} /></Field>
+            {/* Display rename only — the key stays closestRelativeName (§3.2). */}
+            <Field label="Emergency contact"><Input {...register('closestRelativeName')} disabled={disabled} /></Field>
           </div>
 
           <ArraySection
@@ -296,23 +279,6 @@ export function Form1Step({
               `educationalQualifications.${i}.university`,
               `educationalQualifications.${i}.yearOfPassing`,
               `educationalQualifications.${i}.percentage`,
-            ]}
-            register={register}
-          />
-
-          <ArraySection
-            title="Working Experience"
-            rows={work.fields}
-            onAdd={() => work.append({ organization: '', period: '', designation: '', salaryCtc: '', reasonForLeaving: '' })}
-            onRemove={work.remove}
-            disabled={disabled}
-            cols={['Organization', 'Period', 'Designation', 'Salary/CTC (confidential)', 'Reason for leaving']}
-            fieldNames={(i) => [
-              `workingExperiences.${i}.organization`,
-              `workingExperiences.${i}.period`,
-              `workingExperiences.${i}.designation`,
-              `workingExperiences.${i}.salaryCtc`,
-              `workingExperiences.${i}.reasonForLeaving`,
             ]}
             register={register}
           />

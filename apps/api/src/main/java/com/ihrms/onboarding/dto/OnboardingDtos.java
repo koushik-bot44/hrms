@@ -17,9 +17,10 @@ import java.util.List;
 /**
  * Employee onboarding request/response DTOs for the four-form stepper (§3.2). Save is lenient so
  * drafts round-trip; required-field completeness is enforced at submit. Sensitive values
- * ({@code offeredCtc}, {@code workingExperiences[].salaryCtc}, {@code panNumber},
- * {@code axisAccountNumber}) are returned in full on the employee's OWN dashboard and are encrypted
- * at rest; HR sees them masked (see review DTOs).
+ * ({@code panNumber}, {@code axisAccountNumber}) are returned in full on the employee's OWN
+ * dashboard and are encrypted at rest; HR sees them masked (see review DTOs). Offered CTC, the
+ * standalone designation, relationship, relative phone and the working-experience table were REMOVED
+ * from Form 1's display surface (§3.2) — their storage columns/keys remain untouched.
  */
 public final class OnboardingDtos {
 
@@ -46,13 +47,6 @@ public final class OnboardingDtos {
       @Size(max = 20) String yearOfPassing,
       @Size(max = 20) String percentage) {}
 
-  public record WorkingExperience(
-      @Size(max = 200) String organization,
-      @Size(max = 100) String period,
-      @Size(max = 150) String designation,
-      @Size(max = 60) String salaryCtc,
-      @Size(max = 200) String reasonForLeaving) {}
-
   public record FamilyDetail(
       @Size(max = 150) String name,
       @Size(max = 10) String age,
@@ -69,8 +63,6 @@ public final class OnboardingDtos {
       @Pattern(regexp = "|\\d{4}-\\d{2}-\\d{2}", message = "Use YYYY-MM-DD") String dateOfBirth,
       @Size(max = 180) String email,
       @Size(max = 30) String mobile,
-      @Size(max = 150) String designation,
-      @Size(max = 60) String offeredCtc,
       @Size(max = 300) String currentAddress,
       @Size(max = 300) String permanentAddress,
       // Relocated from Form 2 (presentation only — stored on form2_info exactly as before; PAN +
@@ -81,13 +73,11 @@ public final class OnboardingDtos {
       @Size(max = 40) String axisAccountNumber,
       @Size(max = 40) String maritalStatus,
       @Size(max = 10) String bloodGroup,
+      // "Emergency contact" on screen/PDF; the key keeps its historical name (display rename only).
       @Size(max = 150) String closestRelativeName,
-      @Size(max = 30) String closestRelativePhone,
       @Size(max = 80) String city,
-      @Size(max = 60) String relationship,
       @Size(max = 4000) String declaration,
       @Valid @Size(max = 20) List<EducationalQualification> educationalQualifications,
-      @Valid @Size(max = 20) List<WorkingExperience> workingExperiences,
       @Valid @Size(max = 20) List<FamilyDetail> familyDetails,
       @Valid @Size(max = 20) List<CharacterReference> characterReferences) {}
 
@@ -96,8 +86,6 @@ public final class OnboardingDtos {
       String dateOfBirth,
       String email,
       String mobile,
-      String designation,
-      String offeredCtc,
       String currentAddress,
       String permanentAddress,
       String alternateNumber,
@@ -107,12 +95,9 @@ public final class OnboardingDtos {
       String maritalStatus,
       String bloodGroup,
       String closestRelativeName,
-      String closestRelativePhone,
       String city,
-      String relationship,
       String declaration,
       List<EducationalQualification> educationalQualifications,
-      List<WorkingExperience> workingExperiences,
       List<FamilyDetail> familyDetails,
       List<CharacterReference> characterReferences,
       SectionStatus status,

@@ -391,8 +391,6 @@ class OnboardingApiTest {
         "dateOfBirth", "1990-01-01",
         "email", "alex@personal.test",
         "mobile", "5551234",
-        "designation", "Engineer",
-        "offeredCtc", "1200000",
         "city", "Metro",
         "panNumber", "ABCDE1234F",
         "alternateNumber", "5559999",

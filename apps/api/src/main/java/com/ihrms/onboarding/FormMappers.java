@@ -12,7 +12,6 @@ import com.ihrms.onboarding.dto.OnboardingDtos.Form2Request;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form3Entry;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form3EntryView;
-import com.ihrms.onboarding.dto.OnboardingDtos.WorkingExperience;
 import com.ihrms.support.FieldCrypto;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -41,27 +40,39 @@ public final class FormMappers {
 
   // --- Form 1 ---------------------------------------------------------------
 
-  /** Build the {@code data} JSONB map for Form 1 (salaryCtc encrypted; offeredCtc is a column). */
-  public static Map<String, Object> toForm1Data(Form1Request r) {
+  /** Keys REMOVED from Form 1's display surface (§3.2) but kept in storage — carried over on re-save. */
+  private static final String[] FORM1_RETIRED_KEYS = {
+    "designation", "closestRelativePhone", "relationship", "workingExperiences"
+  };
+
+  /**
+   * Build the {@code data} JSONB map for Form 1. The retired display fields are no longer captured,
+   * but their previously stored values are CARRIED OVER so a re-save never wipes historical data
+   * (columns/keys stay per the additive-only rule; offeredCtc is a column and simply stops being set).
+   */
+  public static Map<String, Object> toForm1Data(Form1Request r, Map<String, Object> previous) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("name", r.name());
     m.put("dateOfBirth", r.dateOfBirth());
     m.put("email", r.email());
     m.put("mobile", r.mobile());
-    m.put("designation", r.designation());
     m.put("currentAddress", r.currentAddress());
     m.put("permanentAddress", r.permanentAddress());
     m.put("maritalStatus", r.maritalStatus());
     m.put("bloodGroup", r.bloodGroup());
     m.put("closestRelativeName", r.closestRelativeName());
-    m.put("closestRelativePhone", r.closestRelativePhone());
     m.put("city", r.city());
-    m.put("relationship", r.relationship());
     m.put("declaration", r.declaration());
     m.put("educationalQualifications", eduToMaps(r.educationalQualifications()));
-    m.put("workingExperiences", weToMaps(r.workingExperiences()));
     m.put("familyDetails", famToMaps(r.familyDetails()));
     m.put("characterReferences", refToMaps(r.characterReferences()));
+    if (previous != null) {
+      for (String key : FORM1_RETIRED_KEYS) {
+        if (previous.get(key) != null) {
+          m.put(key, previous.get(key));
+        }
+      }
+    }
     return m;
   }
 
@@ -79,8 +90,6 @@ public final class FormMappers {
         str(d, "dateOfBirth"),
         str(d, "email"),
         str(d, "mobile"),
-        str(d, "designation"),
-        sensitive(e.getOfferedCtc(), mode),
         str(d, "currentAddress"),
         str(d, "permanentAddress"),
         str(d2, "alternateNumber"),
@@ -90,12 +99,9 @@ public final class FormMappers {
         str(d, "maritalStatus"),
         str(d, "bloodGroup"),
         str(d, "closestRelativeName"),
-        str(d, "closestRelativePhone"),
         str(d, "city"),
-        str(d, "relationship"),
         str(d, "declaration"),
         eduViews(d.get("educationalQualifications")),
-        weViews(d.get("workingExperiences"), mode),
         famViews(d.get("familyDetails")),
         refViews(d.get("characterReferences")),
         e.getStatus(),
@@ -244,37 +250,6 @@ public final class FormMappers {
           new EducationalQualification(
               str(m, "qualification"), str(m, "university"), str(m, "yearOfPassing"),
               str(m, "percentage")));
-    }
-    return out;
-  }
-
-  private static List<Map<String, Object>> weToMaps(List<WorkingExperience> in) {
-    List<Map<String, Object>> out = new ArrayList<>();
-    if (in != null) {
-      for (WorkingExperience w : in) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("organization", w.organization());
-        m.put("period", w.period());
-        m.put("designation", w.designation());
-        m.put("salaryCtc", FieldCrypto.encrypt(w.salaryCtc())); // sensitive → encrypted in JSON
-        m.put("reasonForLeaving", w.reasonForLeaving());
-        out.add(m);
-      }
-    }
-    return out;
-  }
-
-  private static List<WorkingExperience> weViews(Object raw, Mode mode) {
-    List<WorkingExperience> out = new ArrayList<>();
-    for (Map<String, Object> m : asList(raw)) {
-      String salary = FieldCrypto.decrypt(str(m, "salaryCtc"));
-      out.add(
-          new WorkingExperience(
-              str(m, "organization"),
-              str(m, "period"),
-              str(m, "designation"),
-              sensitive(salary, mode),
-              str(m, "reasonForLeaving")));
     }
     return out;
   }

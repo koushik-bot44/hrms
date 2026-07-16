@@ -137,8 +137,9 @@ public class OnboardingService {
       f1 = new Form1Personal();
       f1.setEmployeeId(emp.employeeId());
     }
-    f1.setData(FormMappers.toForm1Data(body));
-    f1.setOfferedCtc(body.offeredCtc());
+    // Retired display fields (§3.2) are carried over from the previous map; the offeredCtc COLUMN is
+    // no longer set (its stored, encrypted values remain untouched).
+    f1.setData(FormMappers.toForm1Data(body, f1.getData()));
     clearRevision(f1);
     f1.setStatus(SectionStatus.DRAFT);
     form1s.save(f1);

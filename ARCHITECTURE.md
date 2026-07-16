@@ -111,8 +111,12 @@ Accounts Admin, own team for Accountant).
    factor) and lands on their **dashboard**.
 4. Employee completes a **guided four-form stepper** under their own record:
    - **Form 1 — Personal Details** (identity, addresses, alternate number, vehicle no, **PAN + bank
-     account** (encrypted at rest, masked with audited reveal), conduct references, education, work
-     experience, family, declaration)
+     account** (encrypted at rest, masked with audited reveal), conduct references, education, family,
+     emergency contact, declaration). _Offered CTC, the standalone designation, relationship, relative
+     phone and the working-experience table were REMOVED from Form 1's display + PDF — additive-only:
+     their columns/JSON keys stay and previously stored values are preserved (carried over on re-save),
+     just no longer shown/captured. "Closest relative" is displayed as **"Emergency contact"** (the
+     `closestRelativeName` key is unchanged)._
    - **Form 2 — Employee Info** (employment details — full/father name, DOJ, emails, designation,
      Spark ID, documents submitted; `employeeId` is read-only and blank until approval). _Note:
      alternate number, vehicle no, PAN, account number and the two addresses moved to Form 1's

@@ -1655,8 +1655,6 @@ export interface components {
             dateOfBirth?: string;
             email?: string;
             mobile?: string;
-            designation?: string;
-            offeredCtc?: string;
             currentAddress?: string;
             permanentAddress?: string;
             alternateNumber?: string;
@@ -1666,29 +1664,17 @@ export interface components {
             maritalStatus?: string;
             bloodGroup?: string;
             closestRelativeName?: string;
-            closestRelativePhone?: string;
             city?: string;
-            relationship?: string;
             declaration?: string;
             educationalQualifications?: components["schemas"]["EducationalQualification"][];
-            workingExperiences?: components["schemas"]["WorkingExperience"][];
             familyDetails?: components["schemas"]["FamilyDetail"][];
             characterReferences?: components["schemas"]["CharacterReference"][];
-        };
-        WorkingExperience: {
-            organization?: string;
-            period?: string;
-            designation?: string;
-            salaryCtc?: string;
-            reasonForLeaving?: string;
         };
         Form1View: {
             name?: string;
             dateOfBirth?: string;
             email?: string;
             mobile?: string;
-            designation?: string;
-            offeredCtc?: string;
             currentAddress?: string;
             permanentAddress?: string;
             alternateNumber?: string;
@@ -1698,12 +1684,9 @@ export interface components {
             maritalStatus?: string;
             bloodGroup?: string;
             closestRelativeName?: string;
-            closestRelativePhone?: string;
             city?: string;
-            relationship?: string;
             declaration?: string;
             educationalQualifications?: components["schemas"]["EducationalQualification"][];
-            workingExperiences?: components["schemas"]["WorkingExperience"][];
             familyDetails?: components["schemas"]["FamilyDetail"][];
             characterReferences?: components["schemas"]["CharacterReference"][];
             /** @enum {string} */

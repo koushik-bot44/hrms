@@ -218,7 +218,6 @@ class AccountantApiTest {
             .andExpect(status().isOk())
             .andReturn();
     JsonNode record = json.readTree(res.getResponse().getContentAsString());
-    assertThat(record.get("form1").get("offeredCtc").asText()).isEqualTo("********"); // masked (§6)
     assertThat(record.get("form1").get("panNumber").asText()).isEqualTo("********"); // PAN surfaces under Form 1 (§3.2)
     assertThat(auditLogs.findByAction("EMPLOYEE_RECORD_VIEWED"))
         .singleElement()
@@ -229,7 +228,6 @@ class AccountantApiTest {
             .andExpect(status().isOk())
             .andReturn();
     JsonNode plain = json.readTree(revealed.getResponse().getContentAsString());
-    assertThat(plain.get("form1").get("offeredCtc").asText()).isEqualTo("2500000");
     assertThat(plain.get("form1").get("panNumber").asText()).isEqualTo("ABCDE1234F");
     assertThat(auditLogs.findByAction("SENSITIVE_FIELD_REVEALED")).hasSize(1);
   }

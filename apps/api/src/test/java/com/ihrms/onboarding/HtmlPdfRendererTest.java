@@ -42,8 +42,6 @@ class HtmlPdfRendererTest {
     m.put("dob", "05/05/1990");
     m.put("email", "meera@personal.test");
     m.put("mobile", "9812345678");
-    m.put("designation", "QA Lead");
-    m.put("offeredCtc", "Rs. 14,50,000"); // SENSITIVE — must appear in full
     m.put("currentAddress", "12 Marine Drive, Mumbai");
     m.put("permanentAddress", "44 Hill Road, Pune");
     // Relocated from Form 2 (§3.2) — the Form 1 document now carries them (real values, PDF policy).
@@ -54,9 +52,7 @@ class HtmlPdfRendererTest {
     m.put("maritalStatus", "Married");
     m.put("bloodGroup", "O+");
     m.put("closestRelativeName", "Arjun Nair");
-    m.put("closestRelativePhone", "9800000000");
     m.put("city", "Mumbai");
-    m.put("relationship", "Spouse");
     m.put("declaration", "I DECLARE THAT THE INFORMATION IS TRUE AND CORRECT.");
     m.put("ref1", "Ravi Menon, Kochi, 9000000001");
     m.put("ref2", "Latha Rao, Chennai, 9000000002");
@@ -64,9 +60,6 @@ class HtmlPdfRendererTest {
         Map.of("qualification", "M.Tech", "university", "IIT Bombay", "yearOfPassing", "2014", "percentage", "8.7 CGPA"),
         Map.of("qualification", "B.Tech", "university", "COEP Pune", "yearOfPassing", "2012", "percentage", "78%"),
         Map.of("qualification", "HSC", "university", "Fergusson", "yearOfPassing", "2008", "percentage", "91%")));
-    m.put("experiences", List.of(
-        Map.of("organization", "Wipro", "period", "2014-2018", "designation", "QA Engineer", "salaryCtc", "8 LPA", "reasonForLeaving", "Growth"),
-        Map.of("organization", "Zoho", "period", "2018-2023", "designation", "Sr QA", "salaryCtc", "12 LPA", "reasonForLeaving", "Relocation")));
     m.put("families", List.of(
         Map.of("name", "Arjun Nair", "age", "36", "relation", "Spouse", "occupation", "Architect"),
         Map.of("name", "Kavya Nair", "age", "6", "relation", "Daughter", "occupation", "Student")));
@@ -82,11 +75,14 @@ class HtmlPdfRendererTest {
     assertThat(t).contains("Globex Corporation"); // joining-company letterhead
     assertThat(t).doesNotContain("Acme Technologies"); // template placeholder replaced
     assertThat(t).doesNotContain("JOINING COMPANY"); // demo sub-label removed
-    assertThat(t).contains("Meera Nair").contains("QA Lead").contains("Rs. 14,50,000"); // incl. SENSITIVE
+    assertThat(t).contains("Meera Nair");
+    // Removed from Form 1 (§3.2): Offered CTC, standalone designation — no longer rendered.
+    assertThat(t).doesNotContain("Rs. 14,50,000").doesNotContain("QA Lead").doesNotContain("Offered CTC");
+    assertThat(t).contains("Emergency contact"); // renamed from "closest relative" (display only)
     // Relocated from Form 2 (§3.2): the Form 1 document now carries these — PAN/account in full.
     assertThat(t).contains("9812300000").contains("MH12XY9999").contains("ZZZPN1234Q").contains("918020099887766");
     assertThat(t).contains("M.Tech").contains("IIT Bombay").contains("B.Tech").contains("HSC"); // all edu rows
-    assertThat(t).contains("Wipro").contains("Zoho").contains("12 LPA"); // all experience rows (+ SENSITIVE salary)
+    assertThat(t).doesNotContain("WORKING EXPERIENCE"); // the whole section was removed (§3.2)
     assertThat(t).contains("Kavya Nair"); // second family row
     assertThat(t).contains("Ravi Menon").contains("Latha Rao"); // both references
     assertThat(t).contains("I DECLARE THAT THE INFORMATION IS TRUE AND CORRECT.");

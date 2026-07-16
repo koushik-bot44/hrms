@@ -89,13 +89,6 @@ export const EducationalQualificationSchema = z.object({
   yearOfPassing: optional(20),
   percentage: optional(20),
 });
-export const WorkingExperienceSchema = z.object({
-  organization: optional(200),
-  period: optional(100),
-  designation: optional(150),
-  salaryCtc: optional(60),
-  reasonForLeaving: optional(200),
-});
 export const FamilyDetailSchema = z.object({
   name: optional(150),
   age: optional(10),
@@ -123,8 +116,6 @@ export const Form1Schema = z.object({
   dateOfBirth: dateish,
   email: optional(180),
   mobile: optional(30),
-  designation: optional(150),
-  offeredCtc: optional(60),
   currentAddress: optional(300),
   permanentAddress: optional(300),
   // Relocated from Form 2 (§3.2) — same validation they had there; PAN/account stay sensitive.
@@ -135,12 +126,11 @@ export const Form1Schema = z.object({
   maritalStatus: optional(40),
   bloodGroup: optional(10),
   closestRelativeName: optional(150),
-  closestRelativePhone: optional(30),
+
   city: optional(80),
-  relationship: optional(60),
+
   declaration: optional(4000),
   educationalQualifications: z.array(EducationalQualificationSchema).max(20),
-  workingExperiences: z.array(WorkingExperienceSchema).max(20),
   familyDetails: z.array(FamilyDetailSchema).max(20),
   // Min-2 is enforced at submit (evaluateOnboarding), not per-save, so drafts stay lenient.
   characterReferences: z.array(CharacterReferenceSchema).max(20),

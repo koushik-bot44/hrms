@@ -40,11 +40,7 @@
    <td class="l">D.O.B:</td><td class="v" style="width:17%;" th:text="${dob}">12/05/1994</td>
    <td class="l">Email Id:</td><td class="v" th:text="${email}">rahul.sharma@example.com</td>
  </tr>
- <tr>
-   <td class="l">Mobile No.:</td><td class="v" style="width:25%;" th:text="${mobile}">9876543210</td>
-   <td class="l">Designation:</td><td class="v" style="width:26%;" th:text="${designation}">Software Engineer</td>
-   <td class="l">Offered CTC:</td><td class="v" th:text="${offeredCtc}">Rs. 8,00,000</td>
- </tr>
+ <tr><td class="l">Mobile No.:</td><td class="v" colspan="5" th:text="${mobile}">9876543210</td></tr>
  <tr><td class="l">Current Address:</td><td class="v" colspan="5" th:text="${currentAddress}">Flat 402, Green Meadows, Madhapur, Hyderabad - 500081</td></tr>
  <tr><td class="l">Permanent Address:</td><td class="v" colspan="5" th:text="${permanentAddress}">H.No 12-3-45, Gandhi Nagar, Vijayawada - 520003</td></tr>
  <tr>
@@ -64,14 +60,8 @@
    <td class="l">1.</td><td class="v" style="width:49%;" th:text="${ref1}">Anil Kumar, Kukatpally, Hyderabad, 9000011111</td>
    <td class="l">2.</td><td class="v" colspan="3" th:text="${ref2}">Sita Rao, Ameerpet, Hyderabad, 9000022222</td>
  </tr>
- <tr>
-   <td class="l">Name of closest relative:</td><td class="v" style="width:38%;" th:text="${closestRelativeName}">Suresh Sharma</td>
-   <td class="l">Phone:</td><td class="v" colspan="3" th:text="${closestRelativePhone}">9000033333</td>
- </tr>
- <tr>
-   <td class="l">City:</td><td class="v" style="width:38%;" th:text="${city}">Hyderabad</td>
-   <td class="l">Relationship:</td><td class="v" colspan="3" th:text="${relationship}">Father</td>
- </tr>
+ <tr><td class="l">Emergency contact:</td><td class="v" colspan="5" th:text="${closestRelativeName}">Suresh Sharma</td></tr>
+ <tr><td class="l">City:</td><td class="v" colspan="5" th:text="${city}">Hyderabad</td></tr>
  <tr><td colspan="6" style="padding-top:7px;">By my signature below, I Confirm that all the information above is true. Further, I give permission to contact the references above.</td></tr>
  <tr>
    <td class="l">Legal Signature:</td>
@@ -87,12 +77,6 @@
  <tr th:each="e : ${educations}"><td th:text="${e.qualification}">B.Tech (CSE)</td><td th:text="${e.university}">JNTU Hyderabad</td><td th:text="${e.yearOfPassing}">2016</td><td th:text="${e.percentage}">72%</td></tr>
 </table>
 
-<!-- WORKING EXPERIENCE (repeat <tr> per experience item) -->
-<div class="sec">WORKING EXPERIENCE</div>
-<table class="g">
- <tr><th>ORGANIZATION</th><th>PERIOD</th><th>DESIGNATION</th><th>SALARY(CTC)</th><th>REASON FOR LEAVING</th></tr>
- <tr th:each="w : ${experiences}"><td th:text="${w.organization}">Infosys Ltd</td><td th:text="${w.period}">2016 - 2019</td><td th:text="${w.designation}">Systems Engineer</td><td th:text="${w.salaryCtc}">4.5 LPA</td><td th:text="${w.reasonForLeaving}">Career growth</td></tr>
-</table>
 
 <!-- FAMILY DETAILS (repeat <tr> per family member) -->
 <div class="sec">FAMILY DETAILS</div>

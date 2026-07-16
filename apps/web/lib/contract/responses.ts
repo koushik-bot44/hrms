@@ -102,7 +102,6 @@ export type Form1View = Schemas['Form1View'];
 export type Form2View = Schemas['Form2View'];
 export type Form3EntryView = Schemas['Form3EntryView'];
 export type EducationalQualification = Schemas['EducationalQualification'];
-export type WorkingExperience = Schemas['WorkingExperience'];
 export type FamilyDetail = Schemas['FamilyDetail'];
 export type CharacterReference = Schemas['CharacterReference'];
 export type SignatureView = Required<Schemas['SignatureView']>;

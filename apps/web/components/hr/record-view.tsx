@@ -321,14 +321,14 @@ function RevisionNote({ status, note }: { status?: SectionStatus | string; note?
 
 const F1_FIELDS: Array<[keyof Form1View, string]> = [
   ['name', 'Name'], ['dateOfBirth', 'Date of birth'], ['email', 'Email'], ['mobile', 'Mobile'],
-  ['designation', 'Designation'], ['offeredCtc', 'Offered CTC'], ['maritalStatus', 'Marital status'],
+  ['maritalStatus', 'Marital status'],
   ['bloodGroup', 'Blood group'], ['city', 'City'], ['currentAddress', 'Current address'],
   ['permanentAddress', 'Permanent address'],
   // Relocated from Form 2 (§3.2) — PAN/account arrive masked; the audited reveal unmasks them.
   ['alternateNumber', 'Alternate number'], ['vehicleNo2W4W', 'Vehicle no'],
   ['panNumber', 'PAN number'], ['axisAccountNumber', 'Axis account'],
-  ['closestRelativeName', 'Closest relative'],
-  ['closestRelativePhone', 'Relative phone'], ['relationship', 'Relationship'],
+  // Display rename only — the key stays closestRelativeName (§3.2).
+  ['closestRelativeName', 'Emergency contact'],
 ];
 
 function Form1Body({ form1 }: { form1: Form1View }) {
@@ -347,11 +347,6 @@ function Form1Body({ form1 }: { form1: Form1View }) {
         title="Educational Qualifications"
         cols={['Qualification', 'University', 'Year', '%']}
         rows={(form1.educationalQualifications ?? []).map((e) => [e.qualification, e.university, e.yearOfPassing, e.percentage])}
-      />
-      <MiniTable
-        title="Working Experience"
-        cols={['Organization', 'Period', 'Designation', 'Salary/CTC', 'Reason']}
-        rows={(form1.workingExperiences ?? []).map((w) => [w.organization, w.period, w.designation, w.salaryCtc, w.reasonForLeaving])}
       />
       <MiniTable
         title="Family Details"
