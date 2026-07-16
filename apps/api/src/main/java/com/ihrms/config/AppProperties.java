@@ -22,9 +22,25 @@ public record AppProperties(
     String fieldEncKey,
     Mail mail,
     S3 s3,
-    Storage storage) {
+    Storage storage,
+    Vapid vapid) {
 
   public record Mail(String host, int port, String username, String password, String from) {}
+
+  /**
+   * Web Push (VAPID) keys — an EC P-256 keypair (base64url) + a {@code mailto:} subject. SECRETS: set via
+   * {@code VAPID_PUBLIC_KEY} / {@code VAPID_PRIVATE_KEY} / {@code VAPID_SUBJECT} in the environment; never
+   * committed. Blank => Web Push is disabled in dev and refused at startup in prod (see PushService).
+   */
+  public record Vapid(String publicKey, String privateKey, String subject) {
+    public boolean isConfigured() {
+      return notBlank(publicKey) && notBlank(privateKey) && notBlank(subject);
+    }
+
+    private static boolean notBlank(String s) {
+      return s != null && !s.isBlank();
+    }
+  }
 
   public record S3(
       String endpoint,

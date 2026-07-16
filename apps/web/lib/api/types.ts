@@ -196,6 +196,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/push/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** N1 verification: send a test notification to the caller's OWN subscriptions. */
+        post: operations["test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push/subscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register (upsert on endpoint) a browser push subscription for the caller. */
+        post: operations["subscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/provisioning/accounts-admin": {
         parameters: {
             query?: never;
@@ -932,6 +966,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/push/public-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The VAPID public key the browser needs to create a PushSubscription. */
+        get: operations["publicKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding": {
         parameters: {
             query?: never;
@@ -1428,6 +1479,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/push/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove the caller's own push subscription (by endpoint). */
+        delete: operations["unsubscribe"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding/documents/{id}": {
         parameters: {
             query?: never;
@@ -1649,6 +1717,38 @@ export interface components {
         };
         CreateTeamRequest: {
             name: string;
+        };
+        /** @description Result of a test send to the caller's own subscriptions. */
+        TestResult: {
+            /**
+             * Format: int32
+             * @description How many of the caller's subscriptions were targeted.
+             */
+            targeted?: number;
+            /** @description Human-readable status (e.g. push disabled, or sent). */
+            message?: string;
+        };
+        /** @description The subscription's encryption keys (from PushSubscription.toJSON()). */
+        Keys: {
+            /** @description Client public key (base64url). */
+            p256dh: string;
+            /** @description Client auth secret (base64url). */
+            auth: string;
+        };
+        /** @description A browser PushSubscription to register for the acting principal. */
+        SubscribeRequest: {
+            /** @description Push service endpoint URL (unique per browser/device). */
+            endpoint: string;
+            keys: components["schemas"]["Keys"];
+            /** @description Optional user-agent label for the device. */
+            userAgent?: string;
+        };
+        /** @description Result of registering a subscription. */
+        SubscribeResult: {
+            /** @description Server id of the stored subscription. */
+            id?: string;
+            /** @description True if this endpoint was already registered and was updated. */
+            existing?: boolean;
         };
         ProvisionAccountantRequest: {
             name: string;
@@ -2048,6 +2148,13 @@ export interface components {
             memberCount?: number;
             createdAt?: string;
         };
+        /** @description The VAPID public key the browser needs to create a PushSubscription. */
+        PublicKeyResponse: {
+            /** @description VAPID public key (base64url); empty when push is not configured. */
+            publicKey?: string;
+            /** @description Whether the server has Web Push configured (VAPID keys present). */
+            enabled?: boolean;
+        };
         AccountantStatus: {
             exists?: boolean;
             accountant?: components["schemas"]["AccountantView"];
@@ -2321,6 +2428,10 @@ export interface components {
             designation?: string;
             dateOfJoining?: string;
             approvedAt?: string;
+        };
+        /** @description Remove a previously registered subscription (by endpoint). */
+        UnsubscribeRequest: {
+            endpoint: string;
         };
         PurgeCompanyResult: {
             id?: string;
@@ -2677,6 +2788,50 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["TeamDetailView"];
+                };
+            };
+        };
+    };
+    test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TestResult"];
+                };
+            };
+        };
+    };
+    subscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubscribeResult"];
                 };
             };
         };
@@ -4012,6 +4167,26 @@ export interface operations {
             };
         };
     };
+    publicKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PublicKeyResponse"];
+                };
+            };
+        };
+    };
     dashboard: {
         parameters: {
             query?: never;
@@ -4715,6 +4890,28 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["AuditPage"];
                 };
+            };
+        };
+    };
+    unsubscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnsubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

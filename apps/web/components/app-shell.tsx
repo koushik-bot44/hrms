@@ -3,10 +3,11 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { KeyRound, LogOut, Menu, ShieldCheck, UserRound } from 'lucide-react';
+import { Bell, KeyRound, LogOut, Menu, ShieldCheck, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth-provider';
 import { ChangePasswordDialog } from '@/components/change-password-dialog';
+import { PushBetaDialog } from '@/components/push/push-beta-dialog';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -100,6 +101,7 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [changingPassword, setChangingPassword] = React.useState(false);
+  const [pushBeta, setPushBeta] = React.useState(false);
   const [confirmClockOut, setConfirmClockOut] = React.useState(false);
   const [clockingOut, setClockingOut] = React.useState(false);
   const isStaff = session?.type === 'USER';
@@ -171,6 +173,10 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
               Change password
             </DropdownMenuItem>
           ) : null}
+          <DropdownMenuItem onSelect={() => setPushBeta(true)}>
+            <Bell className="size-4" />
+            OS notifications (beta)
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={requestSignOut}>
             <LogOut className="size-4" />
             Sign out
@@ -180,6 +186,7 @@ function UserMenu({ roleLabel }: { roleLabel: string }) {
       {isStaff ? (
         <ChangePasswordDialog open={changingPassword} onOpenChange={setChangingPassword} />
       ) : null}
+      <PushBetaDialog open={pushBeta} onOpenChange={setPushBeta} />
 
       {/* Still-clocked-in confirm on sign-out (§8a). */}
       <Dialog open={confirmClockOut} onOpenChange={setConfirmClockOut}>

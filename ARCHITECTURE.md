@@ -605,6 +605,48 @@ balances are a future feature).
 
 ---
 
+## 8c. OS notifications (Web Push)
+
+OS-level notifications are delivered with **Web Push (VAPID)** — the browser standard for background
+notifications that appear even when the IHRMS tab is closed or unfocused. Built in stages: **N1 (this
+stage)** is the delivery backend only; **N2** adds the real opt-in UX + a fuller Service Worker; **N3**
+triggers pushes from mail/notification events.
+
+- **How Web Push works.** In the browser, a **Service Worker** (`/sw.js`, served at the web origin root)
+  creates a **`PushSubscription`** — an `endpoint` URL at the browser vendor's push service (Google /
+  Mozilla / Apple) plus two keys (`p256dh`, `auth`). The server stores that subscription and, to notify,
+  POSTs an **encrypted** payload to the endpoint, **signed with the VAPID private key**. The push service
+  delivers it to the browser, which fires the Service Worker's `push` event → an OS notification. IHRMS
+  never talks to the browser directly — only outbound HTTPS to the push services (works behind Railway; no
+  inbound socket).
+- **Subscriptions (`push_subscriptions`, additive V20).** One row per browser/device — the `endpoint` is
+  **unique**, so subscribe is an upsert. Owned by **exactly one principal**: a staff `userId` **OR** a
+  credentialed `employeeId` (the same nullable-either polymorphism as `message_recipients`), with a
+  denormalized `companyId` (null for platform roles). Only **mailbox-capable** principals may subscribe —
+  staff always; an employee only once credentialed (§8, Stage 5) — else `403`. Indexed by principal for
+  fan-out.
+- **Endpoints (`/push/**`, any authenticated principal; owns only its own rows).**
+  - `GET /push/public-key` — the VAPID public key the browser needs to subscribe (+ an `enabled` flag).
+  - `POST /push/subscribe {endpoint, keys:{p256dh, auth}, userAgent?}` — upsert for the caller; audited
+    `PUSH_SUBSCRIBED`.
+  - `DELETE /push/unsubscribe {endpoint}` — remove the caller's subscription (idempotent); audited
+    `PUSH_UNSUBSCRIBED`.
+  - `POST /push/test` — **N1 verification only**: sends a test notification to the CALLER's own
+    subscriptions. N3 replaces this trigger with real mail events; it's kept for debugging and never
+    notifies anyone but the caller.
+- **Sending is best-effort.** `PushService.sendToPrincipal(ref, title, body, url)` loads that principal's
+  subscriptions and POSTs an encrypted, VAPID-signed payload to each via the `nl.martijndwars:web-push`
+  library (BouncyCastle crypto). Failures are **logged, never thrown** to callers; a `404/410` from the
+  push service means the subscription is gone, so that row is **pruned**. `sendToPrincipal` is the seam N3
+  will call from mail events.
+- **VAPID keys are env secrets.** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:`)
+  come from the environment (set in Railway; generate with `npx web-push generate-vapid-keys`) — **never
+  generated in code, hardcoded, or committed**. Absent keys **disable** push in dev (logged) and **refuse
+  startup in the `prod` profile** (fail-fast). The Service Worker `sw.js` **must** be served at the site
+  root scope on the web origin (Next.js serves `public/sw.js` at `/sw.js`).
+
+---
+
 ## 9. Deployment Architecture (existing shell — keep as-is)
 
 The project is built into the already-deployed monorepo shell. **Do not change the deployment

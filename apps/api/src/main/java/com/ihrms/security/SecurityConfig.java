@@ -107,6 +107,10 @@ public class SecurityConfig {
                     .hasRole("MANAGER")
                     .requestMatchers("/leave/**")
                     .authenticated()
+                    // Web Push (§ Web Push): any authenticated principal may register their own browser
+                    // subscription + self-test; the service refuses an uncredentialed employee (403).
+                    .requestMatchers("/push/**")
+                    .authenticated()
                     .anyRequest()
                     .authenticated())
         // Hardened response headers (§6): nosniff, frame DENY, HSTS (prod/HTTPS), no-referrer.
