@@ -151,7 +151,7 @@ export function CreateCompanyDialog() {
           </div>
           <div className="space-y-1.5">
             <label htmlFor="company-mail-domain" className="text-sm font-medium">
-              Mail domain
+              Mail Domain
             </label>
             <Input
               id="company-mail-domain"

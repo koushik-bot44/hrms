@@ -78,7 +78,7 @@ class HtmlPdfRendererTest {
     assertThat(t).contains("Meera Nair");
     // Removed from Form 1 (§3.2): Offered CTC, standalone designation — no longer rendered.
     assertThat(t).doesNotContain("Rs. 14,50,000").doesNotContain("QA Lead").doesNotContain("Offered CTC");
-    assertThat(t).contains("Emergency contact"); // renamed from "closest relative" (display only)
+    assertThat(t).contains("Emergency Contact"); // renamed from "closest relative" (display only)
     // Relocated from Form 2 (§3.2): the Form 1 document now carries these — PAN/account in full.
     assertThat(t).contains("9812300000").contains("MH12XY9999").contains("ZZZPN1234Q").contains("918020099887766");
     assertThat(t).contains("M.Tech").contains("IIT Bombay").contains("B.Tech").contains("HSC"); // all edu rows

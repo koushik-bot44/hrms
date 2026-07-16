@@ -175,7 +175,7 @@ export function CreateAccountantDialog() {
             </div>
             <div className="space-y-1.5">
               <label htmlFor="acc-localpart" className="text-sm font-medium">
-                Mailbox name
+                Mailbox Name
               </label>
               <Input
                 id="acc-localpart"
@@ -194,7 +194,7 @@ export function CreateAccountantDialog() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label htmlFor="acc-password" className="text-sm font-medium">
-                  Initial password
+                  Initial Password
                 </label>
                 <Button
                   type="button"

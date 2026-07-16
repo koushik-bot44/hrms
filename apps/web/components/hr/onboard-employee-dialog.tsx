@@ -119,7 +119,7 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={onSubmit} className="space-y-4" noValidate>
-              <Field id="onb-name" label="Full name" error={errors.fullName?.message}>
+              <Field id="onb-name" label="Full Name" error={errors.fullName?.message}>
                 <Input
                   id="onb-name"
                   placeholder="Alex Doe"
@@ -144,7 +144,7 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
                   {...register('designation')}
                 />
               </Field>
-              <Field id="onb-doj" label="Date of joining" error={errors.dateOfJoining?.message}>
+              <Field id="onb-doj" label="Date of Joining" error={errors.dateOfJoining?.message}>
                 <Input
                   id="onb-doj"
                   type="date"

@@ -125,7 +125,7 @@ function SignInForm() {
   if (step === 'request') {
     return (
       <form onSubmit={onRequest} className="space-y-4" noValidate>
-        <Field id="emp-name" label="Full name" error={requestForm.formState.errors.fullName?.message}>
+        <Field id="emp-name" label="Full Name" error={requestForm.formState.errors.fullName?.message}>
           <Input
             id="emp-name"
             autoComplete="name"
@@ -161,7 +161,7 @@ function SignInForm() {
           Dev code (no email configured): <span className="font-mono font-medium">{devOtp}</span>
         </p>
       ) : null}
-      <Field id="emp-otp" label="6-digit code" error={verifyForm.formState.errors.otp?.message}>
+      <Field id="emp-otp" label="6-Digit Code" error={verifyForm.formState.errors.otp?.message}>
         <Input
           id="emp-otp"
           inputMode="numeric"

@@ -320,15 +320,15 @@ function RevisionNote({ status, note }: { status?: SectionStatus | string; note?
 }
 
 const F1_FIELDS: Array<[keyof Form1View, string]> = [
-  ['name', 'Name'], ['dateOfBirth', 'Date of birth'], ['email', 'Email'], ['mobile', 'Mobile'],
-  ['maritalStatus', 'Marital status'],
-  ['bloodGroup', 'Blood group'], ['city', 'City'], ['currentAddress', 'Current address'],
-  ['permanentAddress', 'Permanent address'],
+  ['name', 'Name'], ['dateOfBirth', 'Date of Birth'], ['email', 'Email'], ['mobile', 'Mobile'],
+  ['maritalStatus', 'Marital Status'],
+  ['bloodGroup', 'Blood Group'], ['city', 'City'], ['currentAddress', 'Current Address'],
+  ['permanentAddress', 'Permanent Address'],
   // Relocated from Form 2 (§3.2) — PAN/account arrive masked; the audited reveal unmasks them.
-  ['alternateNumber', 'Alternate number'], ['vehicleNo2W4W', 'Vehicle no'],
-  ['panNumber', 'PAN number'], ['axisAccountNumber', 'Axis account'],
+  ['alternateNumber', 'Alternate Number'], ['vehicleNo2W4W', 'Vehicle No'],
+  ['panNumber', 'PAN Number'], ['axisAccountNumber', 'Axis Account'],
   // Display rename only — the key stays closestRelativeName (§3.2).
-  ['closestRelativeName', 'Emergency contact'],
+  ['closestRelativeName', 'Emergency Contact'],
 ];
 
 function Form1Body({ form1 }: { form1: Form1View }) {
@@ -364,11 +364,11 @@ function Form1Body({ form1 }: { form1: Form1View }) {
 
 // alternate number, vehicle no, PAN, account number + addresses moved to Form 1 (§3.2).
 const F2_FIELDS: Array<[keyof Form2View, string]> = [
-  ['fullName', 'Full name'], ['fatherName', "Father's name"], ['employeeId', 'Employee ID'],
-  ['sparkId', 'Spark ID'], ['dateOfBirth', 'Date of birth'], ['dateOfJoining', 'Date of joining'],
-  ['bloodGroup', 'Blood group'], ['mobile', 'Mobile'],
-  ['officialEmail', 'Official email'], ['personalEmail', 'Personal email'], ['designation', 'Designation'],
-  ['documentSubmitted', 'Documents submitted'],
+  ['fullName', 'Full Name'], ['fatherName', "Father's Name"], ['employeeId', 'Employee ID'],
+  ['sparkId', 'Spark ID'], ['dateOfBirth', 'Date of Birth'], ['dateOfJoining', 'Date of Joining'],
+  ['bloodGroup', 'Blood Group'], ['mobile', 'Mobile'],
+  ['officialEmail', 'Official Email'], ['personalEmail', 'Personal Email'], ['designation', 'Designation'],
+  ['documentSubmitted', 'Documents Submitted'],
 ];
 
 function Form2Body({ form2 }: { form2: Form2View }) {
@@ -377,9 +377,9 @@ function Form2Body({ form2 }: { form2: Form2View }) {
 
 const F3_FIELDS: Array<[keyof Form3EntryView, string]> = [
   ['companyName', 'Company'], ['companyAddress', 'Address'], ['dateOfJoining', 'Joined'],
-  ['dateOfRelieving', 'Relieved'], ['designation', 'Designation'], ['lastDrawnSalary', 'Last drawn salary'],
-  ['jobType', 'Job type'], ['reasonForLeaving', 'Reason for leaving'], ['reportingTo', 'Reporting to'],
-  ['roContact', 'RO contact'], ['hrNameContact', 'HR name / contact'],
+  ['dateOfRelieving', 'Relieved'], ['designation', 'Designation'], ['lastDrawnSalary', 'Last Drawn Salary'],
+  ['jobType', 'Job Type'], ['reasonForLeaving', 'Reason for Leaving'], ['reportingTo', 'Reporting To'],
+  ['roContact', 'RO Contact'], ['hrNameContact', 'HR Name / Contact'],
 ];
 
 function Form3Body({ entry }: { entry: Form3EntryView }) {

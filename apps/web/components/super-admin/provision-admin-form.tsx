@@ -86,7 +86,7 @@ export function ProvisionAdminForm({
       </div>
       <div className="space-y-1.5">
         <label htmlFor="admin-localpart" className="text-sm font-medium">
-          Mailbox name
+          Mailbox Name
         </label>
         <Input
           id="admin-localpart"
@@ -105,7 +105,7 @@ export function ProvisionAdminForm({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <label htmlFor="admin-password" className="text-sm font-medium">
-            Initial password
+            Initial Password
           </label>
           <Button
             type="button"

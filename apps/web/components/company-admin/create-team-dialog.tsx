@@ -100,7 +100,7 @@ export function CreateTeamDialog({ companyId }: { companyId?: string }) {
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
           <div className="space-y-1.5">
             <label htmlFor="team-name" className="text-sm font-medium">
-              Team name
+              Team Name
             </label>
             <Input
               id="team-name"

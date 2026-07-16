@@ -71,7 +71,7 @@ export function ChangePasswordDialog({
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
           <div className="space-y-1.5">
             <label htmlFor="cp-current" className="text-sm font-medium">
-              Current password
+              Current Password
             </label>
             <Input
               id="cp-current"
@@ -86,7 +86,7 @@ export function ChangePasswordDialog({
           </div>
           <div className="space-y-1.5">
             <label htmlFor="cp-new" className="text-sm font-medium">
-              New password
+              New Password
             </label>
             <Input
               id="cp-new"

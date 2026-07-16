@@ -145,7 +145,7 @@ export function SignaturePad({
           onChange={(e) => renderTyped(e.target.value)}
           placeholder="Type your full name"
           disabled={disabled}
-          aria-label="Typed signature"
+          aria-label="Typed Signature"
         />
       ) : null}
 

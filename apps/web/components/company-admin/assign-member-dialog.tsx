@@ -194,7 +194,7 @@ export function AssignMemberDialog({
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="member-localpart" className="text-sm font-medium">
-                    Mailbox name
+                    Mailbox Name
                   </label>
                   <Input
                     id="member-localpart"
@@ -215,7 +215,7 @@ export function AssignMemberDialog({
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label htmlFor="member-password" className="text-sm font-medium">
-                      Initial password
+                      Initial Password
                     </label>
                     <Button
                       type="button"

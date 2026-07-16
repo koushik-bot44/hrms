@@ -200,7 +200,7 @@ export function SuperAdminOnboardDialog() {
                 </div>
               ) : null}
 
-              <Field id="sa-onb-name" label="Full name" error={errors.fullName?.message}>
+              <Field id="sa-onb-name" label="Full Name" error={errors.fullName?.message}>
                 <Input
                   id="sa-onb-name"
                   placeholder="Alex Doe"
@@ -225,7 +225,7 @@ export function SuperAdminOnboardDialog() {
                   {...register('designation')}
                 />
               </Field>
-              <Field id="sa-onb-doj" label="Date of joining" error={errors.dateOfJoining?.message}>
+              <Field id="sa-onb-doj" label="Date of Joining" error={errors.dateOfJoining?.message}>
                 <Input
                   id="sa-onb-doj"
                   type="date"

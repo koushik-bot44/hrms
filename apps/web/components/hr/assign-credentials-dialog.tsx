@@ -167,7 +167,7 @@ export function AssignCredentialsDialog({
           <form onSubmit={onSubmit} className="space-y-4" noValidate>
             <div className="space-y-1.5">
               <label htmlFor="cred-localpart" className="text-sm font-medium">
-                Mailbox name
+                Mailbox Name
               </label>
               <Input
                 id="cred-localpart"

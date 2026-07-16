@@ -36,7 +36,7 @@ export default function WorkspacePage() {
         <CardContent className="grid gap-4 text-sm sm:grid-cols-3">
           <Detail label="Name" value={emp.name} />
           <Detail label="Employee ID" value={emp.employeeCode} mono />
-          <Detail label="Mailbox address" value={emp.mailAddress} mono />
+          <Detail label="Mailbox Address" value={emp.mailAddress} mono />
         </CardContent>
       </Card>
 

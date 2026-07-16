@@ -69,7 +69,7 @@ export function TeamAttendance() {
       },
       {
         accessorKey: 'lateToday',
-        header: 'Late today',
+        header: 'Late Today',
         cell: ({ row }) =>
           row.original.lateToday ? (
             <Badge variant="warning">Late</Badge>
@@ -86,7 +86,7 @@ export function TeamAttendance() {
       },
       {
         accessorKey: 'periodSeconds',
-        header: 'Range total',
+        header: 'Range Total',
         cell: ({ row }) => (
           <span className="tabular-nums">{formatDuration(row.original.periodSeconds)}</span>
         ),

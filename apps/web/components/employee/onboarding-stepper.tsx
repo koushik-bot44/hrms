@@ -248,23 +248,23 @@ export function Form1Step({
             <Field label="Name" error={errors.name?.message}>
               <Input {...register('name')} disabled={disabled} aria-invalid={!!errors.name} />
             </Field>
-            <Field label="Date of birth" error={errors.dateOfBirth?.message}>
+            <Field label="Date of Birth" error={errors.dateOfBirth?.message}>
               <Input type="date" {...register('dateOfBirth')} disabled={disabled} />
             </Field>
             <Field label="Email"><Input type="email" {...register('email')} disabled={disabled} /></Field>
             <Field label="Mobile"><Input {...register('mobile')} disabled={disabled} /></Field>
-            <Field label="Marital status"><Input {...register('maritalStatus')} disabled={disabled} /></Field>
-            <Field label="Blood group"><Input {...register('bloodGroup')} disabled={disabled} /></Field>
+            <Field label="Marital Status"><Input {...register('maritalStatus')} disabled={disabled} /></Field>
+            <Field label="Blood Group"><Input {...register('bloodGroup')} disabled={disabled} /></Field>
             <Field label="City"><Input {...register('city')} disabled={disabled} /></Field>
-            <Field label="Current address"><Input {...register('currentAddress')} disabled={disabled} /></Field>
-            <Field label="Permanent address"><Input {...register('permanentAddress')} disabled={disabled} /></Field>
+            <Field label="Current Address"><Input {...register('currentAddress')} disabled={disabled} /></Field>
+            <Field label="Permanent Address"><Input {...register('permanentAddress')} disabled={disabled} /></Field>
             {/* Relocated from Form 2 (§3.2) — same fields, same validation; PAN/account stay confidential. */}
-            <Field label="Alternate number"><Input {...register('alternateNumber')} disabled={disabled} /></Field>
-            <Field label="Vehicle no (2W/4W)"><Input {...register('vehicleNo2W4W')} disabled={disabled} /></Field>
-            <Field label="PAN number (confidential)"><Input {...register('panNumber')} disabled={disabled} /></Field>
-            <Field label="Axis account number (confidential)"><Input {...register('axisAccountNumber')} disabled={disabled} /></Field>
+            <Field label="Alternate Number"><Input {...register('alternateNumber')} disabled={disabled} /></Field>
+            <Field label="Vehicle No (2W/4W)"><Input {...register('vehicleNo2W4W')} disabled={disabled} /></Field>
+            <Field label="PAN Number (confidential)"><Input {...register('panNumber')} disabled={disabled} /></Field>
+            <Field label="Axis Account Number (confidential)"><Input {...register('axisAccountNumber')} disabled={disabled} /></Field>
             {/* Display rename only — the key stays closestRelativeName (§3.2). */}
-            <Field label="Emergency contact"><Input {...register('closestRelativeName')} disabled={disabled} /></Field>
+            <Field label="Emergency Contact"><Input {...register('closestRelativeName')} disabled={disabled} /></Field>
           </div>
 
           <ArraySection
@@ -465,22 +465,22 @@ export function Form2Step({
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Full name"><Input {...register('fullName')} disabled={disabled} /></Field>
-            <Field label="Father's name"><Input {...register('fatherName')} disabled={disabled} /></Field>
+            <Field label="Full Name"><Input {...register('fullName')} disabled={disabled} /></Field>
+            <Field label="Father's Name"><Input {...register('fatherName')} disabled={disabled} /></Field>
             <Field label="Employee ID (assigned on approval)">
               <Input value={employeeCode ?? ''} readOnly disabled placeholder="—" />
             </Field>
             <Field label="Spark ID (set by HR)">
               <Input value={form2?.sparkId ?? ''} readOnly disabled placeholder="—" />
             </Field>
-            <Field label="Date of birth"><Input type="date" {...register('dateOfBirth')} disabled={disabled} /></Field>
-            <Field label="Date of joining"><Input type="date" {...register('dateOfJoining')} disabled={disabled} /></Field>
-            <Field label="Blood group"><Input {...register('bloodGroup')} disabled={disabled} /></Field>
+            <Field label="Date of Birth"><Input type="date" {...register('dateOfBirth')} disabled={disabled} /></Field>
+            <Field label="Date of Joining"><Input type="date" {...register('dateOfJoining')} disabled={disabled} /></Field>
+            <Field label="Blood Group"><Input {...register('bloodGroup')} disabled={disabled} /></Field>
             <Field label="Mobile"><Input {...register('mobile')} disabled={disabled} /></Field>
-            <Field label="Official email"><Input type="email" {...register('officialEmail')} disabled={disabled} /></Field>
-            <Field label="Personal email"><Input type="email" {...register('personalEmail')} disabled={disabled} /></Field>
+            <Field label="Official Email"><Input type="email" {...register('officialEmail')} disabled={disabled} /></Field>
+            <Field label="Personal Email"><Input type="email" {...register('personalEmail')} disabled={disabled} /></Field>
             <Field label="Designation"><Input {...register('designation')} disabled={disabled} /></Field>
-            <Field label="Documents submitted"><Input {...register('documentSubmitted')} disabled={disabled} /></Field>
+            <Field label="Documents Submitted"><Input {...register('documentSubmitted')} disabled={disabled} /></Field>
             {/* alternate number, vehicle no, PAN, account number + addresses moved to Form 1 (§3.2). */}
           </div>
           <StepActions onBack={onBack} saving={save.isPending} nextLabel={submitLabel} />
@@ -571,16 +571,16 @@ export function Form3Step({
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Company (previous employer)"><Input {...register(`entries.${i}.companyName`)} disabled={disabled} /></Field>
-                  <Field label="Company address"><Input {...register(`entries.${i}.companyAddress`)} disabled={disabled} /></Field>
-                  <Field label="Date of joining"><Input type="date" {...register(`entries.${i}.dateOfJoining`)} disabled={disabled} /></Field>
-                  <Field label="Date of relieving"><Input type="date" {...register(`entries.${i}.dateOfRelieving`)} disabled={disabled} /></Field>
+                  <Field label="Company Address"><Input {...register(`entries.${i}.companyAddress`)} disabled={disabled} /></Field>
+                  <Field label="Date of Joining"><Input type="date" {...register(`entries.${i}.dateOfJoining`)} disabled={disabled} /></Field>
+                  <Field label="Date of Relieving"><Input type="date" {...register(`entries.${i}.dateOfRelieving`)} disabled={disabled} /></Field>
                   <Field label="Designation"><Input {...register(`entries.${i}.designation`)} disabled={disabled} /></Field>
-                  <Field label="Last drawn salary (confidential)"><Input {...register(`entries.${i}.lastDrawnSalary`)} disabled={disabled} /></Field>
-                  <Field label="Job type"><Input {...register(`entries.${i}.jobType`)} disabled={disabled} /></Field>
-                  <Field label="Reason for leaving"><Input {...register(`entries.${i}.reasonForLeaving`)} disabled={disabled} /></Field>
-                  <Field label="Reporting to"><Input {...register(`entries.${i}.reportingTo`)} disabled={disabled} /></Field>
-                  <Field label="RO contact"><Input {...register(`entries.${i}.roContact`)} disabled={disabled} /></Field>
-                  <Field label="HR name / contact"><Input {...register(`entries.${i}.hrNameContact`)} disabled={disabled} /></Field>
+                  <Field label="Last Drawn Salary (confidential)"><Input {...register(`entries.${i}.lastDrawnSalary`)} disabled={disabled} /></Field>
+                  <Field label="Job Type"><Input {...register(`entries.${i}.jobType`)} disabled={disabled} /></Field>
+                  <Field label="Reason for Leaving"><Input {...register(`entries.${i}.reasonForLeaving`)} disabled={disabled} /></Field>
+                  <Field label="Reporting To"><Input {...register(`entries.${i}.reportingTo`)} disabled={disabled} /></Field>
+                  <Field label="RO Contact"><Input {...register(`entries.${i}.roContact`)} disabled={disabled} /></Field>
+                  <Field label="HR Name / Contact"><Input {...register(`entries.${i}.hrNameContact`)} disabled={disabled} /></Field>
                 </div>
               </div>
             ))
