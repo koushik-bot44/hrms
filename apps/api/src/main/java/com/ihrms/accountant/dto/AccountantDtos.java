@@ -1,6 +1,7 @@
 package com.ihrms.accountant.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -59,4 +60,32 @@ public final class AccountantDtos {
       int size,
       long totalElements,
       int totalPages) {}
+
+  // --- Team-wise browsing (§2): ACCOUNTS_ADMIN company -> team -> employee -----------
+
+  @Schema(description = "One company at the top of the ACCOUNTS_ADMIN drilldown.")
+  public record ViewerCompanyRow(
+      String id,
+      String name,
+      String code,
+      @Schema(description = "Number of teams in the company.") long teamCount,
+      @Schema(description = "Number of APPROVED employees in the company.") long employeeCount) {}
+
+  @Schema(description = "One team within a company — its HR, Manager and approved-employee count.")
+  public record ViewerTeamRow(
+      String id,
+      String name,
+      String companyId,
+      @Schema(description = "The team HR's name (null if unassigned).") String hrName,
+      @Schema(description = "The team Manager's name (null if unassigned).") String managerName,
+      @Schema(description = "Number of APPROVED employees on this team.") long employeeCount) {}
+
+  @Schema(description = "The ACCOUNTANT's own team — the roster header (null if none assigned).")
+  public record MyTeamView(
+      String teamId,
+      String teamName,
+      String companyId,
+      String companyName,
+      String hrName,
+      String managerName) {}
 }

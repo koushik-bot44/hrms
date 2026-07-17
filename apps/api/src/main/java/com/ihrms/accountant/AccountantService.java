@@ -4,6 +4,9 @@ import com.ihrms.accountant.dto.AccountantDtos.AccountantStatus;
 import com.ihrms.accountant.dto.AccountantDtos.AccountantView;
 import com.ihrms.accountant.dto.AccountantDtos.ApprovedEmployeePage;
 import com.ihrms.accountant.dto.AccountantDtos.ApprovedEmployeeRow;
+import com.ihrms.accountant.dto.AccountantDtos.MyTeamView;
+import com.ihrms.accountant.dto.AccountantDtos.ViewerCompanyRow;
+import com.ihrms.accountant.dto.AccountantDtos.ViewerTeamRow;
 import com.ihrms.accountant.dto.AccountantDtos.ProvisionAccountantRequest;
 import com.ihrms.accountant.dto.AccountantDtos.ProvisionAccountantResult;
 import com.ihrms.audit.AuditActor;
@@ -34,6 +37,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -204,6 +208,139 @@ public class AccountantService {
         page.getSize(),
         page.getTotalElements(),
         page.getTotalPages());
+  }
+
+  // --- Team-wise browsing (§2) ---------------------------------------------------
+  //
+  // ACCOUNTS_ADMIN drills COMPANY -> TEAM -> EMPLOYEE across every company; the ACCOUNTANT never picks
+  // a company/team (they have exactly one) — they read only their own team's roster. A "team's
+  // employees" are the APPROVED employees onboarded by that team's HR (the same onboardingHr resolution
+  // as the mail graph / manager scope). All READ-ONLY.
+
+  private static final String DELETED = "DELETED";
+
+  /** Top level of the ACCOUNTS_ADMIN drilldown: the active companies with team + approved counts. */
+  public List<ViewerCompanyRow> companies(IhrmsPrincipal.User actor) {
+    requireAccountsAdmin(actor);
+    return companies.findAll().stream()
+        .filter(c -> !DELETED.equals(c.getStatus()))
+        .sorted((a, b) -> a.getName().compareToIgnoreCase(b.getName()))
+        .map(
+            c ->
+                new ViewerCompanyRow(
+                    c.getId(),
+                    c.getName(),
+                    c.getCode(),
+                    teams.findByCompanyId(c.getId()).size(),
+                    employees.countByCompanyIdAndStatus(c.getId(), EmployeeStatus.APPROVED)))
+        .toList();
+  }
+
+  /** A company's teams (ACCOUNTS_ADMIN, any company): HR/Manager names + approved-employee count. */
+  public List<ViewerTeamRow> teamsOfCompany(IhrmsPrincipal.User actor, String companyId) {
+    requireAccountsAdmin(actor);
+    List<Team> ts = teams.findByCompanyIdOrderByCreatedAtDesc(companyId);
+    Set<String> userIds =
+        ts.stream()
+            .flatMap(t -> Stream.of(t.getHrUserId(), t.getManagerUserId()))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+    Map<String, String> names =
+        users.findAllById(userIds).stream()
+            .collect(Collectors.toMap(User::getId, User::getName));
+    return ts.stream()
+        .map(
+            t ->
+                new ViewerTeamRow(
+                    t.getId(),
+                    t.getName(),
+                    t.getCompanyId(),
+                    t.getHrUserId() == null ? null : names.get(t.getHrUserId()),
+                    t.getManagerUserId() == null ? null : names.get(t.getManagerUserId()),
+                    t.getHrUserId() == null
+                        ? 0
+                        : employees.countByOnboardingHrIdAndStatus(
+                            t.getHrUserId(), EmployeeStatus.APPROVED)))
+        .toList();
+  }
+
+  /**
+   * A team's APPROVED employees. ACCOUNTS_ADMIN may read any team; an ACCOUNTANT may read ONLY a team
+   * they are the accountant of (else 404 — never widen). Employees = onboardingHr == the team's HR,
+   * tenant-filtered by the team's company.
+   */
+  public ApprovedEmployeePage teamEmployees(
+      IhrmsPrincipal.User actor, String teamId, String search, Pageable pageable) {
+    Team team =
+        teams
+            .findById(teamId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
+    if (actor.role() == UserRole.ACCOUNTANT && !ownsTeam(actor, teamId)) {
+      // Not this accountant's team — do not reveal existence, do not widen scope.
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found");
+    }
+    String hrId = team.getHrUserId();
+    String companyId = team.getCompanyId();
+    Specification<Employee> spec =
+        (root, q, cb) -> {
+          List<Predicate> p = new ArrayList<>();
+          p.add(cb.equal(root.get("status"), EmployeeStatus.APPROVED));
+          p.add(cb.equal(root.get("companyId"), companyId)); // tenant filter (§6)
+          p.add(hrId == null ? cb.disjunction() : cb.equal(root.get("onboardingHrId"), hrId));
+          if (isPresent(search)) {
+            String like = "%" + search.trim().toLowerCase() + "%";
+            p.add(
+                cb.or(
+                    cb.like(cb.lower(root.get("fullName")), like),
+                    cb.like(cb.lower(root.get("email")), like),
+                    cb.like(cb.lower(root.get("employeeCode")), like)));
+          }
+          return cb.and(p.toArray(new Predicate[0]));
+        };
+    Page<Employee> page = employees.findAll(spec, pageable);
+    Map<String, String> companyNames = companyNames(page.getContent());
+    return new ApprovedEmployeePage(
+        page.getContent().stream().map(e -> row(e, companyNames)).toList(),
+        page.getNumber(),
+        page.getSize(),
+        page.getTotalElements(),
+        page.getTotalPages());
+  }
+
+  /** The ACCOUNTANT's own team descriptor (roster header). {@code null} if none is assigned. */
+  public MyTeamView myTeam(IhrmsPrincipal.User actor) {
+    if (actor.role() != UserRole.ACCOUNTANT) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the team Accountant has a team");
+    }
+    Team t = teams.findByAccountantUserId(actor.userId()).stream().findFirst().orElse(null);
+    if (t == null) {
+      return null;
+    }
+    String companyName =
+        companies.findById(t.getCompanyId()).map(Company::getName).orElse(null);
+    return new MyTeamView(
+        t.getId(),
+        t.getName(),
+        t.getCompanyId(),
+        companyName,
+        t.getHrUserId() == null ? null : userName(t.getHrUserId()),
+        t.getManagerUserId() == null ? null : userName(t.getManagerUserId()));
+  }
+
+  private boolean ownsTeam(IhrmsPrincipal.User actor, String teamId) {
+    return teams.findByAccountantUserId(actor.userId()).stream()
+        .anyMatch(t -> t.getId().equals(teamId));
+  }
+
+  private String userName(String userId) {
+    return users.findById(userId).map(User::getName).orElse(null);
+  }
+
+  private void requireAccountsAdmin(IhrmsPrincipal.User actor) {
+    if (actor.role() != UserRole.ACCOUNTS_ADMIN) {
+      // The team Accountant browses only their own team — no company/team picking.
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cross-company browsing is Accounts-Admin only");
+    }
   }
 
   /** The full record of an in-scope APPROVED employee (masked); the read is audited. */

@@ -306,6 +306,95 @@ class AccountantApiTest {
         .andExpect(status().isForbidden());
   }
 
+  // --- Team-wise browsing (§2) ----------------------------------------------
+
+  @Test
+  void teamWiseBrowsing_accountsAdminDrillsCompanyTeamEmployee_accountantOwnTeamOnly() throws Exception {
+    // Company A: a full team (hrA + manager + accountant); its approved employee is approvedA.
+    User mgrA = user(companyA, UserRole.MANAGER, "mgra@a.test");
+    User accA = user(companyA, UserRole.ACCOUNTANT, "acca@a.test");
+    Team teamA = new Team();
+    teamA.setName("Alpha Team");
+    teamA.setCompanyId(companyA);
+    teamA.setHrUserId(hrA.getId());
+    teamA.setManagerUserId(mgrA.getId());
+    teamA.setAccountantUserId(accA.getId());
+    teams.save(teamA);
+    // Company B: a team keyed to approvedB's onboarding HR (proves cross-company drilldown).
+    Team teamB = new Team();
+    teamB.setName("Beta Team");
+    teamB.setCompanyId(companyB);
+    teamB.setHrUserId(approvedB.getOnboardingHrId());
+    teams.save(teamB);
+
+    String adminToken = mintAccountant(); // the cross-company ACCOUNTS_ADMIN
+
+    // 1) Companies with team + approved counts (both companies).
+    JsonNode companiesJson = getJson("/accountant/companies", adminToken);
+    assertThat(companiesJson).hasSize(2);
+    JsonNode rowA = firstWhere(companiesJson, "id", companyA);
+    assertThat(rowA.get("teamCount").asInt()).isEqualTo(1);
+    assertThat(rowA.get("employeeCount").asInt()).isEqualTo(1); // approvedA (in-flight excluded)
+
+    // 2) Company A's teams — HR/Manager names + approved count.
+    JsonNode teamsA = getJson("/accountant/companies/" + companyA + "/teams", adminToken);
+    assertThat(teamsA).hasSize(1);
+    assertThat(teamsA.get(0).get("name").asText()).isEqualTo("Alpha Team");
+    assertThat(teamsA.get(0).get("hrName").asText()).isEqualTo(hrA.getName());
+    assertThat(teamsA.get(0).get("managerName").asText()).isEqualTo(mgrA.getName());
+    assertThat(teamsA.get(0).get("employeeCount").asInt()).isEqualTo(1);
+
+    // 3) A team's approved employees — teamA -> approvedA only; teamB (company B) -> approvedB.
+    JsonNode empA = getJson("/accountant/teams/" + teamA.getId() + "/employees", adminToken);
+    assertThat(empA.get("totalElements").asInt()).isEqualTo(1);
+    assertThat(empA.get("content").get(0).get("employeeCode").asText()).isEqualTo("AAA-EMP-000001");
+    JsonNode empB = getJson("/accountant/teams/" + teamB.getId() + "/employees", adminToken);
+    assertThat(empB.get("content").get(0).get("employeeCode").asText()).isEqualTo("BBB-EMP-000001");
+
+    // --- ACCOUNTANT: own team only, no company/team picking ---
+    String accToken =
+        tokens.issueAccess(
+            new IhrmsPrincipal.User(
+                accA.getId(), accA.getEmail(), accA.getName(), UserRole.ACCOUNTANT, companyA, teamA.getId()));
+
+    JsonNode myTeam = getJson("/accountant/my-team", accToken);
+    assertThat(myTeam.get("teamId").asText()).isEqualTo(teamA.getId());
+    assertThat(myTeam.get("teamName").asText()).isEqualTo("Alpha Team");
+    assertThat(myTeam.get("companyName").asText()).isEqualTo("AAA Inc");
+
+    // Own team roster -> ok (1 approved); ANOTHER team -> 404 (never widen).
+    assertThat(getJson("/accountant/teams/" + teamA.getId() + "/employees", accToken)
+            .get("totalElements").asInt())
+        .isEqualTo(1);
+    mvc.perform(get("/accountant/teams/" + teamB.getId() + "/employees")
+            .header("Authorization", "Bearer " + accToken))
+        .andExpect(status().isNotFound());
+    // Cross-company browsing is Accounts-Admin only.
+    mvc.perform(get("/accountant/companies").header("Authorization", "Bearer " + accToken))
+        .andExpect(status().isForbidden());
+    mvc.perform(get("/accountant/companies/" + companyA + "/teams")
+            .header("Authorization", "Bearer " + accToken))
+        .andExpect(status().isForbidden());
+  }
+
+  private JsonNode getJson(String path, String token) throws Exception {
+    return json.readTree(
+        mvc.perform(get(path).header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private static JsonNode firstWhere(JsonNode array, String field, String value) {
+    for (JsonNode n : array) {
+      if (value.equals(n.get(field).asText())) {
+        return n;
+      }
+    }
+    throw new AssertionError("no element with " + field + "=" + value);
+  }
+
   // --- No writes ------------------------------------------------------------
 
   @Test

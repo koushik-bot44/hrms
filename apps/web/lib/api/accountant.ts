@@ -3,9 +3,12 @@ import type {
   ApprovedEmployeePage,
   AuditLogPage,
   EmployeeRecord,
+  MyTeamView,
   ProvisionAccountantInput,
   ProvisionAccountantResult,
   RevealedSensitive,
+  ViewerCompanyRow,
+  ViewerTeamRow,
 } from '@/lib/contract';
 import { apiFetch } from './client';
 
@@ -45,6 +48,41 @@ export function getApprovedEmployees(
   params.set('page', String(query.page ?? 0));
   params.set('size', String(query.size ?? 20));
   return apiFetch<ApprovedEmployeePage>(`/accountant/employees?${params.toString()}`, { signal });
+}
+
+// --- Team-wise browsing (§2) ----------------------------------------------
+
+/** ACCOUNTS_ADMIN: the companies to drill into (with team + approved-employee counts). */
+export function getViewerCompanies(signal?: AbortSignal): Promise<ViewerCompanyRow[]> {
+  return apiFetch<ViewerCompanyRow[]>('/accountant/companies', { signal });
+}
+
+/** ACCOUNTS_ADMIN: a company's teams (HR/Manager names + approved-employee count). */
+export function getCompanyTeams(companyId: string, signal?: AbortSignal): Promise<ViewerTeamRow[]> {
+  return apiFetch<ViewerTeamRow[]>(`/accountant/companies/${encodeURIComponent(companyId)}/teams`, {
+    signal,
+  });
+}
+
+/** A team's APPROVED employees. ACCOUNTS_ADMIN: any team; ACCOUNTANT: only their own (else 404). */
+export function getTeamEmployees(
+  teamId: string,
+  query: { search?: string; page?: number; size?: number } = {},
+  signal?: AbortSignal,
+): Promise<ApprovedEmployeePage> {
+  const params = new URLSearchParams();
+  if (query.search) params.set('search', query.search);
+  params.set('page', String(query.page ?? 0));
+  params.set('size', String(query.size ?? 20));
+  return apiFetch<ApprovedEmployeePage>(
+    `/accountant/teams/${encodeURIComponent(teamId)}/employees?${params.toString()}`,
+    { signal },
+  );
+}
+
+/** ACCOUNTANT: their own team descriptor (roster header); null if none is assigned. */
+export function getMyTeam(signal?: AbortSignal): Promise<MyTeamView | null> {
+  return apiFetch<MyTeamView | null>('/accountant/my-team', { signal });
 }
 
 /** An approved employee's full record (masked); the read is audited. */

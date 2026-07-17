@@ -368,6 +368,11 @@ export type ApprovedEmployeePage = Omit<Required<Schemas['ApprovedEmployeePage']
   content: ApprovedEmployeeRow[];
 };
 
+// Team-wise browsing (§2): ACCOUNTS_ADMIN company -> team -> employee; ACCOUNTANT own team.
+export type ViewerCompanyRow = Required<Schemas['ViewerCompanyRow']>;
+export type ViewerTeamRow = Required<Schemas['ViewerTeamRow']>;
+export type MyTeamView = Required<Schemas['MyTeamView']>;
+
 // --- Internal mail — thread-based (§8, Stage 3) ----------------------------
 
 /** A mail participant — a staff account shown by name + `localpart@domain` address. */

@@ -1431,6 +1431,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accountant/teams/{teamId}/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A team's APPROVED employees. ACCOUNTS_ADMIN: any team. ACCOUNTANT: only their OWN team (else 404). */
+        get: operations["teamEmployees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accountant/my-team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The ACCOUNTANT's own team (roster header); null if none assigned. */
+        get: operations["myTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accountant/employees": {
         parameters: {
             query?: never;
@@ -1455,6 +1489,40 @@ export interface paths {
             cookie?: never;
         };
         get: operations["record_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accountant/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Companies to drill into (ACCOUNTS_ADMIN only; the Accountant has one team). */
+        get: operations["companies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accountant/companies/{companyId}/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A company's teams with HR/Manager + approved-employee counts (ACCOUNTS_ADMIN). */
+        get: operations["teams"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2407,6 +2475,46 @@ export interface components {
             designation?: string;
             dateOfJoining?: string;
             approvedAt?: string;
+        };
+        /** @description The ACCOUNTANT's own team — the roster header (null if none assigned). */
+        MyTeamView: {
+            teamId?: string;
+            teamName?: string;
+            companyId?: string;
+            companyName?: string;
+            hrName?: string;
+            managerName?: string;
+        };
+        /** @description One company at the top of the ACCOUNTS_ADMIN drilldown. */
+        ViewerCompanyRow: {
+            id?: string;
+            name?: string;
+            code?: string;
+            /**
+             * Format: int64
+             * @description Number of teams in the company.
+             */
+            teamCount?: number;
+            /**
+             * Format: int64
+             * @description Number of APPROVED employees in the company.
+             */
+            employeeCount?: number;
+        };
+        /** @description One team within a company — its HR, Manager and approved-employee count. */
+        ViewerTeamRow: {
+            id?: string;
+            name?: string;
+            companyId?: string;
+            /** @description The team HR's name (null if unassigned). */
+            hrName?: string;
+            /** @description The team Manager's name (null if unassigned). */
+            managerName?: string;
+            /**
+             * Format: int64
+             * @description Number of APPROVED employees on this team.
+             */
+            employeeCount?: number;
         };
         /** @description Remove a previously registered subscription (by endpoint). */
         UnsubscribeRequest: {
@@ -4801,6 +4909,51 @@ export interface operations {
             };
         };
     };
+    teamEmployees: {
+        parameters: {
+            query: {
+                search?: string;
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path: {
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApprovedEmployeePage"];
+                };
+            };
+        };
+    };
+    myTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MyTeamView"];
+                };
+            };
+        };
+    };
     employees: {
         parameters: {
             query: {
@@ -4843,6 +4996,48 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
+    companies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ViewerCompanyRow"][];
+                };
+            };
+        };
+    };
+    teams: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ViewerTeamRow"][];
                 };
             };
         };

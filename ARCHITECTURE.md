@@ -56,6 +56,16 @@ Accountant}`). All three are expected on a **new** team; **existing** teams may 
 keep working, surfacing a "needs accountant" (or needs-HR/Manager) state until filled. Approvals stay
 **within the team**, and the team's Accountant reads only that team's approved employees.
 
+**Team-wise browsing for the read-only viewers (§2).** Both viewer roles browse employees **grouped by
+team** (a team = an HR's team; its employees are those whose `onboardingHr` is that team's HR — the same
+resolution as manager scope / the mail graph; approved-only). The **Accounts Admin** (cross-company) drills
+**COMPANY → TEAM → EMPLOYEE**: pick a company, see its teams (with HR, Manager and approved-employee count),
+open a team for its approved roster, then a read-only record. The **Accountant** (single team, not widened)
+lands **directly on their own team's roster** — no company/team pickers — and can reach only their own team
+(a request for any other team/company is refused). Served read-only under `/accountant/**`:
+`GET /accountant/companies`, `GET /accountant/companies/{companyId}/teams`,
+`GET /accountant/teams/{teamId}/employees` (own-team-only for the Accountant), and `GET /accountant/my-team`.
+
 **Super Admin cross-company operations.** Team management and onboarding are normally the Company
 Admin's and HR's jobs; the **Super Admin can do both in any company** by selecting the target company
 explicitly (Company Admin stays locked to its own). Team ops reuse the same one-HR-one-Manager rule

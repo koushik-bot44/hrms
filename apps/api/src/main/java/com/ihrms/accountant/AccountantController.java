@@ -1,12 +1,17 @@
 package com.ihrms.accountant;
 
 import com.ihrms.accountant.dto.AccountantDtos.ApprovedEmployeePage;
+import com.ihrms.accountant.dto.AccountantDtos.MyTeamView;
+import com.ihrms.accountant.dto.AccountantDtos.ViewerCompanyRow;
+import com.ihrms.accountant.dto.AccountantDtos.ViewerTeamRow;
 import com.ihrms.audit.dto.AuditDtos.AuditPage;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
 import com.ihrms.review.dto.ReviewDtos.RevealedSensitive;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -45,6 +50,40 @@ public class AccountantController {
       @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC)
           Pageable pageable) {
     return accountant.listApproved(actor, search, companyId, pageable);
+  }
+
+  // --- Team-wise browsing (§2): ACCOUNTS_ADMIN company -> team -> employee -----------
+
+  @Operation(summary = "Companies to drill into (ACCOUNTS_ADMIN only; the Accountant has one team).")
+  @GetMapping("/companies")
+  public List<ViewerCompanyRow> companies(@AuthenticationPrincipal IhrmsPrincipal.User actor) {
+    return accountant.companies(actor);
+  }
+
+  @Operation(summary = "A company's teams with HR/Manager + approved-employee counts (ACCOUNTS_ADMIN).")
+  @GetMapping("/companies/{companyId}/teams")
+  public List<ViewerTeamRow> teams(
+      @PathVariable String companyId, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
+    return accountant.teamsOfCompany(actor, companyId);
+  }
+
+  @Operation(
+      summary =
+          "A team's APPROVED employees. ACCOUNTS_ADMIN: any team. ACCOUNTANT: only their OWN team (else 404).")
+  @GetMapping("/teams/{teamId}/employees")
+  public ApprovedEmployeePage teamEmployees(
+      @PathVariable String teamId,
+      @RequestParam(required = false) String search,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return accountant.teamEmployees(actor, teamId, search, pageable);
+  }
+
+  @Operation(summary = "The ACCOUNTANT's own team (roster header); null if none assigned.")
+  @GetMapping("/my-team")
+  public MyTeamView myTeam(@AuthenticationPrincipal IhrmsPrincipal.User actor) {
+    return accountant.myTeam(actor);
   }
 
   @GetMapping("/employees/{id}")

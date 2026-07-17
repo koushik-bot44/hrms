@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { PageHeader } from '@/components/page-header';
 import { RoleDashboard } from '@/components/dashboard/role-dashboard';
-import { ApprovedEmployeesTable } from '@/components/accountant/approved-employees-table';
+import { ViewerEmployeesBrowser } from '@/components/accountant/viewer-employees-browser';
 
 export const metadata: Metadata = { title: 'Overview' };
 
@@ -13,8 +13,7 @@ export default function AccountantOverviewPage() {
         description="Read-only oversight of approved employees and their records, scoped to your access."
       />
       <RoleDashboard show="stats" />
-      <h2 className="text-sm font-semibold text-muted-foreground">Approved employees</h2>
-      <ApprovedEmployeesTable />
+      <ViewerEmployeesBrowser />
     </div>
   );
 }
