@@ -22,13 +22,9 @@ function toValues(f: Form2View | null): Form2Values {
   const s = (v?: string | null) => v ?? '';
   return {
     fullName: s(f?.fullName),
-    fatherName: s(f?.fatherName),
     personalEmail: s(f?.personalEmail),
     designation: s(f?.designation),
     dateOfJoining: s(f?.dateOfJoining),
-    dateOfBirth: s(f?.dateOfBirth),
-    bloodGroup: s(f?.bloodGroup),
-    mobile: s(f?.mobile),
     officialEmail: s(f?.officialEmail),
     documentSubmitted: s(f?.documentSubmitted),
   };

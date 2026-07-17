@@ -147,9 +147,10 @@ export type Form1Values = z.output<typeof Form1Schema>;
 
 const FORM2_DATE_ISO = /^\d{4}-\d{2}-\d{2}$/;
 
+// Father's name, date of birth, blood group and mobile were REMOVED from Form 2's display + PDF (§3.2)
+// — their form2_info.data keys stay in storage (carried over on re-save). These remain on Form 1.
 export const Form2Schema = z.object({
   fullName: z.string().trim().min(2, 'Full name is required').max(150),
-  fatherName: optional(150),
   personalEmail: z
     .string()
     .trim()
@@ -159,9 +160,6 @@ export const Form2Schema = z.object({
     .max(180),
   designation: z.string().trim().min(2, 'Designation is required').max(150),
   dateOfJoining: z.string().regex(FORM2_DATE_ISO, 'Select a date of joining'),
-  dateOfBirth: dateish,
-  bloodGroup: optional(10),
-  mobile: optional(30),
   // Assigned later — inert for now (never required, never blocks submit).
   officialEmail: optional(180),
   documentSubmitted: optional(60),

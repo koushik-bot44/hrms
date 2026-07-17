@@ -111,13 +111,12 @@ public final class OnboardingDtos {
   // email (the login identity) + designation are required; officialEmail is left blank/inert. alternate
   // number, vehicle no, PAN, account number and the two addresses moved to Form 1's PRESENTATION — their
   // storage stays on form2_info and is written through by Form 1.
+  // Father's name, date of birth, blood group and mobile were REMOVED from Form 2's display + PDF (§3.2)
+  // — additive-only: their form2_info.data keys stay and prior values are preserved (carried over on
+  // re-save), just no longer captured here. (These fields remain on Form 1.)
   public record Form2Request(
       @NotBlank(message = "Full name is required") @Size(max = 150) String fullName,
-      @Size(max = 150) String fatherName,
-      @Pattern(regexp = "|\\d{4}-\\d{2}-\\d{2}", message = "Use YYYY-MM-DD") String dateOfBirth,
       @Pattern(regexp = "|\\d{4}-\\d{2}-\\d{2}", message = "Use YYYY-MM-DD") String dateOfJoining,
-      @Size(max = 10) String bloodGroup,
-      @Size(max = 30) String mobile,
       @Size(max = 180) String officialEmail,
       @NotBlank(message = "Personal email is required")
           @Email(message = "Enter a valid email")
@@ -126,19 +125,18 @@ public final class OnboardingDtos {
       @NotBlank(message = "Designation is required") @Size(max = 150) String designation,
       @Size(max = 60) String documentSubmitted) {}
 
-  /** {@code employeeId} is the system-assigned code (null until Manager approval); read-only. */
+  /**
+   * {@code employeeId} is the system-assigned code (null until Manager approval); read-only. Father's
+   * name / DOB / blood group / mobile / Spark ID were removed from Form 2's surface (§3.2) — their
+   * columns/keys remain in storage (additive-only).
+   */
   public record Form2View(
       String fullName,
-      String fatherName,
       String employeeId,
-      String dateOfBirth,
       String dateOfJoining,
-      String bloodGroup,
-      String mobile,
       String officialEmail,
       String personalEmail,
       String designation,
-      String sparkId,
       String documentSubmitted,
       SectionStatus status,
       String revisionNote,

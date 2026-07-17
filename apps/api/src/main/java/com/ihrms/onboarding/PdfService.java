@@ -198,18 +198,14 @@ public class PdfService {
   private Map<String, Object> form2Model(
       String companyName, Form2View v, String employeeCode, String signatureDataUri, String signedDate) {
     Map<String, Object> m = new LinkedHashMap<>();
+    // Father's name / DOB / blood group / mobile / Spark ID removed from Form 2 (§3.2).
     m.put("companyName", companyName);
     m.put("fullName", nn(v == null ? null : v.fullName()));
-    m.put("fatherName", nn(v == null ? null : v.fatherName()));
     m.put("employeeId", nn(employeeCode)); // blank until approval mints it
-    m.put("dob", date(v == null ? null : v.dateOfBirth()));
     m.put("doj", date(v == null ? null : v.dateOfJoining()));
-    m.put("bloodGroup", nn(v == null ? null : v.bloodGroup()));
-    m.put("mobile", nn(v == null ? null : v.mobile()));
     m.put("officialEmail", nn(v == null ? null : v.officialEmail()));
     m.put("personalEmail", nn(v == null ? null : v.personalEmail()));
     m.put("designation", nn(v == null ? null : v.designation()));
-    m.put("sparkId", nn(v == null ? null : v.sparkId()));
     m.put("documentSubmitted", nn(v == null ? null : v.documentSubmitted()));
     m.put("signatureDataUri", signatureDataUri);
     m.put("signedDate", nn(signedDate));

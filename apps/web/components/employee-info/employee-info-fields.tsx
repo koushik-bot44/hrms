@@ -12,15 +12,13 @@ import { Input } from '@/components/ui/input';
  * invite target — labelled as such. Generic over the form type so onboard (Form 2 only) and the SA form
  * (Form 2 + company/team) can both drive it.
  */
+// Father's name, date of birth, blood group and mobile were removed from Form 2 (§3.2); they remain on
+// Form 1. Spark ID (formerly an inert display field) was removed too.
 const FORM2_FIELDS = [
   'fullName',
-  'fatherName',
   'personalEmail',
   'designation',
   'dateOfJoining',
-  'dateOfBirth',
-  'bloodGroup',
-  'mobile',
   'officialEmail',
   'documentSubmitted',
 ] as const;
@@ -50,26 +48,11 @@ export function EmployeeInfoFields<T extends FieldValues>({
 
   return (
     <div className="space-y-6">
-      <Section title="Identity">
+      <Section title="Identity & role">
         <Field id={id('fullName')} label="Full Name" error={err('fullName')} required>
           <Input id={id('fullName')} placeholder="Alex Doe" disabled={disabled}
             aria-invalid={Boolean(err('fullName'))} {...reg('fullName')} />
         </Field>
-        <Field id={id('fatherName')} label="Father's Name" error={err('fatherName')}>
-          <Input id={id('fatherName')} disabled={disabled} {...reg('fatherName')} />
-        </Field>
-        <Field id={id('dateOfBirth')} label="Date of Birth" error={err('dateOfBirth')}>
-          <Input id={id('dateOfBirth')} type="date" disabled={disabled} {...reg('dateOfBirth')} />
-        </Field>
-        <Field id={id('bloodGroup')} label="Blood Group" error={err('bloodGroup')}>
-          <Input id={id('bloodGroup')} placeholder="O+" disabled={disabled} {...reg('bloodGroup')} />
-        </Field>
-        <Field id={id('mobile')} label="Mobile" error={err('mobile')}>
-          <Input id={id('mobile')} inputMode="tel" disabled={disabled} {...reg('mobile')} />
-        </Field>
-      </Section>
-
-      <Section title="Sign-in & role">
         <Field
           id={id('personalEmail')}
           label="Personal Email"
@@ -106,9 +89,6 @@ export function EmployeeInfoFields<T extends FieldValues>({
             readOnly
             disabled
           />
-        </Field>
-        <Field id={id('sparkId')} label="Spark ID" hint="Assigned later.">
-          <Input id={id('sparkId')} value="" placeholder="Assigned later" readOnly disabled />
         </Field>
         <Field id={id('officialEmail')} label="Official Email" hint="Assigned later.">
           <Input id={id('officialEmail')} type="email" value="" placeholder="Assigned later" readOnly disabled />

@@ -117,24 +117,34 @@ public final class FormMappers {
   };
 
   /**
-   * Rebuild Form 2's {@code data} map from the request, CARRYING OVER the keys that now belong to
-   * Form 1's presentation (Form 2 no longer submits them) — a Form 2 re-save must never wipe the
-   * relocated values that Form 1 reads/writes in this same map.
+   * Keys REMOVED from Form 2's display + PDF (§3.2) but kept in storage — no longer captured, carried
+   * over on re-save so previously stored values are never wiped (additive-only). These fields remain on
+   * Form 1; only Form 2 stopped showing/capturing them.
+   */
+  private static final String[] FORM2_RETIRED_KEYS = {
+    "fatherName", "dateOfBirth", "bloodGroup", "mobile"
+  };
+
+  /**
+   * Rebuild Form 2's {@code data} map from the request, CARRYING OVER the keys Form 2 no longer submits
+   * — both the Form-1-relocated keys (which Form 1 reads/writes in this same map) and the retired
+   * display keys — so a Form 2 re-save never wipes previously stored values.
    */
   public static Map<String, Object> toForm2Data(Form2Request r, Map<String, Object> previous) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("fullName", r.fullName());
-    m.put("fatherName", r.fatherName());
-    m.put("dateOfBirth", r.dateOfBirth());
     m.put("dateOfJoining", r.dateOfJoining());
-    m.put("bloodGroup", r.bloodGroup());
-    m.put("mobile", r.mobile());
     m.put("officialEmail", r.officialEmail());
     m.put("personalEmail", r.personalEmail());
     m.put("designation", r.designation());
     m.put("documentSubmitted", r.documentSubmitted());
     if (previous != null) {
       for (String key : RELOCATED_DATA_KEYS) {
+        if (previous.get(key) != null) {
+          m.put(key, previous.get(key));
+        }
+      }
+      for (String key : FORM2_RETIRED_KEYS) {
         if (previous.get(key) != null) {
           m.put(key, previous.get(key));
         }
@@ -165,16 +175,11 @@ public final class FormMappers {
     Map<String, Object> d = e.getData() == null ? Map.of() : e.getData();
     return new Form2View(
         str(d, "fullName"),
-        str(d, "fatherName"),
         employeeCode,
-        str(d, "dateOfBirth"),
         str(d, "dateOfJoining"),
-        str(d, "bloodGroup"),
-        str(d, "mobile"),
         str(d, "officialEmail"),
         str(d, "personalEmail"),
         str(d, "designation"),
-        e.getSparkId(),
         str(d, "documentSubmitted"),
         e.getStatus(),
         e.getRevisionNote(),

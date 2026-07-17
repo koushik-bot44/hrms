@@ -2007,11 +2007,7 @@ export interface components {
         };
         Form2Request: {
             fullName: string;
-            fatherName?: string;
-            dateOfBirth?: string;
             dateOfJoining?: string;
-            bloodGroup?: string;
-            mobile?: string;
             officialEmail?: string;
             personalEmail: string;
             designation: string;
@@ -2047,16 +2043,11 @@ export interface components {
         };
         Form2View: {
             fullName?: string;
-            fatherName?: string;
             employeeId?: string;
-            dateOfBirth?: string;
             dateOfJoining?: string;
-            bloodGroup?: string;
-            mobile?: string;
             officialEmail?: string;
             personalEmail?: string;
             designation?: string;
-            sparkId?: string;
             documentSubmitted?: string;
             /** @enum {string} */
             status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";

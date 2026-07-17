@@ -28,13 +28,9 @@ const EMPLOYEES_KEY = ['hr-employees'] as const;
 
 export const EMPTY_FORM2: OnboardEmployeeInput = {
   fullName: '',
-  fatherName: '',
   personalEmail: '',
   designation: '',
   dateOfJoining: '',
-  dateOfBirth: '',
-  bloodGroup: '',
-  mobile: '',
   officialEmail: '',
   documentSubmitted: '',
 };

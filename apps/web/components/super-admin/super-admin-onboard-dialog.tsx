@@ -30,13 +30,9 @@ const EMPTY: SuperAdminOnboardInput = {
   companyId: '',
   teamId: '',
   fullName: '',
-  fatherName: '',
   personalEmail: '',
   designation: '',
   dateOfJoining: '',
-  dateOfBirth: '',
-  bloodGroup: '',
-  mobile: '',
   officialEmail: '',
   documentSubmitted: '',
 };

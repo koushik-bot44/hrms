@@ -120,13 +120,16 @@ Accounts Admin, own team for Accountant).
 
 ### 3.2 Onboarding (the spine — starts with HR)
 1. **HR** (or the **Super Admin**, cross-company) initiates onboarding by **filling Form 2 — Employee
-   Info** for the new hire (full/father name, DOJ, **personal email**, designation, blood group, mobile,
-   documents-submitted, …). Submitting Form 2 **creates the employee record** (`status = INVITED`) **and
-   sends the invite in one action** — there is no separate 4-field onboard step. The **personal email is
-   the employee's login identity** (globally unique, §6). **No employee ID is minted here** — the unique
-   ID is allocated only on Manager approval (see §3.3 / §5), so the Form-2 `employeeId` shows **greyed /
-   blank** until then. **Spark ID** and the **official email** are left **blank/inert** at onboarding
-   (official email is slated for removal — the column stays, unpopulated).
+   Info** for the new hire (**full name**, DOJ, **personal email**, designation, documents-submitted).
+   Submitting Form 2 **creates the employee record** (`status = INVITED`) **and sends the invite in one
+   action** — there is no separate 4-field onboard step. The **personal email is the employee's login
+   identity** (globally unique, §6). **No employee ID is minted here** — the unique ID is allocated only
+   on Manager approval (see §3.3 / §5), so the Form-2 `employeeId` shows **greyed / blank** until then.
+   The **official email** is left **blank/inert** at onboarding (slated for removal — the column stays,
+   unpopulated). _Father's name, date of birth, blood group, mobile and Spark ID were **removed from
+   Form 2's display + PDF** (they remain on **Form 1**); additive-only — their `form2_info` columns/keys
+   stay and any previously stored values are preserved (carried over on re-save), just no longer
+   captured or shown on Form 2._
 2. The system **emails the employee a selection note** — *"Hello {full name}, you are selected to the
    {designation} role in {company name}."* — plus a **link to the employee login**, sent to the
    **personal email**. The email carries **no ID** (there isn't one yet).
@@ -232,12 +235,14 @@ indicative. **Schema is additive-only thereafter.**
   **WorkingExperience[]** (organization/period/designation/`salaryCtc` [SENSITIVE]/reasonForLeaving),
   **FamilyDetail[]** (name/age/relation/occupation), **CharacterReference[]** (name/address/phone — min 2).
 - **Form2Info** — Employee Info, **HR/SA-authored at onboard** (the employee never fills or sees it):
-  `fullName`, `fatherName`, `employeeId` [SYSTEM/READONLY — blank until approval], `dob`,
-  `dateOfJoining`, `bloodGroup`, `mobile`, `alternateNumber`, `officialEmail` [blank/inert — slated for
-  removal], `personalEmail` [the login identity], `designation`, `sparkId` [HR/ADMIN-set; blank at
-  onboard], `documentSubmitted`, `vehicleNo2W4W`, `panNumber` [SENSITIVE], `axisAccountNumber`
-  [SENSITIVE], `currentAddress`, `permanentAddress`. Editable by HR/SA only while the employee is
-  `INVITED` (then read-only, 409); a personal-email change while `INVITED` re-invites. Not part of the
+  `fullName`, `employeeId` [SYSTEM/READONLY — blank until approval], `dateOfJoining`, `officialEmail`
+  [blank/inert — slated for removal], `personalEmail` [the login identity], `designation`,
+  `documentSubmitted`, `alternateNumber`, `vehicleNo2W4W`, `panNumber` [SENSITIVE], `axisAccountNumber`
+  [SENSITIVE], `currentAddress`, `permanentAddress` — plus retained-but-no-longer-captured columns/keys
+  `fatherName`, `dob`, `bloodGroup`, `mobile`, `sparkId` (**removed from Form 2's display + PDF**;
+  columns/keys kept, values preserved — additive-only; these fields live on **Form 1**). Editable by
+  HR/SA only while the employee is `INVITED` (then read-only, 409); a personal-email change while
+  `INVITED` re-invites. Not part of the
   verification loop.
 - **Form3PreviousEmployment** _(repeatable — one row per prior employer)_ — `companyName` (the employee's
   previous employer — employee-entered), `companyAddress`, `dateOfJoining`, `dateOfRelieving`,

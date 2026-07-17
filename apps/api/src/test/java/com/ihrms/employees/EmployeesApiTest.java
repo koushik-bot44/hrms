@@ -185,15 +185,15 @@ class EmployeesApiTest {
     // Distinct (non-overlapping) local parts so the old address is NOT a substring of the new.
     String id = onboard("Alex Doe", "oldalex@personal.test");
 
-    // A personal-email change re-invites the NEW address; other fields (fatherName) just save.
+    // A personal-email change re-invites the NEW address; other fields (designation) just save.
     Map<String, Object> body = form2Edit("Alex Doe", "freshalex@personal.test");
-    body.put("fatherName", "Papa Doe");
+    body.put("designation", "Staff Engineer");
     JsonNode view =
         json.readTree(
             mvc.perform(patchForm2(id, body)).andExpect(status().isOk()).andReturn().getResponse()
                 .getContentAsString());
     assertThat(view.get("personalEmail").asText()).isEqualTo("freshalex@personal.test");
-    assertThat(view.get("fatherName").asText()).isEqualTo("Papa Doe");
+    assertThat(view.get("designation").asText()).isEqualTo("Staff Engineer");
     assertThat(view.get("employeeId").isNull()).isTrue(); // still greyed/blank until approval
 
     // The invite re-fired to the NEW address; the Employee's login identity moved with it.
@@ -207,7 +207,7 @@ class EmployeesApiTest {
   void editForm2NonEmailChangeDoesNotReinvite() throws Exception {
     String id = onboard("Alex Doe", "alex@personal.test");
     Map<String, Object> body = form2Edit("Alex Doe", "alex@personal.test"); // same email
-    body.put("fatherName", "Papa Doe");
+    body.put("designation", "Staff Engineer");
     mvc.perform(patchForm2(id, body)).andExpect(status().isOk());
     assertThat(auditLogs.findByAction("EMPLOYEE_REINVITED")).isEmpty(); // no email change → no re-invite
     assertThat(auditLogs.findByAction("FORM2_UPDATED")).hasSize(1);
@@ -266,7 +266,7 @@ class EmployeesApiTest {
     return json.readTree(r.getResponse().getContentAsString()).get("employee").get("id").asText();
   }
 
-  /** A mutable Form-2 edit body (so tests can add fields like fatherName). */
+  /** A mutable Form-2 edit body (so tests can add/override fields like designation). */
   private static Map<String, Object> form2Edit(String fullName, String personalEmail) {
     return new HashMap<>(form2Body(fullName, personalEmail));
   }

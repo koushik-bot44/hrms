@@ -16,19 +16,14 @@
 <!-- LETTERHEAD: JOINING company name -->
 <div class="brand" th:text="${companyName}">Acme Technologies</div>
 
-<!-- 18 label/value rows, in this exact order -->
+<!-- Employee-Info rows. Father's name / DOB / blood group / mobile / Spark ID removed from Form 2 (§3.2). -->
 <table class="kv">
  <tr><td class="k">Full Name</td><td th:text="${fullName}">Rahul Sharma</td></tr>
- <tr><td class="k">Father Name</td><td th:text="${fatherName}">Suresh Sharma</td></tr>
  <tr><td class="k">Employee ID</td><td th:text="${employeeId}">ACME-EMP-000123</td></tr>
- <tr><td class="k">Date of Birth</td><td th:text="${dob}">12/05/1994</td></tr>
  <tr><td class="k">Date of Joining</td><td th:text="${doj}">01/08/2026</td></tr>
- <tr><td class="k">Blood Group</td><td th:text="${bloodGroup}">B+</td></tr>
- <tr><td class="k">Mobile No</td><td th:text="${mobile}">9876543210</td></tr>
  <tr><td class="k">Official Email ID</td><td th:text="${officialEmail}">rahul.sharma@acme.com</td></tr>
  <tr><td class="k">Personnel E-Mail ID</td><td th:text="${personalEmail}">rahul.sharma@example.com</td></tr>
  <tr><td class="k">Designation</td><td th:text="${designation}">Software Engineer</td></tr>
- <tr><td class="k">Spark ID</td><td th:text="${sparkId}">SPRK-4471</td></tr>
  <tr><td class="k">Document Submitted</td><td th:text="${documentSubmitted}">Aadhaar, PAN, Degree Certificate</td></tr>
 </table>
 
