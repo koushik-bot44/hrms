@@ -5,7 +5,7 @@ import { getMyTeam } from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
-import { TeamEmployeesTable } from '@/components/accountant/team-employees-table';
+import { TeamViewTabs } from '@/components/accountant/team-view-tabs';
 
 /**
  * The ACCOUNTANT lands directly on THEIR OWN team's roster (§2) — no company/team pickers (the role has
@@ -44,7 +44,7 @@ export function AccountantTeamRoster() {
           · {team.companyName ?? '—'} · HR {team.hrName ?? '—'} · Manager {team.managerName ?? '—'}
         </span>
       </div>
-      <TeamEmployeesTable teamId={team.teamId} />
+      <TeamViewTabs teamId={team.teamId} />
     </div>
   );
 }

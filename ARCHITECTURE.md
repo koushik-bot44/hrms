@@ -609,6 +609,13 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
     `GET /accountant/teams/{teamId}/attendance/summary?month=YYYY-MM` — a team roll-up + a live **today**
     snapshot (presentToday, clockedInNow, onLeaveToday, totalLateThisMonth) + a per-employee row; the team
     read is **batched** (~4 queries, no N+1). Every query is `companyId`/team scoped.
+  - **Web (read-only dashboard).** The viewer team view carries an **Employees | Attendance** tab beside the
+    existing roster (ACCOUNTS_ADMIN via company→team, ACCOUNTANT own team). Attendance shows the roll-up
+    tiles + a per-employee roster with a **live clocked-in dot**, month selector, and ~45s polling +
+    refetch-on-focus; a row opens the employee detail — a **worked-vs-break donut** (recharts; the only
+    same-unit split — counts never go in the pie), separate **stat cards** for the counts (worked, break,
+    days present, late, adherence + its label, leaves by type), and a **month-wise report** (bar + table
+    from the series). Numbers use the shared duration formatter (e.g. 63,300s → "17h 35m").
 
 ---
 

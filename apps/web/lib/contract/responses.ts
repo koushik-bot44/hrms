@@ -373,6 +373,21 @@ export type ViewerCompanyRow = Required<Schemas['ViewerCompanyRow']>;
 export type ViewerTeamRow = Required<Schemas['ViewerTeamRow']>;
 export type MyTeamView = Required<Schemas['MyTeamView']>;
 
+// Viewer attendance analytics (§8a) — live-computed metrics (Prompt-2 endpoints). These come fully
+// populated from the server, so deep-require the (otherwise all-optional) generated shapes.
+type DeepRequired<T> = T extends (infer U)[]
+  ? DeepRequired<U>[]
+  : T extends object
+    ? { [K in keyof T]-?: DeepRequired<NonNullable<T[K]>> }
+    : T;
+
+export type LeavesByType = DeepRequired<Schemas['LeavesByType']>;
+export type TimeComposition = DeepRequired<Schemas['TimeComposition']>;
+export type EmployeeMonthSummary = DeepRequired<Schemas['EmployeeMonthSummary']>;
+export type EmployeeMonthlySeries = DeepRequired<Schemas['EmployeeMonthlySeries']>;
+export type TeamAttendanceMemberRow = DeepRequired<Schemas['TeamAttendanceMemberRow']>;
+export type TeamAttendanceSummary = DeepRequired<Schemas['TeamAttendanceSummary']>;
+
 // --- Internal mail — thread-based (§8, Stage 3) ----------------------------
 
 /** A mail participant — a staff account shown by name + `localpart@domain` address. */

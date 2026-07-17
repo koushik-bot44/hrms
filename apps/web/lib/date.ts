@@ -77,6 +77,22 @@ export function istTodayIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: IST });
 }
 
+/** The current shift-month (yyyy-MM) in IST — the default for the viewer attendance dashboards. */
+export function istMonthIso(): string {
+  return istTodayIso().slice(0, 7);
+}
+
+/** A YYYY-MM string → a compact "Mon YYYY" label (e.g. "2026-01" → "Jan 2026"). */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  if (!y || !m) return month;
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 /** {@code days} ago (yyyy-MM-dd) in IST — the default lower bound for attendance filters. */
 export function istDaysAgoIso(days: number): string {
   const d = new Date();

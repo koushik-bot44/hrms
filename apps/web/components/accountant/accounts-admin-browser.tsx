@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
-import { TeamEmployeesTable } from '@/components/accountant/team-employees-table';
+import { TeamViewTabs } from '@/components/accountant/team-view-tabs';
 
 /**
  * The ACCOUNTS_ADMIN team-wise browser (§2): COMPANY → TEAM → EMPLOYEE. Cross-company, READ-ONLY. Pick a
@@ -36,7 +36,7 @@ export function AccountsAdminBrowser() {
       ) : !team ? (
         <TeamList company={company} onPick={setTeam} />
       ) : (
-        <TeamEmployeesTable teamId={team.id} />
+        <TeamViewTabs teamId={team.id} />
       )}
     </div>
   );

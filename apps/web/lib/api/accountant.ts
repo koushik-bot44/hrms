@@ -2,11 +2,14 @@ import type {
   AccountantStatus,
   ApprovedEmployeePage,
   AuditLogPage,
+  EmployeeMonthSummary,
+  EmployeeMonthlySeries,
   EmployeeRecord,
   MyTeamView,
   ProvisionAccountantInput,
   ProvisionAccountantResult,
   RevealedSensitive,
+  TeamAttendanceSummary,
   ViewerCompanyRow,
   ViewerTeamRow,
 } from '@/lib/contract';
@@ -83,6 +86,46 @@ export function getTeamEmployees(
 /** ACCOUNTANT: their own team descriptor (roster header); null if none is assigned. */
 export function getMyTeam(signal?: AbortSignal): Promise<MyTeamView | null> {
   return apiFetch<MyTeamView | null>('/accountant/my-team', { signal });
+}
+
+// --- Attendance analytics (§8a, read-only, live) --------------------------
+
+/** A team's month roll-up + live today snapshot + per-employee rows. Default month = current (IST). */
+export function getTeamAttendanceSummary(
+  teamId: string,
+  month?: string,
+  signal?: AbortSignal,
+): Promise<TeamAttendanceSummary> {
+  const q = month ? `?month=${encodeURIComponent(month)}` : '';
+  return apiFetch<TeamAttendanceSummary>(
+    `/accountant/teams/${encodeURIComponent(teamId)}/attendance/summary${q}`,
+    { signal },
+  );
+}
+
+/** One employee's month metrics + time-composition + clocked-in-now. Default month = current (IST). */
+export function getEmployeeAttendanceSummary(
+  employeeId: string,
+  month?: string,
+  signal?: AbortSignal,
+): Promise<EmployeeMonthSummary> {
+  const q = month ? `?month=${encodeURIComponent(month)}` : '';
+  return apiFetch<EmployeeMonthSummary>(
+    `/accountant/employees/${encodeURIComponent(employeeId)}/attendance/summary${q}`,
+    { signal },
+  );
+}
+
+/** An employee's per-month metric series (last N months; default 6) for the month-wise report. */
+export function getEmployeeAttendanceMonthly(
+  employeeId: string,
+  months = 6,
+  signal?: AbortSignal,
+): Promise<EmployeeMonthlySeries> {
+  return apiFetch<EmployeeMonthlySeries>(
+    `/accountant/employees/${encodeURIComponent(employeeId)}/attendance/monthly?months=${months}`,
+    { signal },
+  );
 }
 
 /** An approved employee's full record (masked); the read is audited. */
