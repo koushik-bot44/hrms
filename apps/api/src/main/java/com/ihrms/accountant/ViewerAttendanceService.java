@@ -6,6 +6,7 @@ import com.ihrms.accountant.dto.ViewerAttendanceDtos.LeavesByType;
 import com.ihrms.accountant.dto.ViewerAttendanceDtos.TeamAttendanceMemberRow;
 import com.ihrms.accountant.dto.ViewerAttendanceDtos.TeamAttendanceSummary;
 import com.ihrms.accountant.dto.ViewerAttendanceDtos.TimeComposition;
+import com.ihrms.attendance.AttendanceCalendar;
 import com.ihrms.attendance.AttendanceMath;
 import com.ihrms.attendance.ShiftConfig;
 import com.ihrms.auth.IhrmsPrincipal;
@@ -27,6 +28,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,10 +46,6 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 public class ViewerAttendanceService {
-
-  /** v1 working-days rule — labeled so the UI can show exactly what adherence means; swap-ready. */
-  private static final String WORKING_DAYS_DEFINITION =
-      "Calendar days in the shift-month (all days count; adherence = days present ÷ calendar days).";
 
   private final AccountantService accountant;
   private final AttendanceSessionRepository sessions;
@@ -80,7 +78,13 @@ public class ViewerAttendanceService {
         sessions.findByEmployeeIdAndShiftDateBetween(employee.getId(), ym.atDay(1), ym.atEndOfMonth());
     List<LeaveRequest> approved =
         leaves.findByEmployeeIdAndStatus(employee.getId(), LeaveStatus.APPROVED);
-    return computeMonth(ym, monthSessions, breaksBySession(monthSessions), approved, clockedInNow(employee.getId()));
+    return computeMonth(
+        ym,
+        monthSessions,
+        breaksBySession(monthSessions),
+        approved,
+        LocalDate.now(ShiftConfig.ZONE),
+        clockedInNow(employee.getId()));
   }
 
   /** A per-month series (last {@code months}, default 6) ending with the current shift-month. */
@@ -99,6 +103,7 @@ public class ViewerAttendanceService {
     List<LeaveRequest> approved =
         leaves.findByEmployeeIdAndStatus(employee.getId(), LeaveStatus.APPROVED);
     boolean clockedInNow = clockedInNow(employee.getId());
+    LocalDate today = LocalDate.now(ShiftConfig.ZONE);
 
     List<EmployeeMonthSummary> series =
         java.util.stream.IntStream.range(0, n)
@@ -107,7 +112,7 @@ public class ViewerAttendanceService {
                   YearMonth ym = start.plusMonths(i);
                   List<AttendanceSession> monthSessions =
                       span.stream().filter(s -> YearMonth.from(s.getShiftDate()).equals(ym)).toList();
-                  return computeMonth(ym, monthSessions, breaksById, approved, clockedInNow);
+                  return computeMonth(ym, monthSessions, breaksById, approved, today, clockedInNow);
                 })
             .toList();
     return new EmployeeMonthlySeries(employee.getId(), series);
@@ -167,10 +172,19 @@ public class ViewerAttendanceService {
                           .mapToLong(s -> AttendanceMath.workedSeconds(s, breaksById))
                           .sum();
                   long late = ss.stream().filter(AttendanceSession::isLate).count();
+                  List<LeaveRequest> empLeaves = leavesByEmp.getOrDefault(e.getId(), List.of());
                   long leaveDays =
-                      leavesByEmp.getOrDefault(e.getId(), List.of()).stream()
+                      empLeaves.stream()
                           .mapToLong(lr -> leaveDaysInMonth(lr, monthStart, monthEnd))
                           .sum();
+                  Set<LocalDate> present =
+                      ss.stream().map(AttendanceSession::getShiftDate).collect(Collectors.toSet());
+                  long absences =
+                      countAbsences(
+                          AttendanceCalendar.workingDays(ym),
+                          present,
+                          leaveWorkingDays(ym, empLeaves, monthStart, monthEnd),
+                          todayCal);
                   return new TeamAttendanceMemberRow(
                       e.getId(),
                       e.getEmployeeCode(),
@@ -178,7 +192,8 @@ public class ViewerAttendanceService {
                       openNow.contains(e.getId()),
                       worked,
                       late,
-                      leaveDays);
+                      leaveDays,
+                      absences);
                 })
             .sorted(Comparator.comparing(r -> r.fullName() == null ? "" : r.fullName().toLowerCase()))
             .toList();
@@ -219,6 +234,7 @@ public class ViewerAttendanceService {
       List<AttendanceSession> monthSessions,
       Map<String, List<AttendanceBreak>> breaksById,
       List<LeaveRequest> approvedLeaves,
+      LocalDate today,
       boolean clockedInNow) {
     LocalDate monthStart = ym.atDay(1);
     LocalDate monthEnd = ym.atEndOfMonth();
@@ -233,10 +249,12 @@ public class ViewerAttendanceService {
             .filter(s -> !s.isOpen())
             .mapToLong(s -> AttendanceMath.breakSeconds(s, breaksById))
             .sum();
-    long daysPresent =
-        monthSessions.stream().map(AttendanceSession::getShiftDate).distinct().count();
+    Set<LocalDate> present =
+        monthSessions.stream().map(AttendanceSession::getShiftDate).collect(Collectors.toSet());
+    long daysPresent = present.size(); // headline: distinct shift-days with a session (unchanged)
     long lateLogins = monthSessions.stream().filter(AttendanceSession::isLate).count();
 
+    // leaveDaysTotal / leavesByType are ALL calendar days (unchanged); only adherence uses working days.
     long casual = 0;
     long sick = 0;
     long unpaid = 0;
@@ -258,9 +276,14 @@ public class ViewerAttendanceService {
       }
     }
 
-    int workingDays = ym.lengthOfMonth();
-    int adherencePct =
-        workingDays == 0 ? 0 : (int) Math.round((daysPresent * 100.0) / workingDays);
+    // Adherence + absence: everything on the Mon–Fri working-day basis (see AttendanceCalendar).
+    List<LocalDate> workingDays = AttendanceCalendar.workingDays(ym);
+    Set<LocalDate> leaveWorking = leaveWorkingDays(ym, approvedLeaves, monthStart, monthEnd);
+    long presentWorking = workingDays.stream().filter(present::contains).count(); // numerator (Mon–Fri)
+    long expectedDays = workingDays.size() - leaveWorking.size(); // denominator (working − leave)
+    Integer adherencePct =
+        expectedDays <= 0 ? null : (int) Math.round((presentWorking * 100.0) / expectedDays);
+    long unapprovedAbsences = countAbsences(workingDays, present, leaveWorking, today);
 
     return new EmployeeMonthSummary(
         ym.toString(),
@@ -271,11 +294,43 @@ public class ViewerAttendanceService {
         new LeavesByType(casual, sick, unpaid),
         leaveDaysTotal,
         leaveRequests,
-        workingDays,
+        workingDays.size(),
+        expectedDays,
+        unapprovedAbsences,
         adherencePct,
-        WORKING_DAYS_DEFINITION,
+        AttendanceCalendar.WORKING_DAYS_DEFINITION,
         new TimeComposition(worked, breakSeconds, null), // idle omitted in v1 (worked + break = gross)
         clockedInNow);
+  }
+
+  /** Distinct Mon–Fri dates covered by any approved leave, clipped to the month (adherence basis). */
+  private static Set<LocalDate> leaveWorkingDays(
+      YearMonth ym, List<LeaveRequest> approvedLeaves, LocalDate monthStart, LocalDate monthEnd) {
+    Set<LocalDate> working = new HashSet<>(AttendanceCalendar.workingDays(ym));
+    Set<LocalDate> out = new HashSet<>();
+    for (LeaveRequest lr : approvedLeaves) {
+      LocalDate start = lr.getStartDate().isBefore(monthStart) ? monthStart : lr.getStartDate();
+      LocalDate end = lr.getEndDate().isAfter(monthEnd) ? monthEnd : lr.getEndDate();
+      for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+        if (working.contains(d)) {
+          out.add(d);
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Unapproved absences: PAST working days (strictly before {@code today}, IST) with no session and no
+   * approved leave. Today and future working days are NEVER counted — their shift hasn't elapsed yet.
+   */
+  private static long countAbsences(
+      List<LocalDate> workingDays, Set<LocalDate> present, Set<LocalDate> leaveWorking, LocalDate today) {
+    return workingDays.stream()
+        .filter(d -> d.isBefore(today))
+        .filter(d -> !present.contains(d))
+        .filter(d -> !leaveWorking.contains(d))
+        .count();
   }
 
   /** Approved leave days that fall inside the month: range clipped to [start,end], inclusive calendar days (v1). */

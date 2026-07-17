@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ihrms.attendance.AttendanceCalendar;
 import com.ihrms.attendance.ShiftConfig;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.TokenService;
@@ -130,10 +131,15 @@ class ViewerAttendanceApiTest {
     assertThat(s.get("leavesByType").get("casual").asLong()).isEqualTo(5L);
     assertThat(s.get("leavesByType").get("sick").asLong()).isEqualTo(2L); // Dec 30-Jan 2 clipped to Jan 1-2
     assertThat(s.get("leavesByType").get("unpaid").asLong()).isEqualTo(0L);
-    assertThat(s.get("leaveDaysTotal").asLong()).isEqualTo(7L);
+    assertThat(s.get("leaveDaysTotal").asLong()).isEqualTo(7L); // all calendar days (unchanged)
     assertThat(s.get("leaveRequests").asLong()).isEqualTo(2L);
-    assertThat(s.get("workingDays").asInt()).isEqualTo(31);
-    assertThat(s.get("adherencePct").asInt()).isEqualTo(13); // round(4/31*100)
+    // NEW adherence basis (Mon–Fri): Jan 2026 has 22 working days; 6 fall on approved leave
+    // (Jan 1,2,20,21,22,23) -> expected 16; present-on-working = Jan 12,15 (Jan 10/31 are Saturdays) = 2.
+    assertThat(s.get("workingDays").asInt()).isEqualTo(22);
+    assertThat(s.get("expectedDays").asLong()).isEqualTo(16L);
+    assertThat(s.get("adherencePct").asInt()).isEqualTo(13); // round(2/16*100) = 13
+    // Unapproved absences: 22 working − 2 present-working − 6 leave-working = 14 (all past).
+    assertThat(s.get("unapprovedAbsences").asLong()).isEqualTo(14L);
     // The donut split agrees with the headline worked/break; idle omitted in v1.
     assertThat(s.get("timeComposition").get("workedSeconds").asLong()).isEqualTo(63300L);
     assertThat(s.get("timeComposition").get("breakSeconds").asLong()).isEqualTo(1800L);
@@ -174,7 +180,58 @@ class ViewerAttendanceApiTest {
     assertThat(row.get("workedSeconds").asLong()).isEqualTo(63300L);
     assertThat(row.get("lateLogins").asLong()).isEqualTo(1L);
     assertThat(row.get("leaveDaysTotal").asLong()).isEqualTo(7L);
+    // Same basis as the employee summary: 22 working − 2 present-working − 6 leave-working = 14.
+    assertThat(row.get("unapprovedAbsences").asLong()).isEqualTo(14L);
     assertThat(row.get("clockedInNow").asBoolean()).isTrue();
+  }
+
+  @Test
+  void adherence_isPresentWorkingOverWorkingMinusLeave_cleanExample() throws Exception {
+    // A dedicated April-2026 employee: present on the first 18 of the month's 22 working days,
+    // CASUAL leave on Apr 27-28 (2 working days). Expected = 22 − 2 = 20; adherence = 18/20 = 90%.
+    Employee e = approved(companyA, empA.getOnboardingHrId(), "AAA-EMP-000042", "Cleo Clean");
+    for (LocalDate d : AttendanceCalendar.workingDays(YearMonth.of(2026, 4)).subList(0, 18)) {
+      presentDay(e, d);
+    }
+    leave(e, LeaveType.CASUAL, LocalDate.of(2026, 4, 27), LocalDate.of(2026, 4, 28));
+
+    JsonNode s = getJson("/accountant/employees/" + e.getId() + "/attendance/summary?month=2026-04", adminToken);
+    assertThat(s.get("daysPresent").asLong()).isEqualTo(18L);
+    assertThat(s.get("workingDays").asInt()).isEqualTo(22);
+    assertThat(s.get("expectedDays").asLong()).isEqualTo(20L);
+    assertThat(s.get("adherencePct").asInt()).isEqualTo(90); // round(18/20*100)
+    // Leftover working days Apr 29-30 are past, unattended, unleaved -> 2 unapproved absences.
+    assertThat(s.get("unapprovedAbsences").asLong()).isEqualTo(2L);
+  }
+
+  @Test
+  void unapprovedAbsences_countPastWorkingDaysOnly_currentMonthExcludesTodayAndFuture() throws Exception {
+    // A fresh employee with NO sessions/leaves this (current) shift-month: every past Mon–Fri is an
+    // absence; today and every future working day are NEVER counted.
+    Employee e = approved(companyA, empA.getOnboardingHrId(), "AAA-EMP-000043", "Nora Now");
+    YearMonth now = YearMonth.now(ShiftConfig.ZONE);
+    LocalDate today = LocalDate.now(ShiftConfig.ZONE);
+    long pastWorkingDays =
+        AttendanceCalendar.workingDays(now).stream().filter(d -> d.isBefore(today)).count();
+
+    JsonNode s =
+        getJson("/accountant/employees/" + e.getId() + "/attendance/summary?month=" + now, adminToken);
+    assertThat(s.get("unapprovedAbsences").asLong()).isEqualTo(pastWorkingDays);
+    // Explicitly: the count never reaches into today/future working days.
+    assertThat(s.get("unapprovedAbsences").asLong()).isLessThanOrEqualTo(pastWorkingDays);
+  }
+
+  @Test
+  void adherence_isNull_whenExpectedDaysZero_dividesByZeroSafely() throws Exception {
+    // A whole-month approved leave leaves zero expected days -> adherence is N/A (null), never a crash.
+    Employee e = approved(companyA, empA.getOnboardingHrId(), "AAA-EMP-000044", "Zeb Zero");
+    leave(e, LeaveType.CASUAL, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28));
+
+    JsonNode s = getJson("/accountant/employees/" + e.getId() + "/attendance/summary?month=2026-02", adminToken);
+    assertThat(s.get("expectedDays").asLong()).isZero();
+    assertThat(s.get("adherencePct").isNull()).isTrue();
+    // Every working day is covered by leave, so there are no unapproved absences either.
+    assertThat(s.get("unapprovedAbsences").asLong()).isZero();
   }
 
   @Test
@@ -236,6 +293,12 @@ class ViewerAttendanceApiTest {
     s.setShiftDate(shiftDate);
     s.setLate(late);
     return sessions.save(s);
+  }
+
+  /** A completed 8h session whose SHIFT-DAY is {@code day} (marks that day present). */
+  private void presentDay(Employee e, LocalDate day) {
+    Instant in = ist(day.getYear(), day.getMonthValue(), day.getDayOfMonth(), 19, 0);
+    session(e, in, in.plusSeconds(28800), day, false);
   }
 
   private void openSession(Employee e, Instant in, LocalDate shiftDate) {

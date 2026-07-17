@@ -598,10 +598,19 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
     **breakSeconds** = Σ completed breaks. **daysPresent** = distinct `shiftDate`s with ≥1 session.
     **lateLogins** = count of `is_late = true` (persisted, not recomputed).
   - **leavesByType {CASUAL, SICK, UNPAID}** + **leaveDaysTotal** = APPROVED leaves clipped to the month,
-    counting **all calendar days inclusive** (start..end, weekends included — v1); **leaveRequests** =
-    approved requests overlapping the month.
-  - **workingDays** = **calendar days in the month** (v1, labeled `workingDaysDefinition`, swap-ready);
-    **adherencePct** = round(daysPresent ÷ workingDays × 100).
+    counting **all calendar days inclusive** (start..end, weekends included — unchanged); **leaveRequests** =
+    approved requests overlapping the month. (These headline leave totals are calendar-day; the
+    adherence/absence basis below is stricter — Mon–Fri only.)
+  - **workingDays** = **Mon–Fri in the month** (weekends excluded; public holidays NOT excluded yet).
+    Centralized + labeled in `AttendanceCalendar` (`workingDaysDefinition`), swap-ready for a richer
+    calendar later. **expectedDays** = workingDays − approved-leave days that land **on** working days
+    (a leave on a weekend never reduces the denominator). **adherencePct** =
+    round(present-on-working ÷ expectedDays × 100), where present-on-working = `daysPresent ∩ Mon–Fri`;
+    when **expectedDays = 0** (e.g. a whole-month leave) adherence is **null (N/A)** — never a divide-by-zero.
+  - **unapprovedAbsences** = count of working days that are already in the **PAST** (`date < today`, IST)
+    with **no session and no approved leave**. Today and every future working day are **never** counted
+    (an as-yet-unworked day isn't an absence). Present on the per-employee summary, the monthly series, and
+    each team-roster row.
   - **timeComposition** = `{workedSeconds, breakSeconds}` (both real; sum to gross clocked time; **idle
     omitted in v1** — no count metric is mixed into the split). **clockedInNow** = an OPEN session exists now.
   - Endpoints: `GET /accountant/employees/{id}/attendance/summary?month=YYYY-MM` (one month; default =
@@ -614,8 +623,9 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
     tiles + a per-employee roster with a **live clocked-in dot**, month selector, and ~45s polling +
     refetch-on-focus; a row opens the employee detail — a **worked-vs-break donut** (recharts; the only
     same-unit split — counts never go in the pie), separate **stat cards** for the counts (worked, break,
-    days present, late, adherence + its label, leaves by type), and a **month-wise report** (bar + table
-    from the series). Numbers use the shared duration formatter (e.g. 63,300s → "17h 35m"). Both views
+    days present, late, adherence + its label [N/A when there are no expected days], **unapproved
+    absences**, leaves by type), and a **month-wise report** (bar + table with an Absent column, from the
+    series). Numbers use the shared duration formatter (e.g. 63,300s → "17h 35m"). Both views
     offer a client-side **CSV export** (no refetch — built from the already-loaded state): the employee's
     month-wise series and the team's per-employee roster for the selected month (RFC-4180 escaping, UTF-8
     BOM; durations as decimal hours, header-labeled).

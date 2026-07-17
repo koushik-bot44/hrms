@@ -28,6 +28,7 @@ function exportTeamCsv(data: TeamAttendanceSummary): void {
     'Worked (h)',
     'Late logins',
     'Leave days',
+    'Unapproved absences',
   ];
   const rows = data.employees.map((e) => [
     e.fullName ?? '',
@@ -36,6 +37,7 @@ function exportTeamCsv(data: TeamAttendanceSummary): void {
     hours(e.workedSeconds),
     e.lateLogins,
     e.leaveDaysTotal,
+    e.unapprovedAbsences,
   ]);
   downloadCsv(`attendance_team_${data.teamId}_${data.month}.csv`, toCsv(headers, rows));
 }
@@ -104,7 +106,7 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
       </div>
 
       {query.isLoading ? (
-        <TableSkeleton rows={6} cols={5} />
+        <TableSkeleton rows={6} cols={7} />
       ) : query.isError ? (
         <EmptyState
           icon={CalendarClock}
@@ -137,6 +139,7 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
                     <th className="px-3 py-2 font-medium">Worked (month)</th>
                     <th className="px-3 py-2 font-medium">Late</th>
                     <th className="px-3 py-2 font-medium">Leave days</th>
+                    <th className="px-3 py-2 font-medium">Absent</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -172,6 +175,9 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
                         {e.lateLogins}
                       </td>
                       <td className="px-3 py-2 tabular-nums">{e.leaveDaysTotal}</td>
+                      <td className={cn('px-3 py-2 tabular-nums', e.unapprovedAbsences > 0 && 'text-warning')}>
+                        {e.unapprovedAbsences}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

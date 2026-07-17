@@ -197,8 +197,19 @@ function SummaryBody({ data }: { data: EmployeeMonthSummary }) {
         <Stat label="Late logins" value={String(data.lateLogins)} tone={data.lateLogins > 0 ? 'warning' : undefined} />
         <Stat
           label="Adherence"
-          value={`${data.adherencePct}%`}
-          sub={`${data.daysPresent}/${data.workingDays} days`}
+          value={data.adherencePct === null ? 'N/A' : `${data.adherencePct}%`}
+          sub={
+            data.adherencePct === null
+              ? 'No expected working days'
+              : `of ${data.expectedDays} expected · ${data.workingDays} working days`
+          }
+          title={data.workingDaysDefinition}
+        />
+        <Stat
+          label="Unapproved Absences"
+          value={String(data.unapprovedAbsences)}
+          tone={data.unapprovedAbsences > 0 ? 'warning' : undefined}
+          sub="Past working days, no session or leave"
           title={data.workingDaysDefinition}
         />
         <Stat
@@ -261,6 +272,9 @@ function exportEmployeeCsv(employeeId: string, months: EmployeeMonthSummary[]): 
     'Casual',
     'Sick',
     'Unpaid',
+    'Working days',
+    'Expected days',
+    'Unapproved absences',
     'Adherence %',
   ];
   const rows = months.map((m) => [
@@ -273,7 +287,10 @@ function exportEmployeeCsv(employeeId: string, months: EmployeeMonthSummary[]): 
     m.leavesByType.casual,
     m.leavesByType.sick,
     m.leavesByType.unpaid,
-    m.adherencePct,
+    m.workingDays,
+    m.expectedDays,
+    m.unapprovedAbsences,
+    m.adherencePct ?? 'N/A', // null when there are no expected working days
   ]);
   const from = months[0]?.month ?? 'na';
   const to = months[months.length - 1]?.month ?? 'na';
@@ -346,6 +363,7 @@ function MonthlyReport({
                     <th className="px-3 py-2 font-medium">Days present</th>
                     <th className="px-3 py-2 font-medium">Late</th>
                     <th className="px-3 py-2 font-medium">Leave days</th>
+                    <th className="px-3 py-2 font-medium">Absent</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -363,6 +381,9 @@ function MonthlyReport({
                       <td className="px-3 py-2 tabular-nums">{m.daysPresent}</td>
                       <td className="px-3 py-2 tabular-nums">{m.lateLogins}</td>
                       <td className="px-3 py-2 tabular-nums">{m.leaveDaysTotal}</td>
+                      <td className={cn('px-3 py-2 tabular-nums', m.unapprovedAbsences > 0 && 'text-warning')}>
+                        {m.unapprovedAbsences}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

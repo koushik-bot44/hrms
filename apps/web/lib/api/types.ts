@@ -2548,6 +2548,11 @@ export interface components {
              * @description Approved leave days this month.
              */
             leaveDaysTotal?: number;
+            /**
+             * Format: int64
+             * @description Past working days with no session and no approved leave, this month.
+             */
+            unapprovedAbsences?: number;
         };
         /** @description A team's attendance roll-up for the month + a live 'today' snapshot. */
         TeamAttendanceSummary: {
@@ -2625,15 +2630,25 @@ export interface components {
             leaveRequests?: number;
             /**
              * Format: int32
-             * @description Working days in the month per the stated rule.
+             * @description Working days in the month per the stated rule (Mon–Fri).
              */
             workingDays?: number;
             /**
+             * Format: int64
+             * @description Adherence denominator = working days − approved leave on working days.
+             */
+            expectedDays?: number;
+            /**
+             * Format: int64
+             * @description Past working days (before today, IST) with no session and no approved leave. Today/future never count.
+             */
+            unapprovedAbsences?: number;
+            /**
              * Format: int32
-             * @description daysPresent / workingDays as a whole percent (0–100).
+             * @description present-on-working ÷ expectedDays as a whole percent; null when expectedDays = 0 (N/A).
              */
             adherencePct?: number;
-            /** @description Human label of how workingDays / adherence is defined. */
+            /** @description Human label of how workingDays / adherence / absence are defined. */
             workingDaysDefinition?: string;
             timeComposition?: components["schemas"]["TimeComposition"];
             /** @description Whether the employee has an OPEN session right now (live). */

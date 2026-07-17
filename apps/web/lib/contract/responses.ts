@@ -383,10 +383,18 @@ type DeepRequired<T> = T extends (infer U)[]
 
 export type LeavesByType = DeepRequired<Schemas['LeavesByType']>;
 export type TimeComposition = DeepRequired<Schemas['TimeComposition']>;
-export type EmployeeMonthSummary = DeepRequired<Schemas['EmployeeMonthSummary']>;
-export type EmployeeMonthlySeries = DeepRequired<Schemas['EmployeeMonthlySeries']>;
+// adherencePct is genuinely nullable at runtime (N/A when expectedDays = 0); DeepRequired would strip
+// the null, so override it here — and re-nest the corrected month type inside the monthly series.
+export type EmployeeMonthSummary = Omit<DeepRequired<Schemas['EmployeeMonthSummary']>, 'adherencePct'> & {
+  adherencePct: number | null;
+};
+export type EmployeeMonthlySeries = Omit<DeepRequired<Schemas['EmployeeMonthlySeries']>, 'months'> & {
+  months: EmployeeMonthSummary[];
+};
 export type TeamAttendanceMemberRow = DeepRequired<Schemas['TeamAttendanceMemberRow']>;
-export type TeamAttendanceSummary = DeepRequired<Schemas['TeamAttendanceSummary']>;
+export type TeamAttendanceSummary = Omit<DeepRequired<Schemas['TeamAttendanceSummary']>, 'employees'> & {
+  employees: TeamAttendanceMemberRow[];
+};
 
 // --- Internal mail — thread-based (§8, Stage 3) ----------------------------
 

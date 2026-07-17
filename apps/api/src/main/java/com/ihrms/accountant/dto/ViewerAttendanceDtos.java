@@ -36,9 +36,19 @@ public final class ViewerAttendanceDtos {
       @Schema(description = "Total approved leave days in the month (sum of leavesByType).")
           long leaveDaysTotal,
       @Schema(description = "Number of approved leave REQUESTS overlapping the month.") long leaveRequests,
-      @Schema(description = "Working days in the month per the stated rule.") int workingDays,
-      @Schema(description = "daysPresent / workingDays as a whole percent (0–100).") int adherencePct,
-      @Schema(description = "Human label of how workingDays / adherence is defined.")
+      @Schema(description = "Working days in the month per the stated rule (Mon–Fri).") int workingDays,
+      @Schema(description = "Adherence denominator = working days − approved leave on working days.")
+          long expectedDays,
+      @Schema(
+              description =
+                  "Past working days (before today, IST) with no session and no approved leave. Today/future"
+                      + " never count.")
+          long unapprovedAbsences,
+      @Schema(
+              description =
+                  "present-on-working ÷ expectedDays as a whole percent; null when expectedDays = 0 (N/A).")
+          Integer adherencePct,
+      @Schema(description = "Human label of how workingDays / adherence / absence are defined.")
           String workingDaysDefinition,
       TimeComposition timeComposition,
       @Schema(description = "Whether the employee has an OPEN session right now (live).") boolean clockedInNow) {}
@@ -54,7 +64,9 @@ public final class ViewerAttendanceDtos {
       boolean clockedInNow,
       @Schema(description = "Worked seconds this month (breaks excluded).") long workedSeconds,
       @Schema(description = "Late logins this month.") long lateLogins,
-      @Schema(description = "Approved leave days this month.") long leaveDaysTotal) {}
+      @Schema(description = "Approved leave days this month.") long leaveDaysTotal,
+      @Schema(description = "Past working days with no session and no approved leave, this month.")
+          long unapprovedAbsences) {}
 
   @Schema(description = "A team's attendance roll-up for the month + a live 'today' snapshot.")
   public record TeamAttendanceSummary(
