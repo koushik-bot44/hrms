@@ -1,11 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import { CalendarClock, Users } from 'lucide-react';
-import type { TeamAttendanceMemberRow } from '@/lib/contract';
+import { CalendarClock, Download, Users } from 'lucide-react';
+import type { TeamAttendanceMemberRow, TeamAttendanceSummary } from '@/lib/contract';
 import { getTeamAttendanceSummary } from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
 import { formatDuration, istMonthIso } from '@/lib/date';
+import { downloadCsv, toCsv } from '@/lib/csv';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/loading-skeleton';
@@ -15,6 +17,28 @@ import { cn } from '@/lib/utils';
 
 const REFRESH_MS = 45_000;
 const hm = (s: number) => formatDuration(s);
+const hours = (s: number) => Math.round((s / 3600) * 100) / 100;
+
+/** Export the loaded per-employee roster for the selected month as CSV (no refetch). */
+function exportTeamCsv(data: TeamAttendanceSummary): void {
+  const headers = [
+    'Employee name',
+    'Employee ID',
+    'Clocked in now',
+    'Worked (h)',
+    'Late logins',
+    'Leave days',
+  ];
+  const rows = data.employees.map((e) => [
+    e.fullName ?? '',
+    e.employeeCode ?? '',
+    e.clockedInNow ? 'Yes' : 'No',
+    hours(e.workedSeconds),
+    e.lateLogins,
+    e.leaveDaysTotal,
+  ]);
+  downloadCsv(`attendance_team_${data.teamId}_${data.month}.csv`, toCsv(headers, rows));
+}
 
 /**
  * A team's attendance lens (§8a, read-only): a live roll-up + per-employee roster with a "clocked-in now"
@@ -64,7 +88,19 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
             'Live — updates automatically'
           )}
         </p>
-        <MonthPicker value={month} onChange={setMonth} />
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!data || data.employees.length === 0}
+            onClick={() => data && exportTeamCsv(data)}
+          >
+            <Download className="size-4" />
+            Export CSV
+          </Button>
+          <MonthPicker value={month} onChange={setMonth} />
+        </div>
       </div>
 
       {query.isLoading ? (

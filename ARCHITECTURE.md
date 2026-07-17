@@ -615,7 +615,10 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
     refetch-on-focus; a row opens the employee detail — a **worked-vs-break donut** (recharts; the only
     same-unit split — counts never go in the pie), separate **stat cards** for the counts (worked, break,
     days present, late, adherence + its label, leaves by type), and a **month-wise report** (bar + table
-    from the series). Numbers use the shared duration formatter (e.g. 63,300s → "17h 35m").
+    from the series). Numbers use the shared duration formatter (e.g. 63,300s → "17h 35m"). Both views
+    offer a client-side **CSV export** (no refetch — built from the already-loaded state): the employee's
+    month-wise series and the team's per-employee roster for the selected month (RFC-4180 escaping, UTF-8
+    BOM; durations as decimal hours, header-labeled).
 
 ---
 

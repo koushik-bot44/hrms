@@ -12,11 +12,12 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ArrowLeft, CalendarClock } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Download } from 'lucide-react';
 import type { EmployeeMonthSummary } from '@/lib/contract';
 import { getEmployeeAttendanceMonthly, getEmployeeAttendanceSummary } from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
 import { formatDuration, monthLabel } from '@/lib/date';
+import { downloadCsv, toCsv } from '@/lib/csv';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,8 @@ const BREAK = 'hsl(var(--warning))';
 const REFRESH_MS = 45_000;
 
 const hm = (seconds: number) => formatDuration(seconds);
+/** Decimal hours for spreadsheet-friendly CSV values (2dp). */
+const hours = (seconds: number) => Math.round((seconds / 3600) * 100) / 100;
 
 /**
  * One employee's attendance detail (§8a, read-only): a worked-vs-break DONUT (the only same-unit split —
@@ -109,6 +112,7 @@ export function EmployeeAttendanceDetail({
       ) : null}
 
       <MonthlyReport
+        employeeId={employeeId}
         months={series.data?.months ?? []}
         loading={series.isLoading}
         activeMonth={month}
@@ -245,12 +249,45 @@ function Stat({
   );
 }
 
+/** Export the loaded per-month series as CSV (no refetch). Hours are decimal (header-labeled). */
+function exportEmployeeCsv(employeeId: string, months: EmployeeMonthSummary[]): void {
+  const headers = [
+    'Month',
+    'Worked (h)',
+    'Break (h)',
+    'Days present',
+    'Late logins',
+    'Leave days',
+    'Casual',
+    'Sick',
+    'Unpaid',
+    'Adherence %',
+  ];
+  const rows = months.map((m) => [
+    m.month,
+    hours(m.workedSeconds),
+    hours(m.breakSeconds),
+    m.daysPresent,
+    m.lateLogins,
+    m.leaveDaysTotal,
+    m.leavesByType.casual,
+    m.leavesByType.sick,
+    m.leavesByType.unpaid,
+    m.adherencePct,
+  ]);
+  const from = months[0]?.month ?? 'na';
+  const to = months[months.length - 1]?.month ?? 'na';
+  downloadCsv(`attendance_${employeeId}_${from}-${to}.csv`, toCsv(headers, rows));
+}
+
 function MonthlyReport({
+  employeeId,
   months,
   loading,
   activeMonth,
   onPickMonth,
 }: {
+  employeeId: string;
   months: EmployeeMonthSummary[];
   loading: boolean;
   activeMonth: string;
@@ -263,8 +300,18 @@ function MonthlyReport({
   }));
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Month-wise report</CardTitle>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={months.length === 0}
+          onClick={() => exportEmployeeCsv(employeeId, months)}
+        >
+          <Download className="size-4" />
+          Export CSV
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {loading ? (
