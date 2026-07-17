@@ -38,10 +38,10 @@ Super Admin
 | **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **provision the single Accounts Admin**; **archive (soft-delete) a company and restore it**; **manage teams in any company** (create / rename / reassign HR + Manager + Accountant) and **onboard employees into any company** (selecting company → team → HR); view **all** companies' audit logs (separated per company), including archived companies'. |
 | **Accounts Admin** | Entire portal — **read-only** | A central, cross-company **viewer** (`companyId = null`, like Super Admin but never writes). Sees **approved** employees across **all** companies and their **full records** (the four forms + documents/PDFs) with sensitive fields **masked by default** and an **audited reveal** — the exact HR mechanism; and an **approval-only** audit trail across companies. **No onboarding / verify / approve / edit / archive / delete / provisioning — GET-only.** In-flight (non-approved) employees are **not** visible. **Exactly one** may exist; provisioned by Super Admin. |
 | **Company Admin** | One company | Create teams and assign the team's HR, Manager and Accountant (one each); **assign/reset the mailbox credentials of any APPROVED employee in the company** (§6, alongside the onboarding HR); view **own company's** audit logs. |
-| **HR** | Own team / own onboarded employees | Trigger onboarding (email + unique ID); look up an employee by ID and see all their forms/documents; verify documents; route the approval request to the team's Manager. |
+| **HR** | Own team / own onboarded employees | Onboard by **filling Form 2** (which creates the record + sends the invite); **edit Form 2 while the employee is `INVITED`** (locked once they start, 409; a personal-email change re-invites); look up an employee by ID and see all their forms/documents; verify **Forms 1/3/4 + documents** (Form 2 is not verified); route the approval request to the team's Manager. |
 | **Manager** | Own team | Workspace inbox/notifications (who was onboarded, who was verified, pending approvals); **approve** verified employees. Approval is the **final step** _[parked: post-approval actions]_. |
 | **Accountant** | Own team — **read-only** | A **team-scoped** viewer (a staff `User` with a `teamId`, like HR/Manager, but never writes). Sees the **approved** employees of **its own team** (those onboarded by that team's HR) and their **full records** — masked by default with the same **audited reveal** as HR — plus an **approval-only** audit trail for **its team**. **No writes — GET-only.** Cannot see other teams' or other companies' employees. |
-| **Employee** | Own record only | Authenticate with **unique ID + email/OTP**; fill tabbed forms and upload documents under their own record. |
+| **Employee** | Own record only | Authenticate with **full name + personal email/OTP**; fill **Forms 1, 3, 4** and upload documents under their own record (Form 2 is HR/SA-authored — the employee never sees it). |
 
 **Company archival (soft-delete):** Super Admin can **delete a company as a reversible archive** — it
 disappears from all active lists and operations, and **every principal under it (Company Admin, HR,
@@ -72,11 +72,13 @@ The same scoping backs the **live attendance analytics** (§8a) — per-employee
 Admin's and HR's jobs; the **Super Admin can do both in any company** by selecting the target company
 explicitly (Company Admin stays locked to its own). Team ops reuse the same one-HR-one-Manager rule
 and are audited under the **target** company. When the Super Admin onboards, they pick **company →
-team → HR** — the employee attaches to that **team's HR** (`onboardingHrId`, exactly as if that HR had
-onboarded them; there is no direct team field, so **the HR is determined by the selected team**, which
-has exactly one). Everything downstream is **unchanged**: the employee is `INVITED` with no ID, gets
-the same selection email + `/employee/login` link, appears in **that HR's** queue, is verified by that
-HR, and approved by **that team's Manager** (who mints the unique ID).
+team → HR** and **fill Form 2** — the employee attaches to that **team's HR** (`onboardingHrId`, exactly
+as if that HR had onboarded them; there is no direct team field, so **the HR is determined by the
+selected team**, which has exactly one). Everything downstream is **unchanged**: the employee is
+`INVITED` with no ID, gets the same selection email + `/employee/login` link (to their personal email),
+appears in **that HR's** queue, is verified by that HR (Forms 1/3/4), and approved by **that team's
+Manager** (who mints the unique ID). The Super Admin can also **edit Form 2 while `INVITED`** and its
+standalone Form-2 PDF, identically to HR.
 
 **Employee ↔ team linkage:** an Employee is tied to a **Company** and their **onboarding HR**
 (no direct team field in v1). The approving Manager is therefore **the Manager on the onboarding
@@ -113,15 +115,28 @@ Accounts Admin, own team for Accountant).
 2. **Company Admin** creates **Teams** and assigns one **HR** and one **Manager** to each.
 
 ### 3.2 Onboarding (the spine — starts with HR)
-1. **HR** initiates onboarding with **{full name, email, designation, date of joining}**. The system
-   creates the employee record (`status = INVITED`). **No employee ID is minted here** — the unique
-   ID is allocated only on Manager approval (see §3.3 / §5).
+1. **HR** (or the **Super Admin**, cross-company) initiates onboarding by **filling Form 2 — Employee
+   Info** for the new hire (full/father name, DOJ, **personal email**, designation, blood group, mobile,
+   documents-submitted, …). Submitting Form 2 **creates the employee record** (`status = INVITED`) **and
+   sends the invite in one action** — there is no separate 4-field onboard step. The **personal email is
+   the employee's login identity** (globally unique, §6). **No employee ID is minted here** — the unique
+   ID is allocated only on Manager approval (see §3.3 / §5), so the Form-2 `employeeId` shows **greyed /
+   blank** until then. **Spark ID** and the **official email** are left **blank/inert** at onboarding
+   (official email is slated for removal — the column stays, unpopulated).
 2. The system **emails the employee a selection note** — *"Hello {full name}, you are selected to the
-   {designation} role in {company name}."* — plus a **link to the employee login**. The email carries
-   **no ID** (there isn't one yet).
+   {designation} role in {company name}."* — plus a **link to the employee login**, sent to the
+   **personal email**. The email carries **no ID** (there isn't one yet).
+   - **Form 2 is editable only while `INVITED`.** HR/SA may correct Form 2 up until the employee starts
+     their own forms; once the employee reaches `IN_PROGRESS` (or beyond), Form 2 is **read-only** to
+     HR/SA — a manual edit is rejected (**409**). The lock blocks **manual** edits only; the **system**
+     still stamps the minted `employeeId` into Form 2 at approval (render-time, unaffected by the lock).
+   - **Changing the personal email (while `INVITED`) re-invites.** Because the personal email *is* the
+     login identity, editing it **re-sends the invite to the new address** (the old address gets nothing
+     further) and re-checks global uniqueness. Editing any **other** Form-2 field does **not** re-invite.
 3. **Employee** logs in with **full name + email → OTP** (the OTP to that email is the security
    factor) and lands on their **dashboard**.
-4. Employee completes a **guided four-form stepper** under their own record:
+4. Employee completes a **guided stepper** under their own record — **Forms 1, 3 and 4 only** (the
+   employee **never sees Form 2** — not to fill, not read-only, not in their PDFs):
    - **Form 1 — Personal Details** (identity, addresses, alternate number, vehicle no, **PAN + bank
      account** (encrypted at rest, masked with audited reveal), conduct references, education, family,
      emergency contact, declaration). _Offered CTC, the standalone designation, relationship, relative
@@ -129,12 +144,12 @@ Accounts Admin, own team for Accountant).
      their columns/JSON keys stay and previously stored values are preserved (carried over on re-save),
      just no longer shown/captured. "Closest relative" is displayed as **"Emergency contact"** (the
      `closestRelativeName` key is unchanged)._
-   - **Form 2 — Employee Info** (employment details — full/father name, DOJ, emails, designation,
-     Spark ID, documents submitted; `employeeId` is read-only and blank until approval). _Note:
+   - **Form 2 — Employee Info** — **filled by HR/SA at onboard, not the employee** (see step 1). _Note:
      alternate number, vehicle no, PAN, account number and the two addresses moved to Form 1's
      PRESENTATION; their storage stayed on `form2_info` (encrypted columns + data keys) — Form 1
      writes them through and reads them back, so pre-move employee data surfaces under Form 1
-     unchanged (no migration, no column changes)._
+     unchanged (no migration, no column changes). Form 1's write-through and HR's Form-2 employment
+     fields share the one `form2_info` row without clobbering each other._
    - **Form 3 — Previous Employment** (one block per prior employer — **repeatable**)
    - **Form 4 — Documents** (a grouped upload checklist: educational, per-employment, identity proofs,
      other)
@@ -142,10 +157,15 @@ Accounts Admin, own team for Accountant).
    one per form plus one **merged complete application** — branded with the **joining company**, the
    signature stamped into Forms 1 & 2; these are stored under the record and **regenerated whenever a
    form is edited and re-submitted** (and `employeeId` is stamped in once approval mints it).
+   **The merged/complete PDF contains only Forms 1, 3 and 4** — Form 2 is generated as a **standalone
+   HR/SA-only PDF** (not merged into the complete application, and never fetchable by the employee).
 6. Every field value, uploaded file, the signature, and the generated PDFs are stored **under that
    employee's record**; submission routes to HR for verification.
 
 ### 3.3 Verification & approval
+**Form 2 is not verified** — HR/SA authored it at onboard, so it carries no Verify / Send-back action
+and is **not** part of the routing-to-Manager gate. HR verifies **Forms 1, 3, 4 (+ documents)** only;
+the record view still **displays** Form 2 (read-only) and exposes its standalone HR-only PDF.
 1. **HR** opens the employee's record (by ID) and reviews each form and document with **two per-item
    actions**:
    - **Verify** → the item is `VERIFIED`.
@@ -159,8 +179,9 @@ Accounts Admin, own team for Accountant).
    The employee fixes the flagged item(s) and **re-submits**: each revised item returns to
    awaiting-HR, the affected form PDFs **regenerate**, the onboarding HR is notified, and the items
    come back for **re-review**.
-2. On completion — **every** form and document `VERIFIED` (a single `REVISION_REQUESTED` item blocks
-   this) — HR **routes an approval request** to the **team's Manager**.
+2. On completion — **Forms 1, 3, 4 and every document `VERIFIED`** (a single `REVISION_REQUESTED` item
+   blocks this; Form 2 is HR-authored and not gated) — HR **routes an approval request** to the **team's
+   Manager**.
 3. **Manager** sees it in their **notifications/approvals inbox** and **approves** → final step in v1.
    (Rejecting the application, if needed, is the Manager's decision here.)
 4. **On approval, the system allocates the unique employee ID** (§5) from the company's atomic
@@ -204,10 +225,14 @@ indicative. **Schema is additive-only thereafter.**
   **EducationalQualification[]** (qualification/university/yearOfPassing/percentage),
   **WorkingExperience[]** (organization/period/designation/`salaryCtc` [SENSITIVE]/reasonForLeaving),
   **FamilyDetail[]** (name/age/relation/occupation), **CharacterReference[]** (name/address/phone — min 2).
-- **Form2Info** — Employee Info: `fullName`, `fatherName`, `employeeId` [SYSTEM/READONLY — blank until
-  approval], `dob`, `dateOfJoining`, `bloodGroup`, `mobile`, `alternateNumber`, `officialEmail`,
-  `personalEmail`, `designation`, `sparkId` [HR/ADMIN-set], `documentSubmitted`, `vehicleNo2W4W`,
-  `panNumber` [SENSITIVE], `axisAccountNumber` [SENSITIVE], `currentAddress`, `permanentAddress`.
+- **Form2Info** — Employee Info, **HR/SA-authored at onboard** (the employee never fills or sees it):
+  `fullName`, `fatherName`, `employeeId` [SYSTEM/READONLY — blank until approval], `dob`,
+  `dateOfJoining`, `bloodGroup`, `mobile`, `alternateNumber`, `officialEmail` [blank/inert — slated for
+  removal], `personalEmail` [the login identity], `designation`, `sparkId` [HR/ADMIN-set; blank at
+  onboard], `documentSubmitted`, `vehicleNo2W4W`, `panNumber` [SENSITIVE], `axisAccountNumber`
+  [SENSITIVE], `currentAddress`, `permanentAddress`. Editable by HR/SA only while the employee is
+  `INVITED` (then read-only, 409); a personal-email change while `INVITED` re-invites. Not part of the
+  verification loop.
 - **Form3PreviousEmployment** _(repeatable — one row per prior employer)_ — `companyName` (the employee's
   previous employer — employee-entered), `companyAddress`, `dateOfJoining`, `dateOfRelieving`,
   `designation`, `lastDrawnSalary` [SENSITIVE], `jobType`, `reasonForLeaving`, `reportingTo`,
@@ -219,7 +244,10 @@ indicative. **Schema is additive-only thereafter.**
   Captured once at final submit and stamped into Forms 1 & 2 and the merged PDF.
 - **GeneratedDocument** _(the produced PDFs)_ — `id`, `employeeId`, `kind`
   (FORM1 | FORM2 | FORM3 | FORM4_MANIFEST | MERGED), `storageKey`, `sha256`, `generatedAt`.
-  Regenerated on every edit-and-resubmit; re-stamped with `employeeId` on approval.
+  Regenerated on every edit-and-resubmit; re-stamped with `employeeId` on approval. The **MERGED**
+  complete application contains **Forms 1, 3, 4 only**; **FORM2** is a **standalone HR/SA-only** PDF —
+  excluded from the merge and never returned to the employee (their generated-docs list omits it and a
+  direct fetch is refused, 403).
 
 Each form and document carries a `status` (DRAFT | SUBMITTED | VERIFIED | REVISION_REQUESTED | REJECTED)
 plus a nullable `revisionNote` + `revisionRequestedAt` set when HR sends that item back (§3.3). SENSITIVE fields are encrypted at

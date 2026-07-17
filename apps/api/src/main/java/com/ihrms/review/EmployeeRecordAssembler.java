@@ -129,11 +129,10 @@ public class EmployeeRecordAssembler {
       Form2Info f2,
       List<Form3PrevEmployment> f3,
       List<Document> docs) {
+    // Form 2 is HR/SA-authored (§3.2) and NOT part of the gate — only Forms 1, 3 and the documents are.
     return employee.getStatus() == EmployeeStatus.SUBMITTED
         && f1 != null
         && f1.getStatus() == SectionStatus.VERIFIED
-        && f2 != null
-        && f2.getStatus() == SectionStatus.VERIFIED
         && f3.stream().allMatch(r -> r.getStatus() == SectionStatus.VERIFIED)
         && !docs.isEmpty()
         && docs.stream().allMatch(d -> d.getStatus() == DocumentStatus.VERIFIED);

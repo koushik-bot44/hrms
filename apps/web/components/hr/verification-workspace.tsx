@@ -38,17 +38,16 @@ const recordKey = (id: string) => ['hr-record', id] as const;
 function patchRecord(rec: EmployeeRecord, v: ReviewVars): EmployeeRecord {
   // Empty string clears it (the field is non-null in the record type; '' reads as "no note").
   const note = v.decision === 'REVISION_REQUESTED' ? v.reason ?? '' : '';
-  let { form1, form2, form3, documents } = rec;
+  // Form 2 is HR/SA-authored (§3.2) — it is never verified/sent-back, so it plays no part in the gate.
+  let { form1, form3, documents } = rec;
   if (v.kind === 'form') {
     if (v.id === 'FORM1' && form1) form1 = { ...form1, status: v.decision, revisionNote: note };
-    if (v.id === 'FORM2' && form2) form2 = { ...form2, status: v.decision, revisionNote: note };
     if (v.id === 'FORM3') form3 = form3.map((e) => ({ ...e, status: v.decision, revisionNote: note }));
   } else {
     documents = documents.map((d) => (d.id === v.id ? { ...d, status: v.decision, revisionNote: note } : d));
   }
   const anyRevision =
     form1?.status === 'REVISION_REQUESTED' ||
-    form2?.status === 'REVISION_REQUESTED' ||
     form3.some((e) => e.status === 'REVISION_REQUESTED') ||
     documents.some((d) => d.status === 'REVISION_REQUESTED');
   const underReview = rec.status === 'SUBMITTED' || rec.status === 'REVISION_REQUESTED';
@@ -57,12 +56,10 @@ function patchRecord(rec: EmployeeRecord, v: ReviewVars): EmployeeRecord {
     status === 'SUBMITTED' &&
     !!form1 &&
     form1.status === 'VERIFIED' &&
-    !!form2 &&
-    form2.status === 'VERIFIED' &&
     form3.every((e) => e.status === 'VERIFIED') &&
     documents.length > 0 &&
     documents.every((d) => d.status === 'VERIFIED');
-  return { ...rec, status, form1, form2, form3, documents, reviewComplete };
+  return { ...rec, status, form1, form3, documents, reviewComplete };
 }
 
 /** Verify / send items back by INTERNAL id, then route to the Manager once all are verified (§3.3). */

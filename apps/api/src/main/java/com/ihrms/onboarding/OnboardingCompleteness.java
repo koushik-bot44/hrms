@@ -12,10 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The submission gate for the four-form stepper (§3.2): Form 1 + Form 2 filled, at least two
- * conduct references, the required identity documents uploaded, and a signature captured. Returns
- * the list of missing items ({@code empty} = ready to submit). The web mirrors these rules for its
- * progress/CTA state; this is the authoritative server-side gate.
+ * The submission gate for the employee's stepper (§3.2): Form 1 filled, at least two conduct
+ * references, the required identity documents uploaded, and a signature captured. Form 2 is
+ * HR/SA-authored at onboard and is NOT gated here (the {@code form2} argument is only used to surface
+ * Form 1's relocated fields). Returns the list of missing items ({@code empty} = ready to submit); the
+ * web mirrors these rules for its progress/CTA state, but this is the authoritative server-side gate.
  */
 public final class OnboardingCompleteness {
 
@@ -41,9 +42,7 @@ public final class OnboardingCompleteness {
       }
     }
 
-    if (form2 == null || isBlank(str(form2))) {
-      missing.add("Complete Form 2 — Employee Info");
-    }
+    // Form 2 is HR/SA-authored at onboard (§3.2) — it is not part of the employee's submission gate.
 
     if (!hasUploaded(documents, DocumentType.AADHAAR)) {
       missing.add("Form 4 — upload your Aadhaar");
@@ -66,11 +65,6 @@ public final class OnboardingCompleteness {
 
   private static boolean refFilled(CharacterReference r) {
     return r != null && !isBlank(r.name());
-  }
-
-  private static String str(Form2Info form2) {
-    Object v = form2.getData() == null ? null : form2.getData().get("fullName");
-    return v == null ? null : v.toString();
   }
 
   private static boolean hasUploaded(List<Document> documents, DocumentType type) {

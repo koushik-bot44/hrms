@@ -6,6 +6,7 @@ import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.GeneratedDocumentKind;
 import com.ihrms.domain.enums.SectionStatus;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -106,18 +107,23 @@ public final class OnboardingDtos {
 
   // --- Form 2: Employee Info ------------------------------------------------
 
-  // alternate number, vehicle no, PAN, account number and the two addresses moved to Form 1's
-  // PRESENTATION (§3.2) — their storage stays on form2_info and is written through by Form 1.
+  // Form 2 is FILLED BY HR/SA at onboard (§3.2) — the employee never submits it. fullName + personal
+  // email (the login identity) + designation are required; officialEmail is left blank/inert. alternate
+  // number, vehicle no, PAN, account number and the two addresses moved to Form 1's PRESENTATION — their
+  // storage stays on form2_info and is written through by Form 1.
   public record Form2Request(
-      @Size(max = 150) String fullName,
+      @NotBlank(message = "Full name is required") @Size(max = 150) String fullName,
       @Size(max = 150) String fatherName,
       @Pattern(regexp = "|\\d{4}-\\d{2}-\\d{2}", message = "Use YYYY-MM-DD") String dateOfBirth,
       @Pattern(regexp = "|\\d{4}-\\d{2}-\\d{2}", message = "Use YYYY-MM-DD") String dateOfJoining,
       @Size(max = 10) String bloodGroup,
       @Size(max = 30) String mobile,
       @Size(max = 180) String officialEmail,
-      @Size(max = 180) String personalEmail,
-      @Size(max = 150) String designation,
+      @NotBlank(message = "Personal email is required")
+          @Email(message = "Enter a valid email")
+          @Size(max = 180)
+          String personalEmail,
+      @NotBlank(message = "Designation is required") @Size(max = 150) String designation,
       @Size(max = 60) String documentSubmitted) {}
 
   /** {@code employeeId} is the system-assigned code (null until Manager approval); read-only. */
@@ -230,6 +236,8 @@ public final class OnboardingDtos {
 
   // --- Dashboard + presign envelopes ----------------------------------------
 
+  // The employee's own dashboard covers Forms 1, 3, 4 only — Form 2 is HR/SA-authored and never shown
+  // to the employee (no view, and its standalone PDF is filtered out of generatedDocuments — §3.2).
   public record OnboardingDashboard(
       String employeeCode,
       String email,
@@ -237,7 +245,6 @@ public final class OnboardingDtos {
       String designation,
       EmployeeStatus status,
       Form1View form1,
-      Form2View form2,
       List<Form3EntryView> form3,
       List<DocumentView> documents,
       SignatureView signature,

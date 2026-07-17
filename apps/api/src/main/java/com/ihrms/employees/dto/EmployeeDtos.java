@@ -1,11 +1,10 @@
 package com.ihrms.employees.dto;
 
 import com.ihrms.domain.enums.EmployeeStatus;
-import jakarta.validation.constraints.Email;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form2Request;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-import java.time.LocalDate;
 import java.util.List;
 
 /** Employee-onboarding request/response DTOs — JSON shapes match api-contract.md §3.5. */
@@ -14,31 +13,18 @@ public final class EmployeeDtos {
   private EmployeeDtos() {}
 
   /**
-   * HR onboards with the employee's full name, email, designation (job title) and date of joining.
-   * No employee ID is minted here — it is allocated on Manager approval (§5).
+   * HR onboards by FILLING FORM 2 — Employee Info (§3.2). Submitting it creates the record and sends
+   * the invite in one action; the personal email is the login identity. No employee ID is minted here —
+   * it is allocated on Manager approval (§5).
    */
-  public record OnboardEmployeeRequest(
-      @NotBlank(message = "Full name is required") @Size(max = 120, message = "Full name is too long")
-          String fullName,
-      @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
-      @NotBlank(message = "Designation is required")
-          @Size(max = 120, message = "Designation is too long")
-          String designation,
-      @NotNull(message = "Date of joining is required") LocalDate dateOfJoining) {}
+  public record OnboardEmployeeRequest(@NotNull @Valid Form2Request form2) {}
 
   /**
-   * SUPER_ADMIN onboards into a chosen company (companyId is the path) by selecting a {@code teamId};
-   * the employee attaches to that team's HR (§2). Same employee fields as the HR form.
+   * SUPER_ADMIN onboards into a chosen company (companyId is the path) by selecting a {@code teamId} and
+   * filling Form 2; the employee attaches to that team's HR (§2). Same Form-2 payload as the HR form.
    */
   public record SuperAdminOnboardRequest(
-      @NotBlank(message = "Team is required") String teamId,
-      @NotBlank(message = "Full name is required") @Size(max = 120, message = "Full name is too long")
-          String fullName,
-      @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
-      @NotBlank(message = "Designation is required")
-          @Size(max = 120, message = "Designation is too long")
-          String designation,
-      @NotNull(message = "Date of joining is required") LocalDate dateOfJoining) {}
+      @NotBlank(message = "Team is required") String teamId, @NotNull @Valid Form2Request form2) {}
 
   /** {@code employeeCode} is null until the employee is approved (§5). */
   public record EmployeeSummaryView(

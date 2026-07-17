@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DocumentStatus, DocumentType } from '../enums';
-import type { DocumentDto, Form1View, Form2View, SignatureView } from '../responses';
+import type { DocumentDto, Form1View, SignatureView } from '../responses';
 
 /**
  * Employee onboarding contracts — the four-form stepper (ARCHITECTURE.md §3.2). Form 1 Personal
@@ -199,7 +199,6 @@ const DONE_DOC_STATUSES: DocumentStatus[] = [DocumentStatus.UPLOADED, DocumentSt
 
 export function evaluateOnboarding(
   form1: Form1View | null,
-  form2: Form2View | null,
   documents: DocumentDto[],
   signature: SignatureView | null,
 ): { complete: boolean; missing: string[] } {
@@ -213,7 +212,7 @@ export function evaluateOnboarding(
       missing.push('Form 1 — confirm the declaration');
     }
   }
-  if (!form2 || !form2.fullName) missing.push('Complete Form 2 — Employee Info');
+  // Form 2 is HR/SA-authored at onboard (§3.2) — not part of the employee's submission gate.
   for (const req of REQUIRED_DOC_TYPES) {
     const has = documents.some((d) => d.docType === req && DONE_DOC_STATUSES.includes(d.status));
     if (!has) missing.push(`Form 4 — upload your ${DOCUMENT_TYPE_LABELS[req]}`);

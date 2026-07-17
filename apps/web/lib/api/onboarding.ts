@@ -6,8 +6,6 @@ import {
   type DocumentType,
   type Form1Values,
   type Form1View,
-  type Form2Values,
-  type Form2View,
   type Form3EntryView,
   type Form3Values,
   type OnboardingDashboard,
@@ -26,9 +24,7 @@ export function saveForm1(body: Form1Values): Promise<Form1View> {
   return apiFetch<Form1View>('/me/onboarding/form1', { method: 'PUT', body });
 }
 
-export function saveForm2(body: Form2Values): Promise<Form2View> {
-  return apiFetch<Form2View>('/me/onboarding/form2', { method: 'PUT', body });
-}
+// Form 2 is HR/SA-authored at onboard (§3.2) — the employee has no Form-2 save endpoint.
 
 export function saveForm3(body: Form3Values): Promise<Form3EntryView[]> {
   return apiFetch<Form3EntryView[]>('/me/onboarding/form3', { method: 'PUT', body });

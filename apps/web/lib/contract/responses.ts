@@ -115,15 +115,16 @@ export type GeneratedDocumentView = Omit<Required<Schemas['GeneratedDocumentView
   sha256: string | null;
 };
 
+// The employee dashboard covers Forms 1, 3, 4 only — Form 2 is HR/SA-authored and never exposed to the
+// employee (no view; its standalone PDF is filtered out of generatedDocuments — §3.2).
 export type OnboardingDashboard = Omit<
   Required<Schemas['OnboardingDashboard']>,
-  'employeeCode' | 'fullName' | 'designation' | 'form1' | 'form2' | 'form3' | 'documents' | 'signature' | 'generatedDocuments'
+  'employeeCode' | 'fullName' | 'designation' | 'form1' | 'form3' | 'documents' | 'signature' | 'generatedDocuments'
 > & {
   employeeCode: string | null;
   fullName: string | null;
   designation: string | null;
   form1: Form1View | null;
-  form2: Form2View | null;
   form3: Form3EntryView[];
   documents: DocumentDto[];
   signature: SignatureView | null;

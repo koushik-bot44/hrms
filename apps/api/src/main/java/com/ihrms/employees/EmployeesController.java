@@ -5,6 +5,8 @@ import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.employees.dto.EmployeeDtos.EmployeePage;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeRequest;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeResult;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form2Request;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +16,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -40,6 +44,21 @@ public class EmployeesController {
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     return employees.onboard(body, actor, request.getRemoteAddr());
+  }
+
+  /**
+   * Edit the HR/SA-authored Form 2 (§3.2) — allowed only while the employee is {@code INVITED} (409
+   * once they start). A personal-email change re-invites. HR (own onboarded) + SUPER_ADMIN (any); the
+   * matching URL rule opens this path to both roles, and the service scopes access.
+   */
+  @PatchMapping("/{id}/form2")
+  @PreAuthorize("hasAnyRole('HR','SUPER_ADMIN')")
+  public Form2View editForm2(
+      @PathVariable String id,
+      @Valid @RequestBody Form2Request body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return employees.editForm2(id, body, actor, request.getRemoteAddr());
   }
 
   /**

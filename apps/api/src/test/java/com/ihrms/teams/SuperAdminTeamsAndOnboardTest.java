@@ -102,12 +102,11 @@ class SuperAdminTeamsAndOnboardTest {
           assertThat(t.get("manager").get("email").asText()).isEqualTo("max@acme");
         });
 
-    // Onboard an employee into company A by selecting the team -> attaches to that team's HR.
+    // Onboard an employee into company A by FILLING FORM 2 + selecting the team -> attaches to that HR.
     JsonNode onboarded =
         json.readTree(
             perform(post("/companies/" + companyA + "/employees"), superToken,
-                    Map.of("teamId", teamId, "fullName", "Eve Employee", "email", "eve@personal.test",
-                        "designation", "Engineer", "dateOfJoining", "2026-08-01"), 201)
+                    saOnboard(teamId, "Eve Employee", "eve@personal.test"), 201)
                 .getResponse().getContentAsString());
     assertThat(onboarded.get("loginUrl").asText()).contains("/employee/login");
     String employeeId = onboarded.get("employee").get("id").asText();
@@ -124,6 +123,19 @@ class SuperAdminTeamsAndOnboardTest {
     assertThat(auditLogs.findByAction("EMPLOYEE_ONBOARDED"))
         .singleElement()
         .satisfies(r -> assertThat(r.getCompanyId()).isEqualTo(companyA));
+
+    // SA parity (§3.2): the Super Admin can edit Form 2 while the employee is INVITED — and a
+    // personal-email change re-invites (identical to HR).
+    JsonNode edited =
+        json.readTree(
+            perform(patch("/employees/" + employeeId + "/form2"), superToken,
+                    Map.of("fullName", "Eve Employee", "personalEmail", "eve2@personal.test",
+                        "designation", "Engineer", "dateOfJoining", "2026-08-01"), 200)
+                .getResponse().getContentAsString());
+    assertThat(edited.get("personalEmail").asText()).isEqualTo("eve2@personal.test");
+    assertThat(employees.findById(employeeId).orElseThrow().getEmail()).isEqualTo("eve2@personal.test");
+    assertThat(auditLogs.findByAction("EMPLOYEE_REINVITED"))
+        .anySatisfy(r -> assertThat(r.getCompanyId()).isEqualTo(companyA));
   }
 
   @Test
@@ -134,8 +146,7 @@ class SuperAdminTeamsAndOnboardTest {
 
     // Onboard into A but pass B's team -> 400.
     perform(post("/companies/" + companyA + "/employees"), superToken,
-        Map.of("teamId", teamInB, "fullName", "X", "email", "x@personal.test",
-            "designation", "Eng", "dateOfJoining", "2026-08-01"), 400);
+        saOnboard(teamInB, "X Ray", "x@personal.test"), 400);
   }
 
   @Test
@@ -143,11 +154,22 @@ class SuperAdminTeamsAndOnboardTest {
     // The /companies/** paths are SUPER_ADMIN-only.
     perform(get("/companies/" + companyA + "/teams"), caToken, null, 403);
     perform(post("/companies/" + companyA + "/employees"), caToken,
-        Map.of("teamId", "x", "fullName", "Y", "email", "y@personal.test",
-            "designation", "Eng", "dateOfJoining", "2026-08-01"), 403);
+        saOnboard("x", "Y Zed", "y@personal.test"), 403);
   }
 
   // --- helpers --------------------------------------------------------------
+
+  /** SA onboard body: team + the HR/SA-authored Form 2 (§3.2). */
+  private static Map<String, Object> saOnboard(String teamId, String fullName, String email) {
+    return Map.of(
+        "teamId", teamId,
+        "form2",
+            Map.of(
+                "fullName", fullName,
+                "personalEmail", email,
+                "designation", "Engineer",
+                "dateOfJoining", "2026-08-01"));
+  }
 
   private MvcResult perform(MockHttpServletRequestBuilder req, String token, Object body, int expected)
       throws Exception {

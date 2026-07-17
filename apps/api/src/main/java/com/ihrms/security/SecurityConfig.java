@@ -73,6 +73,10 @@ public class SecurityConfig {
                     .hasAnyRole("HR", "COMPANY_ADMIN")
                     .requestMatchers(HttpMethod.POST, "/employees/*/credentials")
                     .hasAnyRole("HR", "COMPANY_ADMIN")
+                    // Form-2 edit at onboard (§3.2): HR (own onboarded) + SUPER_ADMIN (cross-company);
+                    // the service scopes access and enforces the INVITED-only lock.
+                    .requestMatchers(HttpMethod.PATCH, "/employees/*/form2")
+                    .hasAnyRole("HR", "SUPER_ADMIN")
                     .requestMatchers("/employees/**")
                     .hasRole("HR")
                     .requestMatchers("/me/onboarding/**")

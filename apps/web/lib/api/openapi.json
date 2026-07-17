@@ -262,36 +262,6 @@
         }
       }
     },
-    "/me/onboarding/form2": {
-      "put": {
-        "tags": [
-          "onboarding-controller"
-        ],
-        "operationId": "saveForm2",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Form2Request"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/Form2View"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/me/onboarding/form1": {
       "put": {
         "tags": [
@@ -2089,6 +2059,46 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/EmployeeRecordView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/form2": {
+      "patch": {
+        "tags": [
+          "employees-controller"
+        ],
+        "operationId": "editForm2",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Form2Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Form2View"
                 }
               }
             }
@@ -4035,116 +4045,6 @@
           }
         }
       },
-      "Form2Request": {
-        "type": "object",
-        "properties": {
-          "fullName": {
-            "maxLength": 150,
-            "minLength": 0,
-            "type": "string"
-          },
-          "fatherName": {
-            "maxLength": 150,
-            "minLength": 0,
-            "type": "string"
-          },
-          "dateOfBirth": {
-            "pattern": "|\\d{4}-\\d{2}-\\d{2}",
-            "type": "string"
-          },
-          "dateOfJoining": {
-            "pattern": "|\\d{4}-\\d{2}-\\d{2}",
-            "type": "string"
-          },
-          "bloodGroup": {
-            "maxLength": 10,
-            "minLength": 0,
-            "type": "string"
-          },
-          "mobile": {
-            "maxLength": 30,
-            "minLength": 0,
-            "type": "string"
-          },
-          "officialEmail": {
-            "maxLength": 180,
-            "minLength": 0,
-            "type": "string"
-          },
-          "personalEmail": {
-            "maxLength": 180,
-            "minLength": 0,
-            "type": "string"
-          },
-          "designation": {
-            "maxLength": 150,
-            "minLength": 0,
-            "type": "string"
-          },
-          "documentSubmitted": {
-            "maxLength": 60,
-            "minLength": 0,
-            "type": "string"
-          }
-        }
-      },
-      "Form2View": {
-        "type": "object",
-        "properties": {
-          "fullName": {
-            "type": "string"
-          },
-          "fatherName": {
-            "type": "string"
-          },
-          "employeeId": {
-            "type": "string"
-          },
-          "dateOfBirth": {
-            "type": "string"
-          },
-          "dateOfJoining": {
-            "type": "string"
-          },
-          "bloodGroup": {
-            "type": "string"
-          },
-          "mobile": {
-            "type": "string"
-          },
-          "officialEmail": {
-            "type": "string"
-          },
-          "personalEmail": {
-            "type": "string"
-          },
-          "designation": {
-            "type": "string"
-          },
-          "sparkId": {
-            "type": "string"
-          },
-          "documentSubmitted": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "DRAFT",
-              "SUBMITTED",
-              "VERIFIED",
-              "REVISION_REQUESTED",
-              "REJECTED"
-            ]
-          },
-          "revisionNote": {
-            "type": "string"
-          },
-          "updatedAt": {
-            "type": "string"
-          }
-        }
-      },
       "CharacterReference": {
         "type": "object",
         "properties": {
@@ -4652,9 +4552,6 @@
           "form1": {
             "$ref": "#/components/schemas/Form1View"
           },
-          "form2": {
-            "$ref": "#/components/schemas/Form2View"
-          },
           "form3": {
             "type": "array",
             "items": {
@@ -5156,31 +5053,72 @@
           }
         }
       },
-      "OnboardEmployeeRequest": {
+      "Form2Request": {
         "required": [
-          "dateOfJoining",
           "designation",
-          "email",
-          "fullName"
+          "fullName",
+          "personalEmail"
         ],
         "type": "object",
         "properties": {
           "fullName": {
-            "maxLength": 120,
+            "maxLength": 150,
             "minLength": 0,
             "type": "string"
           },
-          "email": {
+          "fatherName": {
+            "maxLength": 150,
+            "minLength": 0,
             "type": "string"
           },
-          "designation": {
-            "maxLength": 120,
-            "minLength": 0,
+          "dateOfBirth": {
+            "pattern": "|\\d{4}-\\d{2}-\\d{2}",
             "type": "string"
           },
           "dateOfJoining": {
-            "type": "string",
-            "format": "date"
+            "pattern": "|\\d{4}-\\d{2}-\\d{2}",
+            "type": "string"
+          },
+          "bloodGroup": {
+            "maxLength": 10,
+            "minLength": 0,
+            "type": "string"
+          },
+          "mobile": {
+            "maxLength": 30,
+            "minLength": 0,
+            "type": "string"
+          },
+          "officialEmail": {
+            "maxLength": 180,
+            "minLength": 0,
+            "type": "string"
+          },
+          "personalEmail": {
+            "maxLength": 180,
+            "minLength": 0,
+            "type": "string"
+          },
+          "designation": {
+            "maxLength": 150,
+            "minLength": 0,
+            "type": "string"
+          },
+          "documentSubmitted": {
+            "maxLength": 60,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
+      "OnboardEmployeeRequest": {
+        "required": [
+          "form2"
+        ],
+        "type": "object",
+        "properties": {
+          "form2": {
+            "$ref": "#/components/schemas/Form2Request"
           }
         }
       },
@@ -5265,6 +5203,63 @@
             "type": "string"
           },
           "managerName": {
+            "type": "string"
+          }
+        }
+      },
+      "Form2View": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string"
+          },
+          "fatherName": {
+            "type": "string"
+          },
+          "employeeId": {
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string"
+          },
+          "dateOfJoining": {
+            "type": "string"
+          },
+          "bloodGroup": {
+            "type": "string"
+          },
+          "mobile": {
+            "type": "string"
+          },
+          "officialEmail": {
+            "type": "string"
+          },
+          "personalEmail": {
+            "type": "string"
+          },
+          "designation": {
+            "type": "string"
+          },
+          "sparkId": {
+            "type": "string"
+          },
+          "documentSubmitted": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "SUBMITTED",
+              "VERIFIED",
+              "REVISION_REQUESTED",
+              "REJECTED"
+            ]
+          },
+          "revisionNote": {
+            "type": "string"
+          },
+          "updatedAt": {
             "type": "string"
           }
         }
@@ -5445,10 +5440,7 @@
       },
       "SuperAdminOnboardRequest": {
         "required": [
-          "dateOfJoining",
-          "designation",
-          "email",
-          "fullName",
+          "form2",
           "teamId"
         ],
         "type": "object",
@@ -5456,22 +5448,8 @@
           "teamId": {
             "type": "string"
           },
-          "fullName": {
-            "maxLength": 120,
-            "minLength": 0,
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          },
-          "designation": {
-            "maxLength": 120,
-            "minLength": 0,
-            "type": "string"
-          },
-          "dateOfJoining": {
-            "type": "string",
-            "format": "date"
+          "form2": {
+            "$ref": "#/components/schemas/Form2Request"
           }
         }
       },

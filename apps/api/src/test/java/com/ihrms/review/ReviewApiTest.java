@@ -170,12 +170,13 @@ class ReviewApiTest {
             .header("Authorization", "Bearer " + hr1Token))
         .andExpect(status().isBadRequest());
 
+    // Form 2 is HR-authored (§3.2) and NOT part of the gate — verifying Form 1 + the document completes
+    // the review and routing succeeds without any Form-2 action.
     reviewForm("FORM1", "VERIFIED", null);
-    reviewForm("FORM2", "VERIFIED", null);
     MvcResult afterDoc = reviewDoc(docId, "VERIFIED", null);
     assertThat(json.readTree(afterDoc.getResponse().getContentAsString()).get("reviewComplete").asBoolean())
         .isTrue();
-    assertThat(auditLogs.findByAction("FORM_REVIEWED")).hasSize(2);
+    assertThat(auditLogs.findByAction("FORM_REVIEWED")).hasSize(1);
     assertThat(auditLogs.findByAction("DOCUMENT_REVIEWED")).hasSize(1);
 
     MvcResult routed =
@@ -220,7 +221,6 @@ class ReviewApiTest {
   void rejectingADocumentRecordsTheReasonAndBlocksRouting() throws Exception {
     String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
     reviewForm("FORM1", "VERIFIED", null);
-    reviewForm("FORM2", "VERIFIED", null);
     MvcResult rejected = reviewDoc(docId, "REJECTED", "Scan is blurry");
     assertThat(json.readTree(rejected.getResponse().getContentAsString()).get("reviewComplete").asBoolean())
         .isFalse();
@@ -240,14 +240,15 @@ class ReviewApiTest {
 
     // A form: verify -> reject -> verify again. Each PATCH succeeds (200, asserted in the helper)
     // and the stored status reflects the latest decision — an already-decided item is re-decidable.
-    reviewForm("FORM2", "VERIFIED", null);
-    assertThat(form2s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
+    // (Form 1 is the example; Form 2 is HR-authored and not a review item.)
+    reviewForm("FORM1", "VERIFIED", null);
+    assertThat(form1s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
         .isEqualTo(SectionStatus.VERIFIED);
-    reviewForm("FORM2", "REJECTED", "needs a fix");
-    assertThat(form2s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
+    reviewForm("FORM1", "REJECTED", "needs a fix");
+    assertThat(form1s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
         .isEqualTo(SectionStatus.REJECTED);
-    reviewForm("FORM2", "VERIFIED", null);
-    assertThat(form2s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
+    reviewForm("FORM1", "VERIFIED", null);
+    assertThat(form1s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
         .isEqualTo(SectionStatus.VERIFIED);
 
     // A document: same — verifying then re-deciding to rejected is allowed.
@@ -261,7 +262,6 @@ class ReviewApiTest {
   void sendingAnItemBackForRevisionFlagsItAndTheEmployeeAndBlocksRouting() throws Exception {
     String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
     reviewForm("FORM1", "VERIFIED", null);
-    reviewForm("FORM2", "VERIFIED", null);
 
     // Send the document back for revision — the note is required and surfaces on the record.
     MvcResult sentBack = reviewDoc(docId, "REVISION_REQUESTED", "Please re-upload a clearer PAN scan");
@@ -291,6 +291,19 @@ class ReviewApiTest {
         .isEqualTo(EmployeeStatus.SUBMITTED);
     assertThat(json.readTree(reVerified.getResponse().getContentAsString()).get("reviewComplete").asBoolean())
         .isTrue();
+  }
+
+  @Test
+  void form2IsNotAVerifiableReviewItem() throws Exception {
+    // Form 2 is HR/SA-authored at onboard (§3.2) — attempting to verify/send it back is rejected (400).
+    mvc.perform(patch("/employees/" + emp.getId() + "/forms/FORM2")
+            .header("Authorization", "Bearer " + hr1Token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("decision", "VERIFIED"))))
+        .andExpect(status().isBadRequest());
+    // Its status is untouched by the attempt.
+    assertThat(form2s.findByEmployeeId(emp.getId()).orElseThrow().getStatus())
+        .isEqualTo(SectionStatus.SUBMITTED);
   }
 
   @Test

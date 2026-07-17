@@ -2,6 +2,7 @@ package com.ihrms.employees;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,6 +16,7 @@ import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.AuditLogRepository;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.UserRepository;
+import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,9 +34,10 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * HR onboarding (ARCHITECTURE.md §3.2): the record is created with full name / email / designation /
- * date of joining, status INVITED and <strong>no employee ID</strong> (allocated on approval, §5); a
- * selection email is logged; email is globally unique; HR scoping + audit.
+ * HR onboarding (ARCHITECTURE.md §3.2): HR FILLS FORM 2, which creates the record (status INVITED, no
+ * employee ID — allocated on approval, §5) and sends the selection email to the personal email; the
+ * personal email is globally unique; HR scoping + audit. Also covers the Form-2 edit while INVITED, the
+ * IN_PROGRESS lock (409), and the re-invite on a personal-email change.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -177,6 +180,57 @@ class EmployeesApiTest {
   }
 
   @Test
+  void editForm2WhileInvitedSavesAndReinvitesOnPersonalEmailChange(CapturedOutput output)
+      throws Exception {
+    // Distinct (non-overlapping) local parts so the old address is NOT a substring of the new.
+    String id = onboard("Alex Doe", "oldalex@personal.test");
+
+    // A personal-email change re-invites the NEW address; other fields (fatherName) just save.
+    Map<String, Object> body = form2Edit("Alex Doe", "freshalex@personal.test");
+    body.put("fatherName", "Papa Doe");
+    JsonNode view =
+        json.readTree(
+            mvc.perform(patchForm2(id, body)).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsString());
+    assertThat(view.get("personalEmail").asText()).isEqualTo("freshalex@personal.test");
+    assertThat(view.get("fatherName").asText()).isEqualTo("Papa Doe");
+    assertThat(view.get("employeeId").isNull()).isTrue(); // still greyed/blank until approval
+
+    // The invite re-fired to the NEW address; the Employee's login identity moved with it.
+    assertThat(output.getOut()).contains("[DEV SELECTION]").contains("freshalex@personal.test");
+    assertThat(auditLogs.findByAction("EMPLOYEE_REINVITED")).hasSize(1);
+    assertThat(queue(get("/employees").param("search", "freshalex@")).get("content")).hasSize(1);
+    assertThat(queue(get("/employees").param("search", "oldalex@")).get("content")).isEmpty();
+  }
+
+  @Test
+  void editForm2NonEmailChangeDoesNotReinvite() throws Exception {
+    String id = onboard("Alex Doe", "alex@personal.test");
+    Map<String, Object> body = form2Edit("Alex Doe", "alex@personal.test"); // same email
+    body.put("fatherName", "Papa Doe");
+    mvc.perform(patchForm2(id, body)).andExpect(status().isOk());
+    assertThat(auditLogs.findByAction("EMPLOYEE_REINVITED")).isEmpty(); // no email change → no re-invite
+    assertThat(auditLogs.findByAction("FORM2_UPDATED")).hasSize(1);
+  }
+
+  @Test
+  void editForm2IsLockedOnceTheEmployeeStartsOnboarding() throws Exception {
+    String id = onboard("Alex Doe", "alex@personal.test");
+    // Simulate the employee starting their forms (INVITED -> IN_PROGRESS): Form 2 becomes read-only.
+    jdbc.update("UPDATE \"employees\" SET \"status\" = 'IN_PROGRESS' WHERE \"id\" = ?", id);
+    mvc.perform(patchForm2(id, form2Edit("Alex Doe", "alex@personal.test")))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void editForm2EnforcesPersonalEmailUniqueness() throws Exception {
+    String alex = onboard("Alex Doe", "alex@personal.test");
+    onboard("Bob Roe", "bob@personal.test");
+    mvc.perform(patchForm2(alex, form2Edit("Alex Doe", "bob@personal.test")))
+        .andExpect(status().isConflict()); // bob's email is taken
+  }
+
+  @Test
   void nonHrNonAdminIsForbiddenFromTheEmployeeList() throws Exception {
     // The list is HR (own onboarded) + COMPANY_ADMIN (company-wide, §6). A MANAGER — like any other
     // role — is denied. (COMPANY_ADMIN's company-wide access is covered in EmployeeCredentialsTest.)
@@ -191,16 +245,38 @@ class EmployeesApiTest {
   // --- fixtures -------------------------------------------------------------
 
   private MockHttpServletRequestBuilder asHr(String fullName, String email) throws Exception {
+    // Onboard = HR fills Form 2 (§3.2); the personal email is the login identity.
     return post("/employees")
         .header("Authorization", "Bearer " + hrToken)
         .contentType(MediaType.APPLICATION_JSON)
-        .content(
-            json.writeValueAsString(
-                Map.of(
-                    "fullName", fullName,
-                    "email", email,
-                    "designation", "Software Engineer",
-                    "dateOfJoining", "2026-07-01")));
+        .content(json.writeValueAsString(Map.of("form2", form2Body(fullName, email))));
+  }
+
+  private static Map<String, Object> form2Body(String fullName, String personalEmail) {
+    return Map.of(
+        "fullName", fullName,
+        "personalEmail", personalEmail,
+        "designation", "Software Engineer",
+        "dateOfJoining", "2026-07-01");
+  }
+
+  /** Onboard via HR and return the new employee's internal id. */
+  private String onboard(String fullName, String email) throws Exception {
+    MvcResult r = mvc.perform(asHr(fullName, email)).andExpect(status().isCreated()).andReturn();
+    return json.readTree(r.getResponse().getContentAsString()).get("employee").get("id").asText();
+  }
+
+  /** A mutable Form-2 edit body (so tests can add fields like fatherName). */
+  private static Map<String, Object> form2Edit(String fullName, String personalEmail) {
+    return new HashMap<>(form2Body(fullName, personalEmail));
+  }
+
+  private MockHttpServletRequestBuilder patchForm2(String employeeId, Map<String, Object> body)
+      throws Exception {
+    return patch("/employees/" + employeeId + "/form2")
+        .header("Authorization", "Bearer " + hrToken)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsString(body));
   }
 
   private String company(String code) {

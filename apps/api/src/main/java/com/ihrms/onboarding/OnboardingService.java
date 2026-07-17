@@ -6,6 +6,7 @@ import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.DocumentType;
 import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.domain.enums.GeneratedDocumentKind;
 import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
@@ -32,8 +33,6 @@ import com.ihrms.onboarding.dto.OnboardingDtos.DocumentUploadRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentView;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1Request;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1View;
-import com.ihrms.onboarding.dto.OnboardingDtos.Form2Request;
-import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form3EntryView;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form3Request;
 import com.ihrms.onboarding.dto.OnboardingDtos.GeneratedDocumentView;
@@ -160,29 +159,9 @@ public class OnboardingService {
     return FormMappers.form1View(f1, f2, FormMappers.Mode.PLAIN);
   }
 
-  // --- Form 2 ---------------------------------------------------------------
-
-  @Transactional
-  public Form2View saveForm2(IhrmsPrincipal.Employee emp, Form2Request body, String ip) {
-    Employee employee = loadEmployee(emp.employeeId());
-
-    Form2Info f2 = form2s.findByEmployeeId(emp.employeeId()).orElse(null);
-    assertFormEditable(employee, f2 == null ? null : f2.getStatus());
-    if (f2 == null) {
-      f2 = new Form2Info();
-      f2.setEmployeeId(emp.employeeId());
-    }
-    // Carry over the keys relocated to Form 1 (§3.2) — a Form 2 re-save must not wipe them; the
-    // PAN/account encrypted columns are simply no longer touched here (Form 1 writes them).
-    f2.setData(FormMappers.toForm2Data(body, f2.getData()));
-    clearRevision(f2);
-    f2.setStatus(SectionStatus.DRAFT);
-    form2s.save(f2);
-    markInProgress(employee);
-
-    audit(emp, "FORM2_SAVED", "Form2Info", f2.getId(), null, ip);
-    return FormMappers.form2View(f2, employee.getEmployeeCode());
-  }
+  // Form 2 is HR/SA-authored at onboard (§3.2) — the employee never fills or sees it, so there is no
+  // employee-facing Form 2 endpoint here. HR/SA edits it via EmployeesService (INVITED-only, re-invite
+  // on a personal-email change). Form 1's write-through still shares the one form2_info row (below).
 
   // --- Form 3 ---------------------------------------------------------------
 
@@ -386,11 +365,10 @@ public class OnboardingService {
           HttpStatus.BAD_REQUEST, "Before submitting: " + String.join("; ", missing));
     }
 
-    // Lock every form/item into SUBMITTED, flip the employee, then generate the PDFs.
+    // Lock the employee-filled forms into SUBMITTED, flip the employee, then generate the PDFs. Form 2
+    // is HR/SA-authored (§3.2) — its status is not part of the employee's submission and is left alone.
     f1.setStatus(SectionStatus.SUBMITTED);
     form1s.save(f1);
-    f2.setStatus(SectionStatus.SUBMITTED);
-    form2s.save(f2);
     List<Form3PrevEmployment> f3 = form3s.findByEmployeeIdOrderByOrderIndexAsc(emp.employeeId());
     f3.forEach(r -> r.setStatus(SectionStatus.SUBMITTED));
     form3s.saveAll(f3);
@@ -424,9 +402,9 @@ public class OnboardingService {
     List<Document> docs = documents.findByEmployeeId(emp.employeeId());
     Signature signature = signatures.findByEmployeeId(emp.employeeId()).orElse(null);
 
+    // Form 2 is HR/SA-authored (§3.2) and never sent back for revision, so it never blocks re-submit.
     boolean stillFlagged =
         (f1 != null && f1.getStatus() == SectionStatus.REVISION_REQUESTED)
-            || (f2 != null && f2.getStatus() == SectionStatus.REVISION_REQUESTED)
             || f3.stream().anyMatch(r -> r.getStatus() == SectionStatus.REVISION_REQUESTED)
             || docs.stream().anyMatch(d -> d.getStatus() == DocumentStatus.REVISION_REQUESTED);
     if (stillFlagged) {
@@ -444,10 +422,6 @@ public class OnboardingService {
     if (f1 != null && f1.getStatus() == SectionStatus.DRAFT) {
       f1.setStatus(SectionStatus.SUBMITTED);
       form1s.save(f1);
-    }
-    if (f2 != null && f2.getStatus() == SectionStatus.DRAFT) {
-      f2.setStatus(SectionStatus.SUBMITTED);
-      form2s.save(f2);
     }
     f3.stream()
         .filter(r -> r.getStatus() == SectionStatus.DRAFT)
@@ -499,6 +473,10 @@ public class OnboardingService {
         generated
             .findByIdAndEmployeeId(generatedId, emp.employeeId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
+    // The Form 2 PDF is HR/SA-only (§3.2) — the employee may never fetch it.
+    if (doc.getKind() == GeneratedDocumentKind.FORM2) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This document is not available to you");
+    }
     String url = storage.presignedGetUrl(doc.getStorageKey(), VIEW_TTL_SECONDS);
     audit(emp, "GENERATED_DOCUMENT_VIEWED", "GeneratedDocument", generatedId,
         Map.of("kind", doc.getKind().name()), ip);
@@ -508,14 +486,14 @@ public class OnboardingService {
   // --- internals ------------------------------------------------------------
 
   private OnboardingDashboard dashboardOf(Employee employee) {
-    // Form 1's view surfaces the relocated fields from their form2_info storage (§3.2).
+    // Form 1's view surfaces the relocated fields from their form2_info storage (§3.2); Form 2 itself is
+    // HR/SA-authored and NEVER exposed to the employee.
     Form2Info f2 = form2s.findByEmployeeId(employee.getId()).orElse(null);
     Form1View form1 =
         form1s
             .findByEmployeeId(employee.getId())
             .map(f -> FormMappers.form1View(f, f2, FormMappers.Mode.PLAIN))
             .orElse(null);
-    Form2View form2 = f2 == null ? null : FormMappers.form2View(f2, employee.getEmployeeCode());
     List<Form3EntryView> form3 = form3Views(employee.getId(), FormMappers.Mode.PLAIN);
     List<DocumentView> docs =
         documents.findByEmployeeIdOrderByUploadedAtDesc(employee.getId()).stream()
@@ -526,8 +504,10 @@ public class OnboardingService {
             .findByEmployeeId(employee.getId())
             .map(s -> new SignatureView(s.getType(), s.getSignedAt().toString()))
             .orElse(null);
+    // The employee's generated-docs list omits the HR-only Form 2 PDF (§3.2).
     List<GeneratedDocumentView> gen =
         generated.findByEmployeeIdOrderByKindAsc(employee.getId()).stream()
+            .filter(g -> g.getKind() != GeneratedDocumentKind.FORM2)
             .map(OnboardingService::generatedView)
             .toList();
     return new OnboardingDashboard(
@@ -537,7 +517,6 @@ public class OnboardingService {
         employee.getDesignation(),
         employee.getStatus(),
         form1,
-        form2,
         form3,
         docs,
         signature,

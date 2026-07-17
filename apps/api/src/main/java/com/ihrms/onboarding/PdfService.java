@@ -119,10 +119,11 @@ public class PdfService {
     String signedDate = signedDate(sig, v1 == null ? null : v1.updatedAt());
 
     byte[] pdf1 = html.render("form1", form1Model(companyName, v1, signatureDataUri, signedDate));
+    // Form 2 is generated as a STANDALONE HR/SA-only PDF and is NOT merged into the complete application.
     byte[] pdf2 = html.render("form2", form2Model(companyName, v2, employeeCode, signatureDataUri, signedDate));
     byte[] pdf3 = html.render("form3", form3Model(companyName, v3));
     byte[] pdf4 = PdfRenderer.form4Manifest(companyName, employeeCode, docs);
-    byte[] merged = html.merge(List.of(pdf1, pdf2, pdf3, pdf4));
+    byte[] merged = html.merge(List.of(pdf1, pdf3, pdf4)); // merged = Forms 1, 3, 4 only (§3.2)
 
     // Replace the previous set (unique per employee+kind); best-effort delete of old bytes.
     for (GeneratedDocument old : generated.findByEmployeeId(employee.getId())) {

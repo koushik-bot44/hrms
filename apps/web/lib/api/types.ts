@@ -100,22 +100,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/me/onboarding/form2": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["saveForm2"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/me/onboarding/form1": {
         parameters: {
             query?: never;
@@ -900,6 +884,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["reviewForm"];
+        trace?: never;
+    };
+    "/employees/{id}/form2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["editForm2"];
         trace?: never;
     };
     "/employees/{id}/documents/{documentId}": {
@@ -1722,36 +1722,6 @@ export interface components {
             status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";
             revisionNote?: string;
         };
-        Form2Request: {
-            fullName?: string;
-            fatherName?: string;
-            dateOfBirth?: string;
-            dateOfJoining?: string;
-            bloodGroup?: string;
-            mobile?: string;
-            officialEmail?: string;
-            personalEmail?: string;
-            designation?: string;
-            documentSubmitted?: string;
-        };
-        Form2View: {
-            fullName?: string;
-            fatherName?: string;
-            employeeId?: string;
-            dateOfBirth?: string;
-            dateOfJoining?: string;
-            bloodGroup?: string;
-            mobile?: string;
-            officialEmail?: string;
-            personalEmail?: string;
-            designation?: string;
-            sparkId?: string;
-            documentSubmitted?: string;
-            /** @enum {string} */
-            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";
-            revisionNote?: string;
-            updatedAt?: string;
-        };
         CharacterReference: {
             name?: string;
             address?: string;
@@ -1894,7 +1864,6 @@ export interface components {
             /** @enum {string} */
             status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             form1?: components["schemas"]["Form1View"];
-            form2?: components["schemas"]["Form2View"];
             form3?: components["schemas"]["Form3EntryView"][];
             documents?: components["schemas"]["DocumentView"][];
             signature?: components["schemas"]["SignatureView"];
@@ -2036,12 +2005,20 @@ export interface components {
             decidedAt?: string;
             createdAt?: string;
         };
-        OnboardEmployeeRequest: {
+        Form2Request: {
             fullName: string;
-            email: string;
+            fatherName?: string;
+            dateOfBirth?: string;
+            dateOfJoining?: string;
+            bloodGroup?: string;
+            mobile?: string;
+            officialEmail?: string;
+            personalEmail: string;
             designation: string;
-            /** Format: date */
-            dateOfJoining: string;
+            documentSubmitted?: string;
+        };
+        OnboardEmployeeRequest: {
+            form2: components["schemas"]["Form2Request"];
         };
         EmployeeSummaryView: {
             id?: string;
@@ -2067,6 +2044,24 @@ export interface components {
             status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
             approvalRequestId?: string;
             managerName?: string;
+        };
+        Form2View: {
+            fullName?: string;
+            fatherName?: string;
+            employeeId?: string;
+            dateOfBirth?: string;
+            dateOfJoining?: string;
+            bloodGroup?: string;
+            mobile?: string;
+            officialEmail?: string;
+            personalEmail?: string;
+            designation?: string;
+            sparkId?: string;
+            documentSubmitted?: string;
+            /** @enum {string} */
+            status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";
+            revisionNote?: string;
+            updatedAt?: string;
         };
         RevealedSensitive: {
             form1?: components["schemas"]["Form1View"];
@@ -2123,11 +2118,7 @@ export interface components {
         };
         SuperAdminOnboardRequest: {
             teamId: string;
-            fullName: string;
-            email: string;
-            designation: string;
-            /** Format: date */
-            dateOfJoining: string;
+            form2: components["schemas"]["Form2Request"];
         };
         OtpVerifyRequest: {
             email: string;
@@ -2897,30 +2888,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["Form3EntryView"][];
-                };
-            };
-        };
-    };
-    saveForm2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Form2Request"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["Form2View"];
                 };
             };
         };
@@ -4251,6 +4218,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
+    editForm2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Form2Request"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Form2View"];
                 };
             };
         };

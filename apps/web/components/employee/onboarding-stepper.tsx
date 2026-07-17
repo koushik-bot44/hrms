@@ -11,19 +11,16 @@ import {
   EMPLOYMENT_SLOTS,
   DECLARATION_TEXT,
   Form1Schema,
-  Form2Schema,
   Form3Schema,
   IDENTITY_SLOTS,
   DOCUMENT_TYPE_LABELS,
   evaluateOnboarding,
   type Form1Values,
   type Form1View,
-  type Form2Values,
-  type Form2View,
   type Form3Values,
   type OnboardingDashboard,
 } from '@/lib/contract';
-import { saveForm1, saveForm2, saveForm3, saveSignature, submitOnboarding } from '@/lib/api/onboarding';
+import { saveForm1, saveForm3, saveSignature, submitOnboarding } from '@/lib/api/onboarding';
 import { useApiMutation } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,7 +29,8 @@ import { cn } from '@/lib/utils';
 import { DocumentUploader } from '@/components/employee/document-uploader';
 import { SignaturePad } from '@/components/employee/signature-pad';
 
-const STEPS = ['Personal', 'Employee Info', 'Prev. Employment', 'Documents', 'Review', 'Sign & Submit'];
+// Form 2 (Employee Info) is HR/SA-authored at onboard (§3.2) — it is NOT a step the employee fills.
+const STEPS = ['Personal', 'Prev. Employment', 'Documents', 'Review', 'Sign & Submit'];
 const s = (v?: string | null) => v ?? '';
 
 export function OnboardingStepper({
@@ -55,21 +53,11 @@ export function OnboardingStepper({
         <Form1Step form1={dashboard.form1} disabled={disabled} onSaved={refetch} onNext={goNext} />
       )}
       {step === 1 && (
-        <Form2Step
-          form2={dashboard.form2}
-          employeeCode={dashboard.employeeCode}
-          disabled={disabled}
-          onSaved={refetch}
-          onNext={goNext}
-          onBack={goBack}
-        />
-      )}
-      {step === 2 && (
         <Form3Step form3={dashboard.form3} disabled={disabled} onSaved={refetch} onNext={goNext} onBack={goBack} />
       )}
-      {step === 3 && <Form4Step dashboard={dashboard} disabled={disabled} onNext={goNext} onBack={goBack} />}
-      {step === 4 && <ReviewStep dashboard={dashboard} onNext={goNext} onBack={goBack} />}
-      {step === 5 && (
+      {step === 2 && <Form4Step dashboard={dashboard} disabled={disabled} onNext={goNext} onBack={goBack} />}
+      {step === 3 && <ReviewStep dashboard={dashboard} onNext={goNext} onBack={goBack} />}
+      {step === 4 && (
         <SignStep dashboard={dashboard} disabled={disabled} onSaved={refetch} onBack={goBack} />
       )}
     </div>
@@ -87,7 +75,6 @@ function Stepper({
 }) {
   const done = [
     Boolean(dashboard.form1?.name),
-    Boolean(dashboard.form2?.fullName),
     dashboard.form3.length > 0,
     dashboard.documents.length > 0,
     false,
@@ -410,87 +397,6 @@ function ArraySection({
 }
 
 // ---------------------------------------------------------------------------
-// Form 2 — Employee Info
-// ---------------------------------------------------------------------------
-
-function form2Defaults(f: Form2View | null): Form2Values {
-  return {
-    fullName: s(f?.fullName),
-    fatherName: s(f?.fatherName),
-    dateOfBirth: s(f?.dateOfBirth),
-    dateOfJoining: s(f?.dateOfJoining),
-    bloodGroup: s(f?.bloodGroup),
-    mobile: s(f?.mobile),
-    officialEmail: s(f?.officialEmail),
-    personalEmail: s(f?.personalEmail),
-    designation: s(f?.designation),
-    documentSubmitted: s(f?.documentSubmitted),
-  };
-}
-
-export function Form2Step({
-  form2,
-  employeeCode,
-  disabled,
-  onSaved,
-  onNext,
-  onBack,
-  submitLabel,
-}: {
-  form2: Form2View | null;
-  employeeCode: string | null;
-  disabled: boolean;
-  onSaved: () => void;
-  onNext?: () => void;
-  onBack?: () => void;
-  submitLabel?: string;
-}) {
-  const { register, handleSubmit } = useForm<Form2Values>({
-    resolver: zodResolver(Form2Schema),
-    defaultValues: form2Defaults(form2),
-  });
-  const save = useApiMutation((v: Form2Values) => saveForm2(v), {
-    successMessage: 'Form 2 saved',
-    onSuccess: () => {
-      onSaved();
-      onNext?.();
-    },
-  });
-
-  return (
-    <form onSubmit={handleSubmit((v) => save.mutate(v))} noValidate>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Form 2 — Employee Info</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Full Name"><Input {...register('fullName')} disabled={disabled} /></Field>
-            <Field label="Father's Name"><Input {...register('fatherName')} disabled={disabled} /></Field>
-            <Field label="Employee ID (assigned on approval)">
-              <Input value={employeeCode ?? ''} readOnly disabled placeholder="—" />
-            </Field>
-            <Field label="Spark ID (set by HR)">
-              <Input value={form2?.sparkId ?? ''} readOnly disabled placeholder="—" />
-            </Field>
-            <Field label="Date of Birth"><Input type="date" {...register('dateOfBirth')} disabled={disabled} /></Field>
-            <Field label="Date of Joining"><Input type="date" {...register('dateOfJoining')} disabled={disabled} /></Field>
-            <Field label="Blood Group"><Input {...register('bloodGroup')} disabled={disabled} /></Field>
-            <Field label="Mobile"><Input {...register('mobile')} disabled={disabled} /></Field>
-            <Field label="Official Email"><Input type="email" {...register('officialEmail')} disabled={disabled} /></Field>
-            <Field label="Personal Email"><Input type="email" {...register('personalEmail')} disabled={disabled} /></Field>
-            <Field label="Designation"><Input {...register('designation')} disabled={disabled} /></Field>
-            <Field label="Documents Submitted"><Input {...register('documentSubmitted')} disabled={disabled} /></Field>
-            {/* alternate number, vehicle no, PAN, account number + addresses moved to Form 1 (§3.2). */}
-          </div>
-          <StepActions onBack={onBack} saving={save.isPending} nextLabel={submitLabel} />
-        </CardContent>
-      </Card>
-    </form>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Form 3 — Previous Employment (repeatable)
 // ---------------------------------------------------------------------------
 
@@ -674,12 +580,7 @@ function ReviewStep({
   onNext: () => void;
   onBack: () => void;
 }) {
-  const { missing } = evaluateOnboarding(
-    dashboard.form1,
-    dashboard.form2,
-    dashboard.documents,
-    dashboard.signature,
-  );
+  const { missing } = evaluateOnboarding(dashboard.form1, dashboard.documents, dashboard.signature);
   return (
     <Card>
       <CardHeader>
@@ -687,7 +588,6 @@ function ReviewStep({
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <SummaryRow label="Form 1 — Personal" value={dashboard.form1?.name ?? 'Not completed'} ok={!!dashboard.form1?.name} />
-        <SummaryRow label="Form 2 — Employee Info" value={dashboard.form2?.fullName ?? 'Not completed'} ok={!!dashboard.form2?.fullName} />
         <SummaryRow label="Form 3 — Previous Employment" value={`${dashboard.form3.length} employer(s)`} ok />
         <SummaryRow label="Form 4 — Documents" value={`${dashboard.documents.length} uploaded`} ok={dashboard.documents.length > 0} />
         <SummaryRow label="Signature" value={dashboard.signature ? 'Captured' : 'Not signed'} ok={!!dashboard.signature} />
@@ -733,7 +633,6 @@ function SignStep({
   const [pending, setPending] = React.useState<{ dataUrl: string; type: 'DRAWN' | 'TYPED' } | null>(null);
   const { complete, missing } = evaluateOnboarding(
     dashboard.form1,
-    dashboard.form2,
     dashboard.documents,
     dashboard.signature,
   );

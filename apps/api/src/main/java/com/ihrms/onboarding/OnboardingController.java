@@ -6,8 +6,6 @@ import com.ihrms.onboarding.dto.OnboardingDtos.DocumentUploadRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentView;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1Request;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1View;
-import com.ihrms.onboarding.dto.OnboardingDtos.Form2Request;
-import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form3EntryView;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form3Request;
 import com.ihrms.onboarding.dto.OnboardingDtos.OnboardingDashboard;
@@ -56,13 +54,7 @@ public class OnboardingController {
     return onboarding.saveForm1(emp, body, request.getRemoteAddr());
   }
 
-  @PutMapping("/form2")
-  public Form2View saveForm2(
-      @Valid @RequestBody Form2Request body,
-      @AuthenticationPrincipal IhrmsPrincipal.Employee emp,
-      HttpServletRequest request) {
-    return onboarding.saveForm2(emp, body, request.getRemoteAddr());
-  }
+  // Form 2 is HR/SA-authored at onboard (§3.2) — there is no employee endpoint to fill it.
 
   @PutMapping("/form3")
   public List<Form3EntryView> saveForm3(

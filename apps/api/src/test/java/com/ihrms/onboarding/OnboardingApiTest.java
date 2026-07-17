@@ -17,18 +17,21 @@ import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.TokenService;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.domain.enums.GeneratedDocumentKind;
 import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Form1Personal;
+import com.ihrms.domain.model.Form2Info;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.AuditLogRepository;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.Form1PersonalRepository;
+import com.ihrms.domain.repository.GeneratedDocumentRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.storage.StorageService;
@@ -49,10 +52,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * Employee onboarding — the four-form stepper (§3.2) — with storage MOCKED so it runs in
- * {@code ./mvnw package} with only a DB: per-form save + status flips, the document
- * request/confirm/view orchestration (sha256 from the stubbed bytes), own-record scope, the per-slot
- * cap, the signature capture, and the submission gate → the five generated PDFs → record lock.
+ * Employee onboarding — the employee stepper for Forms 1/3/4 (§3.2; Form 2 is HR-authored at onboard,
+ * seeded here) — with storage MOCKED so it runs in {@code ./mvnw package} with only a DB: per-form save
+ * + status flips, the document request/confirm/view orchestration (sha256 from the stubbed bytes),
+ * own-record scope, the per-slot cap, the signature capture, and the submission gate → the generated
+ * PDFs → record lock. Also asserts the employee never sees Form 2 (no dashboard view, no PDF).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -71,6 +75,7 @@ class OnboardingApiTest {
   @Autowired EmployeeRepository employees;
   @Autowired Form1PersonalRepository form1s;
   @Autowired com.ihrms.domain.repository.Form2InfoRepository form2s;
+  @Autowired GeneratedDocumentRepository generated;
   @Autowired DocumentRepository documents;
   @Autowired NotificationRepository notifications;
   @Autowired AuditLogRepository auditLogs;
@@ -125,16 +130,13 @@ class OnboardingApiTest {
     var f2Row = form2s.findByEmployeeId(empId).orElseThrow();
     assertThat(f2Row.getPanNumber()).isEqualTo("ABCDE1234F"); // decrypted by the converter
     assertThat(f2Row.getData().get("alternateNumber")).isEqualTo("5559999");
+    // Form 1's write-through coexists with the HR-authored Form 2 on the one shared row: the employment
+    // data (fullName) is preserved alongside the relocated PAN/alt values (no clobber, §3.2).
+    assertThat(f2Row.getData().get("fullName")).isEqualTo("Alex Doe");
     // The raw column holds ciphertext, not the plaintext PAN (encryption at rest preserved).
     String rawPan = jdbc.queryForObject(
         "SELECT \"panNumber\" FROM \"form2_info\" WHERE \"employeeId\" = ?", String.class, empId);
     assertThat(rawPan).isNotBlank().isNotEqualTo("ABCDE1234F");
-
-    // A Form 2 re-save must NOT wipe the relocated values (the carry-over guarantee).
-    saveForm2();
-    var f2After = form2s.findByEmployeeId(empId).orElseThrow();
-    assertThat(f2After.getPanNumber()).isEqualTo("ABCDE1234F");
-    assertThat(f2After.getData().get("alternateNumber")).isEqualTo("5559999");
 
     assertThat(dashboard().get("status").asText()).isEqualTo("IN_PROGRESS");
     assertThat(auditLogs.findByAction("FORM1_SAVED")).hasSize(1);
@@ -200,9 +202,8 @@ class OnboardingApiTest {
     mvc.perform(post("/me/onboarding/submit").header("Authorization", "Bearer " + empToken))
         .andExpect(status().isBadRequest());
 
-    // Fill Form 1 + Form 2, upload+confirm Aadhaar & PAN, capture a signature.
+    // Fill Form 1 (Form 2 is HR-authored, already seeded), upload+confirm Aadhaar & PAN, capture a sig.
     saveForm1();
-    saveForm2();
     confirm(upload("AADHAAR"));
     confirm(upload("PAN"));
     signature();
@@ -213,9 +214,24 @@ class OnboardingApiTest {
             .andReturn();
     JsonNode dash = json.readTree(submit.getResponse().getContentAsString());
     assertThat(dash.get("status").asText()).isEqualTo("SUBMITTED");
-    // The PDFs (one per form + a merged complete application) are generated just after the submit
-    // commits, so the dashboard reflects them on the next read.
-    assertThat(dashboard().get("generatedDocuments")).hasSize(5);
+    // All FIVE PDFs are generated post-commit (FORM1/FORM2/FORM3/FORM4_MANIFEST/MERGED)...
+    assertThat(generated.findByEmployeeId(empId)).hasSize(5);
+    // ...but the employee's dashboard OMITS the HR-only Form 2 PDF -> only 4 are visible (§3.2).
+    JsonNode gen = dashboard().get("generatedDocuments");
+    assertThat(gen).hasSize(4);
+    assertThat(gen).allSatisfy(g -> assertThat(g.get("kind").asText()).isNotEqualTo("FORM2"));
+
+    // Even directly, the employee may not fetch the Form 2 PDF -> 403.
+    String form2GenId =
+        generated.findByEmployeeId(empId).stream()
+            .filter(g -> g.getKind() == GeneratedDocumentKind.FORM2)
+            .findFirst()
+            .orElseThrow()
+            .getId();
+    mvc.perform(
+            get("/me/onboarding/generated/" + form2GenId + "/url")
+                .header("Authorization", "Bearer " + empToken))
+        .andExpect(status().isForbidden());
 
     // Locked: further edits and re-submit are rejected.
     mvc.perform(
@@ -301,9 +317,8 @@ class OnboardingApiTest {
 
   @Test
   void revisionLoopUnlocksOnlyFlaggedItemsThenResubmitsForReReview() throws Exception {
-    // Reach SUBMITTED with Form 1 + Form 2 + Aadhaar + PAN + signature.
+    // Reach SUBMITTED with Form 1 + Aadhaar + PAN + signature (Form 2 is HR-authored, seeded).
     saveForm1();
-    saveForm2();
     String aadhaarId = upload("AADHAAR");
     confirm(aadhaarId);
     String panId = upload("PAN");
@@ -330,13 +345,6 @@ class OnboardingApiTest {
     assertThat(dash.get("status").asText()).isEqualTo("REVISION_REQUESTED");
     assertThat(dash.get("form1").get("revisionNote").asText())
         .isEqualTo("Your city looks wrong - please correct it");
-
-    // A NON-flagged form (Form 2, still SUBMITTED) stays locked.
-    mvc.perform(put("/me/onboarding/form2")
-            .header("Authorization", "Bearer " + empToken)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(json.writeValueAsString(Map.of("fullName", "Alex Doe", "designation", "Engineer"))))
-        .andExpect(status().isConflict());
 
     // The flagged form IS editable — saving it clears the note and drops it to DRAFT.
     saveForm1();
@@ -409,17 +417,6 @@ class OnboardingApiTest {
         .andExpect(status().isOk());
   }
 
-  private void saveForm2() throws Exception {
-    mvc.perform(
-            put("/me/onboarding/form2")
-                .header("Authorization", "Bearer " + empToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    json.writeValueAsString(
-                        Map.of("fullName", "Alex Doe", "designation", "Engineer"))))
-        .andExpect(status().isOk());
-  }
-
   private void signature() throws Exception {
     mvc.perform(
             put("/me/onboarding/signature")
@@ -489,7 +486,15 @@ class OnboardingApiTest {
     e.setEmail(email);
     e.setCompanyId(companyId);
     e.setOnboardingHrId(hrId);
-    return employees.save(e);
+    e = employees.save(e);
+    // Form 2 is HR/SA-authored at onboard (§3.2) — seed it so the record mirrors a real onboard.
+    Form2Info f2 = new Form2Info();
+    f2.setEmployeeId(e.getId());
+    f2.setData(
+        new java.util.HashMap<>(
+            Map.of("fullName", "Alex Doe", "personalEmail", email, "designation", "Engineer")));
+    form2s.save(f2);
+    return e;
   }
 
   private String tokenFor(Employee e) {

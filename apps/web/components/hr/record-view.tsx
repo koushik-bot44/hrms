@@ -138,14 +138,15 @@ export function RecordView({
         {f1 ? <Form1Body form1={f1} /> : <Empty />}
       </FormCard>
 
+      {/* Form 2 is HR/SA-authored at onboard (§3.2) — shown READ-ONLY here (no verify / send-back). */}
       <FormCard
-        title="Form 2 — Employee Info"
-        status={record.form2?.status}
-        note={record.form2?.revisionNote}
-        canAct={canAct}
+        title="Form 2 — Employee Info (filled by HR)"
+        status={undefined}
+        note={null}
+        canAct={false}
         busy={busy}
-        onVerify={() => onVerify?.('form', 'FORM2')}
-        onSendBack={() => onSendBack?.('form', 'FORM2', 'Form 2')}
+        onVerify={() => {}}
+        onSendBack={() => {}}
       >
         {f2 ? <Form2Body form2={f2} /> : <Empty />}
       </FormCard>

@@ -3,6 +3,7 @@ package com.ihrms.employees;
 import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
 import com.ihrms.auth.AccountEmails;
+import com.ihrms.auth.AuthorizationService;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
 import com.ihrms.config.AppProperties;
@@ -10,19 +11,25 @@ import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.Form2Info;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.repository.Form2InfoRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.employees.dto.EmployeeDtos.EmployeePage;
 import com.ihrms.employees.dto.EmployeeDtos.EmployeeSummaryView;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeRequest;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeResult;
 import com.ihrms.employees.dto.EmployeeDtos.SuperAdminOnboardRequest;
-import java.time.LocalDate;
+import com.ihrms.onboarding.FormMappers;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form2Request;
+import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
 import jakarta.persistence.criteria.Predicate;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,10 +42,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Employee onboarding (ARCHITECTURE.md §3.2). HR-only (URL rule + @PreAuthorize); scoped to the HR's
- * company. HR provides full name, email, designation and date of joining; the record is created with
- * {@code status = INVITED} and <strong>no employee ID</strong> — the unique ID is allocated only on
- * Manager approval (§5). A selection email + employee-login link is sent and the action is audited.
+ * Employee onboarding (ARCHITECTURE.md §3.2). HR (own company) or SUPER_ADMIN (cross-company) FILL
+ * FORM 2 — Employee Info; submitting it creates the record ({@code status = INVITED}, <strong>no
+ * employee ID</strong> — allocated only on Manager approval, §5) and sends the selection email + login
+ * link to the PERSONAL email (the login identity). Form 2 stays editable while INVITED (locked once the
+ * employee starts, 409); a personal-email change re-invites. Everything is audited.
  */
 @Service
 public class EmployeesService {
@@ -46,47 +54,48 @@ public class EmployeesService {
   private final EmployeeRepository employees;
   private final CompanyRepository companies;
   private final TeamRepository teams;
+  private final Form2InfoRepository form2s;
   private final AuditService audit;
   private final MailService mail;
   private final AccountEmails accountEmails;
+  private final AuthorizationService authz;
   private final AppProperties props;
 
   public EmployeesService(
       EmployeeRepository employees,
       CompanyRepository companies,
       TeamRepository teams,
+      Form2InfoRepository form2s,
       AuditService audit,
       MailService mail,
       AccountEmails accountEmails,
+      AuthorizationService authz,
       AppProperties props) {
     this.employees = employees;
     this.companies = companies;
     this.teams = teams;
+    this.form2s = form2s;
     this.audit = audit;
     this.mail = mail;
     this.accountEmails = accountEmails;
+    this.authz = authz;
     this.props = props;
   }
 
-  /** HR onboards into their own company, attaching the employee to themselves as the onboarding HR. */
+  /**
+   * HR onboards into their own company by FILLING FORM 2 (§3.2) — the employee attaches to the HR as
+   * the onboarding HR. Submitting Form 2 creates the INVITED record and sends the invite in one action.
+   */
   public OnboardEmployeeResult onboard(
       OnboardEmployeeRequest input, IhrmsPrincipal.User actor, String ip) {
-    return createAndInvite(
-        companyOf(actor),
-        actor.userId(),
-        input.fullName(),
-        input.email(),
-        input.designation(),
-        input.dateOfJoining(),
-        actor,
-        ip);
+    return createAndInvite(companyOf(actor), actor.userId(), input.form2(), actor, ip);
   }
 
   /**
-   * SUPER_ADMIN onboards into a chosen company by selecting a team (§2): the employee attaches to that
-   * team's HR exactly as if the HR had onboarded them. The team must belong to the given company and
-   * have an HR assigned; everything downstream (verification by that HR, approval by that team's
-   * Manager) is unchanged.
+   * SUPER_ADMIN onboards into a chosen company by selecting a team (§2) and filling Form 2: the employee
+   * attaches to that team's HR exactly as if the HR had onboarded them. The team must belong to the
+   * given company and have an HR assigned; everything downstream (verification by that HR, approval by
+   * that team's Manager) is unchanged.
    */
   public OnboardEmployeeResult onboardForCompany(
       String companyId, SuperAdminOnboardRequest input, IhrmsPrincipal.User actor, String ip) {
@@ -101,25 +110,18 @@ public class EmployeesService {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "The selected team has no HR assigned yet");
     }
-    return createAndInvite(
-        companyId,
-        team.getHrUserId(),
-        input.fullName(),
-        input.email(),
-        input.designation(),
-        input.dateOfJoining(),
-        actor,
-        ip);
+    return createAndInvite(companyId, team.getHrUserId(), input.form2(), actor, ip);
   }
 
-  /** Shared onboarding: create the INVITED employee, send the selection email, audit. */
+  /**
+   * Shared onboarding (§3.2): create the INVITED employee from the HR/SA-authored Form 2, persist that
+   * Form 2, send the selection email to the PERSONAL email (the login identity), and audit. The employee
+   * ID stays blank until Manager approval mints it; Spark ID + official email are left inert.
+   */
   private OnboardEmployeeResult createAndInvite(
       String companyId,
       String onboardingHrId,
-      String rawFullName,
-      String rawEmail,
-      String rawDesignation,
-      LocalDate dateOfJoining,
+      Form2Request form2,
       IhrmsPrincipal.User actor,
       String ip) {
     Company company =
@@ -127,10 +129,11 @@ public class EmployeesService {
             .findById(companyId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
 
-    String email = rawEmail.trim().toLowerCase();
+    String email = norm(form2.personalEmail());
     accountEmails.assertAvailableForEmployee(email); // unique across staff + employees (§6)
-    String fullName = rawFullName.trim();
-    String designation = rawDesignation.trim();
+    String fullName = form2.fullName().trim();
+    String designation = form2.designation().trim();
+    LocalDate dateOfJoining = parseDateOfJoining(form2.dateOfJoining());
 
     Employee employee = new Employee();
     employee.setFullName(fullName);
@@ -148,10 +151,13 @@ public class EmployeesService {
           HttpStatus.CONFLICT, "An employee with this email already exists");
     }
 
-    String loginUrl =
-        props.webAppUrl().replaceAll("/+$", "")
-            + "/employee/login?email="
-            + URLEncoder.encode(email, StandardCharsets.UTF_8);
+    // Persist the HR/SA-authored Form 2 (§3.2). The minted code reaches Form 2 at render time (null now).
+    Form2Info f2 = new Form2Info();
+    f2.setEmployeeId(employee.getId());
+    f2.setData(FormMappers.toForm2Data(form2, null));
+    form2s.save(f2);
+
+    String loginUrl = loginUrl(email);
     mail.sendEmployeeSelection(email, fullName, designation, company.getName(), loginUrl);
 
     // Partition the audit under the TARGET company (a SUPER_ADMIN actor has no company of its own).
@@ -164,6 +170,120 @@ public class EmployeesService {
         ip);
 
     return new OnboardEmployeeResult(summary(employee), loginUrl);
+  }
+
+  /**
+   * HR/SA edits Form 2 (§3.2) — allowed ONLY while the employee is {@code INVITED} (a manual edit once
+   * they start is rejected, 409). Keeps the Employee columns in sync with Form 2. A change to the
+   * PERSONAL EMAIL (the login identity) re-sends the invite to the new address and re-checks global
+   * uniqueness; editing other fields does not re-invite. HR is scoped to their own onboarded employees;
+   * SUPER_ADMIN may edit any (both via {@link AuthorizationService}).
+   */
+  public Form2View editForm2(
+      String employeeId, Form2Request form2, IhrmsPrincipal.User actor, String ip) {
+    Employee employee = loadAccessible(actor, employeeId);
+    if (employee.getStatus() != EmployeeStatus.INVITED) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Form 2 is locked once the employee starts onboarding");
+    }
+    Company company =
+        companies
+            .findById(employee.getCompanyId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
+
+    LocalDate dateOfJoining = parseDateOfJoining(form2.dateOfJoining());
+    String newEmail = norm(form2.personalEmail());
+    String oldEmail = employee.getEmail();
+    boolean emailChanged = !newEmail.equals(oldEmail);
+    if (emailChanged) {
+      accountEmails.assertAvailableForEmployee(newEmail); // staff/mailbox collisions
+    }
+
+    // Keep the Employee columns in lockstep with Form 2 (the login identity + summary fields).
+    employee.setFullName(form2.fullName().trim());
+    employee.setEmail(newEmail);
+    employee.setDesignation(form2.designation().trim());
+    employee.setDateOfJoining(dateOfJoining);
+    try {
+      employees.saveAndFlush(employee); // surfaces an employee↔employee email clash as a 409
+    } catch (DataIntegrityViolationException e) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "An employee with this email already exists");
+    }
+
+    Form2Info f2 =
+        form2s
+            .findByEmployeeId(employeeId)
+            .orElseGet(
+                () -> {
+                  Form2Info created = new Form2Info();
+                  created.setEmployeeId(employeeId);
+                  return created;
+                });
+    f2.setData(FormMappers.toForm2Data(form2, f2.getData()));
+    form2s.save(f2);
+
+    if (emailChanged) {
+      // The personal email IS the login identity — re-invite the new address; the old gets nothing.
+      mail.sendEmployeeSelection(
+          newEmail, employee.getFullName(), employee.getDesignation(), company.getName(), loginUrl(newEmail));
+      audit.record(
+          new AuditActor("USER", actor.userId(), employee.getCompanyId()),
+          "EMPLOYEE_REINVITED",
+          "Employee",
+          employeeId,
+          Map.of("oldEmail", oldEmail, "newEmail", newEmail),
+          ip);
+    }
+    audit.record(
+        new AuditActor("USER", actor.userId(), employee.getCompanyId()),
+        "FORM2_UPDATED",
+        "Form2Info",
+        f2.getId(),
+        Map.of("employeeId", employeeId, "reinvited", emailChanged),
+        ip);
+
+    return FormMappers.form2View(f2, employee.getEmployeeCode());
+  }
+
+  /** Load an employee the actor may act on (HR own-onboarded / SUPER_ADMIN any); 404 hides existence. */
+  private Employee loadAccessible(IhrmsPrincipal.User actor, String employeeId) {
+    Employee employee =
+        employees
+            .findById(employeeId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
+    AuthorizationService.EmployeeScope scope =
+        new AuthorizationService.EmployeeScope(
+            employee.getId(),
+            employee.getCompanyId(),
+            employee.getOnboardingHrId(),
+            employee.getEmployeeCode());
+    if (!authz.canAccessEmployee(actor, scope)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found");
+    }
+    return employee;
+  }
+
+  private String loginUrl(String email) {
+    return props.webAppUrl().replaceAll("/+$", "")
+        + "/employee/login?email="
+        + URLEncoder.encode(email, StandardCharsets.UTF_8);
+  }
+
+  private static String norm(String email) {
+    return email == null ? null : email.trim().toLowerCase();
+  }
+
+  /** Form 2's date-of-joining is a lenient string; onboarding/edit require a real date. */
+  private static LocalDate parseDateOfJoining(String raw) {
+    if (raw == null || raw.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date of joining is required");
+    }
+    try {
+      return LocalDate.parse(raw.trim());
+    } catch (DateTimeParseException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use YYYY-MM-DD for date of joining");
+    }
   }
 
   /**

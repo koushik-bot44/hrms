@@ -20,6 +20,7 @@ import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.ApprovalRequest;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.Form2Info;
 import com.ihrms.domain.model.Notification;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
@@ -27,6 +28,7 @@ import com.ihrms.domain.repository.ApprovalRequestRepository;
 import com.ihrms.domain.repository.AuditLogRepository;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.repository.Form2InfoRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
@@ -67,6 +69,7 @@ class ManagerApiTest {
   @Autowired TeamRepository teams;
   @Autowired EmployeeRepository employees;
   @Autowired ApprovalRequestRepository approvals;
+  @Autowired Form2InfoRepository form2s;
   @Autowired NotificationRepository notifications;
   @Autowired AuditLogRepository auditLogs;
   @Autowired JdbcTemplate jdbc;
@@ -77,6 +80,7 @@ class ManagerApiTest {
 
   private String companyA;
   private User hr1;
+  private String hr1Token;
   private User manager1;
   private String manager1Token;
   private String manager2Token;
@@ -93,6 +97,8 @@ class ManagerApiTest {
             + "\"employee_code_sequences\" RESTART IDENTITY CASCADE");
     companyA = company("AAA");
     hr1 = user(companyA, UserRole.HR, "hr1@a.test");
+    hr1Token = tokens.issueAccess(
+        new IhrmsPrincipal.User(hr1.getId(), hr1.getEmail(), hr1.getName(), UserRole.HR, companyA, null));
     manager1 = user(companyA, UserRole.MANAGER, "mgr1@a.test");
     User manager2 = user(companyA, UserRole.MANAGER, "mgr2@a.test");
     team = team(companyA, hr1.getId(), manager1.getId());
@@ -108,6 +114,12 @@ class ManagerApiTest {
     employee.setStatus(EmployeeStatus.HR_VERIFIED);
     // no employeeCode — minted on approval (§5)
     employees.save(employee);
+
+    // Form 2 is HR-authored at onboard (§3.2); its printed employeeId stays blank until approval mints it.
+    Form2Info f2 = new Form2Info();
+    f2.setEmployeeId(employee.getId());
+    f2.setData(Map.of("fullName", "Evan Stone", "personalEmail", "evan@personal.test"));
+    form2s.save(f2);
 
     approval = new ApprovalRequest();
     approval.setEmployeeId(employee.getId());
@@ -184,6 +196,16 @@ class ManagerApiTest {
     assertThat(approved.getStatus()).isEqualTo(EmployeeStatus.APPROVED);
     assertThat(approved.getEmployeeCode()).isEqualTo("AAA-EMP-000001");
     assertThat(EmployeeCodes.EMPLOYEE_CODE.matcher(approved.getEmployeeCode()).matches()).isTrue();
+
+    // The minted ID is SYSTEM-stamped into Form 2 at approval (§3.2) — even though a manual Form-2 edit
+    // is locked past INVITED, the record's Form 2 now shows the code.
+    MvcResult record =
+        mvc.perform(get("/employees/" + employee.getId() + "/record")
+                .header("Authorization", "Bearer " + hr1Token))
+            .andExpect(status().isOk())
+            .andReturn();
+    assertThat(json.readTree(record.getResponse().getContentAsString()).get("form2").get("employeeId").asText())
+        .isEqualTo("AAA-EMP-000001");
     assertThat(notifications.findByRecipientUserId(hr1.getId()))
         .anySatisfy(n -> assertThat(n.getType()).isEqualTo(NotificationType.EMPLOYEE_APPROVED));
     assertThat(auditLogs.findByAction("APPROVAL_APPROVED"))

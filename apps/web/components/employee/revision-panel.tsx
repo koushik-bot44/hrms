@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { StatusBadge } from '@/components/status-badge';
-import { Form1Step, Form2Step, Form3Step } from '@/components/employee/onboarding-stepper';
+import { Form1Step, Form3Step } from '@/components/employee/onboarding-stepper';
 
 const FLAGGED = 'REVISION_REQUESTED';
 /** Forms the employee may work on during a revision: sent back (flagged) or already revised (DRAFT). */
@@ -34,19 +34,15 @@ export function RevisionPanel({ dashboard }: { dashboard: OnboardingDashboard })
   const queryClient = useQueryClient();
   const refetch = () => queryClient.invalidateQueries({ queryKey: ['onboarding'] });
 
+  // Form 2 is HR/SA-authored (§3.2) — never sent back for revision, so it never appears here.
   const f1Status = dashboard.form1?.status;
-  const f2Status = dashboard.form2?.status;
   const f3Status = dashboard.form3[0]?.status;
   const showForm1 = f1Status != null && OPEN_FORM_STATES.has(f1Status);
-  const showForm2 = f2Status != null && OPEN_FORM_STATES.has(f2Status);
   const showForm3 = f3Status != null && OPEN_FORM_STATES.has(f3Status);
   const flaggedDocs = dashboard.documents.filter((d) => d.status === FLAGGED);
 
   const anyStillFlagged =
-    f1Status === FLAGGED ||
-    f2Status === FLAGGED ||
-    f3Status === FLAGGED ||
-    flaggedDocs.length > 0;
+    f1Status === FLAGGED || f3Status === FLAGGED || flaggedDocs.length > 0;
 
   const resubmit = useApiMutation(() => resubmitOnboarding(), {
     successMessage: 'Re-submitted for verification',
@@ -71,18 +67,6 @@ export function RevisionPanel({ dashboard }: { dashboard: OnboardingDashboard })
       {showForm1 ? (
         <RevisionSection status={f1Status} note={dashboard.form1?.revisionNote}>
           <Form1Step form1={dashboard.form1} disabled={false} onSaved={refetch} submitLabel="Save Form 1" />
-        </RevisionSection>
-      ) : null}
-
-      {showForm2 ? (
-        <RevisionSection status={f2Status} note={dashboard.form2?.revisionNote}>
-          <Form2Step
-            form2={dashboard.form2}
-            employeeCode={dashboard.employeeCode}
-            disabled={false}
-            onSaved={refetch}
-            submitLabel="Save Form 2"
-          />
         </RevisionSection>
       ) : null}
 

@@ -27,8 +27,30 @@ export function getEmployeeQueue(
   return apiFetch<EmployeePage>(`/employees?${q.toString()}`, { signal });
 }
 
+/**
+ * Onboard = HR/SA fills Form 2 (§3.2). The dialog still collects the core four fields; here they map
+ * onto the Form-2 payload the API now expects (the entered email IS the employee's personal/login
+ * email). The fuller Form-2 onboarding UI is a later step; unset fields stay blank server-side.
+ */
+function toForm2(body: {
+  fullName: string;
+  email: string;
+  designation: string;
+  dateOfJoining: string;
+}) {
+  return {
+    fullName: body.fullName,
+    personalEmail: body.email,
+    designation: body.designation,
+    dateOfJoining: body.dateOfJoining,
+  };
+}
+
 export function onboardEmployee(body: OnboardEmployeeInput): Promise<OnboardEmployeeResult> {
-  return apiFetch<OnboardEmployeeResult>('/employees', { method: 'POST', body });
+  return apiFetch<OnboardEmployeeResult>('/employees', {
+    method: 'POST',
+    body: { form2: toForm2(body) },
+  });
 }
 
 /** SUPER_ADMIN onboards into a chosen company by selecting a team (its HR is resolved server-side). */
@@ -38,6 +60,6 @@ export function onboardForCompany(
 ): Promise<OnboardEmployeeResult> {
   return apiFetch<OnboardEmployeeResult>(`/companies/${companyId}/employees`, {
     method: 'POST',
-    body,
+    body: { teamId: body.teamId, form2: toForm2(body) },
   });
 }

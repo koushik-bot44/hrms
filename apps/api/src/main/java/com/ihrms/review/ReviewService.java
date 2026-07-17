@@ -13,7 +13,6 @@ import com.ihrms.domain.model.ApprovalRequest;
 import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Form1Personal;
-import com.ihrms.domain.model.Form2Info;
 import com.ihrms.domain.model.Form3PrevEmployment;
 import com.ihrms.domain.model.Notification;
 import com.ihrms.domain.model.Team;
@@ -22,7 +21,6 @@ import com.ihrms.domain.repository.ApprovalRequestRepository;
 import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.Form1PersonalRepository;
-import com.ihrms.domain.repository.Form2InfoRepository;
 import com.ihrms.domain.repository.Form3PrevEmploymentRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.TeamRepository;
@@ -53,7 +51,6 @@ public class ReviewService {
 
   private final EmployeeRepository employees;
   private final Form1PersonalRepository form1s;
-  private final Form2InfoRepository form2s;
   private final Form3PrevEmploymentRepository form3s;
   private final DocumentRepository documents;
   private final ApprovalRequestRepository approvals;
@@ -67,7 +64,6 @@ public class ReviewService {
   public ReviewService(
       EmployeeRepository employees,
       Form1PersonalRepository form1s,
-      Form2InfoRepository form2s,
       Form3PrevEmploymentRepository form3s,
       DocumentRepository documents,
       ApprovalRequestRepository approvals,
@@ -79,7 +75,6 @@ public class ReviewService {
       EmployeeRecordAssembler assembler) {
     this.employees = employees;
     this.form1s = form1s;
-    this.form2s = form2s;
     this.form3s = form3s;
     this.documents = documents;
     this.approvals = approvals;
@@ -149,15 +144,9 @@ public class ReviewService {
             AuditActor.from(actor), "FORM_REVIEWED", "Form1Personal", f1.getId(),
             reviewMeta("form", "FORM1", req), ip);
       }
-      case "FORM2" -> {
-        Form2Info f2 =
-            form2s.findByEmployeeId(employee.getId()).orElseThrow(() -> notFound("Form 2 not found"));
-        applyDecision(f2, decision, req);
-        form2s.save(f2);
-        audit.record(
-            AuditActor.from(actor), "FORM_REVIEWED", "Form2Info", f2.getId(),
-            reviewMeta("form", "FORM2", req), ip);
-      }
+      case "FORM2" ->
+          // Form 2 is HR/SA-authored at onboard (§3.2) — it is not a verifiable review item.
+          throw badRequest("Form 2 is filled by HR and is not part of verification");
       case "FORM3" -> {
         List<Form3PrevEmployment> rows =
             form3s.findByEmployeeIdOrderByOrderIndexAsc(employee.getId());
@@ -319,12 +308,6 @@ public class ReviewService {
     f.setRevisionRequestedAt(decision == SectionStatus.REVISION_REQUESTED ? Instant.now() : null);
   }
 
-  private void applyDecision(Form2Info f, SectionStatus decision, ReviewRequest req) {
-    f.setStatus(decision);
-    f.setRevisionNote(decision == SectionStatus.REVISION_REQUESTED ? req.reason() : null);
-    f.setRevisionRequestedAt(decision == SectionStatus.REVISION_REQUESTED ? Instant.now() : null);
-  }
-
   private void applyDecision(Form3PrevEmployment f, SectionStatus decision, ReviewRequest req) {
     f.setStatus(decision);
     f.setRevisionNote(decision == SectionStatus.REVISION_REQUESTED ? req.reason() : null);
@@ -342,9 +325,9 @@ public class ReviewService {
       return;
     }
     String id = employee.getId();
+    // Form 2 is HR/SA-authored (§3.2) — never sent back, so it never drives the revision state.
     boolean anyRevision =
         form1s.findByEmployeeId(id).map(f -> f.getStatus() == SectionStatus.REVISION_REQUESTED).orElse(false)
-            || form2s.findByEmployeeId(id).map(f -> f.getStatus() == SectionStatus.REVISION_REQUESTED).orElse(false)
             || form3s.findByEmployeeIdOrderByOrderIndexAsc(id).stream()
                 .anyMatch(r -> r.getStatus() == SectionStatus.REVISION_REQUESTED)
             || documents.findByEmployeeId(id).stream()
