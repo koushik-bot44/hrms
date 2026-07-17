@@ -41,4 +41,14 @@ public interface AttendanceSessionRepository extends JpaRepository<AttendanceSes
   List<AttendanceSession>
       findByCompanyIdAndEmployeeIdInAndClockOutAtIsNotNullAndClockInAtGreaterThanEqualAndClockInAtLessThan(
           String companyId, Collection<String> employeeIds, Instant from, Instant to);
+
+  // --- Viewer analytics: grouped by the persisted SHIFT-DAY (the overnight-attribution key, §8a) -----
+
+  /** All of one employee's sessions (open + completed) whose SHIFT-DAY falls in the range — a month. */
+  List<AttendanceSession> findByEmployeeIdAndShiftDateBetween(
+      String employeeId, LocalDate from, LocalDate to);
+
+  /** Batched: all sessions for a set of employees whose SHIFT-DAY falls in the range (team roll-up). */
+  List<AttendanceSession> findByCompanyIdAndEmployeeIdInAndShiftDateBetween(
+      String companyId, Collection<String> employeeIds, LocalDate from, LocalDate to);
 }

@@ -65,6 +65,8 @@ lands **directly on their own team's roster** — no company/team pickers — an
 (a request for any other team/company is refused). Served read-only under `/accountant/**`:
 `GET /accountant/companies`, `GET /accountant/companies/{companyId}/teams`,
 `GET /accountant/teams/{teamId}/employees` (own-team-only for the Accountant), and `GET /accountant/my-team`.
+The same scoping backs the **live attendance analytics** (§8a) — per-employee and per-team metrics under
+`/accountant/**`, read-only and computed on each call.
 
 **Super Admin cross-company operations.** Team management and onboarding are normally the Company
 Admin's and HR's jobs; the **Super Admin can do both in any company** by selecting the target company
@@ -585,6 +587,28 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
 - **Audit:** every punch is audited `ATTENDANCE_CLOCK_IN` / `ATTENDANCE_CLOCK_OUT`, and every break
   `ATTENDANCE_BREAK_START` / `ATTENDANCE_BREAK_END`, with `companyId` set.
   `attendance_sessions` carries a denormalized `company_id` so every query filters by tenant.
+- **Viewer attendance analytics (§2, read-only, computed LIVE on each call).** The two viewer roles get
+  live-aggregated attendance metrics under `/accountant/**` — scoped exactly like their employee browsing:
+  **ACCOUNTS_ADMIN** any team/employee (via company→team drilldown), **ACCOUNTANT** their own team only
+  (a foreign team/employee → `404`, no widening). GET-only. Everything is derived from the SAME
+  `sessions − breaks` computation used by the employee/manager views (extracted to one `AttendanceMath`
+  so worked time is never forked). Definitions (all per **shift-month** = sessions whose persisted
+  `shiftDate` falls in that IST calendar month — never the raw clock-in day):
+  - **workedSeconds** = Σ completed sessions' duration **minus their breaks** (an open session → 0);
+    **breakSeconds** = Σ completed breaks. **daysPresent** = distinct `shiftDate`s with ≥1 session.
+    **lateLogins** = count of `is_late = true` (persisted, not recomputed).
+  - **leavesByType {CASUAL, SICK, UNPAID}** + **leaveDaysTotal** = APPROVED leaves clipped to the month,
+    counting **all calendar days inclusive** (start..end, weekends included — v1); **leaveRequests** =
+    approved requests overlapping the month.
+  - **workingDays** = **calendar days in the month** (v1, labeled `workingDaysDefinition`, swap-ready);
+    **adherencePct** = round(daysPresent ÷ workingDays × 100).
+  - **timeComposition** = `{workedSeconds, breakSeconds}` (both real; sum to gross clocked time; **idle
+    omitted in v1** — no count metric is mixed into the split). **clockedInNow** = an OPEN session exists now.
+  - Endpoints: `GET /accountant/employees/{id}/attendance/summary?month=YYYY-MM` (one month; default =
+    current), `…/attendance/monthly?months=N` (a per-month series; default 6), and
+    `GET /accountant/teams/{teamId}/attendance/summary?month=YYYY-MM` — a team roll-up + a live **today**
+    snapshot (presentToday, clockedInNow, onLeaveToday, totalLateThisMonth) + a per-employee row; the team
+    read is **batched** (~4 queries, no N+1). Every query is `companyId`/team scoped.
 
 ---
 

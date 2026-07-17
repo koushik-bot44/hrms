@@ -271,14 +271,7 @@ public class AccountantService {
    */
   public ApprovedEmployeePage teamEmployees(
       IhrmsPrincipal.User actor, String teamId, String search, Pageable pageable) {
-    Team team =
-        teams
-            .findById(teamId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
-    if (actor.role() == UserRole.ACCOUNTANT && !ownsTeam(actor, teamId)) {
-      // Not this accountant's team — do not reveal existence, do not widen scope.
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found");
-    }
+    Team team = assertViewableTeam(actor, teamId);
     String hrId = team.getHrUserId();
     String companyId = team.getCompanyId();
     Specification<Employee> spec =
@@ -325,6 +318,27 @@ public class AccountantService {
         companyName,
         t.getHrUserId() == null ? null : userName(t.getHrUserId()),
         t.getManagerUserId() == null ? null : userName(t.getManagerUserId()));
+  }
+
+  /**
+   * Authorize a team read for a viewer (§2), reused by the roster + the attendance analytics:
+   * ACCOUNTS_ADMIN may view any team; an ACCOUNTANT may view ONLY a team they are the accountant of
+   * (else 404 — never reveal existence, never widen scope).
+   */
+  public Team assertViewableTeam(IhrmsPrincipal.User actor, String teamId) {
+    Team team =
+        teams
+            .findById(teamId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
+    if (actor.role() == UserRole.ACCOUNTANT && !ownsTeam(actor, teamId)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found");
+    }
+    return team;
+  }
+
+  /** Authorize an employee read for a viewer (§2): the same approved-only, in-scope gate as the record view. */
+  public Employee assertViewableEmployee(IhrmsPrincipal.User actor, String employeeId) {
+    return loadApproved(actor, employeeId);
   }
 
   private boolean ownsTeam(IhrmsPrincipal.User actor, String teamId) {

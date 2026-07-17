@@ -1448,6 +1448,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accountant/teams/{teamId}/attendance/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A team's month roll-up + live today snapshot (own-team-only for the Accountant). */
+        get: operations["teamSummary_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accountant/my-team": {
         parameters: {
             query?: never;
@@ -1489,6 +1506,40 @@ export interface paths {
             cookie?: never;
         };
         get: operations["record_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accountant/employees/{employeeId}/attendance/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One employee's live attendance metrics for a shift-month (default = current). */
+        get: operations["employeeSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accountant/employees/{employeeId}/attendance/monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An employee's per-month metric series (last N shift-months; default 6). */
+        get: operations["employeeMonthly"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2476,6 +2527,58 @@ export interface components {
             dateOfJoining?: string;
             approvedAt?: string;
         };
+        /** @description One row of a team's attendance roster for the month. */
+        TeamAttendanceMemberRow: {
+            employeeId?: string;
+            employeeCode?: string;
+            fullName?: string;
+            clockedInNow?: boolean;
+            /**
+             * Format: int64
+             * @description Worked seconds this month (breaks excluded).
+             */
+            workedSeconds?: number;
+            /**
+             * Format: int64
+             * @description Late logins this month.
+             */
+            lateLogins?: number;
+            /**
+             * Format: int64
+             * @description Approved leave days this month.
+             */
+            leaveDaysTotal?: number;
+        };
+        /** @description A team's attendance roll-up for the month + a live 'today' snapshot. */
+        TeamAttendanceSummary: {
+            teamId?: string;
+            teamName?: string;
+            companyId?: string;
+            month?: string;
+            /**
+             * Format: int64
+             * @description Employees with at least one session on today's shift-day.
+             */
+            presentToday?: number;
+            /**
+             * Format: int64
+             * @description Employees with an OPEN session right now.
+             */
+            clockedInNow?: number;
+            /**
+             * Format: int64
+             * @description Employees on an approved leave that covers today (IST calendar date).
+             */
+            onLeaveToday?: number;
+            /**
+             * Format: int64
+             * @description Sum of the team's late logins this month.
+             */
+            totalLateThisMonth?: number;
+            /** Format: int32 */
+            employeeCount?: number;
+            employees?: components["schemas"]["TeamAttendanceMemberRow"][];
+        };
         /** @description The ACCOUNTANT's own team — the roster header (null if none assigned). */
         MyTeamView: {
             teamId?: string;
@@ -2484,6 +2587,83 @@ export interface components {
             companyName?: string;
             hrName?: string;
             managerName?: string;
+        };
+        /** @description One employee's attendance metrics for a shift-month (all computed live). */
+        EmployeeMonthSummary: {
+            /** @description The shift-month, YYYY-MM (Asia/Kolkata). */
+            month?: string;
+            /**
+             * Format: int64
+             * @description Worked seconds = completed sessions' duration MINUS their breaks (open = 0).
+             */
+            workedSeconds?: number;
+            /**
+             * Format: int64
+             * @description Break seconds = completed breaks in the month.
+             */
+            breakSeconds?: number;
+            /**
+             * Format: int64
+             * @description Distinct shift-days with at least one session.
+             */
+            daysPresent?: number;
+            /**
+             * Format: int64
+             * @description Sessions flagged is_late (persisted; not recomputed).
+             */
+            lateLogins?: number;
+            leavesByType?: components["schemas"]["LeavesByType"];
+            /**
+             * Format: int64
+             * @description Total approved leave days in the month (sum of leavesByType).
+             */
+            leaveDaysTotal?: number;
+            /**
+             * Format: int64
+             * @description Number of approved leave REQUESTS overlapping the month.
+             */
+            leaveRequests?: number;
+            /**
+             * Format: int32
+             * @description Working days in the month per the stated rule.
+             */
+            workingDays?: number;
+            /**
+             * Format: int32
+             * @description daysPresent / workingDays as a whole percent (0–100).
+             */
+            adherencePct?: number;
+            /** @description Human label of how workingDays / adherence is defined. */
+            workingDaysDefinition?: string;
+            timeComposition?: components["schemas"]["TimeComposition"];
+            /** @description Whether the employee has an OPEN session right now (live). */
+            clockedInNow?: boolean;
+        };
+        /** @description Approved leave DAYS in the month, split by type (calendar days, clipped to the month). */
+        LeavesByType: {
+            /** Format: int64 */
+            casual?: number;
+            /** Format: int64 */
+            sick?: number;
+            /** Format: int64 */
+            unpaid?: number;
+        };
+        /** @description The same-unit split for a donut. worked + break = gross clocked time; idle is not computed in v1. */
+        TimeComposition: {
+            /** Format: int64 */
+            workedSeconds?: number;
+            /** Format: int64 */
+            breakSeconds?: number;
+            /**
+             * Format: int64
+             * @description Optional idle seconds; null in v1 (worked + break are the real, summable split).
+             */
+            idleSeconds?: number;
+        };
+        /** @description A per-month series of the employee's metrics (oldest → newest). */
+        EmployeeMonthlySeries: {
+            employeeId?: string;
+            months?: components["schemas"]["EmployeeMonthSummary"][];
         };
         /** @description One company at the top of the ACCOUNTS_ADMIN drilldown. */
         ViewerCompanyRow: {
@@ -4934,6 +5114,30 @@ export interface operations {
             };
         };
     };
+    teamSummary_1: {
+        parameters: {
+            query?: {
+                month?: string;
+            };
+            header?: never;
+            path: {
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TeamAttendanceSummary"];
+                };
+            };
+        };
+    };
     myTeam: {
         parameters: {
             query?: never;
@@ -4996,6 +5200,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
+    employeeSummary: {
+        parameters: {
+            query?: {
+                month?: string;
+            };
+            header?: never;
+            path: {
+                employeeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmployeeMonthSummary"];
+                };
+            };
+        };
+    };
+    employeeMonthly: {
+        parameters: {
+            query?: {
+                months?: number;
+            };
+            header?: never;
+            path: {
+                employeeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmployeeMonthlySeries"];
                 };
             };
         };

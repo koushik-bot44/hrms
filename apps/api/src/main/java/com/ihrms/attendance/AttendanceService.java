@@ -420,16 +420,8 @@ public class AttendanceService {
 
   /** Worked seconds for a completed session = its duration minus the sum of its COMPLETED breaks. */
   private long workedSeconds(AttendanceSession s, Map<String, List<AttendanceBreak>> byId) {
-    if (s.isOpen()) {
-      return 0;
-    }
-    long duration = Duration.between(s.getClockInAt(), s.getClockOutAt()).getSeconds();
-    long breakSeconds =
-        byId.getOrDefault(s.getId(), List.of()).stream()
-            .filter(b -> !b.isOpen())
-            .mapToLong(b -> Duration.between(b.getBreakStartAt(), b.getBreakEndAt()).getSeconds())
-            .sum();
-    return Math.max(0, duration - breakSeconds);
+    // Delegated to the shared computation so worked time is never forked (§8a).
+    return AttendanceMath.workedSeconds(s, byId);
   }
 
   private AttendanceSession requireOpenSession(Employee me) {

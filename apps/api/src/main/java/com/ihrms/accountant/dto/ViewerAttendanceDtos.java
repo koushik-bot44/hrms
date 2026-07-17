@@ -1,0 +1,72 @@
+package com.ihrms.accountant.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
+
+/**
+ * Read-only ATTENDANCE ANALYTICS for the viewer roles (§8a/§2), computed LIVE per request. All grouping
+ * is by the persisted shift-day (the overnight 19:00–04:00 attribution) in Asia/Kolkata; worked time is
+ * the shared {@code sessions − breaks} computation. Scoped ACCOUNTS_ADMIN (any team) / ACCOUNTANT (own).
+ */
+public final class ViewerAttendanceDtos {
+
+  private ViewerAttendanceDtos() {}
+
+  @Schema(description = "Approved leave DAYS in the month, split by type (calendar days, clipped to the month).")
+  public record LeavesByType(long casual, long sick, long unpaid) {}
+
+  @Schema(
+      description =
+          "The same-unit split for a donut. worked + break = gross clocked time; idle is not computed in v1.")
+  public record TimeComposition(
+      long workedSeconds,
+      long breakSeconds,
+      @Schema(description = "Optional idle seconds; null in v1 (worked + break are the real, summable split).")
+          Long idleSeconds) {}
+
+  @Schema(description = "One employee's attendance metrics for a shift-month (all computed live).")
+  public record EmployeeMonthSummary(
+      @Schema(description = "The shift-month, YYYY-MM (Asia/Kolkata).") String month,
+      @Schema(description = "Worked seconds = completed sessions' duration MINUS their breaks (open = 0).")
+          long workedSeconds,
+      @Schema(description = "Break seconds = completed breaks in the month.") long breakSeconds,
+      @Schema(description = "Distinct shift-days with at least one session.") long daysPresent,
+      @Schema(description = "Sessions flagged is_late (persisted; not recomputed).") long lateLogins,
+      LeavesByType leavesByType,
+      @Schema(description = "Total approved leave days in the month (sum of leavesByType).")
+          long leaveDaysTotal,
+      @Schema(description = "Number of approved leave REQUESTS overlapping the month.") long leaveRequests,
+      @Schema(description = "Working days in the month per the stated rule.") int workingDays,
+      @Schema(description = "daysPresent / workingDays as a whole percent (0–100).") int adherencePct,
+      @Schema(description = "Human label of how workingDays / adherence is defined.")
+          String workingDaysDefinition,
+      TimeComposition timeComposition,
+      @Schema(description = "Whether the employee has an OPEN session right now (live).") boolean clockedInNow) {}
+
+  @Schema(description = "A per-month series of the employee's metrics (oldest → newest).")
+  public record EmployeeMonthlySeries(String employeeId, List<EmployeeMonthSummary> months) {}
+
+  @Schema(description = "One row of a team's attendance roster for the month.")
+  public record TeamAttendanceMemberRow(
+      String employeeId,
+      String employeeCode,
+      String fullName,
+      boolean clockedInNow,
+      @Schema(description = "Worked seconds this month (breaks excluded).") long workedSeconds,
+      @Schema(description = "Late logins this month.") long lateLogins,
+      @Schema(description = "Approved leave days this month.") long leaveDaysTotal) {}
+
+  @Schema(description = "A team's attendance roll-up for the month + a live 'today' snapshot.")
+  public record TeamAttendanceSummary(
+      String teamId,
+      String teamName,
+      String companyId,
+      String month,
+      @Schema(description = "Employees with at least one session on today's shift-day.") long presentToday,
+      @Schema(description = "Employees with an OPEN session right now.") long clockedInNow,
+      @Schema(description = "Employees on an approved leave that covers today (IST calendar date).")
+          long onLeaveToday,
+      @Schema(description = "Sum of the team's late logins this month.") long totalLateThisMonth,
+      int employeeCount,
+      List<TeamAttendanceMemberRow> employees) {}
+}
