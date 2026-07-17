@@ -14,7 +14,7 @@ export function TeamViewTabs({ teamId }: { teamId: string }) {
     <Tabs defaultValue="employees" className="space-y-4">
       <TabsList>
         <TabsTrigger value="employees">Employees</TabsTrigger>
-        <TabsTrigger value="attendance">Attendance</TabsTrigger>
+        <TabsTrigger value="attendance">Work Log</TabsTrigger>
       </TabsList>
       <TabsContent value="employees">
         <TeamEmployeesTable teamId={teamId} />
