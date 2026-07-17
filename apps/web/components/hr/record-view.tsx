@@ -58,6 +58,14 @@ export function RecordView({
 }: RecordViewProps) {
   const { session } = useAuth();
   const canAct = editable && Boolean(onVerify) && Boolean(onSendBack);
+  // A document can only be VERIFIED after HR has opened (previewed) it — no approving a file
+  // sight-unseen. Tracked per document id for this record view; the file's own data is inline for forms,
+  // so forms are not gated. Marked when the Preview link is clicked.
+  const [previewed, setPreviewed] = React.useState<Set<string>>(new Set());
+  const markPreviewed = React.useCallback(
+    (id: string) => setPreviewed((prev) => (prev.has(id) ? prev : new Set(prev).add(id))),
+    [],
+  );
   // Assigning/resetting a mailbox (§8, Stage 5) is allowed for the onboarding HR OR a COMPANY_ADMIN of
   // the employee's company (§6). Read-only viewers (Accountant, Accounts Admin) and the Manager share this
   // record view — they must never see these controls (the API 403s them; this stops the buttons even
@@ -214,6 +222,8 @@ export function RecordView({
                     <ItemActions
                       busy={busy}
                       viewUrl={d.viewUrl}
+                      previewed={previewed.has(d.id)}
+                      onPreview={() => markPreviewed(d.id)}
                       onVerify={() => onVerify?.('document', d.id)}
                       onSendBack={() => onSendBack?.('document', d.id, d.fileName)}
                     />
@@ -479,31 +489,48 @@ function Empty() {
 /**
  * The two per-item HR actions (§3.3): Verify, and Send back for revision. There is no per-item Reject
  * — terminal rejection of the application is the Manager's action at approval. Both stay enabled after
- * a decision so HR can re-decide (Verify ⇄ Send-back).
+ * a decision so HR can re-decide (Verify ⇄ Send-back). For a DOCUMENT (has a {@code viewUrl}), Verify
+ * stays disabled until HR opens it via Preview — no approving a file sight-unseen; sending it back is
+ * always allowed.
  */
 function ItemActions({
   busy,
   viewUrl,
+  previewed = false,
+  onPreview,
   onVerify,
   onSendBack,
 }: {
   busy: boolean;
   /** When set (documents), shows a Preview link that opens the uploaded file in a new tab. */
   viewUrl?: string;
+  /** Whether this document has been previewed yet (documents only). */
+  previewed?: boolean;
+  /** Called when the Preview link is clicked — unlocks Verify. */
+  onPreview?: () => void;
   onVerify: () => void;
   onSendBack: () => void;
 }) {
+  const needsPreview = Boolean(viewUrl) && !previewed;
   return (
     <div className="flex items-center gap-1.5">
       {viewUrl ? (
-        <a href={viewUrl} target="_blank" rel="noreferrer">
-          <Button type="button" variant="outline" size="sm">
+        <a href={viewUrl} target="_blank" rel="noreferrer" onClick={() => onPreview?.()}>
+          {/* Emphasised until opened — HR must preview before Verify unlocks. */}
+          <Button type="button" variant={needsPreview ? 'default' : 'outline'} size="sm">
             <ExternalLink />
             Preview
           </Button>
         </a>
       ) : null}
-      <Button type="button" variant="success" size="sm" disabled={busy} onClick={onVerify}>
+      <Button
+        type="button"
+        variant="success"
+        size="sm"
+        disabled={busy || needsPreview}
+        onClick={onVerify}
+        title={needsPreview ? 'Preview the document before verifying it' : undefined}
+      >
         <CheckCircle2 />
         Verify
       </Button>

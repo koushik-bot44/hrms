@@ -172,7 +172,9 @@ and is **not** part of the routing-to-Manager gate. HR verifies **Forms 1, 3, 4 
 the record view still **displays** Form 2 (read-only) and exposes its standalone HR-only PDF.
 1. **HR** opens the employee's record (by ID) and reviews each form and document with **two per-item
    actions**:
-   - **Verify** → the item is `VERIFIED`.
+   - **Verify** → the item is `VERIFIED`. For a **document**, Verify stays **disabled until HR opens it
+     via Preview** (no approving an uploaded file sight-unseen); Send-back is always available. Forms are
+     shown inline, so they are not preview-gated.
    - **Send back for revision** (with a **note**) → opens that item and returns **only that
      form/document** to the employee (`REVISION_REQUESTED`). The item becomes re-editable /
      re-uploadable while **everything else stays locked**; the employee's overall status reflects
