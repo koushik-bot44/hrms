@@ -10,7 +10,8 @@ const MAX_SHOWN = 8;
 /**
  * A type-to-search recipient chip input (§8 redesign). The dropdown stays hidden while the field is
  * empty (no pre-populated contact list); it opens once the user types ≥1 character, filtering the
- * ALLOWED contacts (the fetched `/mail/contacts` set) by name or address. A string that matches no
+ * ALLOWED contacts (the fetched `/mail/contacts` set) by mail ADDRESS only (rows still show name +
+ * address; typing part of a name does not surface a contact). A string that matches no
  * allowed contact shows a non-selectable "No matches" state — never an add-anything option — so only
  * graph-permitted people can ever become recipients. Selected people show as removable chips.
  * Keyboard: ↑/↓ to move, Enter to add, Esc to close, Backspace (empty) removes the last chip.
@@ -51,7 +52,8 @@ export function RecipientAutocomplete({
     if (q === '') return []; // empty field → no dropdown, no pre-populated list
     return options
       .filter((o) => o.userId && !excludeIds.has(o.userId) && !selectedIds.has(o.userId))
-      .filter((o) => o.name.toLowerCase().includes(q) || o.address.toLowerCase().includes(q))
+      // Match the mail ADDRESS only (not the display name); rows still show both.
+      .filter((o) => o.address.toLowerCase().includes(q))
       .slice(0, MAX_SHOWN);
   }, [options, excludeIds, selectedIds, query]);
 
