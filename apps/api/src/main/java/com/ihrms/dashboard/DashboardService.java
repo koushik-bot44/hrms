@@ -84,6 +84,9 @@ public class DashboardService {
     return switch (u.role()) {
       case SUPER_ADMIN -> superAdminSummary();
       case ACCOUNTS_ADMIN -> accountsAdminSummary();
+      // HIERARCHY has its own aggregates area (§2, /hierarchy/**, added later) and does not use the
+      // shared role dashboard — an empty summary keeps the shared endpoint safe if ever hit.
+      case HIERARCHY -> new DashboardSummary("HIERARCHY", List.of(), List.of(), null);
       case COMPANY_ADMIN -> companyAdminSummary(u.companyId());
       case HR -> hrSummary(u.userId());
       case MANAGER -> managerSummary(u.userId());

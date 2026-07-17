@@ -362,6 +362,22 @@ export type ProvisionAccountantResult = Omit<
   devPassword: string | null;
 };
 
+// --- Hierarchy (cross-platform, read-only, aggregates-only; §2/§6) ----------
+
+export type HierarchyView = Required<Schemas['HierarchyView']>;
+
+/** {@code hierarchy} is present only once the singleton exists. */
+export type HierarchyStatus = Omit<Required<Schemas['HierarchyStatus']>, 'hierarchy'> & {
+  hierarchy: HierarchyView | null;
+};
+
+export type ProvisionHierarchyResult = Omit<
+  Required<Schemas['ProvisionHierarchyResult']>,
+  'devPassword'
+> & {
+  devPassword: string | null;
+};
+
 /** One row of the cross-company approved-employees table. */
 export type ApprovedEmployeeRow = Schemas['ApprovedEmployeeRow'];
 

@@ -214,7 +214,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/provisioning/accounts-admin": {
+    "/provisioning/hierarchy": {
         parameters: {
             query?: never;
             header?: never;
@@ -225,6 +225,22 @@ export interface paths {
         put?: never;
         post: operations["provision"];
         delete: operations["remove_1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/provisioning/accounts-admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["status_1"];
+        put?: never;
+        post: operations["provision_1"];
+        delete: operations["remove_2"];
         options?: never;
         head?: never;
         patch?: never;
@@ -944,7 +960,7 @@ export interface paths {
         get: operations["get_2"];
         put?: never;
         post?: never;
-        delete: operations["remove_2"];
+        delete: operations["remove_3"];
         options?: never;
         head?: never;
         patch: operations["update_2"];
@@ -1422,7 +1438,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["status_1"];
+        get: operations["status_2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1678,7 +1694,7 @@ export interface components {
             name?: string;
             email?: string;
             /** @enum {string} */
-            role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
+            role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "HIERARCHY" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
             status?: string;
         };
         SignatureRequest: {
@@ -1817,6 +1833,22 @@ export interface components {
             id?: string;
             /** @description True if this endpoint was already registered and was updated. */
             existing?: boolean;
+        };
+        ProvisionHierarchyRequest: {
+            name: string;
+            localPart: string;
+            password: string;
+        };
+        HierarchyView: {
+            id?: string;
+            email?: string;
+            name?: string;
+            status?: string;
+            createdAt?: string;
+        };
+        ProvisionHierarchyResult: {
+            hierarchy?: components["schemas"]["HierarchyView"];
+            devPassword?: string;
         };
         ProvisionAccountantRequest: {
             name: string;
@@ -2235,6 +2267,10 @@ export interface components {
             /** @description Whether the server has Web Push configured (VAPID keys present). */
             enabled?: boolean;
         };
+        HierarchyStatus: {
+            exists?: boolean;
+            hierarchy?: components["schemas"]["HierarchyView"];
+        };
         AccountantStatus: {
             exists?: boolean;
             accountant?: components["schemas"]["AccountantView"];
@@ -2256,7 +2292,7 @@ export interface components {
             name?: string;
             address?: string;
             /** @enum {string} */
-            role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
+            role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "HIERARCHY" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
         };
         ThreadDetailView: {
             threadId?: string;
@@ -3091,12 +3127,76 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AccountantStatus"];
+                    "*/*": components["schemas"]["HierarchyStatus"];
                 };
             };
         };
     };
     provision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProvisionHierarchyRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProvisionHierarchyResult"];
+                };
+            };
+        };
+    };
+    remove_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HierarchyStatus"];
+                };
+            };
+        };
+    };
+    status_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountantStatus"];
+                };
+            };
+        };
+    };
+    provision_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -3120,7 +3220,7 @@ export interface operations {
             };
         };
     };
-    remove_1: {
+    remove_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -4385,7 +4485,7 @@ export interface operations {
             };
         };
     };
-    remove_2: {
+    remove_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -5094,7 +5194,7 @@ export interface operations {
             };
         };
     };
-    status_1: {
+    status_2: {
         parameters: {
             query?: never;
             header?: never;

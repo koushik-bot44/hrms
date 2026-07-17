@@ -91,6 +91,11 @@ public class SecurityConfig {
                     // team-scoped Accountant (the service scopes by role). Provisioning is SUPER_ADMIN-only.
                     .requestMatchers("/accountant/**")
                     .hasAnyRole("ACCOUNTS_ADMIN", "ACCOUNTANT")
+                    // The cross-platform, read-only, AGGREGATES-ONLY Hierarchy area (§2/§6). No data
+                    // handlers yet (aggregate reads land later); the namespace establishes the boundary
+                    // now so wrong roles get a clean 403.
+                    .requestMatchers("/hierarchy/**")
+                    .hasRole("HIERARCHY")
                     .requestMatchers("/provisioning/**")
                     .hasRole("SUPER_ADMIN")
                     // Internal mail (§8): any authenticated account reaches its OWN mailbox; the send

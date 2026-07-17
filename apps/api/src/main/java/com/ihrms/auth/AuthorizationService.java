@@ -55,10 +55,11 @@ public class AuthorizationService {
       return e.companyId();
     }
     IhrmsPrincipal.User u = (IhrmsPrincipal.User) principal;
-    // SUPER_ADMIN and ACCOUNTS_ADMIN are cross-company (null companyId); everyone else (incl. the
-    // team-scoped ACCOUNTANT) is company-locked.
+    // SUPER_ADMIN, ACCOUNTS_ADMIN and HIERARCHY are cross-company/platform (null companyId); everyone
+    // else (incl. the team-scoped ACCOUNTANT) is company-locked.
     return u.role() == com.ihrms.domain.enums.UserRole.SUPER_ADMIN
             || u.role() == com.ihrms.domain.enums.UserRole.ACCOUNTS_ADMIN
+            || u.role() == com.ihrms.domain.enums.UserRole.HIERARCHY
         ? null
         : u.companyId();
   }
@@ -120,6 +121,8 @@ public class AuthorizationService {
       // ACCOUNTS_ADMIN: read-only, cross-company, APPROVED-only — an employeeCode is minted only on
       // approval (§5), so a non-null code == approved. The service also re-checks status explicitly.
       case ACCOUNTS_ADMIN -> employee.employeeCode() != null;
+      // HIERARCHY: aggregates-only (§2/§6) — NEVER an individual record/PII, denied outright.
+      case HIERARCHY -> false;
       case COMPANY_ADMIN -> employee.companyId().equals(u.companyId());
       case HR ->
           employee.companyId().equals(u.companyId())

@@ -7,5 +7,6 @@ export * from './onboarding';
 export * from './review';
 export * from './manager';
 export * from './accountant';
+export * from './hierarchy';
 export * from './mail';
 export * from './leave';

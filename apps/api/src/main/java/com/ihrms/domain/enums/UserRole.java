@@ -5,6 +5,8 @@ public enum UserRole {
   SUPER_ADMIN,
   /** Top-level, cross-company READ-ONLY viewer of approved employees (§2/§6); singleton. */
   ACCOUNTS_ADMIN,
+  /** Cross-platform READ-ONLY, AGGREGATES-ONLY overview role (§2/§6); no PII, no writes; singleton. */
+  HIERARCHY,
   COMPANY_ADMIN,
   HR,
   MANAGER,

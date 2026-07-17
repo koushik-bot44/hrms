@@ -37,6 +37,7 @@ Super Admin
 |------|-------|--------|
 | **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **provision the single Accounts Admin**; **archive (soft-delete) a company and restore it**; **manage teams in any company** (create / rename / reassign HR + Manager + Accountant) and **onboard employees into any company** (selecting company → team → HR); view **all** companies' audit logs (separated per company), including archived companies'. |
 | **Accounts Admin** | Entire portal — **read-only** | A central, cross-company **viewer** (`companyId = null`, like Super Admin but never writes). Sees **approved** employees across **all** companies and their **full records** (the four forms + documents/PDFs) with sensitive fields **masked by default** and an **audited reveal** — the exact HR mechanism; and an **approval-only** audit trail across companies. **No onboarding / verify / approve / edit / archive / delete / provisioning — GET-only.** In-flight (non-approved) employees are **not** visible. **Exactly one** may exist; provisioned by Super Admin. |
+| **Hierarchy** | Entire platform — **read-only, aggregates-only** | A top-level, cross-platform **overview** role (`companyId = null`, like Super Admin/Accounts Admin but never writes). Sees only **platform-wide aggregates / counts / summaries** — **never** individual employee records or PII, **never** attendance or leave, **no** writes anywhere. It never appears in any onboarding / verification / approval / provisioning / company-management flow. **Exactly one** may exist; provisioned by Super Admin; signs in with staff **email + password**. _(Aggregate read endpoints are added later; this stage establishes the role, login, provisioning and a placeholder overview.)_ |
 | **Company Admin** | One company | Create teams and assign the team's HR, Manager and Accountant (one each); **assign/reset the mailbox credentials of any APPROVED employee in the company** (§6, alongside the onboarding HR); view **own company's** audit logs. |
 | **HR** | Own team / own onboarded employees | Onboard by **filling Form 2** (which creates the record + sends the invite); **edit Form 2 while the employee is `INVITED`** (locked once they start, 409; a personal-email change re-invites); look up an employee by ID and see all their forms/documents; verify **Forms 1/3/4 + documents** (Form 2 is not verified); route the approval request to the team's Manager. |
 | **Manager** | Own team | Workspace inbox/notifications (who was onboarded, who was verified, pending approvals); **approve** verified employees. Approval is the **final step** _[parked: post-approval actions]_. |
@@ -98,6 +99,18 @@ path HR uses), and read an **approval-only** slice of the audit trail across all
 appear in an onboarding, verification, approval, provisioning, or company-management flow. **Exactly
 one Accounts Admin may exist** — the Super Admin provisions it (email + name + initial password), and a
 second creation is rejected. It signs in with **staff email + password** (§6), like the other staff roles.
+
+**Hierarchy (platform-wide aggregates viewer).** A third top-level, cross-company **read** principal
+(with **Super Admin** and **Accounts Admin**) — a staff `User` with **`companyId = null`** — but the
+**narrowest** read scope: it sees **only platform-wide aggregates / counts / summaries**, and **never**
+individual employee records, PII, attendance or leave, and **never writes** anything. Where the Accounts
+Admin can open a full masked record, the Hierarchy role **cannot reach any individual record at all** —
+its authorization boundary denies employee-record access outright (aggregates only). **Exactly one
+Hierarchy may exist** — the Super Admin provisions it (email + name + initial password; its login
+identity is formed as `localPart@ihrms`, the platform domain, exactly like the Accounts Admin), a second
+creation is rejected, and it signs in with **staff email + password** (§6). It is **not** part of the
+internal-mail send graph. Its data views (aggregate reads under `/hierarchy/**`) are added in a later
+stage; the role, login, provisioning and a placeholder overview land first.
 
 **Accountant (team-scoped read-only viewer).** The **per-team** analogue of the Accounts Admin: a staff
 `User` with a `companyId` **and a `teamId`** (like HR/Manager), **read-only**. It sees exactly the
@@ -279,7 +292,8 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
 
 ### Enums (defined in the shared package — single source of truth)
 - **UserRole**: `SUPER_ADMIN`, `ACCOUNTS_ADMIN` _(cross-company read-only viewer; singleton)_,
-  `COMPANY_ADMIN`, `HR`, `MANAGER`, `ACCOUNTANT` _(team-scoped read-only viewer)_
+  `HIERARCHY` _(cross-platform read-only, aggregates-only; singleton)_, `COMPANY_ADMIN`, `HR`,
+  `MANAGER`, `ACCOUNTANT` _(team-scoped read-only viewer)_
 - **EmployeeStatus**: `INVITED`, `IN_PROGRESS`, `SUBMITTED`, `REVISION_REQUESTED` _(HR sent one or more
   items back; the employee is fixing them)_, `HR_VERIFIED`, `APPROVED`, `REJECTED`
 - **SectionStatus** _(status of each form + review item)_: `DRAFT`, `SUBMITTED`, `VERIFIED`,
@@ -322,6 +336,12 @@ Security is structural, because the data is sensitive PII (PAN, Aadhaar, BGV, ex
     (`companyId = null`) that may only issue GET/read operations, and only over **approved**
     employees + their records + an approval-only audit view. No handler that mutates state (onboard,
     verify, approve, edit, archive, purge, provision, …) accepts an Accounts Admin.
+  - **Hierarchy → all companies, READ-ONLY and AGGREGATES-ONLY.** A cross-company principal
+    (`companyId = null`) that may only read **platform-wide aggregates / counts / summaries** under its
+    own `/hierarchy/**` namespace — **never** an individual employee record/PII, attendance or leave, and
+    **no** mutating handler. The centralized employee-record gate denies it outright (it is not an
+    approved-record reader like the Accounts Admin). Provisioned SUPER_ADMIN-only as a singleton;
+    staff email + password.
   - Company Admin → only their `companyId` — but **company-wide** within it: may read **any** employee's
     record in the company and **assign/reset any APPROVED employee's mailbox credentials** (Stage 5),
     alongside the onboarding HR. (Verify / route-to-Manager / reveal remain HR-only.)

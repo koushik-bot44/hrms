@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/loading-skeleton';
 import { CreateCompanyDialog } from '@/components/super-admin/create-company-dialog';
 import { CreateAccountantDialog } from '@/components/super-admin/create-accountant-dialog';
+import { CreateHierarchyDialog } from '@/components/super-admin/create-hierarchy-dialog';
 import { SuperAdminOnboardDialog } from '@/components/super-admin/super-admin-onboard-dialog';
 import { CompanyStatusBadge } from '@/components/super-admin/company-status-badge';
 import { DeleteCompanyDialog } from '@/components/super-admin/delete-company-dialog';
@@ -157,6 +158,7 @@ function CompaniesView() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <CreateAccountantDialog />
+            <CreateHierarchyDialog />
             <SuperAdminOnboardDialog />
             <CreateCompanyDialog />
           </div>

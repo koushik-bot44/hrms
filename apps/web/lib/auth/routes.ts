@@ -16,6 +16,9 @@ export function homePathForSession(session: Session): string {
     case UserRole.ACCOUNTS_ADMIN:
     case UserRole.ACCOUNTANT:
       return '/accountant';
+    // Cross-platform, read-only, aggregates-only overview (§2).
+    case UserRole.HIERARCHY:
+      return '/hierarchy';
     case UserRole.COMPANY_ADMIN:
       return '/company-admin';
     case UserRole.HR:

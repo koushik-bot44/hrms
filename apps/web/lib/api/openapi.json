@@ -539,12 +539,78 @@
         }
       }
     },
+    "/provisioning/hierarchy": {
+      "get": {
+        "tags": [
+          "hierarchy-provisioning-controller"
+        ],
+        "operationId": "status",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/HierarchyStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "hierarchy-provisioning-controller"
+        ],
+        "operationId": "provision",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProvisionHierarchyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProvisionHierarchyResult"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "hierarchy-provisioning-controller"
+        ],
+        "operationId": "remove_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/HierarchyStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/provisioning/accounts-admin": {
       "get": {
         "tags": [
           "accountant-provisioning-controller"
         ],
-        "operationId": "status",
+        "operationId": "status_1",
         "responses": {
           "200": {
             "description": "OK",
@@ -562,7 +628,7 @@
         "tags": [
           "accountant-provisioning-controller"
         ],
-        "operationId": "provision",
+        "operationId": "provision_1",
         "requestBody": {
           "content": {
             "application/json": {
@@ -590,7 +656,7 @@
         "tags": [
           "accountant-provisioning-controller"
         ],
-        "operationId": "remove_1",
+        "operationId": "remove_2",
         "responses": {
           "200": {
             "description": "OK",
@@ -2352,7 +2418,7 @@
         "tags": [
           "company-teams-controller"
         ],
-        "operationId": "remove_2",
+        "operationId": "remove_3",
         "parameters": [
           {
             "name": "companyId",
@@ -3382,7 +3448,7 @@
         "tags": [
           "attendance-controller"
         ],
-        "operationId": "status_1",
+        "operationId": "status_2",
         "responses": {
           "200": {
             "description": "OK",
@@ -3942,6 +4008,7 @@
             "enum": [
               "SUPER_ADMIN",
               "ACCOUNTS_ADMIN",
+              "HIERARCHY",
               "COMPANY_ADMIN",
               "HR",
               "MANAGER",
@@ -4443,6 +4510,62 @@
           }
         },
         "description": "Result of registering a subscription."
+      },
+      "ProvisionHierarchyRequest": {
+        "required": [
+          "localPart",
+          "name",
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 2,
+            "type": "string"
+          },
+          "localPart": {
+            "maxLength": 64,
+            "minLength": 0,
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 2147483647,
+            "minLength": 8,
+            "type": "string"
+          }
+        }
+      },
+      "HierarchyView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ProvisionHierarchyResult": {
+        "type": "object",
+        "properties": {
+          "hierarchy": {
+            "$ref": "#/components/schemas/HierarchyView"
+          },
+          "devPassword": {
+            "type": "string"
+          }
+        }
       },
       "ProvisionAccountantRequest": {
         "required": [
@@ -5869,6 +5992,17 @@
         },
         "description": "The VAPID public key the browser needs to create a PushSubscription."
       },
+      "HierarchyStatus": {
+        "type": "object",
+        "properties": {
+          "exists": {
+            "type": "boolean"
+          },
+          "hierarchy": {
+            "$ref": "#/components/schemas/HierarchyView"
+          }
+        }
+      },
       "AccountantStatus": {
         "type": "object",
         "properties": {
@@ -5927,6 +6061,7 @@
             "enum": [
               "SUPER_ADMIN",
               "ACCOUNTS_ADMIN",
+              "HIERARCHY",
               "COMPANY_ADMIN",
               "HR",
               "MANAGER",
