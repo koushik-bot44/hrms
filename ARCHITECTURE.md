@@ -77,8 +77,12 @@ as if that HR had onboarded them; there is no direct team field, so **the HR is 
 selected team**, which has exactly one). Everything downstream is **unchanged**: the employee is
 `INVITED` with no ID, gets the same selection email + `/employee/login` link (to their personal email),
 appears in **that HR's** queue, is verified by that HR (Forms 1/3/4), and approved by **that team's
-Manager** (who mints the unique ID). The Super Admin can also **edit Form 2 while `INVITED`** and its
-standalone Form-2 PDF, identically to HR.
+Manager** (who mints the unique ID). The Super Admin can also **browse any company's employees**
+(`GET /companies/{id}/employees`, all teams) and **open an employee's record** — the read-only
+forms-viewer (Forms 1/3/4 + the HR-authored Form 2 + the generated PDFs, incl. the standalone HR-only
+Form-2 PDF) — and **edit Form 2 while `INVITED`**, identically to HR. Record read is therefore open to
+the onboarding **HR**, the employee's **Company Admin**, and the **Super Admin** (each scoped by role);
+the Super Admin never verifies or routes.
 
 **Employee ↔ team linkage:** an Employee is tied to a **Company** and their **onboarding HR**
 (no direct team field in v1). The approving Manager is therefore **the Manager on the onboarding

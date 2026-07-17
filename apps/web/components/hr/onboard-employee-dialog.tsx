@@ -22,10 +22,24 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { EmployeeInfoFields } from '@/components/employee-info/employee-info-fields';
 
 const EMPLOYEES_KEY = ['hr-employees'] as const;
 
+export const EMPTY_FORM2: OnboardEmployeeInput = {
+  fullName: '',
+  fatherName: '',
+  personalEmail: '',
+  designation: '',
+  dateOfJoining: '',
+  dateOfBirth: '',
+  bloodGroup: '',
+  mobile: '',
+  officialEmail: '',
+  documentSubmitted: '',
+};
+
+/** HR onboarding = fill FORM 2 — Employee Info (§3.2). Submitting it creates the record + sends the invite. */
 export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const [result, setResult] = React.useState<OnboardEmployeeResult | null>(null);
@@ -39,33 +53,30 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
     formState: { errors, isSubmitting },
   } = useForm<OnboardEmployeeInput>({
     resolver: zodResolver(OnboardEmployeeSchema),
-    defaultValues: { fullName: '', email: '', designation: '', dateOfJoining: '' },
+    defaultValues: EMPTY_FORM2,
   });
 
   const mutation = useApiMutation((body: OnboardEmployeeInput) => onboardEmployee(body), {
     successMessage: (data) => `${data.employee.fullName} onboarded`,
     onError: (error) => {
       if (error.status === 400 || error.status === 409) {
-        setError('email', { message: error.message });
+        setError('personalEmail', { message: error.message });
       }
     },
     onSuccess: (data) => {
       setResult(data);
-      reset();
+      reset(EMPTY_FORM2);
     },
-    // Refresh the HR queue (any filter/page) + the dashboard counts.
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY });
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 
-  const onSubmit = handleSubmit((values) => mutation.mutate(values));
-
   const close = () => {
     setOpen(false);
     setResult(null);
-    reset();
+    reset(EMPTY_FORM2);
   };
 
   return (
@@ -75,7 +86,7 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
         setOpen(next);
         if (!next) {
           setResult(null);
-          reset();
+          reset(EMPTY_FORM2);
         }
       }}
     >
@@ -87,78 +98,35 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         {result ? (
-          <div className="space-y-5">
-            <DialogHeader>
-              <div className="mb-1 flex size-9 items-center justify-center rounded-full bg-success/10 text-success">
-                <CheckCircle2 className="size-5" />
-              </div>
-              <DialogTitle>Employee onboarded</DialogTitle>
-              <DialogDescription>
-                We emailed a selection note and a login link to{' '}
-                <span className="font-medium text-foreground">{result.employee.email}</span>. They
-                sign in with their full name + email; a unique employee ID is assigned once a Manager
-                approves them.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setResult(null)}>
-                Onboard another
-              </Button>
-              <Button onClick={close}>Done</Button>
-            </div>
-          </div>
+          <OnboardedConfirmation
+            email={result.employee.email}
+            onAgain={() => setResult(null)}
+            onDone={close}
+          />
         ) : (
           <>
             <DialogHeader>
               <DialogTitle>Onboard an employee</DialogTitle>
               <DialogDescription>
-                Enter their details. We&apos;ll email a selection note with a login link — no ID is
-                needed to sign in.
+                Fill in their Employee Info (Form 2). We&apos;ll email a selection note + login link to
+                their personal email — no ID is needed to sign in.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={onSubmit} className="space-y-4" noValidate>
-              <Field id="onb-name" label="Full Name" error={errors.fullName?.message}>
-                <Input
-                  id="onb-name"
-                  placeholder="Alex Doe"
-                  aria-invalid={Boolean(errors.fullName)}
-                  {...register('fullName')}
-                />
-              </Field>
-              <Field id="onb-email" label="Email" error={errors.email?.message}>
-                <Input
-                  id="onb-email"
-                  type="email"
-                  placeholder="new.hire@personal.com"
-                  aria-invalid={Boolean(errors.email)}
-                  {...register('email')}
-                />
-              </Field>
-              <Field id="onb-designation" label="Designation" error={errors.designation?.message}>
-                <Input
-                  id="onb-designation"
-                  placeholder="Software Engineer"
-                  aria-invalid={Boolean(errors.designation)}
-                  {...register('designation')}
-                />
-              </Field>
-              <Field id="onb-doj" label="Date of Joining" error={errors.dateOfJoining?.message}>
-                <Input
-                  id="onb-doj"
-                  type="date"
-                  min={istTodayIso()}
-                  aria-invalid={Boolean(errors.dateOfJoining)}
-                  {...register('dateOfJoining')}
-                />
-              </Field>
-              <div className="flex justify-end gap-2 pt-2">
+            <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-6" noValidate>
+              <EmployeeInfoFields
+                register={register}
+                errors={errors}
+                dojMin={istTodayIso()}
+                idPrefix="onb"
+              />
+              <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Onboarding…' : 'Onboard & email'}
+                <Button type="submit" disabled={isSubmitting || mutation.isPending}>
+                  {isSubmitting || mutation.isPending ? 'Onboarding…' : 'Onboard & email'}
                 </Button>
               </div>
             </form>
@@ -169,24 +137,35 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
   );
 }
 
-function Field({
-  id,
-  label,
-  error,
-  children,
+/** Shared success panel — the invite went to the employee's personal email. */
+export function OnboardedConfirmation({
+  email,
+  onAgain,
+  onDone,
 }: {
-  id: string;
-  label: string;
-  error?: string;
-  children: React.ReactNode;
+  email: string;
+  onAgain: () => void;
+  onDone: () => void;
 }) {
   return (
-    <div className="space-y-1.5">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-      </label>
-      {children}
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    <div className="space-y-5">
+      <DialogHeader>
+        <div className="mb-1 flex size-9 items-center justify-center rounded-full bg-success/10 text-success">
+          <CheckCircle2 className="size-5" />
+        </div>
+        <DialogTitle>Employee onboarded</DialogTitle>
+        <DialogDescription>
+          We emailed a selection note and a login link to{' '}
+          <span className="font-medium text-foreground">{email}</span>. They sign in with their full
+          name + this email; a unique employee ID is assigned once a Manager approves them.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onAgain}>
+          Onboard another
+        </Button>
+        <Button onClick={onDone}>Done</Button>
+      </div>
     </div>
   );
 }

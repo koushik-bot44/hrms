@@ -69,8 +69,10 @@ public class SecurityConfig {
                     // else under /employees/** (onboard, verify, route, reveal, lookup) stays HR-only.
                     .requestMatchers(HttpMethod.GET, "/employees")
                     .hasAnyRole("HR", "COMPANY_ADMIN")
+                    // Record read: onboarding HR + the employee's COMPANY_ADMIN + the SUPER_ADMIN
+                    // (cross-company forms-viewer / Form-2 edit, §2/§3.2). The service scopes each.
                     .requestMatchers(HttpMethod.GET, "/employees/*/record")
-                    .hasAnyRole("HR", "COMPANY_ADMIN")
+                    .hasAnyRole("HR", "COMPANY_ADMIN", "SUPER_ADMIN")
                     .requestMatchers(HttpMethod.POST, "/employees/*/credentials")
                     .hasAnyRole("HR", "COMPANY_ADMIN")
                     // Form-2 edit at onboard (§3.2): HR (own onboarded) + SUPER_ADMIN (cross-company);

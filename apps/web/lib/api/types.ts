@@ -669,7 +669,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["list_4"];
         put?: never;
         post: operations["onboard_1"];
         delete?: never;
@@ -3853,6 +3853,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["TeamDetailView"];
+                };
+            };
+        };
+    };
+    list_4: {
+        parameters: {
+            query: {
+                search?: string;
+                status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmployeePage"];
                 };
             };
         };

@@ -139,20 +139,31 @@ export type Form1Input = z.input<typeof Form1Schema>;
 export type Form1Values = z.output<typeof Form1Schema>;
 
 // ---------------------------------------------------------------------------
-// Form 2 — Employee Info (employeeId is system-assigned/read-only; sparkId is HR-set)
+// Form 2 — Employee Info: AUTHORED BY HR/SA at onboard (§3.2). employeeId is system-assigned
+// (greyed, minted on approval); sparkId + officialEmail are assigned-later / inert. The personal
+// email is the employee's login (OTP) identity and the invite target — required + validated.
+// (alternate number, vehicle no, PAN, account number and the addresses moved to Form 1, §3.2.)
 // ---------------------------------------------------------------------------
 
-// alternate number, vehicle no, PAN, account number and the addresses moved to Form 1 (§3.2).
+const FORM2_DATE_ISO = /^\d{4}-\d{2}-\d{2}$/;
+
 export const Form2Schema = z.object({
   fullName: z.string().trim().min(2, 'Full name is required').max(150),
   fatherName: optional(150),
+  personalEmail: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, 'Personal email is required')
+    .email('Enter a valid email')
+    .max(180),
+  designation: z.string().trim().min(2, 'Designation is required').max(150),
+  dateOfJoining: z.string().regex(FORM2_DATE_ISO, 'Select a date of joining'),
   dateOfBirth: dateish,
-  dateOfJoining: dateish,
   bloodGroup: optional(10),
   mobile: optional(30),
+  // Assigned later — inert for now (never required, never blocks submit).
   officialEmail: optional(180),
-  personalEmail: optional(180),
-  designation: optional(150),
   documentSubmitted: optional(60),
 });
 export type Form2Values = z.output<typeof Form2Schema>;

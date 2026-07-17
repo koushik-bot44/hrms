@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/empty-state';
 import { CompanyStatusBadge } from '@/components/super-admin/company-status-badge';
 import { ProvisionAdminForm } from '@/components/super-admin/provision-admin-form';
 import { CompanyTeamsSection } from '@/components/super-admin/company-teams-section';
+import { CompanyEmployeesSection } from '@/components/super-admin/company-employees-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -100,6 +101,8 @@ export default function CompanyDetailPage({ params }: { params: { companyId: str
       </Card>
 
       <CompanyTeamsSection companyId={data.id} />
+
+      <CompanyEmployeesSection companyId={data.id} />
     </div>
   );
 }

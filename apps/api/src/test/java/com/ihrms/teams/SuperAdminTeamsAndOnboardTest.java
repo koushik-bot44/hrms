@@ -139,6 +139,38 @@ class SuperAdminTeamsAndOnboardTest {
   }
 
   @Test
+  void superAdminListsACompanysEmployeesAndOpensARecord() throws Exception {
+    String teamId =
+        idOf(post("/companies/" + companyA + "/teams"), superToken, Map.of("name", "Eng"), 201);
+    perform(put("/companies/" + companyA + "/teams/" + teamId + "/hr"), superToken,
+        Map.of("name", "Hana HR", "localPart", "hana", "password", "HanaHR@12"), 200);
+    JsonNode onboarded =
+        json.readTree(
+            perform(post("/companies/" + companyA + "/employees"), superToken,
+                    saOnboard(teamId, "Eve Employee", "eve@personal.test"), 201)
+                .getResponse().getContentAsString());
+    String employeeId = onboarded.get("employee").get("id").asText();
+
+    // SA lists the chosen company's employees (all teams) and finds the new hire.
+    JsonNode page =
+        json.readTree(
+            perform(get("/companies/" + companyA + "/employees"), superToken, null, 200)
+                .getResponse().getContentAsString());
+    assertThat(page.get("content"))
+        .anySatisfy(e -> assertThat(e.get("id").asText()).isEqualTo(employeeId));
+
+    // SA opens the record (cross-company forms-viewer) and sees the HR-authored Form 2.
+    JsonNode record =
+        json.readTree(
+            perform(get("/employees/" + employeeId + "/record"), superToken, null, 200)
+                .getResponse().getContentAsString());
+    assertThat(record.get("form2").get("fullName").asText()).isEqualTo("Eve Employee");
+
+    // The company-scoped list is SUPER_ADMIN-only (the /companies/** path); a COMPANY_ADMIN is refused.
+    perform(get("/companies/" + companyA + "/employees"), caToken, null, 403);
+  }
+
+  @Test
   void rejectsATeamThatIsNotInTheSelectedCompany() throws Exception {
     String teamInB = idOf(post("/companies/" + companyB + "/teams"), superToken, Map.of("name", "Team B"), 201);
     perform(put("/companies/" + companyB + "/teams/" + teamInB + "/hr"), superToken,

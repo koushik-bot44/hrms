@@ -40,11 +40,11 @@ public class ReviewController {
     this.credentials = credentials;
   }
 
-  // Reading a record is open to the onboarding HR OR the employee's COMPANY_ADMIN (same company) so
-  // the admin's employee view can reach it; the service (canAccessEmployee) scopes it. Overrides the
-  // class-level HR-only rule.
+  // Reading a record is open to the onboarding HR, the employee's COMPANY_ADMIN (same company), OR the
+  // SUPER_ADMIN (cross-company — the SA forms-viewer + Form-2 edit navigation, §2/§3.2). The service
+  // (canAccessEmployee) scopes each. Overrides the class-level HR-only rule.
   @GetMapping("/{id}/record")
-  @PreAuthorize("hasAnyRole('HR','COMPANY_ADMIN')")
+  @PreAuthorize("hasAnyRole('HR','COMPANY_ADMIN','SUPER_ADMIN')")
   public EmployeeRecordView record(
       @PathVariable String id,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,

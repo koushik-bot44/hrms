@@ -26,6 +26,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { RecordView, type ItemKind } from '@/components/hr/record-view';
+import { EditEmployeeInfoDialog } from '@/components/employee-info/edit-employee-info-dialog';
 
 type ReviewVars = { kind: ItemKind; id: string; decision: ReviewDecision; reason?: string };
 
@@ -157,6 +158,16 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
           void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
           router.push('/hr/employees');
         }}
+        form2EditAction={
+          record.status === 'INVITED' ? (
+            <EditEmployeeInfoDialog
+              employeeId={record.id}
+              form2={record.form2}
+              employeeCode={record.employeeCode}
+              onSaved={() => queryClient.invalidateQueries({ queryKey: recordKey(employeeId) })}
+            />
+          ) : null
+        }
       />
       <SendBackDialog
         open={Boolean(sendingBack)}

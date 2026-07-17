@@ -294,30 +294,50 @@ public class EmployeesService {
   public EmployeePage queue(
       IhrmsPrincipal.User actor, String search, EmployeeStatus status, Pageable pageable) {
     String companyId = companyOf(actor);
-    Specification<Employee> spec =
-        (root, q, cb) -> {
-          List<Predicate> p = new ArrayList<>();
-          p.add(cb.equal(root.get("companyId"), companyId));
-          // HR sees only their own onboarded employees (§6); a COMPANY_ADMIN sees the whole company.
-          // No other role reaches this method (URL rule + @PreAuthorize gate it to HR / COMPANY_ADMIN).
-          if (actor.role() == UserRole.HR) {
-            p.add(cb.equal(root.get("onboardingHrId"), actor.userId()));
-          }
-          if (status != null) {
-            p.add(cb.equal(root.get("status"), status));
-          }
-          if (search != null && !search.isBlank()) {
-            String like = "%" + search.trim().toLowerCase() + "%";
-            // employeeCode is null until approval — a LIKE on null yields no match (never an NPE).
-            p.add(
-                cb.or(
-                    cb.like(cb.lower(root.get("fullName")), like),
-                    cb.like(cb.lower(root.get("email")), like),
-                    cb.like(cb.lower(root.get("employeeCode")), like)));
-          }
-          return cb.and(p.toArray(new Predicate[0]));
-        };
-    Page<Employee> page = employees.findAll(spec, pageable);
+    // HR sees only their own onboarded employees (§6); a COMPANY_ADMIN sees the whole company. No other
+    // role reaches this method (URL rule + @PreAuthorize gate it to HR / COMPANY_ADMIN).
+    String hrFilter = actor.role() == UserRole.HR ? actor.userId() : null;
+    return toPage(employees.findAll(employeeSpec(companyId, hrFilter, search, status), pageable));
+  }
+
+  /**
+   * Company-wide employee list for a SUPER_ADMIN browsing a chosen company (§2) — no HR filter, all
+   * teams. Reached via {@code GET /companies/{companyId}/employees} (SUPER_ADMIN-only URL rule).
+   */
+  public EmployeePage queueForCompany(
+      String companyId, String search, EmployeeStatus status, Pageable pageable) {
+    companies
+        .findById(companyId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
+    return toPage(employees.findAll(employeeSpec(companyId, null, search, status), pageable));
+  }
+
+  /** Company-scoped employee query; {@code onboardingHrId} narrows to one HR's queue when non-null. */
+  private static Specification<Employee> employeeSpec(
+      String companyId, String onboardingHrId, String search, EmployeeStatus status) {
+    return (root, q, cb) -> {
+      List<Predicate> p = new ArrayList<>();
+      p.add(cb.equal(root.get("companyId"), companyId));
+      if (onboardingHrId != null) {
+        p.add(cb.equal(root.get("onboardingHrId"), onboardingHrId));
+      }
+      if (status != null) {
+        p.add(cb.equal(root.get("status"), status));
+      }
+      if (search != null && !search.isBlank()) {
+        String like = "%" + search.trim().toLowerCase() + "%";
+        // employeeCode is null until approval — a LIKE on null yields no match (never an NPE).
+        p.add(
+            cb.or(
+                cb.like(cb.lower(root.get("fullName")), like),
+                cb.like(cb.lower(root.get("email")), like),
+                cb.like(cb.lower(root.get("employeeCode")), like)));
+      }
+      return cb.and(p.toArray(new Predicate[0]));
+    };
+  }
+
+  private static EmployeePage toPage(Page<Employee> page) {
     return new EmployeePage(
         page.getContent().stream().map(EmployeesService::summary).toList(),
         page.getNumber(),

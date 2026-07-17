@@ -1600,6 +1600,67 @@
       }
     },
     "/companies/{companyId}/employees": {
+      "get": {
+        "tags": [
+          "company-employees-controller"
+        ],
+        "operationId": "list_4",
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "INVITED",
+                "IN_PROGRESS",
+                "SUBMITTED",
+                "REVISION_REQUESTED",
+                "HR_VERIFIED",
+                "APPROVED",
+                "REJECTED"
+              ]
+            }
+          },
+          {
+            "name": "pageable",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeePage"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "company-employees-controller"

@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, UserPlus } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 import { SuperAdminOnboardSchema, type SuperAdminOnboardInput } from '@/lib/contract';
 import { listCompanies } from '@/lib/api/companies';
 import { listTeams, teamsKey } from '@/lib/api/teams';
@@ -20,12 +20,28 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { EmployeeInfoFields } from '@/components/employee-info/employee-info-fields';
+import { OnboardedConfirmation } from '@/components/hr/onboard-employee-dialog';
 
 const SELECT_CLASS =
   'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
-/** Super Admin onboards into any company (§2): pick company → team → (that team's HR) → details. */
+const EMPTY: SuperAdminOnboardInput = {
+  companyId: '',
+  teamId: '',
+  fullName: '',
+  fatherName: '',
+  personalEmail: '',
+  designation: '',
+  dateOfJoining: '',
+  dateOfBirth: '',
+  bloodGroup: '',
+  mobile: '',
+  officialEmail: '',
+  documentSubmitted: '',
+};
+
+/** Super Admin onboards into any company (§2): pick company → team (→ that team's HR) → fill Form 2. */
 export function SuperAdminOnboardDialog() {
   const [open, setOpen] = React.useState(false);
   const [result, setResult] = React.useState<{ email: string } | null>(null);
@@ -41,7 +57,7 @@ export function SuperAdminOnboardDialog() {
     formState: { errors, isSubmitting },
   } = useForm<SuperAdminOnboardInput>({
     resolver: zodResolver(SuperAdminOnboardSchema),
-    defaultValues: { companyId: '', teamId: '', fullName: '', email: '', designation: '', dateOfJoining: '' },
+    defaultValues: EMPTY,
   });
 
   const companyId = watch('companyId');
@@ -57,26 +73,23 @@ export function SuperAdminOnboardDialog() {
   const teamHasNoHr = Boolean(teamId) && teams.isSuccess && !derivedHr;
 
   const mutation = useApiMutation(
-    (values: SuperAdminOnboardInput) =>
-      onboardForCompany(values.companyId, {
-        teamId: values.teamId,
-        fullName: values.fullName,
-        email: values.email,
-        designation: values.designation,
-        dateOfJoining: values.dateOfJoining,
-      }),
+    (values: SuperAdminOnboardInput) => {
+      const { companyId: cid, teamId: tid, ...form2 } = values;
+      return onboardForCompany(cid, { teamId: tid, form2 });
+    },
     {
       successMessage: (data) => `${data.employee.fullName} onboarded`,
       onSuccess: (data) => {
         setResult({ email: data.employee.email });
-        reset();
+        reset(EMPTY);
         void queryClient.invalidateQueries({ queryKey: ['company', companyId] });
         void queryClient.invalidateQueries({ queryKey: ['companies'] });
+        void queryClient.invalidateQueries({ queryKey: ['company-employees', companyId] });
         void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       },
       onError: (error) => {
         if (error.status === 400 || error.status === 409) {
-          setError('email', { message: error.message });
+          setError('personalEmail', { message: error.message });
         }
       },
     },
@@ -90,7 +103,7 @@ export function SuperAdminOnboardDialog() {
   const close = () => {
     setOpen(false);
     setResult(null);
-    reset();
+    reset(EMPTY);
   };
 
   return (
@@ -100,7 +113,7 @@ export function SuperAdminOnboardDialog() {
         setOpen(next);
         if (!next) {
           setResult(null);
-          reset();
+          reset(EMPTY);
         }
       }}
     >
@@ -110,136 +123,98 @@ export function SuperAdminOnboardDialog() {
           Onboard employee
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         {result ? (
-          <div className="space-y-5">
-            <DialogHeader>
-              <div className="mb-1 flex size-9 items-center justify-center rounded-full bg-success/10 text-success">
-                <CheckCircle2 className="size-5" />
-              </div>
-              <DialogTitle>Employee onboarded</DialogTitle>
-              <DialogDescription>
-                We emailed a selection note and a login link to{' '}
-                <span className="font-medium text-foreground">{result.email}</span>. They sign in with
-                their full name + email; a unique employee ID is assigned once a Manager approves them.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setResult(null)}>
-                Onboard another
-              </Button>
-              <Button onClick={close}>Done</Button>
-            </div>
-          </div>
+          <OnboardedConfirmation email={result.email} onAgain={() => setResult(null)} onDone={close} />
         ) : (
           <>
             <DialogHeader>
               <DialogTitle>Onboard an employee</DialogTitle>
               <DialogDescription>
-                Choose the company and team — the employee attaches to that team&apos;s HR.
+                Choose the company and team — the employee attaches to that team&apos;s HR — then fill
+                their Employee Info (Form 2).
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={onSubmit} className="space-y-4" noValidate>
-              <Field id="sa-onb-company" label="Company" error={errors.companyId?.message}>
-                <select
-                  id="sa-onb-company"
-                  className={SELECT_CLASS}
-                  aria-invalid={Boolean(errors.companyId)}
-                  {...register('companyId')}
-                  onChange={(e) => {
-                    setValue('companyId', e.target.value, { shouldValidate: true });
-                    setValue('teamId', ''); // reset team when company changes
-                  }}
-                >
-                  <option value="">Select a company…</option>
-                  {(companies.data ?? []).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.code})
-                    </option>
-                  ))}
-                </select>
-              </Field>
+            <form onSubmit={onSubmit} className="space-y-6" noValidate>
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold">Company &amp; team</h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FieldWrap id="sa-onb-company" label="Company" error={errors.companyId?.message} required>
+                    <select
+                      id="sa-onb-company"
+                      className={SELECT_CLASS}
+                      aria-invalid={Boolean(errors.companyId)}
+                      {...register('companyId')}
+                      onChange={(e) => {
+                        setValue('companyId', e.target.value, { shouldValidate: true });
+                        setValue('teamId', '');
+                      }}
+                    >
+                      <option value="">Select a company…</option>
+                      {(companies.data ?? []).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.code})
+                        </option>
+                      ))}
+                    </select>
+                  </FieldWrap>
 
-              <Field id="sa-onb-team" label="Team" error={errors.teamId?.message}>
-                <select
-                  id="sa-onb-team"
-                  className={SELECT_CLASS}
-                  disabled={!companyId || teams.isLoading}
-                  aria-invalid={Boolean(errors.teamId)}
-                  {...register('teamId')}
-                >
-                  <option value="">
-                    {!companyId
-                      ? 'Choose a company first'
-                      : teams.isLoading
-                        ? 'Loading teams…'
-                        : (teams.data ?? []).length === 0
-                          ? 'No teams in this company'
-                          : 'Select a team…'}
-                  </option>
-                  {(teams.data ?? []).map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              {teamId ? (
-                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                  <span className="text-muted-foreground">Onboarding HR: </span>
-                  {derivedHr ? (
-                    <span className="font-medium">
-                      {derivedHr.name} <span className="text-muted-foreground">· {derivedHr.email}</span>
-                    </span>
-                  ) : (
-                    <span className="text-destructive">
-                      This team has no HR assigned — assign one before onboarding.
-                    </span>
-                  )}
+                  <FieldWrap id="sa-onb-team" label="Team" error={errors.teamId?.message} required>
+                    <select
+                      id="sa-onb-team"
+                      className={SELECT_CLASS}
+                      disabled={!companyId || teams.isLoading}
+                      aria-invalid={Boolean(errors.teamId)}
+                      {...register('teamId')}
+                    >
+                      <option value="">
+                        {!companyId
+                          ? 'Choose a company first'
+                          : teams.isLoading
+                            ? 'Loading teams…'
+                            : (teams.data ?? []).length === 0
+                              ? 'No teams in this company'
+                              : 'Select a team…'}
+                      </option>
+                      {(teams.data ?? []).map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </FieldWrap>
                 </div>
-              ) : null}
 
-              <Field id="sa-onb-name" label="Full Name" error={errors.fullName?.message}>
-                <Input
-                  id="sa-onb-name"
-                  placeholder="Alex Doe"
-                  aria-invalid={Boolean(errors.fullName)}
-                  {...register('fullName')}
-                />
-              </Field>
-              <Field id="sa-onb-email" label="Email" error={errors.email?.message}>
-                <Input
-                  id="sa-onb-email"
-                  type="email"
-                  placeholder="new.hire@personal.com"
-                  aria-invalid={Boolean(errors.email)}
-                  {...register('email')}
-                />
-              </Field>
-              <Field id="sa-onb-designation" label="Designation" error={errors.designation?.message}>
-                <Input
-                  id="sa-onb-designation"
-                  placeholder="Software Engineer"
-                  aria-invalid={Boolean(errors.designation)}
-                  {...register('designation')}
-                />
-              </Field>
-              <Field id="sa-onb-doj" label="Date of Joining" error={errors.dateOfJoining?.message}>
-                <Input
-                  id="sa-onb-doj"
-                  type="date"
-                  min={istTodayIso()}
-                  aria-invalid={Boolean(errors.dateOfJoining)}
-                  {...register('dateOfJoining')}
-                />
-              </Field>
-              <div className="flex justify-end gap-2 pt-2">
+                {teamId ? (
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                    <span className="text-muted-foreground">Onboarding HR: </span>
+                    {derivedHr ? (
+                      <span className="font-medium">
+                        {derivedHr.name}{' '}
+                        <span className="text-muted-foreground">· {derivedHr.email}</span>
+                      </span>
+                    ) : (
+                      <span className="text-destructive">
+                        This team has no HR assigned — assign one before onboarding.
+                      </span>
+                    )}
+                  </div>
+                ) : null}
+              </section>
+
+              <EmployeeInfoFields
+                register={register}
+                errors={errors}
+                dojMin={istTodayIso()}
+                idPrefix="sa-onb"
+              />
+
+              <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting || teamHasNoHr}>
-                  {isSubmitting ? 'Onboarding…' : 'Onboard & email'}
+                <Button type="submit" disabled={isSubmitting || mutation.isPending || teamHasNoHr}>
+                  {isSubmitting || mutation.isPending ? 'Onboarding…' : 'Onboard & email'}
                 </Button>
               </div>
             </form>
@@ -250,21 +225,24 @@ export function SuperAdminOnboardDialog() {
   );
 }
 
-function Field({
+function FieldWrap({
   id,
   label,
   error,
+  required,
   children,
 }: {
   id: string;
   label: string;
   error?: string;
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
       <label htmlFor={id} className="text-sm font-medium">
         {label}
+        {required ? <span className="ml-0.5 text-destructive">*</span> : null}
       </label>
       {children}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}

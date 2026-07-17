@@ -11,7 +11,7 @@ import type {
   RouteToManagerResult,
   SectionStatus,
 } from '@/lib/contract';
-import { DOCUMENT_TYPE_LABELS, UserRole } from '@/lib/contract';
+import { DOCUMENT_TYPE_LABELS, GeneratedDocumentKind, UserRole } from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,14 @@ import { RouteToManagerDialog } from '@/components/hr/route-to-manager-dialog';
 import { AssignCredentialsDialog } from '@/components/hr/assign-credentials-dialog';
 
 export type ItemKind = 'form' | 'document';
+
+const GENERATED_LABELS: Record<GeneratedDocumentKind, string> = {
+  [GeneratedDocumentKind.FORM1]: 'Form 1 — Personal Details',
+  [GeneratedDocumentKind.FORM2]: 'Form 2 — Employee Info',
+  [GeneratedDocumentKind.FORM3]: 'Form 3 — Previous Employment',
+  [GeneratedDocumentKind.FORM4_MANIFEST]: 'Form 4 — Documents',
+  [GeneratedDocumentKind.MERGED]: 'Complete Application (Forms 1, 3, 4)',
+};
 
 interface RecordViewProps {
   record: EmployeeRecord;
@@ -32,6 +40,8 @@ interface RecordViewProps {
   /** Send this item back to the employee for revision — asks for a note (§3.3). */
   onSendBack?: (kind: ItemKind, id: string, label: string) => void;
   onRouted?: (result: RouteToManagerResult) => void;
+  /** HR/SA "Edit Employee Info" affordance for the Form 2 card — shown only while INVITED (§3.2). */
+  form2EditAction?: React.ReactNode;
 }
 
 /** The employee record: the four forms + Form 4 uploads + generated PDFs, sensitive values masked. */
@@ -44,6 +54,7 @@ export function RecordView({
   onVerify,
   onSendBack,
   onRouted,
+  form2EditAction,
 }: RecordViewProps) {
   const { session } = useAuth();
   const canAct = editable && Boolean(onVerify) && Boolean(onSendBack);
@@ -138,15 +149,22 @@ export function RecordView({
         {f1 ? <Form1Body form1={f1} /> : <Empty />}
       </FormCard>
 
-      {/* Form 2 is HR/SA-authored at onboard (§3.2) — shown READ-ONLY here (no verify / send-back). */}
+      {/* Form 2 is HR/SA-authored at onboard (§3.2) — READ-ONLY here (no verify / send-back); the
+          "Edit Employee Info" affordance appears only while INVITED, supplied by the parent. */}
       <FormCard
-        title="Form 2 — Employee Info (filled by HR)"
+        title="Form 2 — Employee Info"
         status={undefined}
         note={null}
         canAct={false}
         busy={busy}
         onVerify={() => {}}
         onSendBack={() => {}}
+        headerExtra={
+          <>
+            <Badge variant="neutral">HR-authored</Badge>
+            {form2EditAction}
+          </>
+        }
       >
         {f2 ? <Form2Body form2={f2} /> : <Empty />}
       </FormCard>
@@ -218,11 +236,22 @@ export function RecordView({
       {record.generatedDocuments.length > 0 ? (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Generated PDFs</h3>
+          <p className="text-xs text-muted-foreground">
+            The complete application merges Forms 1, 3 &amp; 4. Form 2 is a separate HR/SA-only PDF — it
+            is not in the merged file and is never shown to the employee (§3.2).
+          </p>
           <div className="grid gap-2 sm:grid-cols-2">
             {record.generatedDocuments.map((g) => (
               <div key={g.id} className="flex items-center gap-3 rounded-md border p-3">
                 <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{g.fileName}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{GENERATED_LABELS[g.kind] ?? g.fileName}</p>
+                  {g.kind === GeneratedDocumentKind.FORM2 ? (
+                    <Badge variant="neutral" className="mt-1">
+                      HR only
+                    </Badge>
+                  ) : null}
+                </div>
                 <a href={g.viewUrl} target="_blank" rel="noreferrer">
                   <Button type="button" variant="outline" size="sm">
                     <ExternalLink />
@@ -282,6 +311,7 @@ function FormCard({
   busy,
   onVerify,
   onSendBack,
+  headerExtra,
   children,
 }: {
   title: string;
@@ -291,13 +321,15 @@ function FormCard({
   busy: boolean;
   onVerify: () => void;
   onSendBack: () => void;
+  headerExtra?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle className="text-base">{title}</CardTitle>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {headerExtra}
           {status ? <StatusBadge status={status} /> : null}
           {canAct ? <ItemActions busy={busy} onVerify={onVerify} onSendBack={onSendBack} /> : null}
         </div>
