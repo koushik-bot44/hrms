@@ -90,7 +90,7 @@ class HtmlPdfRendererTest {
 
   @Test
   void form2EmployeeIdBlankPreApprovalThenPopulated() throws Exception {
-    // Father's name / DOB / blood group / mobile / Spark ID were removed from Form 2 (§3.2).
+    // Father's name / DOB / blood group / mobile / Spark ID / documents-submitted removed from Form 2 (§3.2).
     Map<String, Object> base = new java.util.LinkedHashMap<>();
     base.put("companyName", "Globex Corporation");
     base.put("fullName", "Meera Nair");
@@ -98,7 +98,6 @@ class HtmlPdfRendererTest {
     base.put("officialEmail", "meera@globex.test");
     base.put("personalEmail", "meera@personal.test");
     base.put("designation", "QA Lead");
-    base.put("documentSubmitted", "Aadhaar, PAN");
     base.put("signatureDataUri", PNG_1X1);
     base.put("signedDate", "01/08/2026");
 
@@ -109,13 +108,14 @@ class HtmlPdfRendererTest {
     assertThat(preText).contains("Globex Corporation").contains("Meera Nair");
     // PAN/account/addresses/vehicle/alternate moved to the Form 1 document (§3.2) — gone from Form 2.
     assertThat(preText).doesNotContain("ZZZPN1234Q").doesNotContain("918020099887766");
-    // The five removed Form-2 fields no longer appear (§3.2) — labels are gone.
+    // The removed Form-2 fields no longer appear (§3.2) — labels are gone.
     assertThat(preText)
         .doesNotContain("Father Name")
         .doesNotContain("Date of Birth")
         .doesNotContain("Blood Group")
         .doesNotContain("Mobile No")
-        .doesNotContain("Spark ID");
+        .doesNotContain("Spark ID")
+        .doesNotContain("Document Submitted");
     assertThat(preText).contains("Employee ID"); // the label is present...
     assertThat(preText).doesNotContain("GLOBEX-EMP"); // ...but no minted code yet
 

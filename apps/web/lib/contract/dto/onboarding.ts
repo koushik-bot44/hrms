@@ -162,7 +162,6 @@ export const Form2Schema = z.object({
   dateOfJoining: z.string().regex(FORM2_DATE_ISO, 'Select a date of joining'),
   // Assigned later — inert for now (never required, never blocks submit).
   officialEmail: optional(180),
-  documentSubmitted: optional(60),
 });
 export type Form2Values = z.output<typeof Form2Schema>;
 

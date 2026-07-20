@@ -206,7 +206,6 @@ public class PdfService {
     m.put("officialEmail", nn(v == null ? null : v.officialEmail()));
     m.put("personalEmail", nn(v == null ? null : v.personalEmail()));
     m.put("designation", nn(v == null ? null : v.designation()));
-    m.put("documentSubmitted", nn(v == null ? null : v.documentSubmitted()));
     m.put("signatureDataUri", signatureDataUri);
     m.put("signedDate", nn(signedDate));
     return m;

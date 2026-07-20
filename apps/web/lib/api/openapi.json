@@ -5370,11 +5370,6 @@
             "maxLength": 150,
             "minLength": 0,
             "type": "string"
-          },
-          "documentSubmitted": {
-            "maxLength": 60,
-            "minLength": 0,
-            "type": "string"
           }
         }
       },
@@ -5493,9 +5488,6 @@
             "type": "string"
           },
           "designation": {
-            "type": "string"
-          },
-          "documentSubmitted": {
             "type": "string"
           },
           "status": {

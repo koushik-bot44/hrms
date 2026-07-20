@@ -111,9 +111,9 @@ public final class OnboardingDtos {
   // email (the login identity) + designation are required; officialEmail is left blank/inert. alternate
   // number, vehicle no, PAN, account number and the two addresses moved to Form 1's PRESENTATION — their
   // storage stays on form2_info and is written through by Form 1.
-  // Father's name, date of birth, blood group and mobile were REMOVED from Form 2's display + PDF (§3.2)
-  // — additive-only: their form2_info.data keys stay and prior values are preserved (carried over on
-  // re-save), just no longer captured here. (These fields remain on Form 1.)
+  // Father's name, date of birth, blood group, mobile and documents-submitted were REMOVED from Form 2's
+  // display + PDF (§3.2) — additive-only: their form2_info.data keys stay and prior values are preserved
+  // (carried over on re-save), just no longer captured here. (DOB/blood group/mobile remain on Form 1.)
   public record Form2Request(
       @NotBlank(message = "Full name is required") @Size(max = 150) String fullName,
       @Pattern(regexp = "|\\d{4}-\\d{2}-\\d{2}", message = "Use YYYY-MM-DD") String dateOfJoining,
@@ -122,13 +122,12 @@ public final class OnboardingDtos {
           @Email(message = "Enter a valid email")
           @Size(max = 180)
           String personalEmail,
-      @NotBlank(message = "Designation is required") @Size(max = 150) String designation,
-      @Size(max = 60) String documentSubmitted) {}
+      @NotBlank(message = "Designation is required") @Size(max = 150) String designation) {}
 
   /**
    * {@code employeeId} is the system-assigned code (null until Manager approval); read-only. Father's
-   * name / DOB / blood group / mobile / Spark ID were removed from Form 2's surface (§3.2) — their
-   * columns/keys remain in storage (additive-only).
+   * name / DOB / blood group / mobile / Spark ID / documents-submitted were removed from Form 2's surface
+   * (§3.2) — their columns/keys remain in storage (additive-only).
    */
   public record Form2View(
       String fullName,
@@ -137,7 +136,6 @@ public final class OnboardingDtos {
       String officialEmail,
       String personalEmail,
       String designation,
-      String documentSubmitted,
       SectionStatus status,
       String revisionNote,
       String updatedAt) {}

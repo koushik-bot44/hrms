@@ -32,7 +32,6 @@ export const EMPTY_FORM2: OnboardEmployeeInput = {
   designation: '',
   dateOfJoining: '',
   officialEmail: '',
-  documentSubmitted: '',
 };
 
 /** HR onboarding = fill FORM 2 — Employee Info (§3.2). Submitting it creates the record + sends the invite. */

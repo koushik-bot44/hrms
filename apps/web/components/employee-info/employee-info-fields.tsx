@@ -20,7 +20,6 @@ const FORM2_FIELDS = [
   'designation',
   'dateOfJoining',
   'officialEmail',
-  'documentSubmitted',
 ] as const;
 type Form2FieldName = (typeof FORM2_FIELDS)[number];
 
@@ -70,10 +69,6 @@ export function EmployeeInfoFields<T extends FieldValues>({
         <Field id={id('dateOfJoining')} label="Date of Joining" error={err('dateOfJoining')} required>
           <Input id={id('dateOfJoining')} type="date" min={dojMin} disabled={disabled}
             aria-invalid={Boolean(err('dateOfJoining'))} {...reg('dateOfJoining')} />
-        </Field>
-        <Field id={id('documentSubmitted')} label="Documents Submitted" error={err('documentSubmitted')}>
-          <Input id={id('documentSubmitted')} placeholder="e.g. Aadhaar, PAN" disabled={disabled}
-            {...reg('documentSubmitted')} />
         </Field>
       </Section>
 

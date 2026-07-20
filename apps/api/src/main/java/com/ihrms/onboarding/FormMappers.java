@@ -122,7 +122,7 @@ public final class FormMappers {
    * Form 1; only Form 2 stopped showing/capturing them.
    */
   private static final String[] FORM2_RETIRED_KEYS = {
-    "fatherName", "dateOfBirth", "bloodGroup", "mobile"
+    "fatherName", "dateOfBirth", "bloodGroup", "mobile", "documentSubmitted"
   };
 
   /**
@@ -137,7 +137,6 @@ public final class FormMappers {
     m.put("officialEmail", r.officialEmail());
     m.put("personalEmail", r.personalEmail());
     m.put("designation", r.designation());
-    m.put("documentSubmitted", r.documentSubmitted());
     if (previous != null) {
       for (String key : RELOCATED_DATA_KEYS) {
         if (previous.get(key) != null) {
@@ -180,7 +179,6 @@ public final class FormMappers {
         str(d, "officialEmail"),
         str(d, "personalEmail"),
         str(d, "designation"),
-        str(d, "documentSubmitted"),
         e.getStatus(),
         e.getRevisionNote(),
         e.getUpdatedAt() == null ? null : e.getUpdatedAt().toString());

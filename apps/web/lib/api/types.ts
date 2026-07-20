@@ -2107,7 +2107,6 @@ export interface components {
             officialEmail?: string;
             personalEmail: string;
             designation: string;
-            documentSubmitted?: string;
         };
         OnboardEmployeeRequest: {
             form2: components["schemas"]["Form2Request"];
@@ -2144,7 +2143,6 @@ export interface components {
             officialEmail?: string;
             personalEmail?: string;
             designation?: string;
-            documentSubmitted?: string;
             /** @enum {string} */
             status?: "DRAFT" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED" | "REJECTED";
             revisionNote?: string;

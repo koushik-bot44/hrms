@@ -175,7 +175,7 @@ Accounts Admin, own team for Accountant).
 
 ### 3.2 Onboarding (the spine — starts with HR)
 1. **HR** (or the **Super Admin**, cross-company) initiates onboarding by **filling Form 2 — Employee
-   Info** for the new hire (**full name**, DOJ, **personal email**, designation, documents-submitted).
+   Info** for the new hire (**full name**, DOJ, **personal email**, designation).
    Submitting Form 2 **creates the employee record** (`status = INVITED`) **and sends the invite in one
    action** — there is no separate 4-field onboard step. The **personal email is the employee's login
    identity** (globally unique, §6). **No employee ID is minted here** — the unique ID is allocated only
@@ -292,10 +292,11 @@ indicative. **Schema is additive-only thereafter.**
 - **Form2Info** — Employee Info, **HR/SA-authored at onboard** (the employee never fills or sees it):
   `fullName`, `employeeId` [SYSTEM/READONLY — blank until approval], `dateOfJoining`, `officialEmail`
   [blank/inert — slated for removal], `personalEmail` [the login identity], `designation`,
-  `documentSubmitted`, `alternateNumber`, `vehicleNo2W4W`, `panNumber` [SENSITIVE], `axisAccountNumber`
+  `alternateNumber`, `vehicleNo2W4W`, `panNumber` [SENSITIVE], `axisAccountNumber`
   [SENSITIVE], `currentAddress`, `permanentAddress` — plus retained-but-no-longer-captured columns/keys
-  `fatherName`, `dob`, `bloodGroup`, `mobile`, `sparkId` (**removed from Form 2's display + PDF**;
-  columns/keys kept, values preserved — additive-only; these fields live on **Form 1**). Editable by
+  `fatherName`, `dob`, `bloodGroup`, `mobile`, `sparkId`, `documentSubmitted` (**removed from Form 2's
+  display + PDF**; columns/keys kept, values preserved — additive-only; DOB/blood group/mobile live on
+  **Form 1**). Editable by
   HR/SA only while the employee is `INVITED` (then read-only, 409); a personal-email change while
   `INVITED` re-invites. Not part of the
   verification loop.

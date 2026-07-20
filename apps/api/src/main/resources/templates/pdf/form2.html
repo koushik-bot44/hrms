@@ -16,7 +16,7 @@
 <!-- LETTERHEAD: JOINING company name -->
 <div class="brand" th:text="${companyName}">Acme Technologies</div>
 
-<!-- Employee-Info rows. Father's name / DOB / blood group / mobile / Spark ID removed from Form 2 (§3.2). -->
+<!-- Employee-Info rows. Father's name / DOB / blood group / mobile / Spark ID / documents-submitted removed from Form 2 (§3.2). -->
 <table class="kv">
  <tr><td class="k">Full Name</td><td th:text="${fullName}">Rahul Sharma</td></tr>
  <tr><td class="k">Employee ID</td><td th:text="${employeeId}">ACME-EMP-000123</td></tr>
@@ -24,7 +24,6 @@
  <tr><td class="k">Official Email ID</td><td th:text="${officialEmail}">rahul.sharma@acme.com</td></tr>
  <tr><td class="k">Personnel E-Mail ID</td><td th:text="${personalEmail}">rahul.sharma@example.com</td></tr>
  <tr><td class="k">Designation</td><td th:text="${designation}">Software Engineer</td></tr>
- <tr><td class="k">Document Submitted</td><td th:text="${documentSubmitted}">Aadhaar, PAN, Degree Certificate</td></tr>
 </table>
 
 <table style="width:100%; margin-top:22px;">

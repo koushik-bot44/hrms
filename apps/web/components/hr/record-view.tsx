@@ -406,11 +406,10 @@ function Form1Body({ form1 }: { form1: Form1View }) {
 }
 
 // alternate number, vehicle no, PAN, account number + addresses moved to Form 1 (§3.2); father's name,
-// DOB, blood group, mobile and Spark ID were removed from Form 2 (§3.2) — those remain on Form 1.
+// DOB, blood group, mobile, Spark ID and documents-submitted were removed from Form 2 (§3.2).
 const F2_FIELDS: Array<[keyof Form2View, string]> = [
   ['fullName', 'Full Name'], ['employeeId', 'Employee ID'], ['dateOfJoining', 'Date of Joining'],
   ['officialEmail', 'Official Email'], ['personalEmail', 'Personal Email'], ['designation', 'Designation'],
-  ['documentSubmitted', 'Documents Submitted'],
 ];
 
 function Form2Body({ form2 }: { form2: Form2View }) {

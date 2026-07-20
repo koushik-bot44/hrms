@@ -34,7 +34,6 @@ const EMPTY: SuperAdminOnboardInput = {
   designation: '',
   dateOfJoining: '',
   officialEmail: '',
-  documentSubmitted: '',
 };
 
 /** Super Admin onboards into any company (§2): pick company → team (→ that team's HR) → fill Form 2. */

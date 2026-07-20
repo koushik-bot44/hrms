@@ -26,7 +26,6 @@ function toValues(f: Form2View | null): Form2Values {
     designation: s(f?.designation),
     dateOfJoining: s(f?.dateOfJoining),
     officialEmail: s(f?.officialEmail),
-    documentSubmitted: s(f?.documentSubmitted),
   };
 }
 
