@@ -23,6 +23,7 @@ import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
+import com.ihrms.mail.InternalMailService;
 import com.ihrms.push.PushService;
 import com.ihrms.storage.StorageService;
 import java.nio.charset.StandardCharsets;
@@ -66,6 +67,7 @@ class RequestsApiTest {
 
   @MockBean StorageService storage;
   @SpyBean PushService push; // real by default; stubbed to fail in the best-effort test
+  @SpyBean InternalMailService internalMail; // real by default; stubbed to fail in the best-effort test
 
   private String acme;
   private User accountant1;
@@ -78,7 +80,7 @@ class RequestsApiTest {
   @BeforeEach
   void setup() {
     jdbc.execute(
-        "TRUNCATE \"request_documents\",\"document_requests\",\"teams\",\"employees\",\"users\",\"companies\",\"audit_logs\" RESTART IDENTITY CASCADE");
+        "TRUNCATE \"request_documents\",\"document_requests\",\"messages\",\"message_recipients\",\"message_attachments\",\"teams\",\"employees\",\"users\",\"companies\",\"audit_logs\" RESTART IDENTITY CASCADE");
     acme = company("ACME", "acme");
 
     User hr1 = user(acme, UserRole.HR, "hr1@acme");
@@ -124,6 +126,8 @@ class RequestsApiTest {
     assertThat(teamQueue(accountant2, null).get("totalElements").asInt()).isZero();
     // Every action is audited with the company set.
     assertThat(auditCount("REQUEST_SUBMITTED")).isEqualTo(1);
+    // A real internal mail went employee -> the routed accountant through the §8d graph edge (audited MAIL_SENT).
+    assertThat(auditCount("MAIL_SENT")).isEqualTo(1);
   }
 
   @Test
@@ -170,6 +174,8 @@ class RequestsApiTest {
     assertThat(auditCount("REQUEST_RESOLVED")).isEqualTo(1);
     assertThat(auditCount("REQUEST_DOCUMENT_UPLOADED")).isEqualTo(2);
     assertThat(auditCount("REQUEST_DOCUMENT_DOWNLOADED")).isEqualTo(2);
+    // Two real internal mails: employee -> accountant on submit, accountant -> employee on resolve (§8d).
+    assertThat(auditCount("MAIL_SENT")).isEqualTo(2);
   }
 
   @Test
@@ -219,21 +225,28 @@ class RequestsApiTest {
   }
 
   @Test
-  void aPushFailureDoesNotBreakTheRequestAction() throws Exception {
-    // Simulate the best-effort OS push failing: it must be swallowed, the request still created.
+  void aMailOrPushFailureDoesNotBreakTheRequestAction() throws Exception {
+    // Simulate BOTH best-effort notifications failing (mail transport + push): each must be swallowed so
+    // the request action still succeeds — and neither leaves a MAIL_SENT behind.
     Mockito.doThrow(new RuntimeException("push transport down"))
         .when(push)
         .sendToPrincipal(any(), any(), any(), any());
+    Mockito.doThrow(new RuntimeException("mail transport down"))
+        .when(internalMail)
+        .send(any(), any(), any());
 
     JsonNode created = submit(emp1, "PAYSLIP", "trip");
     assertThat(created.get("status").asText()).isEqualTo("SUBMITTED");
     assertThat(teamQueue(accountant1, null).get("totalElements").asInt()).isEqualTo(1);
 
-    // A resolve also survives a push failure (the employee notification is best-effort too).
+    // A resolve also survives the failures (the employee notification is best-effort too).
     String id = created.get("id").asText();
     pickUp(accountant1, id);
     String d1 = uploadUrl(accountant1, id, "payslip.pdf");
     assertThat(resolve(accountant1, id, List.of(d1), null).get("status").asText()).isEqualTo("RESOLVED");
+
+    // The forced-failing sends were swallowed — no mail slipped through.
+    assertThat(auditCount("MAIL_SENT")).isZero();
   }
 
   // --- helpers --------------------------------------------------------------

@@ -52,8 +52,8 @@ public class DocumentRequestController {
       @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
     DocumentRequestView view = requests.submit(actor, body, request.getRemoteAddr());
-    // Post-commit best-effort OS push to the routed accountant (never blocks the request). §8d
-    requests.pushAccountantAfterSubmit(view.id());
+    // Post-commit best-effort notification: internal mail (employee → accountant) + OS push. §8d
+    requests.notifyAccountantAfterSubmit(actor, view.id(), request.getRemoteAddr());
     return view;
   }
 
@@ -117,8 +117,8 @@ public class DocumentRequestController {
       @AuthenticationPrincipal IhrmsPrincipal.User accountant,
       HttpServletRequest request) {
     TeamRequestRow row = requests.resolve(accountant, id, body, request.getRemoteAddr());
-    // Post-commit best-effort employee email + OS push (never blocks the resolve). §8d
-    requests.notifyEmployeeAfterResolve(id);
+    // Post-commit best-effort notification: internal mail (accountant → employee) + dev email + OS push. §8d
+    requests.notifyEmployeeAfterResolve(accountant, id, request.getRemoteAddr());
     return row;
   }
 }

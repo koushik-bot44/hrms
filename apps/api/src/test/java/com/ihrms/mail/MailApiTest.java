@@ -154,11 +154,13 @@ class MailApiTest {
     send(hrA, mgr2A).andExpect(status().isForbidden()); // HR <-> a DIFFERENT team's Manager
     send(caA, aa).andExpect(status().isForbidden()); // COMPANY_ADMIN <-> ACCOUNTS_ADMIN (not an edge)
     send(hrA, sa).andExpect(status().isForbidden()); // HR <-> SUPER_ADMIN (not an edge)
-    // The Accountant is NOT in team mail — only its Company Admin.
+    // The Accountant connects ONLY to its OWN team's employees + its Company Admin (§8d) — NOT the team's
+    // HR/Manager, NOT the platform, and NOT a DIFFERENT team's employee.
     send(accA, hrA).andExpect(status().isForbidden()); // ACCOUNTANT <-> its team's HR
     send(accA, mgrA).andExpect(status().isForbidden()); // ACCOUNTANT <-> its team's Manager
     send(accA, sa).andExpect(status().isForbidden()); // ACCOUNTANT <-> SUPER_ADMIN
-    sendExpect(empToken(empA1), accA.getId(), status().isForbidden()); // employee <-> team Accountant
+    sendExpect(empToken(empB1), accA.getId(), status().isForbidden()); // a DIFFERENT team's employee
+    sendExpect(token(accA), empB1.getId(), status().isForbidden()); // ACCOUNTANT <-> other-team employee
     assertThat(audit("MAIL_SENT")).isZero();
   }
 
@@ -177,6 +179,25 @@ class MailApiTest {
     assertThat(audit("MAIL_SENT")).isEqualTo(10);
   }
 
+  @Test
+  void theTeamAccountantEdgeIsExactlyEmployeeAndAccountant() throws Exception {
+    // §8d — the ONLY new edge: an EMPLOYEE and the ACCOUNTANT of their OWN team, symmetric, same company.
+    sendExpect(empToken(empA1), accA.getId(), status().isOk()); // team-A employee -> team-A Accountant
+    sendExpect(token(accA), empA1.getId(), status().isOk()); // team-A Accountant -> team-A employee
+    sendExpect(token(accA), empA2.getId(), status().isOk()); // ...and its other team-A employee
+    sendExpect(token(accA), caA.getId(), status().isOk()); // the Accountant <-> Company Admin still works
+    assertThat(audit("MAIL_SENT")).isEqualTo(4);
+
+    // The edge did NOT connect the Accountant to the team's HR/Manager, another team's employee, another
+    // company, or the platform.
+    sendExpect(token(accA), hrA.getId(), status().isForbidden());
+    sendExpect(token(accA), mgrA.getId(), status().isForbidden());
+    sendExpect(token(accA), empB1.getId(), status().isForbidden()); // a DIFFERENT team's employee
+    sendExpect(token(accA), hrT.getId(), status().isForbidden()); // cross-company
+    sendExpect(token(accA), sa.getId(), status().isForbidden());
+    assertThat(audit("MAIL_SENT")).isEqualTo(4); // no new sends from the denied attempts
+  }
+
   // --- Contacts mirror the graph exactly ------------------------------------
 
   @Test
@@ -192,11 +213,13 @@ class MailApiTest {
     // Manager: its team (the HR + that HR's employees) + the Company Admin.
     assertThat(contactAddresses(mgrA))
         .containsExactlyInAnyOrder("hr@anvicorp", "arjun@anvicorp", "meera@anvicorp", "admin@anvicorp");
-    // Employee: their teammates (HR, Manager, other employees) + the Company Admin. Not the accountant.
+    // Employee: their teammates (HR, Manager, other employees), their team Accountant (§8d), + Company Admin.
     assertThat(contactAddrs(empToken(empA1)))
-        .containsExactlyInAnyOrder("hr@anvicorp", "mgr@anvicorp", "meera@anvicorp", "admin@anvicorp");
-    // Accountant: only the Company Admin.
-    assertThat(contactAddresses(accA)).containsExactly("admin@anvicorp");
+        .containsExactlyInAnyOrder(
+            "hr@anvicorp", "mgr@anvicorp", "meera@anvicorp", "acc@anvicorp", "admin@anvicorp");
+    // Accountant: the employees of its OWN team (§8d) + the Company Admin. NOT the team's HR/Manager, not team B.
+    assertThat(contactAddresses(accA))
+        .containsExactlyInAnyOrder("arjun@anvicorp", "meera@anvicorp", "admin@anvicorp");
     // Platform roles unchanged.
     assertThat(contactAddresses(sa))
         .containsExactlyInAnyOrder("books@ihrms", "admin@anvicorp", "admin@testco");
@@ -527,14 +550,14 @@ class MailApiTest {
   void aCredentialedEmployeeMailsTheirTeamAndCompanyAdmin() throws Exception {
     String emp = empToken(empA1); // credentialed, Team A (onboarded by hrA)
 
-    // Allowed: their HR, their Manager, a SAME-TEAM employee, and the Company Admin.
+    // Allowed: their HR, their Manager, a SAME-TEAM employee, their team Accountant (§8d), the Company Admin.
     sendExpect(emp, hrA.getId(), status().isOk());
     sendExpect(emp, mgrA.getId(), status().isOk());
     sendExpect(emp, empA2.getId(), status().isOk());
+    sendExpect(emp, accA.getId(), status().isOk()); // §8d — the team Accountant edge
     sendExpect(emp, caA.getId(), status().isOk());
 
-    // Denied: the team's Accountant, another team's HR/Manager/employee, platform admins.
-    sendExpect(emp, accA.getId(), status().isForbidden());
+    // Denied: another team's HR/Manager/employee, platform admins (the team Accountant is now allowed).
     sendExpect(emp, hr2A.getId(), status().isForbidden());
     sendExpect(emp, mgr2A.getId(), status().isForbidden());
     sendExpect(emp, empB1.getId(), status().isForbidden());

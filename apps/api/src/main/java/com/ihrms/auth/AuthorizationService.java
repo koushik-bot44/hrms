@@ -169,18 +169,23 @@ public class AuthorizationService {
    * Symmetric, relationship-based, SAME-COMPANY unless a platform row applies; cross-company always
    * denied. Only credentialed employees are ever participants (the mail service resolves them).
    *
-   * <p>The graph is the union of three edges:
+   * <p>The graph is the union of four edges:
    *
    * <ul>
    *   <li><b>Platform</b> (no company constraint): {@code SUPER_ADMIN ↔ COMPANY_ADMIN},
    *       {@code SUPER_ADMIN ↔ ACCOUNTS_ADMIN}.
    *   <li><b>Company-admin</b>: a {@code COMPANY_ADMIN} ↔ anyone in the SAME company (any staff role or a
-   *       credentialed employee). This is the ONLY edge for an {@code ACCOUNTANT} (→ its Company Admin).
+   *       credentialed employee). This is one of only two edges for an {@code ACCOUNTANT} (→ its Company
+   *       Admin).
    *   <li><b>Team</b>: SAME company and a shared team — where a team is identified by its <b>HR's user
    *       id</b>: an employee belongs to {@code {onboardingHr}}, an HR to {@code {ownId}}, a manager to the
-   *       HR ids of the teams they manage; every other role has no team membership (so an Accountant has
-   *       no team edge). Overlap ⇒ teammates: HR ↔ Manager ↔ that HR's employees, and those employees to
-   *       each other.
+   *       HR ids of the teams they manage. Overlap ⇒ teammates: HR ↔ Manager ↔ that HR's employees, and
+   *       those employees to each other. An {@code ACCOUNTANT} is <b>excluded</b> from this generic edge
+   *       (so it never gains the team's HR/Manager or other teams) — its team membership drives ONLY the
+   *       dedicated employee edge below.
+   *   <li><b>Employee ↔ team Accountant</b> (§8d): an {@code EMPLOYEE} and the {@code ACCOUNTANT} of their
+   *       OWN team (their onboarding-HR's team) — SAME company, symmetric, and ONLY this pair. Resolved by
+   *       overlapping the employee's {@code {onboardingHr}} key with the accountant's team-HR-id keys.
    * </ul>
    */
   public boolean canSendMail(MailParticipant a, MailParticipant b) {
@@ -205,12 +210,22 @@ public class AuthorizationService {
     if ((isRole(a, UserRole.COMPANY_ADMIN) || isRole(b, UserRole.COMPANY_ADMIN)) && sameCompany(a, b)) {
       return true;
     }
-    // (C) Team edge — SAME company and a shared team (HR-keyed membership).
-    return sameCompany(a, b)
-        && aKeys != null
-        && bKeys != null
-        && !aKeys.isEmpty()
-        && !Collections.disjoint(aKeys, bKeys);
+    boolean sharedTeam =
+        sameCompany(a, b)
+            && aKeys != null
+            && bKeys != null
+            && !aKeys.isEmpty()
+            && !Collections.disjoint(aKeys, bKeys);
+    // (C) Team edge — SAME company + a shared team (HR-keyed). The ACCOUNTANT is excluded here: its team
+    //     keys must not grant the generic team edge (that would connect it to the team's HR/Manager/other
+    //     teams); they drive ONLY the dedicated employee edge (D).
+    if (sharedTeam && !involvesAccountant(a, b)) {
+      return true;
+    }
+    // (D) EMPLOYEE ↔ the ACCOUNTANT of their OWN team (§8d) — same company, symmetric, ONLY this pair.
+    //     The employee's {onboardingHr} key overlaps the accountant's team-HR-id keys iff that accountant
+    //     is the accountant of the employee's team. Adds no other accountant connectivity.
+    return sharedTeam && isEmployeeAccountantPair(a, b);
   }
 
   /**
@@ -232,8 +247,28 @@ public class AuthorizationService {
               .map(Team::getHrUserId)
               .filter(Objects::nonNull)
               .collect(Collectors.toSet());
-      default -> Set.of(); // COMPANY_ADMIN / ACCOUNTANT / SUPER_ADMIN / ACCOUNTS_ADMIN: no team membership
+      // ACCOUNTANT: the HR ids of the teams it is the accountant of. These keys are consulted ONLY by the
+      // dedicated employee edge (D) — the accountant is excluded from the generic team edge (C) — so they
+      // grant a connection to that team's EMPLOYEES only, never its HR/Manager. One query, like MANAGER.
+      case ACCOUNTANT ->
+          teams.findByAccountantUserId(p.id()).stream()
+              .filter(t -> p.companyId() != null && p.companyId().equals(t.getCompanyId()))
+              .map(Team::getHrUserId)
+              .filter(Objects::nonNull)
+              .collect(Collectors.toSet());
+      default -> Set.of(); // COMPANY_ADMIN / SUPER_ADMIN / ACCOUNTS_ADMIN: no team membership
     };
+  }
+
+  /** True if either side is an {@code ACCOUNTANT} — used to keep it out of the generic team edge (C). */
+  private static boolean involvesAccountant(MailParticipant a, MailParticipant b) {
+    return isRole(a, UserRole.ACCOUNTANT) || isRole(b, UserRole.ACCOUNTANT);
+  }
+
+  /** True exactly when the pair is one {@code ACCOUNTANT} (staff) and one {@code EMPLOYEE} — edge (D). */
+  private static boolean isEmployeeAccountantPair(MailParticipant a, MailParticipant b) {
+    return (isRole(a, UserRole.ACCOUNTANT) && !b.isUser())
+        || (isRole(b, UserRole.ACCOUNTANT) && !a.isUser());
   }
 
   private static boolean isPlatformPair(UserRole x, UserRole y) {

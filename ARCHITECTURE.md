@@ -497,14 +497,19 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
   both directions; only CREDENTIALED employees participate; every pair is SAME-COMPANY unless a platform
   row says otherwise, and cross-company is ALWAYS forbidden):**
   - A **team's mail members** = the team's **HR** + the team's **Manager** + the **employees onboarded by
-    that HR**. (The team's **Accountant is deliberately NOT** part of team mail.)
+    that HR**. (The team's **Accountant is deliberately NOT** a general team-mail member — it is **not**
+    connected to the team's HR, Manager, or other teams — but see the dedicated employee edge below.)
   - `EMPLOYEE` ↔ the members of **their** team (their onboarding-HR's team): their HR, their Manager, the
-    **other employees on that team**; **AND** their `COMPANY_ADMIN`.
+    **other employees on that team**; **their team's `ACCOUNTANT`** (§8d — the accountant of their
+    onboarding-HR's team, same company); **AND** their `COMPANY_ADMIN`.
   - `HR` ↔ the members of their team (their employees, their Manager); **AND** their `COMPANY_ADMIN`.
+    _(NOT the team's Accountant.)_
   - `MANAGER` ↔ the members of their team(s) (the HR, the employees); **AND** their `COMPANY_ADMIN`.
+    _(NOT the team's Accountant.)_
   - `COMPANY_ADMIN` ↔ **anyone in their company** — all HRs, Managers, Accountants, **all employees**;
     **AND** `SUPER_ADMIN`.
-  - `ACCOUNTANT` ↔ their `COMPANY_ADMIN` **only** (not team mail).
+  - `ACCOUNTANT` ↔ the **employees of their own team(s)** (§8d — symmetric with the employee edge above)
+    **AND** their `COMPANY_ADMIN`. **Not** the team's HR/Manager, **not** other teams' members.
   - `ACCOUNTS_ADMIN` ↔ `SUPER_ADMIN` only.
   - `SUPER_ADMIN` ↔ all `COMPANY_ADMIN`s + `ACCOUNTS_ADMIN`.
   - **Everything not listed — and EVERY cross-company pair — is forbidden.** Resolution reuses the
@@ -805,16 +810,16 @@ shape, routed to the team's HR.
 - **Download:** `GET /requests/{id}/documents/{docId}/download` issues a short-lived presigned **GET**,
   authorized to the request's **own employee** OR the **routed Accountant** (their team) — anyone else
   `403`. Audited `REQUEST_DOCUMENT_DOWNLOADED`.
-- **Notifications — internal mail is NOT usable here, by design.** The `canSendMail` graph gives an
-  **Accountant no team edge** (their only mail edge is to their Company Admin), so an employee ↔ team
-  Accountant internal mail is **not permitted** — and the graph is **not** weakened for this feature.
-  Instead, consistent with how leave notifies (and without silently failing): on **submit**, the request
-  itself is the Accountant's durable record in their **`/requests/team` queue**, plus a **best-effort OS
-  push** (§8c) to the Accountant; on **resolve**, the employee sees the outcome + files in their own
-  **`/requests/me`** history, is **emailed** (dev-logged, the employee-facing channel — like a leave
-  decision), and gets a **best-effort OS push**. Both notifications are sent by the **controller AFTER the
-  request tx commits** and are best-effort — a mail/push failure never breaks (or rolls back) the request
-  action. No `NotificationType` bell is used (there is no Accountant bell consumer).
+- **Notifications — real internal mail + OS push.** The send graph now includes the **employee ↔ their
+  team Accountant** edge (§8), so these notifications go through the **ordinary `canSendMail`-guarded
+  internal-mail send path** (exactly like the leave auto-mails), landing as repliable threads and audited
+  `MAIL_SENT`: on **submit**, employee → the routed Accountant ("‹employee› from team ‹team› requested
+  ‹type›" + note); on **resolve**, the resolving Accountant → the employee ("Your ‹type› request is
+  ready"). Each is **also** accompanied by a **best-effort OS push** (§8c) — the Accountant on submit, the
+  employee on resolve — and the employee still gets the dev-logged email + sees the state in their own
+  **`/requests/me`** history; the Accountant's durable record remains their **`/requests/team`** queue.
+  Both are sent by the **controller AFTER the request tx commits** and are best-effort — a mail/push
+  failure never breaks (or rolls back) the request action. Exactly one mail per submit / per resolve.
 - **Scope:** an employee sees ONLY their own requests; an Accountant sees ONLY the requests routed to them
   (`accountantUserId == self`, same company) and may act only on those — cross-team / cross-company is
   denied. Every action is audited (`REQUEST_SUBMITTED` / `REQUEST_PICKED_UP` / `REQUEST_RESOLVED` /

@@ -13,7 +13,9 @@ import com.ihrms.domain.repository.DocumentRequestRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.RequestDocumentRepository;
 import com.ihrms.domain.repository.TeamRepository;
+import com.ihrms.mail.InternalMailService;
 import com.ihrms.mail.MailAttachments;
+import com.ihrms.mail.dto.MailDtos.SendMessageRequest;
 import com.ihrms.push.PushService;
 import com.ihrms.push.PushService.PrincipalRef;
 import com.ihrms.requests.dto.DocumentRequestDtos.DocumentRequestView;
@@ -68,6 +70,7 @@ public class DocumentRequestService {
   private final StorageService storage;
   private final MailAttachments attachmentRules;
   private final MailService mail;
+  private final InternalMailService internalMail;
   private final PushService push;
   private final AuditService audit;
 
@@ -79,6 +82,7 @@ public class DocumentRequestService {
       StorageService storage,
       MailAttachments attachmentRules,
       MailService mail,
+      InternalMailService internalMail,
       PushService push,
       AuditService audit) {
     this.requests = requests;
@@ -88,6 +92,7 @@ public class DocumentRequestService {
     this.storage = storage;
     this.attachmentRules = attachmentRules;
     this.mail = mail;
+    this.internalMail = internalMail;
     this.push = push;
     this.audit = audit;
   }
@@ -340,45 +345,71 @@ public class DocumentRequestService {
 
   // --- Best-effort notifications (controller-after-commit, §8d) ------------
   //
-  // employee↔team-accountant is NOT in the canSendMail graph (an Accountant has no team edge) and the
-  // graph is NOT weakened for this feature — so we do NOT route internal mail. Instead, consistent with
-  // how leave notifies and without silently failing: the request itself is the accountant's durable
-  // record in their /requests/team queue (+ a best-effort OS push here); on resolve the employee sees it
-  // in /requests/me, is emailed (dev-logged), and gets a best-effort OS push. Swallowed on failure so a
-  // push/mail hiccup can never roll back — or fail — the request action.
+  // The send graph now includes the employee↔their-team-accountant edge (§8), so these go through the
+  // ordinary canSendMail-guarded InternalMailService path — a real repliable thread, audited MAIL_SENT —
+  // exactly like the leave auto-mails. Each is ALSO accompanied by the existing best-effort OS push, and
+  // the employee still gets the dev-logged email on resolve. Run from the CONTROLLER, AFTER the request tx
+  // commits (so the send opens its own committing tx), and best-effort: mail and push each in their own
+  // try/catch so a hiccup in either can never roll back — or fail — the request action. Exactly one mail
+  // per submit / per resolve.
 
-  /** Best-effort OS push to the routed Accountant that a new request arrived. */
-  public void pushAccountantAfterSubmit(String requestId) {
+  /** Employee → routed Accountant on submit: a real internal mail + the OS push. Best-effort. */
+  public void notifyAccountantAfterSubmit(IhrmsPrincipal actor, String requestId, String ip) {
+    DocumentRequest request = requests.findById(requestId).orElse(null);
+    if (request == null) {
+      return;
+    }
+    Employee me = employees.findById(request.getEmployeeId()).orElse(null);
+    String who = me != null ? me.getFullName() : "An employee";
+    // (1) Real internal mail, employee → the routed accountant (the §8d edge permits it).
     try {
-      DocumentRequest request = requests.findById(requestId).orElse(null);
-      if (request == null) {
-        return;
+      String team = teamNameFor(me);
+      String subject = "Document request: " + who + " (" + typeLabel(request) + ")";
+      StringBuilder body = new StringBuilder();
+      body.append(who).append(team == null ? "" : " from team " + team).append(" requested ")
+          .append(typeLabel(request)).append(".\n");
+      if (request.getNote() != null && !request.getNote().isBlank()) {
+        body.append("Note: ").append(request.getNote().trim()).append("\n");
       }
-      Employee me = employees.findById(request.getEmployeeId()).orElse(null);
-      String who = me != null ? me.getFullName() : "An employee";
-      String title = "New document request";
-      String body = who + " requested " + label(request) + note(request);
+      body.append("\nOpen the Requests inbox to pick it up.");
+      internalMail.send(actor, mailTo(request.getAccountantUserId(), subject, body.toString()), ip);
+    } catch (RuntimeException e) {
+      log.warn("Request submit mail skipped (best-effort): {}", e.getMessage());
+    }
+    // (2) OS push to the accountant (kept).
+    try {
       push.sendToPrincipal(
           PrincipalRef.forUser(request.getAccountantUserId(), request.getCompanyId()),
-          title,
-          body,
+          "New document request",
+          who + " requested " + label(request) + note(request),
           "/accountant/requests");
     } catch (RuntimeException e) {
       log.warn("Request submit push skipped (best-effort): {}", e.getMessage());
     }
   }
 
-  /** Best-effort employee email + OS push that their request was resolved. */
-  public void notifyEmployeeAfterResolve(String requestId) {
+  /** Accountant → employee on resolve: a real internal mail + the dev-logged email + the OS push. Best-effort. */
+  public void notifyEmployeeAfterResolve(IhrmsPrincipal actor, String requestId, String ip) {
+    DocumentRequest request = requests.findById(requestId).orElse(null);
+    if (request == null || request.getStatus() != RequestStatus.RESOLVED) {
+      return;
+    }
+    Employee me = employees.findById(request.getEmployeeId()).orElse(null);
+    if (me == null) {
+      return;
+    }
+    // (1) Real internal mail, the resolving accountant → the employee (the §8d edge permits it).
     try {
-      DocumentRequest request = requests.findById(requestId).orElse(null);
-      if (request == null || request.getStatus() != RequestStatus.RESOLVED) {
-        return;
-      }
-      Employee me = employees.findById(request.getEmployeeId()).orElse(null);
-      if (me == null) {
-        return;
-      }
+      String subject = "Your " + typeLabel(request) + " request is ready";
+      String body =
+          "Your " + typeLabel(request) + " request has been resolved. The document(s) are ready to "
+              + "download from your HR/Accounts Requests page.";
+      internalMail.send(actor, mailTo(me.getId(), subject, body), ip);
+    } catch (RuntimeException e) {
+      log.warn("Request resolve mail skipped (best-effort): {}", e.getMessage());
+    }
+    // (2) The employee-facing dev-logged email + OS push (kept).
+    try {
       mail.sendDocumentRequestResolved(me.getEmail(), request.getRequestType().name());
       push.sendToPrincipal(
           PrincipalRef.forEmployee(me.getId(), request.getCompanyId()),
@@ -388,6 +419,25 @@ public class DocumentRequestService {
     } catch (RuntimeException e) {
       log.warn("Request resolve notification skipped (best-effort): {}", e.getMessage());
     }
+  }
+
+  /** The employee's team name (their onboarding-HR's team), for the courtesy mail; null if unresolved. */
+  private String teamNameFor(Employee employee) {
+    if (employee == null || employee.getOnboardingHrId() == null) {
+      return null;
+    }
+    return teams
+        .findByCompanyIdAndHrUserId(employee.getCompanyId(), employee.getOnboardingHrId())
+        .map(Team::getName)
+        .orElse(null);
+  }
+
+  private static SendMessageRequest mailTo(String toId, String subject, String body) {
+    return new SendMessageRequest(List.of(toId), List.of(), List.of(), subject, body, List.of());
+  }
+
+  private static String typeLabel(DocumentRequest r) {
+    return r.getRequestType().name().replace('_', ' ');
   }
 
   // --- helpers -------------------------------------------------------------
