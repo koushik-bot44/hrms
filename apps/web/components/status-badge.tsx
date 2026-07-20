@@ -4,6 +4,7 @@ import type {
   DocumentStatus,
   EmployeeStatus,
   LeaveStatus,
+  RequestStatus,
   SectionStatus,
 } from '@/lib/contract';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -20,7 +21,8 @@ type StatusValue =
   | DocumentStatus
   | SectionStatus
   | ApprovalStatus
-  | LeaveStatus;
+  | LeaveStatus
+  | RequestStatus;
 type Tone = NonNullable<BadgeProps['variant']>;
 
 const STATUS_MAP: Record<StatusValue, { label: string; tone: Tone }> = {
@@ -41,6 +43,8 @@ const STATUS_MAP: Record<StatusValue, { label: string; tone: Tone }> = {
   PENDING: { label: 'Pending', tone: 'warning' },
   // LeaveStatus extra (§8b) — PENDING/APPROVED/REJECTED reuse the values above.
   CANCELLED: { label: 'Cancelled', tone: 'neutral' },
+  // RequestStatus extra (§8d) — SUBMITTED/IN_PROGRESS/CANCELLED reuse the values above.
+  RESOLVED: { label: 'Resolved', tone: 'success' },
 };
 
 export interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {

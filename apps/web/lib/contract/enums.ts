@@ -111,6 +111,24 @@ export const LeaveStatus = {
 } as const;
 export type LeaveStatus = (typeof LeaveStatus)[keyof typeof LeaveStatus];
 
+// HR/Accounts document requests — Accounts side (§8d).
+export const RequestType = {
+  PAYSLIP: 'PAYSLIP',
+  SALARY_CERTIFICATE: 'SALARY_CERTIFICATE',
+  FORM16: 'FORM16',
+  TAX_DOCUMENT: 'TAX_DOCUMENT',
+  OTHER: 'OTHER',
+} as const;
+export type RequestType = (typeof RequestType)[keyof typeof RequestType];
+
+export const RequestStatus = {
+  SUBMITTED: 'SUBMITTED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RESOLVED: 'RESOLVED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
+
 /**
  * Registry of every shared enum, keyed by name. The API's enum-parity test iterates
  * this and compares against the Prisma-generated enums.
@@ -126,6 +144,8 @@ export const SHARED_ENUMS = {
   NotificationType,
   LeaveType,
   LeaveStatus,
+  RequestType,
+  RequestStatus,
 } as const;
 
 export type SharedEnumName = keyof typeof SHARED_ENUMS;

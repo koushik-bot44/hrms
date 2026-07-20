@@ -225,6 +225,56 @@ export type TeamLeavePage = Omit<Required<Schemas['TeamLeavePage']>, 'content'> 
   content: TeamLeaveRow[];
 };
 
+// --- HR/Accounts Requests (§8d) --------------------------------------------
+
+/** A fulfilment file's metadata (never the storage key). */
+export type RequestDocumentView = Required<Schemas['RequestDocumentView']>;
+
+/** The employee's own request; nullable fields are null until set. */
+export type DocumentRequestView = Omit<
+  Required<Schemas['DocumentRequestView']>,
+  'note' | 'resolveNote' | 'pickedUpAt' | 'resolvedAt' | 'documents'
+> & {
+  note: string | null;
+  resolveNote: string | null;
+  pickedUpAt: string | null;
+  resolvedAt: string | null;
+  documents: RequestDocumentView[];
+};
+
+/** A row in the Accountant's queue — carries the employee's identity + their team. */
+export type TeamRequestRow = Omit<
+  Required<Schemas['TeamRequestRow']>,
+  | 'employeeCode'
+  | 'employeeName'
+  | 'teamName'
+  | 'note'
+  | 'resolveNote'
+  | 'pickedUpAt'
+  | 'resolvedAt'
+  | 'documents'
+> & {
+  employeeCode: string | null;
+  employeeName: string | null;
+  teamName: string | null;
+  note: string | null;
+  resolveNote: string | null;
+  pickedUpAt: string | null;
+  resolvedAt: string | null;
+  documents: RequestDocumentView[];
+};
+
+/** The presigned PUT envelope for a fulfilment upload. */
+export type RequestUpload = Required<Schemas['RequestUpload']>;
+
+export type MyRequestsPage = Omit<Required<Schemas['MyRequestsPage']>, 'content'> & {
+  content: DocumentRequestView[];
+};
+
+export type TeamRequestsPage = Omit<Required<Schemas['TeamRequestsPage']>, 'content'> & {
+  content: TeamRequestRow[];
+};
+
 // --- Attendance (§8a) ------------------------------------------------------
 
 /** Button + prompt state + worked totals (§8a v2); nullable fields are null when the state is absent. */

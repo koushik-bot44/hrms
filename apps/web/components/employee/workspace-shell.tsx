@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarDays, Clock, Inbox } from 'lucide-react';
+import { CalendarDays, Clock, FileText, Inbox } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { AppShell, type NavItem } from '@/components/app-shell';
 import { WorkspaceEntryGuard } from '@/components/attendance/workspace-entry-guard';
@@ -16,6 +16,8 @@ const nav: NavItem[] = [
   { label: 'Mailbox', href: '/mail', icon: Inbox },
   { label: 'Attendance', href: '/workspace/attendance', icon: Clock },
   { label: 'Leave', href: '/workspace/leave', icon: CalendarDays },
+  // HR side is future — only the Accounts side is wired today (§8d).
+  { label: 'HR/Accounts Requests', href: '/workspace/requests', icon: FileText },
 ];
 
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
