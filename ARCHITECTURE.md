@@ -775,6 +775,55 @@ balances are a future feature).
 
 ---
 
+## 8d. HR/Accounts Requests (Accounts side)
+
+A credentialed employee asks their team's **Accountant** for a document (a payslip, salary certificate,
+Form 16, etc.); the Accountant works it and uploads the requested file(s) to fulfil it. This is the
+**Accounts** side; an **HR** side (HR-fulfilled document requests) is a **future** addition — the same
+shape, routed to the team's HR.
+
+- **Who can request:** only a **credentialed** employee (the `/workspace` principal — `mailAddress`
+  assigned), exactly as leave/attendance. An OTP-only onboarding employee has no request access → `403` on
+  every endpoint.
+- **Routing (reuses the team resolution):** the routee is `employee.onboardingHr → that HR's team →
+  team.accountantUser` — the Accountant of the team whose HR onboarded the employee. There is **no**
+  fallback to the central Accounts Admin; if that team has **no Accountant assigned**, the submit is
+  refused (`409` "No accountant assigned to your team"). The resolved `accountantUserId` is stored on the
+  row, and the Accountant lists/acts by it (mirroring `LeaveRequest.managerUserId`).
+- **Request:** `requestType` (`PAYSLIP` | `SALARY_CERTIFICATE` | `FORM16` | `TAX_DOCUMENT` | `OTHER`) and a
+  free-text `note` (e.g. the period "Jan–Mar 2026").
+- **Lifecycle:** `SUBMITTED → IN_PROGRESS → RESOLVED`. The Accountant **picks up** a request (→
+  `IN_PROGRESS`, `pickedUpAt`), uploads one or more documents, and **resolves** it (→ `RESOLVED`,
+  `resolvedAt`, with an optional resolve note). The employee may **cancel their own** request while it is
+  `SUBMITTED` (→ `CANCELLED`); once it is `IN_PROGRESS`/`RESOLVED` it can no longer be cancelled.
+- **Fulfilment (the existing S3 handshake):** the Accountant uploads via the same **presigned upload →
+  confirm** handshake as employee documents / mail attachments — request an upload URL (server validates
+  type + extension + size: images/pdf/office/csv/zip, ≤10 MB, executables/scripts rejected), PUT to
+  storage, then **resolve** binds the file(s): the server re-reads the bytes, re-validates, computes the
+  **sha256**, and marks them fulfilled. Files live under the **employee's** record key
+  (`companies/{companyId}/employees/{employeeId}/requests/…`); raw storage keys are never exposed.
+- **Download:** `GET /requests/{id}/documents/{docId}/download` issues a short-lived presigned **GET**,
+  authorized to the request's **own employee** OR the **routed Accountant** (their team) — anyone else
+  `403`. Audited `REQUEST_DOCUMENT_DOWNLOADED`.
+- **Notifications — internal mail is NOT usable here, by design.** The `canSendMail` graph gives an
+  **Accountant no team edge** (their only mail edge is to their Company Admin), so an employee ↔ team
+  Accountant internal mail is **not permitted** — and the graph is **not** weakened for this feature.
+  Instead, consistent with how leave notifies (and without silently failing): on **submit**, the request
+  itself is the Accountant's durable record in their **`/requests/team` queue**, plus a **best-effort OS
+  push** (§8c) to the Accountant; on **resolve**, the employee sees the outcome + files in their own
+  **`/requests/me`** history, is **emailed** (dev-logged, the employee-facing channel — like a leave
+  decision), and gets a **best-effort OS push**. Both notifications are sent by the **controller AFTER the
+  request tx commits** and are best-effort — a mail/push failure never breaks (or rolls back) the request
+  action. No `NotificationType` bell is used (there is no Accountant bell consumer).
+- **Scope:** an employee sees ONLY their own requests; an Accountant sees ONLY the requests routed to them
+  (`accountantUserId == self`, same company) and may act only on those — cross-team / cross-company is
+  denied. Every action is audited (`REQUEST_SUBMITTED` / `REQUEST_PICKED_UP` / `REQUEST_RESOLVED` /
+  `REQUEST_CANCELLED` + `REQUEST_DOCUMENT_UPLOAD_REQUESTED` / `REQUEST_DOCUMENT_UPLOADED` /
+  `REQUEST_DOCUMENT_DOWNLOADED`) with `companyId` set; `document_requests` carries a denormalized
+  `companyId` so every query filters by tenant.
+
+---
+
 ## 8c. OS notifications (Web Push)
 
 OS-level notifications are delivered with **Web Push (VAPID)** — the browser standard for background

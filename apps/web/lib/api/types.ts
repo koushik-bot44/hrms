@@ -180,6 +180,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requests/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requests/team/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requests/team/{id}/pick-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pickUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requests/team/{id}/documents/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["uploadUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/push/test": {
         parameters: {
             query?: never;
@@ -255,7 +335,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["submit"];
+        post: operations["submit_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -495,7 +575,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["submit_1"];
+        post: operations["submit_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -511,7 +591,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["cancel"];
+        post: operations["cancel_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -982,6 +1062,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/requests/{id}/documents/{docId}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["download_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requests/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["team"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requests/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/push/public-key": {
         parameters: {
             query?: never;
@@ -1230,7 +1358,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["team"];
+        get: operations["team_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1246,7 +1374,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["me"];
+        get: operations["me_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1406,7 +1534,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["me_1"];
+        get: operations["me_2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1486,7 +1614,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["me_2"];
+        get: operations["me_3"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1865,6 +1993,69 @@ export interface components {
         };
         CreateTeamRequest: {
             name: string;
+        };
+        SubmitDocumentRequest: {
+            /** @enum {string} */
+            requestType: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER";
+            note?: string;
+        };
+        DocumentRequestView: {
+            id?: string;
+            /** @enum {string} */
+            requestType?: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER";
+            note?: string;
+            /** @enum {string} */
+            status?: "SUBMITTED" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
+            resolveNote?: string;
+            pickedUpAt?: string;
+            resolvedAt?: string;
+            createdAt?: string;
+            documents?: components["schemas"]["RequestDocumentView"][];
+        };
+        RequestDocumentView: {
+            id?: string;
+            fileName?: string;
+            contentType?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            createdAt?: string;
+        };
+        ResolveRequest: {
+            documentIds: string[];
+            note?: string;
+        };
+        TeamRequestRow: {
+            id?: string;
+            employeeId?: string;
+            employeeCode?: string;
+            employeeName?: string;
+            teamName?: string;
+            /** @enum {string} */
+            requestType?: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER";
+            note?: string;
+            /** @enum {string} */
+            status?: "SUBMITTED" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
+            resolveNote?: string;
+            pickedUpAt?: string;
+            resolvedAt?: string;
+            createdAt?: string;
+            documents?: components["schemas"]["RequestDocumentView"][];
+        };
+        UploadDocumentRequest: {
+            fileName: string;
+            contentType: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+        };
+        RequestUpload: {
+            documentId?: string;
+            uploadUrl?: string;
+            method?: string;
+            headers?: {
+                [key: string]: string;
+            };
+            /** Format: int32 */
+            expiresInSeconds?: number;
         };
         /** @description Result of a test send to the caller's own subscriptions. */
         TestResult: {
@@ -2323,6 +2514,40 @@ export interface components {
             memberCount?: number;
             createdAt?: string;
         };
+        PresignedView: {
+            url?: string;
+            /** Format: int32 */
+            expiresInSeconds?: number;
+        };
+        Pageable: {
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            sort?: string[];
+        };
+        TeamRequestsPage: {
+            content?: components["schemas"]["TeamRequestRow"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        MyRequestsPage: {
+            content?: components["schemas"]["DocumentRequestView"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
         /** @description The VAPID public key the browser needs to create a PushSubscription. */
         PublicKeyResponse: {
             /** @description VAPID public key (base64url); empty when push is not configured. */
@@ -2337,11 +2562,6 @@ export interface components {
         AccountantStatus: {
             exists?: boolean;
             accountant?: components["schemas"]["AccountantView"];
-        };
-        PresignedView: {
-            url?: string;
-            /** Format: int32 */
-            expiresInSeconds?: number;
         };
         AttachmentView: {
             id?: string;
@@ -2374,13 +2594,6 @@ export interface components {
             createdAt?: string;
             mine?: boolean;
             attachments?: components["schemas"]["AttachmentView"][];
-        };
-        Pageable: {
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            sort?: string[];
         };
         ThreadListItemView: {
             threadId?: string;
@@ -3285,6 +3498,126 @@ export interface operations {
             };
         };
     };
+    submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DocumentRequestView"];
+                };
+            };
+        };
+    };
+    cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DocumentRequestView"];
+                };
+            };
+        };
+    };
+    resolve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TeamRequestRow"];
+                };
+            };
+        };
+    };
+    pickUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TeamRequestRow"];
+                };
+            };
+        };
+    };
+    uploadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RequestUpload"];
+                };
+            };
+        };
+    };
     test: {
         parameters: {
             query?: never;
@@ -3457,7 +3790,7 @@ export interface operations {
             };
         };
     };
-    submit: {
+    submit_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -3803,7 +4136,7 @@ export interface operations {
             };
         };
     };
-    submit_1: {
+    submit_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -3827,7 +4160,7 @@ export interface operations {
             };
         };
     };
-    cancel: {
+    cancel_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -4776,6 +5109,74 @@ export interface operations {
             };
         };
     };
+    download_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                docId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedView"];
+                };
+            };
+        };
+    };
+    team: {
+        parameters: {
+            query: {
+                status?: string;
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TeamRequestsPage"];
+                };
+            };
+        };
+    };
+    me: {
+        parameters: {
+            query: {
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MyRequestsPage"];
+                };
+            };
+        };
+    };
     publicKey: {
         parameters: {
             query?: never;
@@ -5113,7 +5514,7 @@ export interface operations {
             };
         };
     };
-    team: {
+    team_1: {
         parameters: {
             query: {
                 status?: string;
@@ -5138,7 +5539,7 @@ export interface operations {
             };
         };
     };
-    me: {
+    me_1: {
         parameters: {
             query: {
                 pageable: components["schemas"]["Pageable"];
@@ -5354,7 +5755,7 @@ export interface operations {
             };
         };
     };
-    me_1: {
+    me_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -5471,7 +5872,7 @@ export interface operations {
             };
         };
     };
-    me_2: {
+    me_3: {
         parameters: {
             query: {
                 from?: string;

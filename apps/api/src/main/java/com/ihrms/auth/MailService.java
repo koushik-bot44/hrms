@@ -110,6 +110,17 @@ public class MailService {
     log.info("Leave decision email dispatched to {} ({})", email, outcome);
   }
 
+  /** Document-request resolved notice to the employee (§8d) — the employee has no notification bell. */
+  public void sendDocumentRequestResolved(String email, String requestType) {
+    String label = requestType == null ? "document" : requestType.replace('_', ' ').toLowerCase();
+    String body = "Your " + label + " request is ready — sign in to download the document(s).";
+    if (noSmtp()) {
+      log.warn("[DEV REQUEST] {} -> {}  (no SMTP configured; logging only)", email, body);
+      return;
+    }
+    log.info("Document-request resolved email dispatched to {} ({})", email, label);
+  }
+
   private boolean noSmtp() {
     String host = props.mail() == null ? null : props.mail().host();
     return host == null || host.isBlank();

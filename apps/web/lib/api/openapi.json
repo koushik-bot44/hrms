@@ -487,6 +487,176 @@
         }
       }
     },
+    "/requests": {
+      "post": {
+        "tags": [
+          "document-request-controller"
+        ],
+        "operationId": "submit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRequestView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/{id}/cancel": {
+      "post": {
+        "tags": [
+          "document-request-controller"
+        ],
+        "operationId": "cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRequestView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/team/{id}/resolve": {
+      "post": {
+        "tags": [
+          "document-request-controller"
+        ],
+        "operationId": "resolve",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamRequestRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/team/{id}/pick-up": {
+      "post": {
+        "tags": [
+          "document-request-controller"
+        ],
+        "operationId": "pickUp",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamRequestRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/team/{id}/documents/upload-url": {
+      "post": {
+        "tags": [
+          "document-request-controller"
+        ],
+        "operationId": "uploadUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestUpload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/push/test": {
       "post": {
         "tags": [
@@ -676,7 +846,7 @@
         "tags": [
           "onboarding-controller"
         ],
-        "operationId": "submit",
+        "operationId": "submit_1",
         "responses": {
           "201": {
             "description": "Created",
@@ -1136,7 +1306,7 @@
         "tags": [
           "leave-controller"
         ],
-        "operationId": "submit_1",
+        "operationId": "submit_2",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1166,7 +1336,7 @@
         "tags": [
           "leave-controller"
         ],
-        "operationId": "cancel",
+        "operationId": "cancel_1",
         "parameters": [
           {
             "name": "id",
@@ -2533,6 +2703,112 @@
         }
       }
     },
+    "/requests/{id}/documents/{docId}/download": {
+      "get": {
+        "tags": [
+          "document-request-controller"
+        ],
+        "operationId": "download_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/team": {
+      "get": {
+        "tags": [
+          "document-request-controller"
+        ],
+        "operationId": "team",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageable",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamRequestsPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/me": {
+      "get": {
+        "tags": [
+          "document-request-controller"
+        ],
+        "operationId": "me",
+        "parameters": [
+          {
+            "name": "pageable",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyRequestsPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/push/public-key": {
       "get": {
         "tags": [
@@ -2957,7 +3233,7 @@
         "tags": [
           "leave-controller"
         ],
-        "operationId": "team",
+        "operationId": "team_1",
         "parameters": [
           {
             "name": "status",
@@ -3011,7 +3287,7 @@
         "tags": [
           "leave-controller"
         ],
-        "operationId": "me",
+        "operationId": "me_1",
         "parameters": [
           {
             "name": "pageable",
@@ -3287,7 +3563,7 @@
         "tags": [
           "auth-controller"
         ],
-        "operationId": "me_1",
+        "operationId": "me_2",
         "responses": {
           "200": {
             "description": "OK",
@@ -3504,7 +3780,7 @@
         "tags": [
           "attendance-controller"
         ],
-        "operationId": "me_2",
+        "operationId": "me_3",
         "parameters": [
           {
             "name": "from",
@@ -4542,6 +4818,220 @@
             "maxLength": 120,
             "minLength": 2,
             "type": "string"
+          }
+        }
+      },
+      "SubmitDocumentRequest": {
+        "required": [
+          "requestType"
+        ],
+        "type": "object",
+        "properties": {
+          "requestType": {
+            "type": "string",
+            "enum": [
+              "PAYSLIP",
+              "SALARY_CERTIFICATE",
+              "FORM16",
+              "TAX_DOCUMENT",
+              "OTHER"
+            ]
+          },
+          "note": {
+            "maxLength": 2000,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
+      "DocumentRequestView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "requestType": {
+            "type": "string",
+            "enum": [
+              "PAYSLIP",
+              "SALARY_CERTIFICATE",
+              "FORM16",
+              "TAX_DOCUMENT",
+              "OTHER"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "SUBMITTED",
+              "IN_PROGRESS",
+              "RESOLVED",
+              "CANCELLED"
+            ]
+          },
+          "resolveNote": {
+            "type": "string"
+          },
+          "pickedUpAt": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequestDocumentView"
+            }
+          }
+        }
+      },
+      "RequestDocumentView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ResolveRequest": {
+        "required": [
+          "documentIds"
+        ],
+        "type": "object",
+        "properties": {
+          "documentIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "maxLength": 2000,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
+      "TeamRequestRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "employeeId": {
+            "type": "string"
+          },
+          "employeeCode": {
+            "type": "string"
+          },
+          "employeeName": {
+            "type": "string"
+          },
+          "teamName": {
+            "type": "string"
+          },
+          "requestType": {
+            "type": "string",
+            "enum": [
+              "PAYSLIP",
+              "SALARY_CERTIFICATE",
+              "FORM16",
+              "TAX_DOCUMENT",
+              "OTHER"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "SUBMITTED",
+              "IN_PROGRESS",
+              "RESOLVED",
+              "CANCELLED"
+            ]
+          },
+          "resolveNote": {
+            "type": "string"
+          },
+          "pickedUpAt": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequestDocumentView"
+            }
+          }
+        }
+      },
+      "UploadDocumentRequest": {
+        "required": [
+          "contentType",
+          "fileName"
+        ],
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "RequestUpload": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "uploadUrl": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -6078,6 +6568,93 @@
           }
         }
       },
+      "PresignedView": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Pageable": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TeamRequestsPage": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamRequestRow"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "MyRequestsPage": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentRequestView"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "PublicKeyResponse": {
         "type": "object",
         "properties": {
@@ -6111,18 +6688,6 @@
           },
           "accountant": {
             "$ref": "#/components/schemas/AccountantView"
-          }
-        }
-      },
-      "PresignedView": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string"
-          },
-          "expiresInSeconds": {
-            "type": "integer",
-            "format": "int32"
           }
         }
       },
@@ -6236,27 +6801,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AttachmentView"
-            }
-          }
-        }
-      },
-      "Pageable": {
-        "type": "object",
-        "properties": {
-          "page": {
-            "minimum": 0,
-            "type": "integer",
-            "format": "int32"
-          },
-          "size": {
-            "minimum": 1,
-            "type": "integer",
-            "format": "int32"
-          },
-          "sort": {
-            "type": "array",
-            "items": {
-              "type": "string"
             }
           }
         }

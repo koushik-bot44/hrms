@@ -118,6 +118,14 @@ public class SecurityConfig {
                     .hasRole("MANAGER")
                     .requestMatchers("/leave/**")
                     .authenticated()
+                    // HR/Accounts Requests (§8d): /team/** (queue, pick-up, upload-url, resolve) are
+                    // ACCOUNTANT-only (routee-scoped in the service); the employee submit/history/cancel +
+                    // the dual-role document download are open to any authenticated principal, and the
+                    // service authorizes the owner / routed accountant (403s everyone else).
+                    .requestMatchers("/requests/team/**")
+                    .hasRole("ACCOUNTANT")
+                    .requestMatchers("/requests/**")
+                    .authenticated()
                     // Web Push (§ Web Push): any authenticated principal may register their own browser
                     // subscription + self-test; the service refuses an uncredentialed employee (403).
                     .requestMatchers("/push/**")
