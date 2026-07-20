@@ -150,7 +150,9 @@ aggregates surface in a single-glance, read-only **Platform Overview** dashboard
 totals, the onboarding funnel + status-distribution donut (both from the same counts), monthly trends
 (with the offboarding series shown as a labelled "coming soon" placeholder — never faked), employees-per-
 company + the per-company org drill-down (naming assigned staff, never employee identities), and the ops
-metric cards. It is **live-on-load** with polling + refetch-on-focus, and **read-only** throughout.
+metric cards. It is **live-on-load** with polling + refetch-on-focus, and **read-only** throughout. Two
+**client-side CSV exports** (from the already-loaded data — no refetch) are offered: the companies
+roll-up and a drilled company's per-team org breakdown (staff only, never employee identities).
 
 **Accountant (team-scoped read-only viewer).** The **per-team** analogue of the Accounts Admin: a staff
 `User` with a `companyId` **and a `teamId`** (like HR/Manager), **read-only**. It sees exactly the

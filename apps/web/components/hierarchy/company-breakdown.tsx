@@ -2,11 +2,14 @@
 
 import * as React from 'react';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Building2, ChevronRight, ShieldCheck } from 'lucide-react';
-import type { CompanySizeRow, StaffRef } from '@/lib/contract';
+import { Building2, ChevronRight, Download, ShieldCheck } from 'lucide-react';
+import type { CompanyBreakdown, CompanySizeRow, StaffRef } from '@/lib/contract';
 import { getHierarchyBreakdown, getHierarchyCompanies } from '@/lib/api/hierarchy';
 import { useApiQuery } from '@/lib/api/hooks';
+import { downloadCsv, toCsv } from '@/lib/csv';
+import { istTodayIso } from '@/lib/date';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
@@ -37,15 +40,27 @@ export function CompanyBreakdownPanel() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Building2 className="size-4 text-muted-foreground" />
-          Companies
-        </CardTitle>
-        <CardDescription>
-          Employees per company (top {CHART_TOP} by size); open one for its org structure — teams and
-          assigned staff. No employee details are shown.
-        </CardDescription>
+      <CardHeader className="flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Building2 className="size-4 text-muted-foreground" />
+            Companies
+          </CardTitle>
+          <CardDescription>
+            Employees per company (top {CHART_TOP} by size); open one for its org structure — teams and
+            assigned staff. No employee details are shown.
+          </CardDescription>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={rows.length === 0}
+          onClick={() => exportCompaniesCsv(rows)}
+        >
+          <Download className="size-4" />
+          Export CSV
+        </Button>
       </CardHeader>
       <CardContent className="space-y-5">
         {companies.isLoading ? (
@@ -163,9 +178,15 @@ function CompanyDetail({ companyId }: { companyId: string }) {
           <h3 className="text-sm font-semibold">{b.name}</h3>
           {b.archived ? <Badge variant="neutral">Archived</Badge> : null}
         </div>
-        <div className="text-xs text-muted-foreground">
-          {b.teamCount} team{b.teamCount === 1 ? '' : 's'} · {b.employeeCount} employee
-          {b.employeeCount === 1 ? '' : 's'}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">
+            {b.teamCount} team{b.teamCount === 1 ? '' : 's'} · {b.employeeCount} employee
+            {b.employeeCount === 1 ? '' : 's'}
+          </span>
+          <Button type="button" variant="outline" size="sm" onClick={() => exportBreakdownCsv(b)}>
+            <Download className="size-4" />
+            Export CSV
+          </Button>
         </div>
       </div>
 
@@ -230,5 +251,51 @@ function StaffName({ staff }: { staff: StaffRef | null }) {
       <span className="font-medium">{staff.name}</span>
       {staff.email ? <span className="block truncate text-xs text-muted-foreground">{staff.email}</span> : null}
     </span>
+  );
+}
+
+// --- CSV export (client-side, from data already in state; reuse lib/csv.ts) ---
+
+/** Staff as "Name (email)" for a cell, or "—" when unassigned — mirrors StaffName on screen. */
+function staffText(staff: StaffRef | null): string {
+  if (!staff) return '—';
+  return staff.email ? `${staff.name} (${staff.email})` : staff.name;
+}
+
+/** The companies roll-up, exactly as loaded (name, code, status, team + employee counts). No PII. */
+function exportCompaniesCsv(rows: CompanySizeRow[]): void {
+  const headers = ['Company', 'Code', 'Status', 'Teams', 'Employees'];
+  const data = rows.map((c) => [
+    c.name,
+    c.code,
+    c.archived ? 'Archived' : 'Active',
+    c.teamCount,
+    c.employeeCount,
+  ]);
+  downloadCsv(`hierarchy_companies_${istTodayIso()}.csv`, toCsv(headers, data));
+}
+
+/**
+ * One company's org breakdown: a summary line (company + Company Admin) then one row per team
+ * (Team, HR, Manager, Accountant, Employees). Org structure + assigned staff only — never employees.
+ */
+function exportBreakdownCsv(b: CompanyBreakdown): void {
+  const summary = toCsv(
+    ['Company', 'Status', 'Company Admin', 'Teams', 'Employees'],
+    [[b.name, b.archived ? 'Archived' : 'Active', staffText(b.companyAdmin), b.teamCount, b.employeeCount]],
+  );
+  const teamsTable = toCsv(
+    ['Team', 'HR', 'Manager', 'Accountant', 'Employees'],
+    b.teams.map((t) => [
+      t.name,
+      staffText(t.hr),
+      staffText(t.manager),
+      staffText(t.accountant),
+      t.employeeCount,
+    ]),
+  );
+  downloadCsv(
+    `hierarchy_company_${b.companyId}_${istTodayIso()}.csv`,
+    `${summary}\r\n\r\n${teamsTable}`,
   );
 }
