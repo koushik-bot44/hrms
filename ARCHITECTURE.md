@@ -145,9 +145,12 @@ identity or record field ever appears. Sources are stated so they stay stable:
     threshold (**`STUCK_THRESHOLD_DAYS = 7`**), with an optional by-stage breakdown.
 
 Company scoping does **not** restrict the Hierarchy (it is the platform role), but every query is an
-efficient GROUP BY / COUNT (a constant number per endpoint — no N+1 over companies/teams/employees). Its
-data views (aggregate reads under `/hierarchy/**`) are added incrementally; the role, login, provisioning
-and a placeholder overview land first, then these aggregate endpoints.
+efficient GROUP BY / COUNT (a constant number per endpoint — no N+1 over companies/teams/employees). These
+aggregates surface in a single-glance, read-only **Platform Overview** dashboard at `/hierarchy` — headline
+totals, the onboarding funnel + status-distribution donut (both from the same counts), monthly trends
+(with the offboarding series shown as a labelled "coming soon" placeholder — never faked), employees-per-
+company + the per-company org drill-down (naming assigned staff, never employee identities), and the ops
+metric cards. It is **live-on-load** with polling + refetch-on-focus, and **read-only** throughout.
 
 **Accountant (team-scoped read-only viewer).** The **per-team** analogue of the Accounts Admin: a staff
 `User` with a `companyId` **and a `teamId`** (like HR/Manager), **read-only**. It sees exactly the

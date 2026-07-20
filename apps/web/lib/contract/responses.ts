@@ -413,6 +413,56 @@ export type TeamAttendanceSummary = Omit<DeepRequired<Schemas['TeamAttendanceSum
   employees: TeamAttendanceMemberRow[];
 };
 
+// --- Hierarchy platform overview (§2) — cross-company aggregates, server-populated ----
+// Nullable at runtime: averageTimeToApprovalDays (null when none approved) and the StaffRef slots
+// (absent when a company-admin / team slot is unassigned) — overridden so the UI shows "—".
+export type StaffTotals = DeepRequired<Schemas['StaffTotals']>;
+export type CompanyTotals = DeepRequired<Schemas['CompanyTotals']>;
+export type PlatformTotals = DeepRequired<Schemas['PlatformTotals']>;
+export type OnboardingFunnel = DeepRequired<Schemas['OnboardingFunnel']>;
+export type StuckStage = DeepRequired<Schemas['StuckStage']>;
+export type OpsMetrics = Omit<
+  DeepRequired<Schemas['OpsMetrics']>,
+  'averageTimeToApprovalDays' | 'stuckByStage'
+> & {
+  averageTimeToApprovalDays: number | null;
+  stuckByStage: StuckStage[];
+};
+export type PlatformOverview = {
+  totals: PlatformTotals;
+  funnel: OnboardingFunnel;
+  statusDistribution: OnboardingFunnel;
+  ops: OpsMetrics;
+};
+
+export type TrendPoint = DeepRequired<Schemas['TrendPoint']>;
+export type TrendsResponse = Omit<DeepRequired<Schemas['TrendsResponse']>, 'series'> & {
+  series: TrendPoint[];
+};
+
+export type CompanySizeRow = DeepRequired<Schemas['CompanySizeRow']>;
+export type CompaniesResponse = Omit<DeepRequired<Schemas['CompaniesResponse']>, 'companies'> & {
+  companies: CompanySizeRow[];
+};
+
+export type StaffRef = DeepRequired<Schemas['StaffRef']>;
+export type TeamBreakdown = Omit<
+  DeepRequired<Schemas['TeamBreakdown']>,
+  'hr' | 'manager' | 'accountant'
+> & {
+  hr: StaffRef | null;
+  manager: StaffRef | null;
+  accountant: StaffRef | null;
+};
+export type CompanyBreakdown = Omit<
+  DeepRequired<Schemas['CompanyBreakdown']>,
+  'byStatus' | 'companyAdmin' | 'teams'
+> & {
+  byStatus: OnboardingFunnel;
+  companyAdmin: StaffRef | null;
+  teams: TeamBreakdown[];
+};
+
 // --- Internal mail — thread-based (§8, Stage 3) ----------------------------
 
 /** A mail participant — a staff account shown by name + `localpart@domain` address. */
