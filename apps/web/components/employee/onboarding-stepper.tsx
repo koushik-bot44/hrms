@@ -545,7 +545,7 @@ function Form4Step({
             <DocumentUploader
               key={t}
               docType={t}
-              required={t === 'AADHAAR' || t === 'PAN'}
+              required={t === 'AADHAAR' || t === 'PAN' || (t === 'ITR' && dashboard.itrRequired)}
               documents={dashboard.documents}
               disabled={disabled}
             />
@@ -580,7 +580,12 @@ function ReviewStep({
   onNext: () => void;
   onBack: () => void;
 }) {
-  const { missing } = evaluateOnboarding(dashboard.form1, dashboard.documents, dashboard.signature);
+  const { missing } = evaluateOnboarding(
+    dashboard.form1,
+    dashboard.documents,
+    dashboard.signature,
+    dashboard.itrRequired,
+  );
   return (
     <Card>
       <CardHeader>
@@ -635,6 +640,7 @@ function SignStep({
     dashboard.form1,
     dashboard.documents,
     dashboard.signature,
+    dashboard.itrRequired,
   );
 
   const saveSig = useApiMutation(

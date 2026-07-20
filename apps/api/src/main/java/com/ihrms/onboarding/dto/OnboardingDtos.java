@@ -240,6 +240,7 @@ public final class OnboardingDtos {
       String fullName,
       String designation,
       EmployeeStatus status,
+      boolean itrRequired,
       Form1View form1,
       List<Form3EntryView> form3,
       List<DocumentView> documents,

@@ -50,6 +50,7 @@ export const IDENTITY_SLOTS: DocumentType[] = [
   DocumentType.VOTER_ID,
   DocumentType.DRIVING_LICENCE,
   DocumentType.PASSPORT,
+  DocumentType.ITR,
 ];
 export const EMPLOYMENT_GROUPS = [1, 2, 3, 4] as const;
 export const REQUIRED_DOC_TYPES: DocumentType[] = [DocumentType.AADHAAR, DocumentType.PAN];
@@ -68,6 +69,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   [DocumentType.VOTER_ID]: 'Voter ID',
   [DocumentType.DRIVING_LICENCE]: 'Driving Licence',
   [DocumentType.PASSPORT]: 'Passport',
+  [DocumentType.ITR]: 'ITR Form',
   [DocumentType.OTHER]: 'Other',
 };
 
@@ -209,6 +211,7 @@ export function evaluateOnboarding(
   form1: Form1View | null,
   documents: DocumentDto[],
   signature: SignatureView | null,
+  itrRequired = false,
 ): { complete: boolean; missing: string[] } {
   const missing: string[] = [];
   if (!form1 || !form1.name) {
@@ -221,7 +224,8 @@ export function evaluateOnboarding(
     }
   }
   // Form 2 is HR/SA-authored at onboard (§3.2) — not part of the employee's submission gate.
-  for (const req of REQUIRED_DOC_TYPES) {
+  const required = itrRequired ? [...REQUIRED_DOC_TYPES, DocumentType.ITR] : REQUIRED_DOC_TYPES;
+  for (const req of required) {
     const has = documents.some((d) => d.docType === req && DONE_DOC_STATUSES.includes(d.status));
     if (!has) missing.push(`Form 4 — upload your ${DOCUMENT_TYPE_LABELS[req]}`);
   }

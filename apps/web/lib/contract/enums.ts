@@ -53,6 +53,7 @@ export const DocumentType = {
   VOTER_ID: 'VOTER_ID',
   DRIVING_LICENCE: 'DRIVING_LICENCE',
   PASSPORT: 'PASSPORT',
+  ITR: 'ITR',
   OTHER: 'OTHER',
 } as const;
 export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];

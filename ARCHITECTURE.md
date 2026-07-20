@@ -214,7 +214,10 @@ Accounts Admin, own team for Accountant).
      fields share the one `form2_info` row without clobbering each other._
    - **Form 3 — Previous Employment** (one block per prior employer — **repeatable**)
    - **Form 4 — Documents** (a grouped upload checklist: educational, per-employment, identity proofs,
-     other)
+     other). **Aadhaar, PAN and ITR are mandatory** under identity proofs and gate submission. ITR is
+     required for onboardings created after it was introduced (per-employee `itrRequired` flag, set at
+     onboard); employees onboarded earlier keep `itrRequired=false` and are never gated on it, so no
+     already-submitted/approved record is retroactively re-opened.
 5. The employee **draws or types one e-signature** and **submits**. The system then **generates PDFs** —
    one per form plus one **merged complete application** — branded with the **joining company**, the
    signature stamped into Forms 1 & 2; these are stored under the record and **regenerated whenever a
@@ -343,7 +346,7 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
   `REVISION_REQUESTED` _(HR asked for changes to this item)_, `REJECTED`
 - **DocumentType** _(Form 4 slots)_: `SECONDARY`, `INTERMEDIATE`, `DIPLOMA`, `GRADUATION`,
   `POST_GRADUATION`, `OFFER_OR_APPOINTMENT_LETTER`, `HIKE_LETTER`, `RELIEVING_LETTER` _(per-employment,
-  with `groupIndex` 1–4)_, `AADHAAR`, `PAN`, `VOTER_ID`, `DRIVING_LICENCE`, `PASSPORT`, `OTHER`
+  with `groupIndex` 1–4)_, `AADHAAR`, `PAN`, `VOTER_ID`, `DRIVING_LICENCE`, `PASSPORT`, `ITR`, `OTHER`
 - **DocumentStatus**: `PENDING`, `UPLOADED`, `VERIFIED`, `REVISION_REQUESTED` _(HR asked for a
   re-upload)_, `REJECTED`
 - **GeneratedDocumentKind**: `FORM1`, `FORM2`, `FORM3`, `FORM4_MANIFEST`, `MERGED`

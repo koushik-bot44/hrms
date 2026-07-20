@@ -22,6 +22,7 @@ public enum DocumentType {
   VOTER_ID,
   DRIVING_LICENCE,
   PASSPORT,
+  ITR,
   // Free / other
   OTHER
 }

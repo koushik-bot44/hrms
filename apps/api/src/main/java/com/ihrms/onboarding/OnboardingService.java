@@ -359,7 +359,8 @@ public class OnboardingService {
     List<Document> docs = documents.findByEmployeeId(emp.employeeId());
     Signature signature = signatures.findByEmployeeId(emp.employeeId()).orElse(null);
 
-    List<String> missing = OnboardingCompleteness.missing(f1, f2, docs, signature);
+    List<String> missing =
+        OnboardingCompleteness.missing(f1, f2, docs, signature, employee.isItrRequired());
     if (!missing.isEmpty()) {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "Before submitting: " + String.join("; ", missing));
@@ -412,7 +413,8 @@ public class OnboardingService {
           HttpStatus.BAD_REQUEST, "Update every item HR sent back before re-submitting");
     }
 
-    List<String> missing = OnboardingCompleteness.missing(f1, f2, docs, signature);
+    List<String> missing =
+        OnboardingCompleteness.missing(f1, f2, docs, signature, employee.isItrRequired());
     if (!missing.isEmpty()) {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "Before re-submitting: " + String.join("; ", missing));
@@ -516,6 +518,7 @@ public class OnboardingService {
         employee.getFullName(),
         employee.getDesignation(),
         employee.getStatus(),
+        employee.isItrRequired(),
         form1,
         form3,
         docs,

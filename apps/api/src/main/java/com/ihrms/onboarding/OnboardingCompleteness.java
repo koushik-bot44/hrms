@@ -23,7 +23,11 @@ public final class OnboardingCompleteness {
   private OnboardingCompleteness() {}
 
   public static List<String> missing(
-      Form1Personal form1, Form2Info form2, List<Document> documents, Signature signature) {
+      Form1Personal form1,
+      Form2Info form2,
+      List<Document> documents,
+      Signature signature,
+      boolean itrRequired) {
     List<String> missing = new ArrayList<>();
 
     if (form1 == null) {
@@ -50,6 +54,11 @@ public final class OnboardingCompleteness {
     if (!hasUploaded(documents, DocumentType.PAN)) {
       missing.add("Form 4 — upload your PAN");
     }
+    // ITR is mandatory only for employees onboarded after it was introduced (§3.2). Existing employees
+    // carry itrRequired=false, so they are never gated on it — even mid revision loop.
+    if (itrRequired && !hasUploaded(documents, DocumentType.ITR)) {
+      missing.add("Form 4 — upload your ITR Form");
+    }
 
     if (signature == null) {
       missing.add("Sign to submit");
@@ -59,8 +68,12 @@ public final class OnboardingCompleteness {
   }
 
   public static boolean isComplete(
-      Form1Personal form1, Form2Info form2, List<Document> documents, Signature signature) {
-    return missing(form1, form2, documents, signature).isEmpty();
+      Form1Personal form1,
+      Form2Info form2,
+      List<Document> documents,
+      Signature signature,
+      boolean itrRequired) {
+    return missing(form1, form2, documents, signature, itrRequired).isEmpty();
   }
 
   private static boolean refFilled(CharacterReference r) {

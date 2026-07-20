@@ -59,6 +59,13 @@ public class Employee {
   @Column(name = "status", nullable = false)
   private EmployeeStatus status = EmployeeStatus.INVITED;
 
+  /**
+   * Whether Form 4 requires an ITR upload for this employee (§3.2). Set true for NEW onboardings; existing
+   * rows default false so no one already onboarded is retroactively gated. Read by the completeness gate.
+   */
+  @Column(name = "itrRequired", nullable = false)
+  private boolean itrRequired;
+
   @Column(name = "otpHash")
   private String otpHash;
 

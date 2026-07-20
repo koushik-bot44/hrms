@@ -1933,7 +1933,7 @@ export interface components {
         DocumentView: {
             id?: string;
             /** @enum {string} */
-            docType?: "SECONDARY" | "INTERMEDIATE" | "DIPLOMA" | "GRADUATION" | "POST_GRADUATION" | "OFFER_OR_APPOINTMENT_LETTER" | "HIKE_LETTER" | "RELIEVING_LETTER" | "AADHAAR" | "PAN" | "VOTER_ID" | "DRIVING_LICENCE" | "PASSPORT" | "OTHER";
+            docType?: "SECONDARY" | "INTERMEDIATE" | "DIPLOMA" | "GRADUATION" | "POST_GRADUATION" | "OFFER_OR_APPOINTMENT_LETTER" | "HIKE_LETTER" | "RELIEVING_LETTER" | "AADHAAR" | "PAN" | "VOTER_ID" | "DRIVING_LICENCE" | "PASSPORT" | "ITR" | "OTHER";
             /** Format: int32 */
             groupIndex?: number;
             fileName?: string;
@@ -1959,6 +1959,7 @@ export interface components {
             designation?: string;
             /** @enum {string} */
             status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            itrRequired?: boolean;
             form1?: components["schemas"]["Form1View"];
             form3?: components["schemas"]["Form3EntryView"][];
             documents?: components["schemas"]["DocumentView"][];
@@ -1967,7 +1968,7 @@ export interface components {
         };
         DocumentUploadRequest: {
             /** @enum {string} */
-            docType: "SECONDARY" | "INTERMEDIATE" | "DIPLOMA" | "GRADUATION" | "POST_GRADUATION" | "OFFER_OR_APPOINTMENT_LETTER" | "HIKE_LETTER" | "RELIEVING_LETTER" | "AADHAAR" | "PAN" | "VOTER_ID" | "DRIVING_LICENCE" | "PASSPORT" | "OTHER";
+            docType: "SECONDARY" | "INTERMEDIATE" | "DIPLOMA" | "GRADUATION" | "POST_GRADUATION" | "OFFER_OR_APPOINTMENT_LETTER" | "HIKE_LETTER" | "RELIEVING_LETTER" | "AADHAAR" | "PAN" | "VOTER_ID" | "DRIVING_LICENCE" | "PASSPORT" | "ITR" | "OTHER";
             /** Format: int32 */
             groupIndex?: number;
             fileName: string;
@@ -2286,7 +2287,7 @@ export interface components {
         RecordDocument: {
             id?: string;
             /** @enum {string} */
-            docType?: "SECONDARY" | "INTERMEDIATE" | "DIPLOMA" | "GRADUATION" | "POST_GRADUATION" | "OFFER_OR_APPOINTMENT_LETTER" | "HIKE_LETTER" | "RELIEVING_LETTER" | "AADHAAR" | "PAN" | "VOTER_ID" | "DRIVING_LICENCE" | "PASSPORT" | "OTHER";
+            docType?: "SECONDARY" | "INTERMEDIATE" | "DIPLOMA" | "GRADUATION" | "POST_GRADUATION" | "OFFER_OR_APPOINTMENT_LETTER" | "HIKE_LETTER" | "RELIEVING_LETTER" | "AADHAAR" | "PAN" | "VOTER_ID" | "DRIVING_LICENCE" | "PASSPORT" | "ITR" | "OTHER";
             /** Format: int32 */
             groupIndex?: number;
             fileName?: string;

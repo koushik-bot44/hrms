@@ -4747,6 +4747,7 @@
               "VOTER_ID",
               "DRIVING_LICENCE",
               "PASSPORT",
+              "ITR",
               "OTHER"
             ]
           },
@@ -4835,6 +4836,9 @@
               "REJECTED"
             ]
           },
+          "itrRequired": {
+            "type": "boolean"
+          },
           "form1": {
             "$ref": "#/components/schemas/Form1View"
           },
@@ -4885,6 +4889,7 @@
               "VOTER_ID",
               "DRIVING_LICENCE",
               "PASSPORT",
+              "ITR",
               "OTHER"
             ]
           },
@@ -5961,6 +5966,7 @@
               "VOTER_ID",
               "DRIVING_LICENCE",
               "PASSPORT",
+              "ITR",
               "OTHER"
             ]
           },

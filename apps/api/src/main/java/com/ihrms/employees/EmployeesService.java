@@ -143,6 +143,7 @@ public class EmployeesService {
     employee.setCompanyId(companyId);
     employee.setOnboardingHrId(onboardingHrId);
     employee.setStatus(EmployeeStatus.INVITED);
+    employee.setItrRequired(true); // NEW onboardings must upload an ITR (§3.2); existing rows stay false.
     try {
       // Flush inside the try so the global-unique-email violation surfaces here as a 409.
       employees.saveAndFlush(employee);

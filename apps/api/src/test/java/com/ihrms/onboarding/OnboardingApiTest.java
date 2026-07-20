@@ -248,6 +248,45 @@ class OnboardingApiTest {
   }
 
   @Test
+  void itrGatesNewOnboardsButNeverExistingEmployees() throws Exception {
+    // (a) EXISTING cohort: the seeded employee carries itrRequired=false (the migration default), so
+    //     Form 1 + Aadhaar + PAN + signature is enough — ITR is never demanded. No one already onboarded
+    //     is retroactively gated or re-opened.
+    assertThat(dashboard().get("itrRequired").asBoolean()).isFalse();
+    saveForm1();
+    confirm(upload("AADHAAR"));
+    confirm(upload("PAN"));
+    signature();
+    mvc.perform(post("/me/onboarding/submit").header("Authorization", "Bearer " + empToken))
+        .andExpect(status().isCreated());
+
+    // (b) NEW onboarding: itrRequired=true (EmployeesService sets this at onboard). ITR now blocks submit.
+    Employee fresh = employee("nova@personal.test");
+    fresh.setItrRequired(true);
+    employees.save(fresh);
+    String freshToken = tokenFor(fresh);
+    assertThat(dashboardFor(freshToken).get("itrRequired").asBoolean()).isTrue();
+
+    // Form 1 + Aadhaar + PAN + signature but NO ITR -> gated on the ITR Form.
+    saveForm1For(freshToken);
+    confirmFor(freshToken, uploadFor(freshToken, "AADHAAR"));
+    confirmFor(freshToken, uploadFor(freshToken, "PAN"));
+    signatureFor(freshToken);
+    MvcResult gated =
+        mvc.perform(post("/me/onboarding/submit").header("Authorization", "Bearer " + freshToken))
+            .andExpect(status().isBadRequest())
+            .andReturn();
+    assertThat(gated.getResponse().getContentAsString()).contains("ITR Form");
+
+    // Upload the ITR -> the gate clears and submit succeeds.
+    confirmFor(freshToken, uploadFor(freshToken, "ITR"));
+    mvc.perform(post("/me/onboarding/submit").header("Authorization", "Bearer " + freshToken))
+        .andExpect(status().isCreated());
+    assertThat(employees.findById(fresh.getId()).orElseThrow().getStatus())
+        .isEqualTo(EmployeeStatus.SUBMITTED);
+  }
+
+  @Test
   void rejectsBadUploadRequests() throws Exception {
     mvc.perform(
             post("/me/onboarding/documents")
@@ -409,24 +448,37 @@ class OnboardingApiTest {
   }
 
   private void saveForm1() throws Exception {
+    saveForm1For(empToken);
+  }
+
+  private void saveForm1For(String token) throws Exception {
     mvc.perform(
             put("/me/onboarding/form1")
-                .header("Authorization", "Bearer " + empToken)
+                .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(form1Body())))
         .andExpect(status().isOk());
   }
 
   private void signature() throws Exception {
+    signatureFor(empToken);
+  }
+
+  private void signatureFor(String token) throws Exception {
     mvc.perform(
             put("/me/onboarding/signature")
-                .header("Authorization", "Bearer " + empToken)
+                .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("imageDataUrl", SIGNATURE, "type", "DRAWN"))))
         .andExpect(status().isOk());
   }
 
   private MvcResult requestUpload(String docType, Integer groupIndex, String fileName) throws Exception {
+    return requestUploadFor(empToken, docType, groupIndex, fileName);
+  }
+
+  private MvcResult requestUploadFor(
+      String token, String docType, Integer groupIndex, String fileName) throws Exception {
     var body = new java.util.HashMap<String, Object>();
     body.put("docType", docType);
     body.put("fileName", fileName);
@@ -437,7 +489,7 @@ class OnboardingApiTest {
     }
     return mvc.perform(
             post("/me/onboarding/documents")
-                .header("Authorization", "Bearer " + empToken)
+                .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(body)))
         .andExpect(status().isCreated())
@@ -445,21 +497,36 @@ class OnboardingApiTest {
   }
 
   private String upload(String docType) throws Exception {
-    return json.readTree(requestUpload(docType, null, docType.toLowerCase() + ".pdf").getResponse().getContentAsString())
+    return uploadFor(empToken, docType);
+  }
+
+  private String uploadFor(String token, String docType) throws Exception {
+    return json.readTree(
+            requestUploadFor(token, docType, null, docType.toLowerCase() + ".pdf")
+                .getResponse()
+                .getContentAsString())
         .get("documentId")
         .asText();
   }
 
   private void confirm(String documentId) throws Exception {
+    confirmFor(empToken, documentId);
+  }
+
+  private void confirmFor(String token, String documentId) throws Exception {
     mvc.perform(
             post("/me/onboarding/documents/" + documentId + "/confirm")
-                .header("Authorization", "Bearer " + empToken))
+                .header("Authorization", "Bearer " + token))
         .andExpect(status().isCreated());
   }
 
   private JsonNode dashboard() throws Exception {
+    return dashboardFor(empToken);
+  }
+
+  private JsonNode dashboardFor(String token) throws Exception {
     MvcResult res =
-        mvc.perform(get("/me/onboarding").header("Authorization", "Bearer " + empToken))
+        mvc.perform(get("/me/onboarding").header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
             .andReturn();
     return json.readTree(res.getResponse().getContentAsString());
