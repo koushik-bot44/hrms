@@ -72,7 +72,7 @@ export function RevisionPanel({ dashboard }: { dashboard: OnboardingDashboard })
 
       {showForm3 ? (
         <RevisionSection status={f3Status} note={dashboard.form3[0]?.revisionNote}>
-          <Form3Step form3={dashboard.form3} disabled={false} onSaved={refetch} submitLabel="Save Form 3" />
+          <Form3Step form3={dashboard.form3} disabled={false} onSaved={refetch} submitLabel="Save Form 2" />
         </RevisionSection>
       ) : null}
 

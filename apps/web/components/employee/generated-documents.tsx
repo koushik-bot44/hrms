@@ -10,8 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 const KIND_LABELS: Record<GeneratedDocumentKind, string> = {
   [GeneratedDocumentKind.FORM1]: 'Form 1 — Personal Details',
   [GeneratedDocumentKind.FORM2]: 'Form 2 — Employee Info',
-  [GeneratedDocumentKind.FORM3]: 'Form 3 — Previous Employment',
-  [GeneratedDocumentKind.FORM4_MANIFEST]: 'Form 4 — Documents',
+  [GeneratedDocumentKind.FORM3]: 'Form 2 — Previous Employment',
+  [GeneratedDocumentKind.FORM4_MANIFEST]: 'Form 3 — Documents',
   [GeneratedDocumentKind.MERGED]: 'Complete Application (merged)',
 };
 

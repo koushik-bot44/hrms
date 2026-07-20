@@ -397,7 +397,7 @@ function ArraySection({
 }
 
 // ---------------------------------------------------------------------------
-// Form 3 — Previous Employment (repeatable)
+// Form 3 — Previous Employment (repeatable) — internal identity; shown to the employee as "Form 2".
 // ---------------------------------------------------------------------------
 
 export function Form3Step({
@@ -435,7 +435,7 @@ export function Form3Step({
   });
   const entries = useFieldArray({ control, name: 'entries' });
   const save = useApiMutation((v: Form3Values) => saveForm3(v), {
-    successMessage: 'Form 3 saved',
+    successMessage: 'Form 2 saved',
     onSuccess: () => {
       onSaved();
       onNext?.();
@@ -451,7 +451,7 @@ export function Form3Step({
     <form onSubmit={handleSubmit((v) => save.mutate(v))} noValidate>
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">Form 3 — Previous Employment</CardTitle>
+          <CardTitle className="text-base">Form 2 — Previous Employment</CardTitle>
           {!disabled ? (
             <Button type="button" size="sm" variant="outline" onClick={() => entries.append(blank)}>
               <Plus className="size-4" />
@@ -499,7 +499,7 @@ export function Form3Step({
 }
 
 // ---------------------------------------------------------------------------
-// Form 4 — Documents (uploads)
+// Form 4 — Documents (uploads) — internal identity; shown to the employee as "Form 3".
 // ---------------------------------------------------------------------------
 
 function Form4Step({
@@ -516,7 +516,7 @@ function Form4Step({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Form 4 — Documents</CardTitle>
+        <CardTitle className="text-base">Form 3 — Documents</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <DocGroup title="Educational">
@@ -593,8 +593,8 @@ function ReviewStep({
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <SummaryRow label="Form 1 — Personal" value={dashboard.form1?.name ?? 'Not completed'} ok={!!dashboard.form1?.name} />
-        <SummaryRow label="Form 3 — Previous Employment" value={`${dashboard.form3.length} employer(s)`} ok />
-        <SummaryRow label="Form 4 — Documents" value={`${dashboard.documents.length} uploaded`} ok={dashboard.documents.length > 0} />
+        <SummaryRow label="Form 2 — Previous Employment" value={`${dashboard.form3.length} employer(s)`} ok />
+        <SummaryRow label="Form 3 — Documents" value={`${dashboard.documents.length} uploaded`} ok={dashboard.documents.length > 0} />
         <SummaryRow label="Signature" value={dashboard.signature ? 'Captured' : 'Not signed'} ok={!!dashboard.signature} />
         {missing.length > 0 ? (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3">

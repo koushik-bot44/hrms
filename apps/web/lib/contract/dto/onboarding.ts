@@ -227,7 +227,7 @@ export function evaluateOnboarding(
   const required = itrRequired ? [...REQUIRED_DOC_TYPES, DocumentType.ITR] : REQUIRED_DOC_TYPES;
   for (const req of required) {
     const has = documents.some((d) => d.docType === req && DONE_DOC_STATUSES.includes(d.status));
-    if (!has) missing.push(`Form 4 — upload your ${DOCUMENT_TYPE_LABELS[req]}`);
+    if (!has) missing.push(`Form 3 — upload your ${DOCUMENT_TYPE_LABELS[req]}`);
   }
   if (!signature) missing.push('Sign to submit');
   return { complete: missing.length === 0, missing };
