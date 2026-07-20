@@ -3036,6 +3036,108 @@
         }
       }
     },
+    "/hierarchy/trends": {
+      "get": {
+        "tags": [
+          "hierarchy-controller"
+        ],
+        "operationId": "trends",
+        "parameters": [
+          {
+            "name": "months",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 12
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hierarchy/overview": {
+      "get": {
+        "tags": [
+          "hierarchy-controller"
+        ],
+        "operationId": "overview",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformOverview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hierarchy/companies": {
+      "get": {
+        "tags": [
+          "hierarchy-controller"
+        ],
+        "operationId": "companies",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompaniesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hierarchy/companies/{companyId}/breakdown": {
+      "get": {
+        "tags": [
+          "hierarchy-controller"
+        ],
+        "operationId": "breakdown",
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyBreakdown"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -3732,7 +3834,7 @@
           "accountant-controller"
         ],
         "summary": "Companies to drill into (ACCOUNTS_ADMIN only; the Accountant has one team).",
-        "operationId": "companies",
+        "operationId": "companies_1",
         "responses": {
           "200": {
             "description": "OK",
@@ -6286,6 +6388,332 @@
             "format": "int32"
           }
         }
+      },
+      "TrendPoint": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "joined": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "approved": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offboarded": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "One month of the trends series (YYYY-MM, IST). offboarded is a 0 placeholder."
+      },
+      "TrendsResponse": {
+        "type": "object",
+        "properties": {
+          "months": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrendPoint"
+            }
+          }
+        }
+      },
+      "CompanyTotals": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "active": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "archived": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Companies on the platform: total, active and archived (status = DELETED)."
+      },
+      "OnboardingFunnel": {
+        "type": "object",
+        "properties": {
+          "invited": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "inProgress": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "submitted": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revisionRequested": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hrVerified": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "approved": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rejected": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "The current onboarding funnel — how many employees sit at each status right now."
+      },
+      "OpsMetrics": {
+        "type": "object",
+        "properties": {
+          "totalOnboarded": {
+            "type": "integer",
+            "description": "Every onboarded employee record (a record exists only once onboarded).",
+            "format": "int64"
+          },
+          "approved": {
+            "type": "integer",
+            "description": "Employees currently APPROVED.",
+            "format": "int64"
+          },
+          "onboardingCompletionRate": {
+            "type": "number",
+            "description": "approved ÷ totalOnboarded (0 when none onboarded).",
+            "format": "double"
+          },
+          "averageTimeToApprovalDays": {
+            "type": "number",
+            "description": "Mean days between Employee.createdAt and ApprovalRequest.decidedAt over approved employees; null when none approved.",
+            "format": "double"
+          },
+          "stuckThresholdDays": {
+            "type": "integer",
+            "description": "The stuck-onboarding age threshold, in days (configurable constant).",
+            "format": "int32"
+          },
+          "stuckOnboardings": {
+            "type": "integer",
+            "description": "Pre-approval employees older than the threshold (by Employee.createdAt).",
+            "format": "int64"
+          },
+          "stuckByStage": {
+            "type": "array",
+            "description": "The stuck count broken down by the stage they're stuck at.",
+            "items": {
+              "$ref": "#/components/schemas/StuckStage"
+            }
+          }
+        },
+        "description": "Operational metrics over the whole platform (all-time unless noted)."
+      },
+      "PlatformOverview": {
+        "type": "object",
+        "properties": {
+          "totals": {
+            "$ref": "#/components/schemas/PlatformTotals"
+          },
+          "funnel": {
+            "$ref": "#/components/schemas/OnboardingFunnel"
+          },
+          "statusDistribution": {
+            "$ref": "#/components/schemas/OnboardingFunnel"
+          },
+          "ops": {
+            "$ref": "#/components/schemas/OpsMetrics"
+          }
+        },
+        "description": "The one-call platform overview: totals + funnel + ops metrics."
+      },
+      "PlatformTotals": {
+        "type": "object",
+        "properties": {
+          "companies": {
+            "$ref": "#/components/schemas/CompanyTotals"
+          },
+          "teams": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "employees": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "staff": {
+            "$ref": "#/components/schemas/StaffTotals"
+          }
+        },
+        "description": "Platform totals: companies, teams, employees and staff-by-role counts."
+      },
+      "StaffTotals": {
+        "type": "object",
+        "properties": {
+          "companyAdmins": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hrs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "managers": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "accountants": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "accountsAdmins": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Currently-assigned staff counts by role (a count, never a people list)."
+      },
+      "StuckStage": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "INVITED",
+              "IN_PROGRESS",
+              "SUBMITTED",
+              "REVISION_REQUESTED",
+              "HR_VERIFIED",
+              "APPROVED",
+              "REJECTED"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Employees stuck at a given pre-approval stage past the threshold."
+      },
+      "CompaniesResponse": {
+        "type": "object",
+        "properties": {
+          "companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanySizeRow"
+            }
+          }
+        }
+      },
+      "CompanySizeRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "teamCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "employeeCount": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "One company's size row: name, archived flag, team + employee counts."
+      },
+      "CompanyBreakdown": {
+        "type": "object",
+        "properties": {
+          "companyId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "teamCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "employeeCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "byStatus": {
+            "$ref": "#/components/schemas/OnboardingFunnel"
+          },
+          "companyAdmin": {
+            "$ref": "#/components/schemas/StaffRef"
+          },
+          "teams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamBreakdown"
+            }
+          }
+        },
+        "description": "One company's org structure: counts + by-status + the assigned Company Admin + its teams' assigned staff. Names STAFF only — no employee identity/PII."
+      },
+      "StaffRef": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "description": "An assigned staff member (name + email); null when the slot is unassigned."
+      },
+      "TeamBreakdown": {
+        "type": "object",
+        "properties": {
+          "teamId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "hr": {
+            "$ref": "#/components/schemas/StaffRef"
+          },
+          "manager": {
+            "$ref": "#/components/schemas/StaffRef"
+          },
+          "accountant": {
+            "$ref": "#/components/schemas/StaffRef"
+          },
+          "employeeCount": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "One team's org row — its assigned HR/Manager/Accountant + employee count."
       },
       "EmployeePage": {
         "type": "object",

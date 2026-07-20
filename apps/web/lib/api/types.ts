@@ -1255,6 +1255,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hierarchy/trends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["trends"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hierarchy/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hierarchy/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["companies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hierarchy/companies/{companyId}/breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["breakdown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1572,7 +1636,7 @@ export interface paths {
             cookie?: never;
         };
         /** Companies to drill into (ACCOUNTS_ADMIN only; the Accountant has one team). */
-        get: operations["companies"];
+        get: operations["companies_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2367,6 +2431,160 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+        };
+        /** @description One month of the trends series (YYYY-MM, IST). offboarded is a 0 placeholder. */
+        TrendPoint: {
+            month?: string;
+            /** Format: int64 */
+            joined?: number;
+            /** Format: int64 */
+            approved?: number;
+            /** Format: int64 */
+            offboarded?: number;
+        };
+        TrendsResponse: {
+            /** Format: int32 */
+            months?: number;
+            series?: components["schemas"]["TrendPoint"][];
+        };
+        /** @description Companies on the platform: total, active and archived (status = DELETED). */
+        CompanyTotals: {
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            active?: number;
+            /** Format: int64 */
+            archived?: number;
+        };
+        /** @description The current onboarding funnel — how many employees sit at each status right now. */
+        OnboardingFunnel: {
+            /** Format: int64 */
+            invited?: number;
+            /** Format: int64 */
+            inProgress?: number;
+            /** Format: int64 */
+            submitted?: number;
+            /** Format: int64 */
+            revisionRequested?: number;
+            /** Format: int64 */
+            hrVerified?: number;
+            /** Format: int64 */
+            approved?: number;
+            /** Format: int64 */
+            rejected?: number;
+        };
+        /** @description Operational metrics over the whole platform (all-time unless noted). */
+        OpsMetrics: {
+            /**
+             * Format: int64
+             * @description Every onboarded employee record (a record exists only once onboarded).
+             */
+            totalOnboarded?: number;
+            /**
+             * Format: int64
+             * @description Employees currently APPROVED.
+             */
+            approved?: number;
+            /**
+             * Format: double
+             * @description approved ÷ totalOnboarded (0 when none onboarded).
+             */
+            onboardingCompletionRate?: number;
+            /**
+             * Format: double
+             * @description Mean days between Employee.createdAt and ApprovalRequest.decidedAt over approved employees; null when none approved.
+             */
+            averageTimeToApprovalDays?: number;
+            /**
+             * Format: int32
+             * @description The stuck-onboarding age threshold, in days (configurable constant).
+             */
+            stuckThresholdDays?: number;
+            /**
+             * Format: int64
+             * @description Pre-approval employees older than the threshold (by Employee.createdAt).
+             */
+            stuckOnboardings?: number;
+            /** @description The stuck count broken down by the stage they're stuck at. */
+            stuckByStage?: components["schemas"]["StuckStage"][];
+        };
+        /** @description The one-call platform overview: totals + funnel + ops metrics. */
+        PlatformOverview: {
+            totals?: components["schemas"]["PlatformTotals"];
+            funnel?: components["schemas"]["OnboardingFunnel"];
+            statusDistribution?: components["schemas"]["OnboardingFunnel"];
+            ops?: components["schemas"]["OpsMetrics"];
+        };
+        /** @description Platform totals: companies, teams, employees and staff-by-role counts. */
+        PlatformTotals: {
+            companies?: components["schemas"]["CompanyTotals"];
+            /** Format: int64 */
+            teams?: number;
+            /** Format: int64 */
+            employees?: number;
+            staff?: components["schemas"]["StaffTotals"];
+        };
+        /** @description Currently-assigned staff counts by role (a count, never a people list). */
+        StaffTotals: {
+            /** Format: int64 */
+            companyAdmins?: number;
+            /** Format: int64 */
+            hrs?: number;
+            /** Format: int64 */
+            managers?: number;
+            /** Format: int64 */
+            accountants?: number;
+            /** Format: int64 */
+            accountsAdmins?: number;
+        };
+        /** @description Employees stuck at a given pre-approval stage past the threshold. */
+        StuckStage: {
+            /** @enum {string} */
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            /** Format: int64 */
+            count?: number;
+        };
+        CompaniesResponse: {
+            companies?: components["schemas"]["CompanySizeRow"][];
+        };
+        /** @description One company's size row: name, archived flag, team + employee counts. */
+        CompanySizeRow: {
+            id?: string;
+            name?: string;
+            code?: string;
+            archived?: boolean;
+            /** Format: int64 */
+            teamCount?: number;
+            /** Format: int64 */
+            employeeCount?: number;
+        };
+        /** @description One company's org structure: counts + by-status + the assigned Company Admin + its teams' assigned staff. Names STAFF only — no employee identity/PII. */
+        CompanyBreakdown: {
+            companyId?: string;
+            name?: string;
+            archived?: boolean;
+            /** Format: int64 */
+            teamCount?: number;
+            /** Format: int64 */
+            employeeCount?: number;
+            byStatus?: components["schemas"]["OnboardingFunnel"];
+            companyAdmin?: components["schemas"]["StaffRef"];
+            teams?: components["schemas"]["TeamBreakdown"][];
+        };
+        /** @description An assigned staff member (name + email); null when the slot is unassigned. */
+        StaffRef: {
+            name?: string;
+            email?: string;
+        };
+        /** @description One team's org row — its assigned HR/Manager/Accountant + employee count. */
+        TeamBreakdown: {
+            teamId?: string;
+            name?: string;
+            hr?: components["schemas"]["StaffRef"];
+            manager?: components["schemas"]["StaffRef"];
+            accountant?: components["schemas"]["StaffRef"];
+            /** Format: int64 */
+            employeeCount?: number;
         };
         EmployeePage: {
             content?: components["schemas"]["EmployeeSummaryView"][];
@@ -4943,6 +5161,90 @@ export interface operations {
             };
         };
     };
+    trends: {
+        parameters: {
+            query?: {
+                months?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TrendsResponse"];
+                };
+            };
+        };
+    };
+    overview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PlatformOverview"];
+                };
+            };
+        };
+    };
+    companies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CompaniesResponse"];
+                };
+            };
+        };
+    };
+    breakdown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CompanyBreakdown"];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -5377,7 +5679,7 @@ export interface operations {
             };
         };
     };
-    companies: {
+    companies_1: {
         parameters: {
             query?: never;
             header?: never;

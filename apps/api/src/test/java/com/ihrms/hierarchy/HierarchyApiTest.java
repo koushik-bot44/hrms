@@ -153,12 +153,14 @@ class HierarchyApiTest {
     // It cannot self-inspect provisioning (SUPER_ADMIN-only).
     forbidden(hier, get("/provisioning/hierarchy"));
 
-    // The /hierarchy/** namespace is role-gated: a wrong role gets 403; HIERARCHY passes the URL rule
-    // (there is no data handler yet, so it reaches a 404 — not a 403).
+    // The /hierarchy/** namespace is role-gated: a wrong role gets 403; HIERARCHY reaches its own
+    // aggregate reads (added in the analytics stage) — a 200, not a 403. A missing /hierarchy path 404s.
     String hrToken = token(user(companyId, UserRole.HR, "hr@a.test"), UserRole.HR);
     mvc.perform(get("/hierarchy/overview").header("Authorization", "Bearer " + hrToken))
         .andExpect(status().isForbidden());
     mvc.perform(get("/hierarchy/overview").header("Authorization", "Bearer " + hier))
+        .andExpect(status().isOk());
+    mvc.perform(get("/hierarchy/no-such-path").header("Authorization", "Bearer " + hier))
         .andExpect(status().isNotFound());
   }
 

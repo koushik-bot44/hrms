@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest, String> {
   List<ApprovalRequest> findByManagerUserId(String managerUserId);
@@ -29,4 +30,30 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
 
   /** Portfolio-wide pending approvals (Super Admin summary). */
   long countByStatus(ApprovalStatus status);
+
+  // --- Hierarchy platform aggregates (§2; the approval decision is the "approved date" source) ---
+
+  /**
+   * Employees APPROVED per IST month: {@code [ "YYYY-MM", Long ]}. Bucketed by the approval's
+   * {@code decidedAt} (status APPROVED) converted UTC → Asia/Kolkata. Native — naked-UTC {@code timestamp}.
+   */
+  @Query(
+      value =
+          "SELECT to_char(\"decidedAt\" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM') AS ym,"
+              + " COUNT(*) FROM \"approval_requests\" WHERE \"status\" = 'APPROVED' AND \"decidedAt\" IS NOT NULL"
+              + " GROUP BY ym",
+      nativeQuery = true)
+  List<Object[]> approvedPerIstMonth();
+
+  /**
+   * Mean seconds between an employee's {@code createdAt} (onboard) and their approval's {@code decidedAt},
+   * over APPROVED employees — the basis for averageTimeToApprovalDays. {@code null} when none approved.
+   */
+  @Query(
+      value =
+          "SELECT AVG(EXTRACT(EPOCH FROM (a.\"decidedAt\" - e.\"createdAt\"))) FROM \"approval_requests\" a"
+              + " JOIN \"employees\" e ON a.\"employeeId\" = e.\"id\""
+              + " WHERE a.\"status\" = 'APPROVED' AND a.\"decidedAt\" IS NOT NULL",
+      nativeQuery = true)
+  Double avgSecondsToApproval();
 }

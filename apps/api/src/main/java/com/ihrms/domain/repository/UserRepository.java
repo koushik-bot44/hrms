@@ -5,6 +5,7 @@ import com.ihrms.domain.model.User;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 public interface UserRepository extends JpaRepository<User, String> {
   Optional<User> findByEmail(String email);
@@ -35,4 +36,8 @@ public interface UserRepository extends JpaRepository<User, String> {
 
   /** Unassigned company users of a role — candidates for an HR/Manager slot. */
   List<User> findByCompanyIdAndRoleAndTeamIdIsNullOrderByNameAsc(String companyId, UserRole role);
+
+  /** Staff-by-role counts across the platform: {@code [UserRole, Long]} rows (Hierarchy totals, §2). */
+  @Query("select u.role, count(u) from User u group by u.role")
+  List<Object[]> countGroupByRole();
 }

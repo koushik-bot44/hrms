@@ -109,8 +109,45 @@ its authorization boundary denies employee-record access outright (aggregates on
 Hierarchy may exist** — the Super Admin provisions it (email + name + initial password; its login
 identity is formed as `localPart@ihrms`, the platform domain, exactly like the Accounts Admin), a second
 creation is rejected, and it signs in with **staff email + password** (§6). It is **not** part of the
-internal-mail send graph. Its data views (aggregate reads under `/hierarchy/**`) are added in a later
-stage; the role, login, provisioning and a placeholder overview land first.
+internal-mail send graph.
+
+_Hierarchy overview metrics (cross-company, aggregates-only; read-only under `/hierarchy/**`)._ Every
+figure is a **count / summary** computed server-side across **all** companies — no individual employee
+identity or record field ever appears. Sources are stated so they stay stable:
+- **Platform totals** — companies (total, active, archived [`status = DELETED`]), teams (all companies),
+  employees (all companies), and **staff-by-role counts** (Company Admins, HRs, Managers, Accountants,
+  Accounts Admins currently assigned — `User` counts by role, not a people list).
+- **Onboarding funnel** (current snapshot) — the count of employees at **each** `EmployeeStatus` right
+  now: INVITED, IN_PROGRESS, SUBMITTED, REVISION_REQUESTED, HR_VERIFIED, APPROVED, REJECTED. The
+  **status distribution** (donut) is the same counts as proportions — counts are exposed; the UI computes %.
+- **Trends** (monthly series, last _N_ months, default 12, **Asia/Kolkata**):
+  - **joinedPerMonth** = employees onboarded per month, bucketed by **`Employee.createdAt`** (the record
+    is created at onboard = INVITED; there is no separate `invitedAt`).
+  - **approvedPerMonth** = employees approved per month, bucketed by **`ApprovalRequest.decidedAt`** where
+    `status = APPROVED` (there is no `employees.approvedAt` column — the approval record's decision time
+    is the source of truth).
+  - **offboardedPerMonth** = **labelled placeholder, always 0** (offboarding isn't built; the field is
+    present so a later stage can fill it).
+- **Employees per company** — per company: name, active/archived, employee count (for a company-size
+  bar/pie + the drill list). Aggregate only.
+- **Per-company org breakdown** — for one company: #teams, #employees (+ by-status counts), the assigned
+  **Company Admin** (staff name/email), and per team: label + assigned **HR / Manager / Accountant**
+  (staff names/emails) + that team's employee count (employees whose `onboardingHrId` is the team's HR).
+  This is **org structure** — it names **staff** (admins/HR/manager/accountant), which is org data, **not**
+  employee PII; it never includes an employee's name or record.
+- **Ops metrics** —
+  - **onboardingCompletionRate** = APPROVED ÷ total onboarded (all-time; total onboarded = every employee
+    record, since a record only exists once onboarded). 0 when none onboarded.
+  - **averageTimeToApprovalDays** = mean(`ApprovalRequest.decidedAt` − `Employee.createdAt`) over approved
+    employees, in **days**; **null** when none approved.
+  - **stuckOnboardings** = count of employees in a **pre-approval** state (INVITED / IN_PROGRESS /
+    SUBMITTED / HR_VERIFIED / REVISION_REQUESTED) whose **`createdAt`** is older than a configurable
+    threshold (**`STUCK_THRESHOLD_DAYS = 7`**), with an optional by-stage breakdown.
+
+Company scoping does **not** restrict the Hierarchy (it is the platform role), but every query is an
+efficient GROUP BY / COUNT (a constant number per endpoint — no N+1 over companies/teams/employees). Its
+data views (aggregate reads under `/hierarchy/**`) are added incrementally; the role, login, provisioning
+and a placeholder overview land first, then these aggregate endpoints.
 
 **Accountant (team-scoped read-only viewer).** The **per-team** analogue of the Accounts Admin: a staff
 `User` with a `companyId` **and a `teamId`** (like HR/Manager), **read-only**. It sees exactly the

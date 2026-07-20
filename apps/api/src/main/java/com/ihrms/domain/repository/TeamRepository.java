@@ -4,6 +4,7 @@ import com.ihrms.domain.model.Team;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 public interface TeamRepository extends JpaRepository<Team, String> {
   List<Team> findByCompanyId(String companyId);
@@ -30,4 +31,8 @@ public interface TeamRepository extends JpaRepository<Team, String> {
   /** True iff this accountant's team is the one whose HR onboarded the employee (§6 accountant scope). */
   boolean existsByCompanyIdAndAccountantUserIdAndHrUserId(
       String companyId, String accountantUserId, String hrUserId);
+
+  /** Teams per company: {@code [companyId, Long]} rows (Hierarchy companies list, §2). */
+  @Query("select t.companyId, count(t) from Team t group by t.companyId")
+  List<Object[]> countGroupByCompany();
 }
