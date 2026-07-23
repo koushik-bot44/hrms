@@ -23,7 +23,7 @@ const STATUSES: EmployeeStatus[] = [
   'REJECTED',
 ];
 const SELECT_CLASS =
-  'h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'h-11 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const PAGE_SIZE = 20;
 
 /** The HR's onboarding queue: their employees with name/email search + status filter, server-paginated. */
@@ -114,29 +114,29 @@ export function EmployeeQueue() {
           description="Onboard an employee, or adjust the search and status filters."
         />
       ) : (
-        <div className={cn('overflow-x-auto rounded-md border transition-opacity', dim && 'opacity-60')}>
+        <div className={cn('overflow-x-auto rounded-2xl border bg-card shadow-card transition-opacity', dim && 'opacity-60')}>
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 font-medium">Name</th>
-                <th className="px-3 py-2 font-medium">Email</th>
-                <th className="px-3 py-2 font-medium">Designation</th>
-                <th className="px-3 py-2 font-medium">Joining</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2" />
+                <th className="px-4 py-3 font-medium">Name</th>
+                <th className="px-4 py-3 font-medium">Email</th>
+                <th className="px-4 py-3 font-medium">Designation</th>
+                <th className="px-4 py-3 font-medium">Joining</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
               {data.content.map((e) => (
                 <tr key={e.id} className="border-t hover:bg-accent/40">
-                  <td className="px-3 py-2 font-medium">{e.fullName ?? '—'}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{e.email}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{e.designation ?? '—'}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{e.dateOfJoining ?? '—'}</td>
-                  <td className="px-3 py-2">
+                  <td className="px-4 py-3 font-medium">{e.fullName ?? '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{e.email}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{e.designation ?? '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{e.dateOfJoining ?? '—'}</td>
+                  <td className="px-4 py-3">
                     <StatusBadge status={e.status} />
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                  <td className="whitespace-nowrap px-4 py-3 text-right">
                     <Link href={`/hr/employees/${e.id}`} className="text-sm font-medium text-primary hover:underline">
                       {e.status === 'SUBMITTED' ? 'Review' : 'Open'}
                     </Link>

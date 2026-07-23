@@ -187,7 +187,7 @@ export function TeamLeave() {
         />
       ) : (
         <>
-          <DataTable
+          <DataTable carded
             columns={columns}
             data={data?.content ?? []}
             searchPlaceholder="Filter by name…"

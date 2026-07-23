@@ -91,7 +91,7 @@ export function ApprovalsInbox() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {approvals.map((a) => (
         <Card key={a.id}>
           <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">

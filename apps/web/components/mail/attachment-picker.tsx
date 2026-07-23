@@ -14,6 +14,7 @@ import {
 import { uploadMailAttachment } from '@/lib/api/mail';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
+import { surface } from '@/components/ui/surface';
 import { Button } from '@/components/ui/button';
 
 export interface StagedAttachment {
@@ -137,7 +138,7 @@ export function AttachmentPicker({
           {staged.map((f) => (
             <li
               key={f.uid}
-              className="flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-xs"
+              className={cn(surface('card'), 'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs')}
             >
               <FileText className="size-4 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate">

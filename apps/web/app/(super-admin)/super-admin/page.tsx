@@ -188,7 +188,7 @@ function CompaniesView() {
           description={query.error?.message ?? 'Please try again.'}
         />
       ) : (
-        <DataTable
+        <DataTable carded
           columns={columns}
           data={query.data ?? []}
           searchPlaceholder="Search by name or code…"

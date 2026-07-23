@@ -147,7 +147,7 @@ export function TeamAttendance() {
               description={query.error?.message ?? 'Please try again.'}
             />
           ) : (
-            <DataTable
+            <DataTable carded
               columns={columns}
               data={rows}
               searchPlaceholder="Filter by name or ID…"

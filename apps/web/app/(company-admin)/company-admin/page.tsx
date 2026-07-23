@@ -119,7 +119,7 @@ export default function TeamsPage() {
           description={error?.message ?? 'Please try again.'}
         />
       ) : (
-        <DataTable
+        <DataTable carded
           columns={columns}
           data={data ?? []}
           searchPlaceholder="Search teams…"

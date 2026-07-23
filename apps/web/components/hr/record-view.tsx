@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
+import { surface } from '@/components/ui/surface';
+import { cn } from '@/lib/utils';
 import { RouteToManagerDialog } from '@/components/hr/route-to-manager-dialog';
 import { AssignCredentialsDialog } from '@/components/hr/assign-credentials-dialog';
 
@@ -81,7 +83,7 @@ export function RecordView({
   const f3Note = record.form3[0]?.revisionNote;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <Card>
         <CardHeader className="flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
           <div className="min-w-0 space-y-1">
@@ -191,7 +193,7 @@ export function RecordView({
         ) : (
           <div className="space-y-3">
             {f3.map((e, i) => (
-              <div key={e.id ?? i} className="rounded-md border p-3">
+              <div key={e.id ?? i} className={cn(surface('subtle'), 'p-4')}>
                 <p className="mb-2 text-sm font-semibold">Employer {i + 1}</p>
                 <Form3Body entry={e} />
               </div>
@@ -207,7 +209,7 @@ export function RecordView({
         ) : (
           <div className="space-y-2">
             {record.documents.map((d) => (
-              <div key={d.id} className="space-y-2 rounded-md border border-border p-3">
+              <div key={d.id} className={cn(surface('subtle'), 'space-y-2 p-4')}>
                 <div className="flex flex-wrap items-center gap-3">
                   <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <div className="min-w-0 flex-1">

@@ -5,6 +5,8 @@ import { Download, FileText } from 'lucide-react';
 import type { MailAttachment } from '@/lib/contract';
 import { formatFileSize } from '@/lib/contract';
 import { getAttachmentDownloadUrl } from '@/lib/api/mail';
+import { cn } from '@/lib/utils';
+import { surface } from '@/components/ui/surface';
 
 /**
  * Attachment chips shown under a message (§8, Stage 4). Clicking one resolves a short-lived,
@@ -30,7 +32,10 @@ export function AttachmentChips({ attachments }: { attachments: MailAttachment[]
           type="button"
           onClick={() => download(a.id)}
           title={`Download ${a.fileName}`}
-          className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs transition-colors hover:bg-accent"
+          className={cn(
+            surface('card'),
+            'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs transition-colors hover:bg-accent',
+          )}
         >
           <FileText className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="max-w-[12rem] truncate">{a.fileName}</span>

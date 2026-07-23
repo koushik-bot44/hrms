@@ -232,7 +232,7 @@ export function AuditExplorer({ scope }: { scope: 'super' | 'company' }) {
                 auditQuery.isFetching && auditQuery.isPlaceholderData ? 'opacity-60' : 'opacity-100',
               )}
             >
-              <DataTable
+              <DataTable carded
                 columns={COLUMNS}
                 data={data?.content ?? []}
                 searchPlaceholder="Filter loaded rows…"

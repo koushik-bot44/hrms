@@ -141,7 +141,7 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <Button variant="ghost" size="sm" onClick={() => router.push('/hr/employees')}>
         <ArrowLeft className="size-4" />
         Back to queue

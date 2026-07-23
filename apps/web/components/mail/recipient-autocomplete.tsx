@@ -4,6 +4,7 @@ import * as React from 'react';
 import { X } from 'lucide-react';
 import type { MailParty } from '@/lib/contract';
 import { cn } from '@/lib/utils';
+import { surface } from '@/components/ui/surface';
 
 const MAX_SHOWN = 8;
 
@@ -98,7 +99,7 @@ export function RecipientAutocomplete({
       <div className="relative">
         <div
           className={cn(
-            'flex min-h-9 flex-wrap items-center gap-1 rounded-md border border-input bg-background px-2 py-1',
+            'flex min-h-11 flex-wrap items-center gap-1 rounded-xl border border-input bg-background px-2 py-1',
             'focus-within:ring-2 focus-within:ring-ring',
             invalid && 'border-destructive',
             disabled && 'cursor-not-allowed opacity-50',
@@ -152,7 +153,10 @@ export function RecipientAutocomplete({
           <ul
             id={listId}
             role="listbox"
-            className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-card py-1 shadow-md"
+            className={cn(
+              surface('card'),
+              'absolute z-10 mt-1 max-h-56 w-full overflow-auto py-1 shadow-card-hover',
+            )}
           >
             {matches.length === 0 ? (
               // No allowed contact matches — a free-typed address can never be added.

@@ -27,6 +27,8 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string;
   /** Set false to hide the built-in client-side search box (e.g. when the caller owns a server search). */
   searchable?: boolean;
+  /** Wrap the table in the floating Card look (rounded-2xl + shadow), matching the accountant pilot. */
+  carded?: boolean;
   /** Classes for the table container — defaults to a rounded, bordered box; pass '' to card it externally. */
   containerClassName?: string;
   /** Shown when there are no rows (e.g. an <EmptyState/>). */
@@ -41,10 +43,15 @@ export function DataTable<TData, TValue>({
   data,
   searchPlaceholder = 'Search…',
   searchable = true,
-  containerClassName = 'rounded-lg border',
+  carded = false,
+  containerClassName,
   emptyState,
   toolbar,
 }: DataTableProps<TData, TValue>) {
+  // The carded look matches the pilot's static Card; the default stays a plain rounded border.
+  const container =
+    containerClassName ??
+    (carded ? 'overflow-hidden rounded-2xl border bg-card shadow-card' : 'rounded-lg border');
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState('');
 
@@ -79,7 +86,7 @@ export function DataTable<TData, TValue>({
         </div>
       ) : null}
 
-      <div className={containerClassName}>
+      <div className={container}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (

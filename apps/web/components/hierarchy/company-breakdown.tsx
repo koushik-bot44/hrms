@@ -201,21 +201,21 @@ function CompanyDetail({ companyId }: { companyId: string }) {
         ))}
       </div>
 
-      <div className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm">
+      <div className="flex items-center gap-2 rounded-md bg-muted/40 px-4 py-3 text-sm">
         <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
         <span className="text-muted-foreground">Company Admin:</span>
         <StaffName staff={b.companyAdmin} />
       </div>
 
-      <div className="overflow-x-auto rounded-md border">
+      <div className="overflow-x-auto rounded-2xl border bg-card shadow-card">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
-              <th className="px-3 py-2 font-medium">Team</th>
-              <th className="px-3 py-2 font-medium">HR</th>
-              <th className="px-3 py-2 font-medium">Manager</th>
-              <th className="px-3 py-2 font-medium">Accountant</th>
-              <th className="px-3 py-2 text-right font-medium">Employees</th>
+              <th className="px-4 py-3 font-medium">Team</th>
+              <th className="px-4 py-3 font-medium">HR</th>
+              <th className="px-4 py-3 font-medium">Manager</th>
+              <th className="px-4 py-3 font-medium">Accountant</th>
+              <th className="px-4 py-3 text-right font-medium">Employees</th>
             </tr>
           </thead>
           <tbody>
@@ -228,11 +228,11 @@ function CompanyDetail({ companyId }: { companyId: string }) {
             ) : (
               b.teams.map((t) => (
                 <tr key={t.teamId} className="border-t align-top">
-                  <td className="px-3 py-2 font-medium">{t.name}</td>
-                  <td className="px-3 py-2"><StaffName staff={t.hr} /></td>
-                  <td className="px-3 py-2"><StaffName staff={t.manager} /></td>
-                  <td className="px-3 py-2"><StaffName staff={t.accountant} /></td>
-                  <td className="px-3 py-2 text-right tabular-nums">{t.employeeCount}</td>
+                  <td className="px-4 py-3 font-medium">{t.name}</td>
+                  <td className="px-4 py-3"><StaffName staff={t.hr} /></td>
+                  <td className="px-4 py-3"><StaffName staff={t.manager} /></td>
+                  <td className="px-4 py-3"><StaffName staff={t.accountant} /></td>
+                  <td className="px-4 py-3 text-right tabular-nums">{t.employeeCount}</td>
                 </tr>
               ))
             )}

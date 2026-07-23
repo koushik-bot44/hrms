@@ -75,7 +75,7 @@ export function ApprovalAudit() {
 
   return (
     <div className={cn('space-y-3 transition-opacity', dim && 'opacity-60')}>
-      <DataTable
+      <DataTable carded
         columns={COLUMNS}
         data={data?.content ?? []}
         searchPlaceholder="Filter loaded rows…"
