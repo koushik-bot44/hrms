@@ -96,16 +96,17 @@ export default function TeamsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Company workspace"
         description="Your company at a glance — teams, onboarding progress, and recent activity."
         actions={<CreateTeamDialog />}
+        editorial
       />
 
       {/* Stats up top, the Teams block next, then the activity feed below — both dashboard sections
           share the one deduped ['dashboard'] query. */}
-      <RoleDashboard show="stats" />
+      <RoleDashboard show="stats" heroStats />
 
       <h2 id="teams" className="scroll-mt-24 text-sm font-semibold text-muted-foreground">Teams</h2>
 

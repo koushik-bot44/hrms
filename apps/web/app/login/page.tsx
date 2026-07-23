@@ -11,15 +11,8 @@ import { StaffLoginSchema, type StaffLoginInput } from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
 import { ApiError } from '@/lib/api/client';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -39,28 +32,18 @@ export default function LoginPage() {
   }, [auth.status, auth.session, router]);
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background p-6">
-      <Card className="w-full max-w-md animate-fade-in">
-        <CardHeader className="items-center text-center">
-          <div className="mb-1 flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <ShieldCheck className="size-5" />
-          </div>
-          <CardTitle className="text-lg">Sign in</CardTitle>
-          <CardDescription>Sign in to IHRMS with your email and password.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <StaffSignInForm />
-        </CardContent>
-        <CardFooter className="justify-center">
-          <Link
-            href="/employee/login"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            Onboarding employee? Sign in here
-          </Link>
-        </CardFooter>
-      </Card>
-    </div>
+    <AuthShell
+      icon={<ShieldCheck className="size-6" />}
+      title="Welcome back"
+      description="Sign in to IHRMS with your email and password."
+      footer={
+        <Link href="/employee/login" className="text-sm text-muted-foreground hover:text-foreground">
+          Onboarding employee? Sign in here
+        </Link>
+      }
+    >
+      <StaffSignInForm />
+    </AuthShell>
   );
 }
 

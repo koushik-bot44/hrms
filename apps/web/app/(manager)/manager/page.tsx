@@ -8,14 +8,15 @@ export const metadata: Metadata = { title: 'Dashboard' };
 
 export default function ManagerApprovalsPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Manager workspace"
         description="Your team at a glance — approve verified employees and review past decisions."
+        editorial
       />
       {/* Stats up top, then approvals, then the activity feed below — both dashboard sections share the
           one deduped ['dashboard'] query. */}
-      <RoleDashboard show="stats" />
+      <RoleDashboard show="stats" heroStats />
       {/* ApprovalsWorkspace reads the query string (tab/status) → needs a Suspense boundary. */}
       <Suspense>
         <ApprovalsWorkspace />

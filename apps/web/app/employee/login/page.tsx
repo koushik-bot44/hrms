@@ -11,15 +11,8 @@ import { OtpRequestSchema, OtpVerifySchema, type OtpRequestInput } from '@/lib/c
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
 import { ApiError } from '@/lib/api/client';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -42,27 +35,18 @@ export default function EmployeeLoginPage() {
   }, [auth.status, auth.session, router]);
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background p-6">
-      <Card className="w-full max-w-md animate-fade-in">
-        <CardHeader className="items-center text-center">
-          <div className="mb-1 flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <UserRound className="size-5" />
-          </div>
-          <CardTitle className="text-lg">Onboarding employee sign-in</CardTitle>
-          <CardDescription>
-            Enter your full name and email and we&apos;ll send you a one-time code.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SignInForm />
-        </CardContent>
-        <CardFooter className="justify-center">
-          <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">
-            Staff member? Sign in here
-          </Link>
-        </CardFooter>
-      </Card>
-    </div>
+    <AuthShell
+      icon={<UserRound className="size-6" />}
+      title="Welcome to IHRMS"
+      description="Enter your full name and email and we'll send you a one-time code."
+      footer={
+        <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">
+          Staff member? Sign in here
+        </Link>
+      }
+    >
+      <SignInForm />
+    </AuthShell>
   );
 }
 

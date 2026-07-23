@@ -41,11 +41,12 @@ export default function EmployeeOnboardingPage() {
   const revising = data.status === 'REVISION_REQUESTED';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="My onboarding"
         description="Complete the four forms, upload your documents, sign, and submit for verification."
         actions={<StatusBadge status={data.status} />}
+        editorial
       />
 
       <OnboardingSummaryCard />

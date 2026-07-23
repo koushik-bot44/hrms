@@ -45,11 +45,12 @@ export function PlatformOverview() {
   const refreshing = query.isFetching && !query.isLoading;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Platform Overview"
         description="Cross-platform, read-only summaries and counts. Individual records, PII, attendance and leave are never shown here."
         actions={<LiveDot refreshing={refreshing} loading={query.isLoading} />}
+        editorial
       />
 
       {query.isLoading ? (
@@ -284,13 +285,13 @@ function Stat({
   sub?: string;
 }) {
   return (
-    <Card>
-      <CardContent className="space-y-1 p-4">
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <Card variant="tint">
+      <CardContent className="space-y-1 p-6">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-primary">
           <Icon className="size-4" />
           {label}
         </p>
-        <p className="text-3xl font-semibold tabular-nums">{value}</p>
+        <p className="text-4xl font-semibold tracking-tight tabular-nums text-foreground">{value}</p>
         {sub ? <p className="text-xs text-muted-foreground">{sub}</p> : null}
       </CardContent>
     </Card>

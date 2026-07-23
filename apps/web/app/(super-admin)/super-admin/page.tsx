@@ -151,7 +151,7 @@ function CompaniesView() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Companies"
         description="Every company in the portal. Provision each company's admin, or archive one."
@@ -163,9 +163,10 @@ function CompaniesView() {
             <CreateCompanyDialog />
           </div>
         }
+        editorial
       />
 
-      <RoleDashboard show="stats" />
+      <RoleDashboard show="stats" heroStats />
 
       <h2 className="text-sm font-semibold text-muted-foreground">Companies</h2>
 

@@ -7,13 +7,14 @@ export const metadata: Metadata = { title: 'Dashboard' };
 
 export default function HrDashboardPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="HR workspace"
         description="Onboard new employees and track their progress."
         actions={<OnboardEmployeeDialog />}
+        editorial
       />
-      <RoleDashboard />
+      <RoleDashboard heroStats />
     </div>
   );
 }
