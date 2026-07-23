@@ -51,9 +51,9 @@ export function RevisionPanel({ dashboard }: { dashboard: OnboardingDashboard })
 
   return (
     <div className="space-y-5">
-      <Card className="border-amber-500/40 bg-amber-500/5">
+      <Card className="border-warning/40 bg-warning/5">
         <CardContent className="flex items-start gap-3 py-5">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-warning" />
           <div className="space-y-1">
             <div className="font-medium">HR requested changes</div>
             <p className="text-sm text-muted-foreground">
@@ -120,7 +120,7 @@ function RevisionSection({
   return (
     <div className="space-y-2">
       {status === FLAGGED && note ? (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm">
+        <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-sm">
           <span className="font-medium">HR asked you to fix this:</span> {note}
         </p>
       ) : status === 'DRAFT' ? (
@@ -176,7 +176,7 @@ function FlaggedDocument({ doc, onReplaced }: { doc: DocumentDto; onReplaced: ()
         <StatusBadge status={doc.status} />
       </div>
       {doc.revisionNote ? (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm">
+        <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-sm">
           <span className="font-medium">HR asked you to fix this:</span> {doc.revisionNote}
         </p>
       ) : null}

@@ -80,7 +80,7 @@ export function CompanyBreakdownPanel() {
                     cursor={{ fill: 'hsl(var(--accent))', opacity: 0.4 }}
                     formatter={(v) => [String(v), 'Employees']}
                     labelFormatter={(l, p) => (p?.[0]?.payload?.archived ? `${l} (archived)` : String(l))}
-                    contentStyle={{ borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
+                    contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
                   />
                   <Bar dataKey="value" radius={[0, 3, 3, 0]}>
                     {chartData.map((d) => (

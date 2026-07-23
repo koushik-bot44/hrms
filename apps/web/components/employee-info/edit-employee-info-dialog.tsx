@@ -108,8 +108,8 @@ export function EditEmployeeInfoDialog({
             idPrefix="edit-f2"
           />
           {emailChanged ? (
-            <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+            <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-3 text-sm">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
               <p>
                 Changing the personal email will <span className="font-medium">re-send the invitation</span>{' '}
                 to the new address; the previous address can no longer sign in.

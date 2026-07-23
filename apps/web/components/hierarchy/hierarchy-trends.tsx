@@ -87,7 +87,7 @@ export function HierarchyTrends() {
                     cursor={{ fill: 'hsl(var(--accent))', opacity: 0.4 }}
                     formatter={(v, n) => [String(v), n === 'joined' ? 'Onboarded' : 'Approved']}
                     labelFormatter={(_l, p) => (p?.[0]?.payload ? monthLabel(p[0].payload.key) : '')}
-                    contentStyle={{ borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
+                    contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
                   />
                   <Legend
                     verticalAlign="top"

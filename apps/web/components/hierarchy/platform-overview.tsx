@@ -215,7 +215,7 @@ function DistributionCard({ funnel }: { funnel: OnboardingFunnel }) {
                   </Pie>
                   <Tooltip
                     formatter={(v, label) => [`${n(Number(v))} · ${pct(Number(v), total)}%`, String(label)]}
-                    contentStyle={{ borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
+                    contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
                   />
                 </PieChart>
               </ResponsiveContainer>

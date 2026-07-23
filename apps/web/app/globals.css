@@ -3,48 +3,60 @@
 @tailwind utilities;
 
 /*
- * IHRMS design tokens — calm, professional, trustworthy. Light-first (dark optional).
+ * IHRMS design tokens — premium, calm, trustworthy. Light-first (dark optional).
  * HSL triplets consumed via `hsl(var(--token))`. Palette:
- *   primary indigo #4F46E5 · success #16A34A · warning #D97706 · danger #DC2626
- *   bg #F8FAFC · card #FFFFFF · border #E2E8F0 · muted-text #64748B · ink #0F172A
+ *   brand emerald #047857 (bright #10B981) · surface mint #ECFBF4 · bg #F7FAF9
+ *   card #FFFFFF · border #E3EFE9 · muted-text #5B6B66 · ink #0E1A16
+ *   success #16A34A · warning #D97706 · danger #DC2626
+ * Dark mode keeps its coherent cool-neutral ramp; only the brand tokens are greened.
  */
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
+    --background: 160 23% 97%; /* #F7FAF9 soft white, green whisper */
+    --foreground: 162 30% 8%; /* #0E1A16 ink */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card: 0 0% 100%; /* #FFFFFF */
+    --card-foreground: 162 30% 8%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 162 30% 8%;
 
-    --primary: 243 75% 59%; /* indigo #4F46E5 */
+    --primary: 163 94% 24%; /* emerald #047857 — AA on white */
     --primary-foreground: 0 0% 100%;
+    --primary-bright: 160 84% 39%; /* #10B981 — tints, chart fills, decorative (NOT solid-button text bg) */
 
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
 
     --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%; /* #64748B */
+    --muted-foreground: 162 8% 39%; /* #5B6B66 green-neutral */
 
+    /* Neutral hover tint (shadcn `accent`) — deliberately unchanged (NOT the brand). */
     --accent: 210 40% 96%;
     --accent-foreground: 222 47% 11%;
 
-    --destructive: 0 72% 51%; /* danger #DC2626 */
+    /* Mint brand surface (hero/panel/active-nav pill). */
+    --surface-tint: 152 65% 95%; /* #ECFBF4 */
+
+    --destructive: 0 72% 51%; /* #DC2626 */
     --destructive-foreground: 0 0% 100%;
 
     --success: 142 76% 36%; /* #16A34A */
     --success-foreground: 0 0% 100%;
 
-    --warning: 32 95% 44%; /* amber #D97706 */
+    --warning: 32 95% 44%; /* #D97706 */
     --warning-foreground: 0 0% 100%;
 
-    --border: 214 32% 91%; /* #E2E8F0 */
-    --input: 214 32% 91%;
-    --ring: 243 75% 59%;
+    --border: 150 27% 91%; /* #E3EFE9 mint-tinted neutral */
+    --input: 150 27% 91%;
+    --ring: 163 94% 24%; /* mirrors --primary */
 
-    --radius: 0.5rem;
+    /* Signature pad — theme-INVARIANT: the signature is captured dark-on-white for the PDF stamp,
+       so these are the same in light and dark and must not flip with the theme. */
+    --signature-paper: 0 0% 100%;
+    --signature-ink: 222 47% 11%;
+
+    --radius: 0.75rem;
   }
 
   .dark {
@@ -57,8 +69,9 @@
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 96%;
 
-    --primary: 243 75% 66%;
-    --primary-foreground: 222 47% 11%;
+    --primary: 162 94% 30%; /* emerald #059669 — lighter for dark surfaces */
+    --primary-foreground: 162 40% 10%; /* dark ink on the lighter emerald (AA) */
+    --primary-bright: 160 84% 45%;
 
     --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 96%;
@@ -68,6 +81,8 @@
 
     --accent: 217 33% 20%;
     --accent-foreground: 210 40% 96%;
+
+    --surface-tint: 162 34% 15%; /* deep mint panel on the cool-dark ramp */
 
     --destructive: 0 63% 50%;
     --destructive-foreground: 0 0% 100%;
@@ -80,7 +95,11 @@
 
     --border: 217 33% 22%;
     --input: 217 33% 22%;
-    --ring: 243 75% 66%;
+    --ring: 162 94% 30%; /* mirrors --primary */
+
+    /* Signature stays dark-on-white for the PDF stamp even in dark mode. */
+    --signature-paper: 0 0% 100%;
+    --signature-ink: 222 47% 11%;
   }
 }
 

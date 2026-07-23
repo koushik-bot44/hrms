@@ -4,10 +4,10 @@ import { cn } from '@/lib/utils';
 import { useApiStatus, type ApiStatus } from '@/hooks/use-api-status';
 
 const STATUS_META: Record<ApiStatus, { label: string; dot: string; text: string }> = {
-  loading: { label: 'Checking API…', dot: 'bg-slate-400 animate-pulse', text: 'text-slate-500' },
-  online: { label: 'API online', dot: 'bg-green-500', text: 'text-green-600' },
-  degraded: { label: 'API up · database down', dot: 'bg-amber-500', text: 'text-amber-600' },
-  offline: { label: 'API unreachable', dot: 'bg-red-500', text: 'text-red-600' },
+  loading: { label: 'Checking API…', dot: 'bg-muted-foreground animate-pulse', text: 'text-muted-foreground' },
+  online: { label: 'API online', dot: 'bg-success', text: 'text-success' },
+  degraded: { label: 'API up · database down', dot: 'bg-warning', text: 'text-warning' },
+  offline: { label: 'API unreachable', dot: 'bg-destructive', text: 'text-destructive' },
 };
 
 /** Small live indicator: green online, amber degraded, red offline. */

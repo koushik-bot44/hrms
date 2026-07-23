@@ -171,7 +171,7 @@ function SummaryBody({ data }: { data: EmployeeMonthSummary }) {
                     <Tooltip
                       formatter={(v, n) => [`${hm(Number(v))} · ${pct(Number(v))}%`, String(n)]}
                       contentStyle={{
-                        borderRadius: 8,
+                        borderRadius: 'var(--radius)',
                         border: '1px solid hsl(var(--border))',
                         background: 'hsl(var(--card))',
                         fontSize: 12,
@@ -344,7 +344,7 @@ function MonthlyReport({
                   <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
                   <Tooltip
                     formatter={(v) => [`${Number(v)}h`, 'Worked']}
-                    contentStyle={{ borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
+                    contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
                   />
                   <Bar dataKey="workedHours" radius={[4, 4, 0, 0]}>
                     {chart.map((c) => (

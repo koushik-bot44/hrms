@@ -12,6 +12,17 @@ const HEIGHT = 170;
 type Mode = 'draw' | 'type';
 
 /**
+ * Resolve a theme token to an `hsl(...)` string for the 2D canvas. The signature uses the theme-INVARIANT
+ * `--signature-paper` / `--signature-ink` tokens (identical in light + dark) so the captured PNG is always
+ * dark-on-white for the PDF stamp, while removing the raw hex literals.
+ */
+function tokenColor(name: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value ? `hsl(${value})` : fallback;
+}
+
+/**
  * Capture a single e-signature — drawn on a canvas or typed and rendered in a script face. Emits a
  * PNG data URL (and how it was captured) whenever it changes, or null when cleared.
  */
@@ -33,7 +44,7 @@ export function SignaturePad({
   const paintBackground = React.useCallback(() => {
     const c = ctx();
     if (!c) return;
-    c.fillStyle = '#ffffff';
+    c.fillStyle = tokenColor('--signature-paper', '#ffffff');
     c.fillRect(0, 0, WIDTH, HEIGHT);
   }, []);
 
@@ -54,7 +65,7 @@ export function SignaturePad({
     drawing.current = true;
     const c = ctx();
     if (!c) return;
-    c.strokeStyle = '#111827';
+    c.strokeStyle = tokenColor('--signature-ink', '#111827');
     c.lineWidth = 2.2;
     c.lineCap = 'round';
     c.lineJoin = 'round';
@@ -98,7 +109,7 @@ export function SignaturePad({
       onChange(null, 'TYPED');
       return;
     }
-    c.fillStyle = '#111827';
+    c.fillStyle = tokenColor('--signature-ink', '#111827');
     c.font = "48px 'Segoe Script','Brush Script MT',cursive";
     c.textBaseline = 'middle';
     c.fillText(value, 24, HEIGHT / 2);

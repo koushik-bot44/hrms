@@ -597,7 +597,7 @@ function ReviewStep({
         <SummaryRow label="Form 3 — Documents" value={`${dashboard.documents.length} uploaded`} ok={dashboard.documents.length > 0} />
         <SummaryRow label="Signature" value={dashboard.signature ? 'Captured' : 'Not signed'} ok={!!dashboard.signature} />
         {missing.length > 0 ? (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+          <div className="rounded-md border border-warning/40 bg-warning/5 p-3">
             <p className="font-medium">Before you can submit:</p>
             <ul className="ml-4 list-disc text-muted-foreground">
               {missing.map((m) => (
@@ -682,7 +682,7 @@ function SignStep({
         </div>
 
         {missing.length > 0 ? (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+          <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm">
             <p className="font-medium">Still needed:</p>
             <ul className="ml-4 list-disc text-muted-foreground">
               {missing.map((m) => (
