@@ -207,7 +207,8 @@ function CompanyDetail({ companyId }: { companyId: string }) {
         <StaffName staff={b.companyAdmin} />
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border bg-card shadow-card">
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
@@ -238,6 +239,7 @@ function CompanyDetail({ companyId }: { companyId: string }) {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

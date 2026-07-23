@@ -37,9 +37,15 @@ export function RoleDashboard({
   heroStats = false,
 }: {
   show?: 'all' | 'stats' | 'activity';
-  /** Render the stat cards as the mint "moment" (tinted surface, oversized number) — opt-in per page. */
-  heroStats?: boolean;
+  /**
+   * Render the stat cards as the "moment" — the oversized (text-4xl) number + emerald label. `true` also
+   * tints ALL cards mint; a NUMBER tints only the first N (the rest stay white) so the accent doesn't
+   * flood a landing with many stats. Opt-in per page; backward-compatible (`true` = the prior behaviour).
+   */
+  heroStats?: boolean | number;
 }) {
+  const heroOn = Boolean(heroStats);
+  const tintCap = heroStats === true ? Infinity : typeof heroStats === 'number' ? heroStats : 0;
   const query = useApiQuery(['dashboard'], getDashboardSummary, { refetchOnWindowFocus: true });
   const wantStats = show !== 'activity';
   const wantActivity = show !== 'stats';
@@ -75,8 +81,8 @@ export function RoleDashboard({
     <div className="space-y-6">
       {wantStats && stats.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((s) => (
-            <StatCardView key={s.key} card={s} href={DRILL[s.key]} hero={heroStats} />
+          {stats.map((s, i) => (
+            <StatCardView key={s.key} card={s} href={DRILL[s.key]} hero={heroOn} tint={heroOn && i < tintCap} />
           ))}
         </div>
       ) : null}
@@ -103,11 +109,23 @@ export function RoleDashboard({
   );
 }
 
-function StatCardView({ card, href, hero = false }: { card: StatCard; href?: string; hero?: boolean }) {
+function StatCardView({
+  card,
+  href,
+  hero = false,
+  tint = false,
+}: {
+  card: StatCard;
+  href?: string;
+  /** The oversized number + emerald label treatment. */
+  hero?: boolean;
+  /** The mint tinted surface (a capped subset of hero cards). */
+  tint?: boolean;
+}) {
   const inner = (
     <Card
-      variant={hero ? 'tint' : href ? 'interactive' : 'default'}
-      className={cn('h-full', !hero && href && 'transition-colors hover:border-primary/50')}
+      variant={tint ? 'tint' : href ? 'interactive' : 'default'}
+      className={cn('h-full', !tint && href && 'transition-colors hover:border-primary/50')}
     >
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle

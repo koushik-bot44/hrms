@@ -15,6 +15,7 @@ import {
 import { deleteDocument, getDocumentViewUrl, uploadDocument } from '@/lib/api/onboarding';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
+import { surface } from '@/components/ui/surface';
 import { StatusBadge } from '@/components/status-badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -110,8 +111,8 @@ export function DocumentUploader({
         <div
           {...getRootProps()}
           className={cn(
-            'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed px-4 py-5 text-center text-sm transition-colors',
-            isDragActive ? 'border-primary bg-primary/5' : 'hover:border-primary/50',
+            'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed px-4 py-5 text-center text-sm transition-colors',
+            isDragActive ? 'border-primary bg-primary/5' : 'bg-muted/30 hover:border-primary/50',
             progress !== null && 'pointer-events-none opacity-70',
           )}
         >
@@ -137,7 +138,7 @@ export function DocumentUploader({
       ) : null}
 
       {!disabled && limitReached ? (
-        <p className="rounded-md border border-dashed px-3 py-2 text-center text-xs text-muted-foreground">
+        <p className="rounded-xl border border-dashed px-3 py-2 text-center text-xs text-muted-foreground">
           {maxFilesForSlot === 1
             ? 'A file is uploaded — remove it to upload a different one.'
             : `Maximum of ${maxFilesForSlot} files reached — remove one to upload a different file.`}
@@ -149,7 +150,7 @@ export function DocumentUploader({
           {mine.map((doc) => (
             <li
               key={doc.id}
-              className="flex items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 text-sm"
+              className={cn(surface('card'), 'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm')}
             >
               <span className="flex min-w-0 items-center gap-2">
                 <FileText className="size-4 shrink-0 text-muted-foreground" />

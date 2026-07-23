@@ -14,9 +14,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { surface } from '@/components/ui/surface';
+import { cn } from '@/lib/utils';
 
 const SELECT_CLASS =
-  'h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'h-11 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const TYPE_LABELS: Record<string, string> = { CASUAL: 'Casual', SICK: 'Sick', UNPAID: 'Unpaid' };
 
 function formatDate(iso: string): string {
@@ -141,7 +143,7 @@ function MyLeaveHistory() {
             <p className="text-sm">No leave requests yet.</p>
           </div>
         ) : (
-          <ul className="divide-y rounded-md border">
+          <ul className={cn(surface('subtle'), 'divide-y')}>
             {data.content.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-3">
                 <div className="min-w-0">

@@ -25,6 +25,7 @@ import {
 } from '@/lib/api/requests';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { cn } from '@/lib/utils';
+import { surface } from '@/components/ui/surface';
 import { DataTable } from '@/components/data-table';
 import { StatusBadge } from '@/components/status-badge';
 import { EmptyState } from '@/components/empty-state';
@@ -370,8 +371,8 @@ function ResolveDialog({
         <div
           {...getRootProps()}
           className={cn(
-            'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed p-6 text-center text-sm transition-colors',
-            isDragActive ? 'border-primary bg-primary/5' : 'border-input hover:border-primary/50',
+            'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed p-6 text-center text-sm transition-colors',
+            isDragActive ? 'border-primary bg-primary/5' : 'border-input bg-muted/30 hover:border-primary/50',
           )}
         >
           <input {...getInputProps()} />
@@ -383,7 +384,7 @@ function ResolveDialog({
         {staged.length > 0 ? (
           <ul className="space-y-2">
             {staged.map((f) => (
-              <li key={f.key} className="flex items-center gap-3 rounded-md border p-2 text-sm">
+              <li key={f.key} className={cn(surface('card'), 'flex items-center gap-3 rounded-lg p-2 text-sm')}>
                 <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">

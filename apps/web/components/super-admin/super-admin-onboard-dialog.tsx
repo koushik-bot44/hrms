@@ -204,7 +204,7 @@ export function SuperAdminOnboardDialog() {
                 idPrefix="sa-onb"
               />
 
-              <div className="flex justify-end gap-2">
+              <div className="sticky bottom-0 -mx-6 -mb-6 flex justify-end gap-2 border-t bg-background px-6 py-4">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>

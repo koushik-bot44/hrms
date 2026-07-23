@@ -114,7 +114,8 @@ export function EmployeeQueue() {
           description="Onboard an employee, or adjust the search and status filters."
         />
       ) : (
-        <div className={cn('overflow-x-auto rounded-2xl border bg-card shadow-card transition-opacity', dim && 'opacity-60')}>
+        <div className={cn('overflow-hidden rounded-2xl border bg-card shadow-card transition-opacity', dim && 'opacity-60')}>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
               <tr>
@@ -145,6 +146,7 @@ export function EmployeeQueue() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

@@ -26,9 +26,11 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { surface } from '@/components/ui/surface';
+import { cn } from '@/lib/utils';
 
 const SELECT_CLASS =
-  'h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'h-11 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return '';
@@ -159,7 +161,7 @@ function MyRequestsHistory() {
             <p className="text-sm">No requests yet.</p>
           </div>
         ) : (
-          <ul className="divide-y rounded-md border">
+          <ul className={cn(surface('subtle'), 'divide-y')}>
             {data.content.map((r) => (
               <RequestRow
                 key={r.id}

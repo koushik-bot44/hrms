@@ -81,21 +81,29 @@ function Stepper({
     Boolean(dashboard.signature),
   ];
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2.5">
       {STEPS.map((label, i) => (
         <button
           key={label}
           type="button"
           onClick={() => onStep(i)}
           className={cn(
-            'flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-            i === step ? 'border-primary bg-primary text-primary-foreground' : 'border-border hover:border-primary/50',
+            'flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors',
+            i === step
+              ? 'border-primary/40 bg-surface-tint text-primary'
+              : done[i]
+                ? 'border-primary/30 text-primary hover:border-primary/50'
+                : 'border-border text-muted-foreground hover:border-primary/50',
           )}
         >
           <span
             className={cn(
               'flex size-5 items-center justify-center rounded-full text-[11px]',
-              i === step ? 'bg-primary-foreground/20' : 'bg-muted',
+              i === step
+                ? 'bg-primary text-primary-foreground'
+                : done[i]
+                  ? 'bg-primary/15 text-primary'
+                  : 'bg-muted text-muted-foreground',
             )}
           >
             {done[i] ? <Check className="size-3" /> : i + 1}
