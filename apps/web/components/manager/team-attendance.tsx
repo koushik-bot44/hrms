@@ -104,7 +104,7 @@ export function TeamAttendance() {
           value={from}
           max={to}
           onChange={(e) => setFrom(e.target.value)}
-          className="h-9 w-auto"
+          className="w-auto"
         />
       </label>
       <label className="flex items-center gap-1.5">
@@ -115,7 +115,7 @@ export function TeamAttendance() {
           min={from}
           max={istTodayIso()}
           onChange={(e) => setTo(e.target.value)}
-          className="h-9 w-auto"
+          className="w-auto"
         />
       </label>
       <Button

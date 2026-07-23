@@ -372,7 +372,7 @@ function ArraySection({
                   <div key={col} className="min-w-[140px] flex-1 space-y-1">
                     <label className="text-[11px] text-muted-foreground">{col}</label>
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <Input {...register(names[ci] as any)} disabled={disabled} className="h-9" />
+                    <Input {...register(names[ci] as any)} disabled={disabled} />
                   </div>
                 ))}
                 {!disabled ? (

@@ -7,12 +7,12 @@ export const metadata: Metadata = { title: 'Overview' };
 
 export default function AccountantOverviewPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Accounts workspace"
         description="Read-only oversight of approved employees and their records, scoped to your access."
       />
-      <RoleDashboard show="stats" />
+      <RoleDashboard show="stats" heroStats />
       <ViewerEmployeesBrowser />
     </div>
   );

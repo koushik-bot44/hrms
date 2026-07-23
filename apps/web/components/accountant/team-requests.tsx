@@ -40,7 +40,7 @@ import {
 } from '@/components/ui/dialog';
 
 const SELECT_CLASS =
-  'h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'h-11 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const MAX_FILES = 20; // matches the server's per-request bind cap (§8d)
 
 function formatDateTime(iso: string | null): string {

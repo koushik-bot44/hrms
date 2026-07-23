@@ -1,16 +1,29 @@
 import * as React from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn(
-        'rounded-2xl border bg-card text-card-foreground shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover',
-        className,
-      )}
-      {...props}
-    />
+const cardVariants = cva('rounded-2xl border text-card-foreground', {
+  variants: {
+    variant: {
+      // Static container — the default. Does NOT lift on hover (a card wrapping a table/form must not twitch).
+      default: 'bg-card shadow-card',
+      // Mint brand surface (stat "moment" / hero panel). Ink text reads AA-safe on the light mint.
+      tint: 'border-transparent bg-surface-tint text-foreground',
+      // Clickable card — the gentle hover elevation lives here (opt-in only).
+      interactive:
+        'bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover',
+    },
+  },
+  defaultVariants: { variant: 'default' },
+});
+
+export interface CardProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof cardVariants> {}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, variant, ...props }, ref) => (
+    <div ref={ref} className={cn(cardVariants({ variant }), className)} {...props} />
   ),
 );
 Card.displayName = 'Card';
@@ -50,4 +63,4 @@ const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 );
 CardFooter.displayName = 'CardFooter';
 
-export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter };
+export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, cardVariants };

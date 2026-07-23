@@ -133,7 +133,7 @@ export function Mailbox() {
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search your mail"
             aria-label="Search your mail"
-            className="h-9 pl-8 pr-8"
+            className="pl-8 pr-8"
           />
           {searchInput ? (
             <button
@@ -225,7 +225,7 @@ export function Mailbox() {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search your mail"
-              className="h-9 pl-8"
+              className="pl-8"
             />
           </form>
           <MobilePanes

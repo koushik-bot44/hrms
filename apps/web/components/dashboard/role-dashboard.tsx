@@ -32,7 +32,14 @@ const DRILL: Record<string, string> = {
  * `show` renders only one section so a page can place them apart (e.g. stats above a list, activity
  * below it); both instances share the one deduped `['dashboard']` query.
  */
-export function RoleDashboard({ show = 'all' }: { show?: 'all' | 'stats' | 'activity' }) {
+export function RoleDashboard({
+  show = 'all',
+  heroStats = false,
+}: {
+  show?: 'all' | 'stats' | 'activity';
+  /** Render the stat cards as the mint "moment" (tinted surface, oversized number) — opt-in per page. */
+  heroStats?: boolean;
+}) {
   const query = useApiQuery(['dashboard'], getDashboardSummary, { refetchOnWindowFocus: true });
   const wantStats = show !== 'activity';
   const wantActivity = show !== 'stats';
@@ -69,7 +76,7 @@ export function RoleDashboard({ show = 'all' }: { show?: 'all' | 'stats' | 'acti
       {wantStats && stats.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((s) => (
-            <StatCardView key={s.key} card={s} href={DRILL[s.key]} />
+            <StatCardView key={s.key} card={s} href={DRILL[s.key]} hero={heroStats} />
           ))}
         </div>
       ) : null}
@@ -96,16 +103,25 @@ export function RoleDashboard({ show = 'all' }: { show?: 'all' | 'stats' | 'acti
   );
 }
 
-function StatCardView({ card, href }: { card: StatCard; href?: string }) {
+function StatCardView({ card, href, hero = false }: { card: StatCard; href?: string; hero?: boolean }) {
   const inner = (
-    <Card className={cn('h-full transition-colors', href && 'hover:border-primary/50')}>
+    <Card
+      variant={hero ? 'tint' : href ? 'interactive' : 'default'}
+      className={cn('h-full', !hero && href && 'transition-colors hover:border-primary/50')}
+    >
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{card.label}</CardTitle>
+        <CardTitle
+          className={cn('text-sm font-medium', hero ? 'text-primary' : 'text-muted-foreground')}
+        >
+          {card.label}
+        </CardTitle>
         {href ? <ArrowUpRight className="size-4 text-muted-foreground" aria-hidden /> : null}
       </CardHeader>
       <CardContent>
         {/* A 0 renders as "0" (never a placeholder). */}
-        <div className="text-2xl font-semibold tabular-nums">{card.value}</div>
+        <div className={cn('font-semibold tabular-nums tracking-tight', hero ? 'text-4xl' : 'text-2xl')}>
+          {card.value}
+        </div>
       </CardContent>
     </Card>
   );

@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog';
 
 const SELECT_CLASS =
-  'h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'h-11 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const TYPE_LABELS: Record<string, string> = { CASUAL: 'Casual', SICK: 'Sick', UNPAID: 'Unpaid' };
 
 function formatDate(iso: string): string {
@@ -157,7 +157,7 @@ export function TeamLeave() {
             setFrom(e.target.value);
             setPage(0);
           }}
-          className="h-9 w-auto"
+          className="w-auto"
         />
       </label>
       <label className="flex items-center gap-1.5">
@@ -169,7 +169,7 @@ export function TeamLeave() {
             setTo(e.target.value);
             setPage(0);
           }}
-          className="h-9 w-auto"
+          className="w-auto"
         />
       </label>
     </div>

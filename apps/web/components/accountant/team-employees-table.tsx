@@ -3,12 +3,13 @@
 import * as React from 'react';
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Users } from 'lucide-react';
 import type { ApprovedEmployeeRow } from '@/lib/contract';
 import { getTeamEmployees } from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
 import { DataTable } from '@/components/data-table';
 import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/loading-skeleton';
@@ -82,15 +83,17 @@ export function TeamEmployeesTable({ teamId }: { teamId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="max-w-sm space-y-1.5">
-        <label htmlFor="team-emp-search" className="text-xs font-medium text-muted-foreground">
-          Search
-        </label>
+      {/* ONE search field — server search across the whole team (name, email, employee ID). The former
+          "filter loaded rows" client box is dropped: the server search already spans every row. */}
+      <div className="relative w-full max-w-md">
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           id="team-emp-search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Name, email or employee ID…"
+          placeholder="Search by name, email or employee ID…"
+          aria-label="Search employees"
+          className="rounded-xl pl-10"
         />
       </div>
 
@@ -104,18 +107,21 @@ export function TeamEmployeesTable({ teamId }: { teamId: string }) {
         />
       ) : (
         <div className={cn('transition-opacity', dim && 'opacity-60')}>
-          <DataTable
-            columns={COLUMNS}
-            data={data?.content ?? []}
-            searchPlaceholder="Filter loaded rows…"
-            emptyState={
-              <EmptyState
-                icon={Users}
-                title="No approved employees"
-                description="This team has no approved employees yet."
-              />
-            }
-          />
+          <Card className="overflow-hidden">
+            <DataTable
+              columns={COLUMNS}
+              data={data?.content ?? []}
+              searchable={false}
+              containerClassName=""
+              emptyState={
+                <EmptyState
+                  icon={Users}
+                  title="No approved employees"
+                  description="This team has no approved employees yet."
+                />
+              }
+            />
+          </Card>
           {(data?.totalElements ?? 0) > 0 ? (
             <div className="flex items-center justify-between pt-3 text-sm text-muted-foreground">
               <span>

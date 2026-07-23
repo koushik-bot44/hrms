@@ -21,7 +21,7 @@ export function AccountsAdminBrowser() {
   const [team, setTeam] = React.useState<ViewerTeamRow | null>(null);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Breadcrumbs
         company={company}
         team={team}
@@ -54,7 +54,10 @@ function Breadcrumbs({
   onCompany: () => void;
 }) {
   return (
-    <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label="Breadcrumb">
+    <nav
+      className="flex flex-wrap items-center gap-2 rounded-full border bg-card px-4 py-2 text-sm"
+      aria-label="Breadcrumb"
+    >
       <Crumb label="Companies" active={!company} onClick={onRoot} />
       {company ? (
         <>
@@ -102,7 +105,7 @@ function CompanyList({ onPick }: { onPick: (c: ViewerCompanyRow) => void }) {
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {companies.map((c) => (
         <button key={c.id} type="button" onClick={() => onPick(c)} className="text-left">
-          <Card className="transition-colors hover:border-primary/50">
+          <Card variant="interactive" className="h-full transition-colors hover:border-primary/50">
             <CardContent className="flex items-center justify-between gap-3 p-4">
               <div className="min-w-0">
                 <p className="truncate font-medium">{c.name}</p>
@@ -150,7 +153,7 @@ function TeamList({
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {teams.map((t) => (
         <button key={t.id} type="button" onClick={() => onPick(t)} className="text-left">
-          <Card className="transition-colors hover:border-primary/50">
+          <Card variant="interactive" className="h-full transition-colors hover:border-primary/50">
             <CardContent className="space-y-1 p-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="truncate font-medium">{t.name}</p>

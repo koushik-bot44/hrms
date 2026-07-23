@@ -12,7 +12,7 @@
  */
 @layer base {
   :root {
-    --background: 160 23% 97%; /* #F7FAF9 soft white, green whisper */
+    --background: 152 30% 96%; /* mint-neutral — a step deeper so white cards float */
     --foreground: 162 30% 8%; /* #0E1A16 ink */
 
     --card: 0 0% 100%; /* #FFFFFF */
@@ -60,7 +60,7 @@
   }
 
   .dark {
-    --background: 222 47% 8%;
+    --background: 222 47% 7%; /* a step deeper than the 11% cards so they float */
     --foreground: 210 40% 96%;
 
     --card: 222 47% 11%;

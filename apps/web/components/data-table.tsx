@@ -25,6 +25,10 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   searchPlaceholder?: string;
+  /** Set false to hide the built-in client-side search box (e.g. when the caller owns a server search). */
+  searchable?: boolean;
+  /** Classes for the table container — defaults to a rounded, bordered box; pass '' to card it externally. */
+  containerClassName?: string;
   /** Shown when there are no rows (e.g. an <EmptyState/>). */
   emptyState?: React.ReactNode;
   /** Extra toolbar controls (filters) rendered next to the search box. */
@@ -36,6 +40,8 @@ export function DataTable<TData, TValue>({
   columns,
   data,
   searchPlaceholder = 'Search…',
+  searchable = true,
+  containerClassName = 'rounded-lg border',
   emptyState,
   toolbar,
 }: DataTableProps<TData, TValue>) {
@@ -55,21 +61,25 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-full max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder={searchPlaceholder}
-            className="pl-9"
-            aria-label="Search"
-          />
+      {searchable || toolbar ? (
+        <div className="flex flex-wrap items-center gap-3">
+          {searchable ? (
+            <div className="relative w-full max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={globalFilter}
+                onChange={(e) => setGlobalFilter(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="pl-9"
+                aria-label="Search"
+              />
+            </div>
+          ) : null}
+          {toolbar}
         </div>
-        {toolbar}
-      </div>
+      ) : null}
 
-      <div className="rounded-lg border">
+      <div className={containerClassName}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
