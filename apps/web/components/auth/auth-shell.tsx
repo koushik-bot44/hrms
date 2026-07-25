@@ -10,8 +10,8 @@ import {
 
 /**
  * The shared editorial chrome for the two sign-in doors (staff password + employee OTP). Presentation
- * only — a calm, mint-forward field with a floating white card; the forms + all auth logic live in the
- * pages. The decorative field is built from design tokens (a mint gradient + soft brand-tinted blobs),
+ * only — a calm, tint-forward field with a floating white card; the forms + all auth logic live in the
+ * pages. The decorative field is built from design tokens (a tint gradient + soft brand-tinted blobs),
  * no image assets. Works at mobile widths and in dark mode.
  */
 export function AuthShell({
@@ -29,7 +29,7 @@ export function AuthShell({
 }) {
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background p-6">
-      {/* Tokenized decorative mint field — no assets. */}
+      {/* Tokenized decorative tint field — no assets. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-gradient-to-br from-surface-tint via-background to-surface-tint"

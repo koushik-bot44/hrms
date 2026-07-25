@@ -23,11 +23,11 @@ export default function WorkspacePage() {
 
   return (
     <div className="space-y-8">
-      {/* Editorial identity hero — the mint moment. */}
+      {/* Editorial identity hero — the tint moment. */}
       <Card variant="tint">
         <CardContent className="space-y-6 p-8">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-primary">Welcome back</p>
+            <p className="text-sm font-medium text-primary dark:text-foreground">Welcome back</p>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">
               {emp.name ?? 'Your workspace'}
             </h1>

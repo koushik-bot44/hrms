@@ -5,38 +5,38 @@
 /*
  * IHRMS design tokens — premium, calm, trustworthy. Light-first (dark optional).
  * HSL triplets consumed via `hsl(var(--token))`. Palette:
- *   brand emerald #047857 (bright #10B981) · surface mint #ECFBF4 · bg #F7FAF9
- *   card #FFFFFF · border #E3EFE9 · muted-text #5B6B66 · ink #0E1A16
- *   success #16A34A · warning #D97706 · danger #DC2626
- * Dark mode keeps its coherent cool-neutral ramp; only the brand tokens are greened.
+ *   brand indigo #4F46E5 (bright #6366F1) · surface tint #EEF0FE · bg near-white
+ *   card #FFFFFF · border indigo-neutral · muted-text #64748B · ink #0F172A
+ *   success #16A34A · warning #D97706 · danger #DC2626 (distinct hues from the brand)
+ * Dark mode keeps its coherent cool-neutral ramp; only the brand tokens re-hue to indigo.
  */
 @layer base {
   :root {
-    --background: 152 30% 96%; /* mint-neutral — a step deeper so white cards float */
-    --foreground: 162 30% 8%; /* #0E1A16 ink */
+    --background: 240 24% 97%; /* faint indigo-neutral near-white — a step deeper so white cards float */
+    --foreground: 222 47% 11%; /* #0F172A slate ink */
 
     --card: 0 0% 100%; /* #FFFFFF */
-    --card-foreground: 162 30% 8%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 162 30% 8%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 163 94% 24%; /* emerald #047857 — AA on white */
+    --primary: 243 75% 59%; /* indigo #4F46E5 — white text is AA (5.8:1) */
     --primary-foreground: 0 0% 100%;
-    --primary-bright: 160 84% 39%; /* #10B981 — tints, chart fills, decorative (NOT solid-button text bg) */
+    --primary-bright: 239 84% 67%; /* #6366F1 — tints, chart fills, decorative (NOT solid-button text bg) */
 
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
 
     --muted: 210 40% 96%;
-    --muted-foreground: 162 8% 39%; /* #5B6B66 green-neutral */
+    --muted-foreground: 215 16% 47%; /* #64748B slate-neutral */
 
     /* Neutral hover tint (shadcn `accent`) — deliberately unchanged (NOT the brand). */
     --accent: 210 40% 96%;
     --accent-foreground: 222 47% 11%;
 
-    /* Mint brand surface (hero/panel/active-nav pill). */
-    --surface-tint: 152 65% 95%; /* #ECFBF4 */
+    /* Soft indigo brand surface (hero/panel/tinted stat cards). */
+    --surface-tint: 240 60% 97%; /* #EEF0FE */
 
     --destructive: 0 72% 51%; /* #DC2626 */
     --destructive-foreground: 0 0% 100%;
@@ -47,15 +47,15 @@
     --warning: 32 95% 44%; /* #D97706 */
     --warning-foreground: 0 0% 100%;
 
-    --border: 150 27% 91%; /* #E3EFE9 mint-tinted neutral */
-    --input: 150 27% 91%;
-    --ring: 163 94% 24%; /* mirrors --primary */
+    --border: 235 24% 90%; /* faint indigo-neutral */
+    --input: 235 24% 90%;
+    --ring: 243 75% 59%; /* mirrors --primary */
 
     /* Sidebar — its OWN dark surface, identical in light + dark app modes (not page-driven). */
     --sidebar: 216 28% 11%;
     --sidebar-foreground: 210 24% 92%;
     --sidebar-muted: 214 14% 62%;
-    --sidebar-active: 163 94% 24%; /* emerald pill — white text is AA (5.5:1) */
+    --sidebar-active: 243 75% 59%; /* indigo pill — white text is AA (5.8:1) */
     --sidebar-active-foreground: 0 0% 100%;
     --sidebar-border: 214 20% 20%;
 
@@ -77,9 +77,9 @@
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 96%;
 
-    --primary: 162 94% 30%; /* emerald #059669 — lighter for dark surfaces */
-    --primary-foreground: 162 40% 10%; /* dark ink on the lighter emerald (AA) */
-    --primary-bright: 160 84% 45%;
+    --primary: 243 75% 63%; /* lifted indigo for dark surfaces — white text stays AA (~5:1) */
+    --primary-foreground: 0 0% 100%;
+    --primary-bright: 239 84% 74%;
 
     --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 96%;
@@ -90,7 +90,7 @@
     --accent: 217 33% 20%;
     --accent-foreground: 210 40% 96%;
 
-    --surface-tint: 162 34% 15%; /* deep mint panel on the cool-dark ramp */
+    --surface-tint: 240 30% 18%; /* deep indigo panel on the cool-dark ramp */
 
     --destructive: 0 63% 50%;
     --destructive-foreground: 0 0% 100%;
@@ -103,13 +103,13 @@
 
     --border: 217 33% 22%;
     --input: 217 33% 22%;
-    --ring: 162 94% 30%; /* mirrors --primary */
+    --ring: 243 75% 63%; /* mirrors --primary */
 
     /* Sidebar is dark in BOTH modes — same values as :root (its own surface, not page-driven). */
     --sidebar: 216 28% 11%;
     --sidebar-foreground: 210 24% 92%;
     --sidebar-muted: 214 14% 62%;
-    --sidebar-active: 163 94% 24%;
+    --sidebar-active: 243 75% 59%;
     --sidebar-active-foreground: 0 0% 100%;
     --sidebar-border: 214 20% 20%;
 
