@@ -166,7 +166,7 @@ export function Mailbox() {
       {/* Body */}
       <div className="flex min-h-0 flex-1">
         {/* Left rail */}
-        <aside className="hidden w-52 shrink-0 flex-col gap-1 border-r bg-card p-3 md:flex">
+        <aside className="hidden w-52 shrink-0 flex-col gap-1 bg-sidebar p-3 text-sidebar-foreground md:flex">
           <Button className="mb-2 justify-start" onClick={() => openCompose({ mode: 'new' })}>
             <SquarePen />
             Compose
@@ -185,7 +185,7 @@ export function Mailbox() {
             onClick={() => switchFolder('sent')}
           />
           {searching ? (
-            <div className="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
+            <div className="mt-2 flex items-center justify-between rounded-lg bg-sidebar-foreground/10 px-3 py-2 text-xs">
               <span className="truncate">Results for “{searchTerm}”</span>
               <button type="button" onClick={clearSearch} aria-label="Clear search">
                 <X className="size-3.5" />
@@ -301,8 +301,8 @@ function FolderButton({
       className={cn(
         'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
         active
-          ? 'bg-surface-tint text-primary'
-          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+          ? 'bg-sidebar-active text-sidebar-active-foreground'
+          : 'text-sidebar-muted hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground',
       )}
     >
       <Icon className="size-4 shrink-0" />

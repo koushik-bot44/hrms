@@ -12,7 +12,18 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ArrowLeft, CalendarClock, Download } from 'lucide-react';
+import {
+  AlarmClock,
+  ArrowLeft,
+  CalendarCheck2,
+  CalendarClock,
+  CalendarX2,
+  Clock,
+  Coffee,
+  Download,
+  Gauge,
+  Plane,
+} from 'lucide-react';
 import type { EmployeeMonthSummary } from '@/lib/contract';
 import { getEmployeeAttendanceMonthly, getEmployeeAttendanceSummary } from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
@@ -24,6 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { MonthPicker } from '@/components/accountant/month-picker';
+import { StatTile, MeterRow } from '@/components/dashboard/stat-tile';
 import { cn } from '@/lib/utils';
 
 // Theme-aware chart colors from the IHRMS design tokens (work each look via CSS vars).
@@ -180,24 +192,46 @@ function SummaryBody({ data }: { data: EmployeeMonthSummary }) {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="mt-2 space-y-1.5 text-sm">
-                <LegendRow color={WORKED} label="Worked" value={`${hm(data.timeComposition.workedSeconds)} · ${pct(data.timeComposition.workedSeconds)}%`} />
-                <LegendRow color={BREAK} label="Break" value={`${hm(data.timeComposition.breakSeconds)} · ${pct(data.timeComposition.breakSeconds)}%`} />
+              {/* Same worked/break split as the donut, as same-unit progress bars (of gross clocked time). */}
+              <div className="mt-3 space-y-3">
+                <MeterRow
+                  label="Worked"
+                  value={data.timeComposition.workedSeconds}
+                  max={gross}
+                  tone="primary"
+                  display={`${hm(data.timeComposition.workedSeconds)} · ${pct(data.timeComposition.workedSeconds)}%`}
+                />
+                <MeterRow
+                  label="Break"
+                  value={data.timeComposition.breakSeconds}
+                  max={gross}
+                  tone="warning"
+                  display={`${hm(data.timeComposition.breakSeconds)} · ${pct(data.timeComposition.breakSeconds)}%`}
+                />
               </div>
             </>
           )}
         </CardContent>
       </Card>
 
-      {/* Counts / other units — never in the donut. */}
+      {/* Counts / other units — never in the donut. Icon-tile cards, semantic tints, SAME data as before. */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:col-span-2">
-        <Stat label="Worked" value={hm(data.workedSeconds)} />
-        <Stat label="Break time" value={hm(data.breakSeconds)} />
-        <Stat label="Days present" value={String(data.daysPresent)} />
-        <Stat label="Late logins" value={String(data.lateLogins)} tone={data.lateLogins > 0 ? 'warning' : undefined} />
-        <Stat
+        <StatTile icon={Clock} label="Worked" value={hm(data.workedSeconds)} tone="primary" size="sm" />
+        <StatTile icon={Coffee} label="Break time" value={hm(data.breakSeconds)} tone="neutral" size="sm" />
+        <StatTile icon={CalendarCheck2} label="Days present" value={String(data.daysPresent)} tone="primary" size="sm" />
+        <StatTile
+          icon={AlarmClock}
+          label="Late logins"
+          value={String(data.lateLogins)}
+          tone={data.lateLogins > 0 ? 'warning' : 'neutral'}
+          size="sm"
+        />
+        <StatTile
+          icon={Gauge}
           label="Adherence"
           value={data.adherencePct === null ? 'N/A' : `${data.adherencePct}%`}
+          tone="primary"
+          size="sm"
           sub={
             data.adherencePct === null
               ? 'No expected working days'
@@ -205,58 +239,25 @@ function SummaryBody({ data }: { data: EmployeeMonthSummary }) {
           }
           title={data.workingDaysDefinition}
         />
-        <Stat
+        <StatTile
+          icon={CalendarX2}
           label="Unapproved Absences"
           value={String(data.unapprovedAbsences)}
-          tone={data.unapprovedAbsences > 0 ? 'warning' : undefined}
+          tone={data.unapprovedAbsences > 0 ? 'danger' : 'neutral'}
+          size="sm"
           sub="Past working days, no session or leave"
           title={data.workingDaysDefinition}
         />
-        <Stat
+        <StatTile
+          icon={Plane}
           label="Leaves taken"
           value={String(data.leaveDaysTotal)}
+          tone="neutral"
+          size="sm"
           sub={`C ${data.leavesByType.casual} · S ${data.leavesByType.sick} · U ${data.leavesByType.unpaid}`}
         />
       </div>
     </div>
-  );
-}
-
-function LegendRow({ color, label, value }: { color: string; label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="flex items-center gap-2 text-muted-foreground">
-        <span className="size-2.5 rounded-full" style={{ background: color }} />
-        {label}
-      </span>
-      <span className="font-medium tabular-nums">{value}</span>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  sub,
-  tone,
-  title,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone?: 'warning';
-  title?: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="space-y-0.5 p-4" title={title}>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={cn('text-xl font-semibold tabular-nums', tone === 'warning' && 'text-warning')}>
-          {value}
-        </p>
-        {sub ? <p className="text-xs text-muted-foreground">{sub}</p> : null}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -354,16 +355,16 @@ function MonthlyReport({
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="overflow-x-auto rounded-md border">
+            <div className="overflow-x-auto rounded-xl border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Month</th>
-                    <th className="px-3 py-2 font-medium">Worked</th>
-                    <th className="px-3 py-2 font-medium">Days present</th>
-                    <th className="px-3 py-2 font-medium">Late</th>
-                    <th className="px-3 py-2 font-medium">Leave days</th>
-                    <th className="px-3 py-2 font-medium">Absent</th>
+                    <th className="px-4 py-3 font-medium">Month</th>
+                    <th className="px-4 py-3 font-medium">Worked</th>
+                    <th className="px-4 py-3 font-medium">Days present</th>
+                    <th className="px-4 py-3 font-medium">Late</th>
+                    <th className="px-4 py-3 font-medium">Leave days</th>
+                    <th className="px-4 py-3 font-medium">Absent</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -376,12 +377,12 @@ function MonthlyReport({
                         m.month === activeMonth && 'bg-primary/5',
                       )}
                     >
-                      <td className="px-3 py-2 font-medium">{monthLabel(m.month)}</td>
-                      <td className="px-3 py-2 tabular-nums">{hm(m.workedSeconds)}</td>
-                      <td className="px-3 py-2 tabular-nums">{m.daysPresent}</td>
-                      <td className="px-3 py-2 tabular-nums">{m.lateLogins}</td>
-                      <td className="px-3 py-2 tabular-nums">{m.leaveDaysTotal}</td>
-                      <td className={cn('px-3 py-2 tabular-nums', m.unapprovedAbsences > 0 && 'text-warning')}>
+                      <td className="px-4 py-3 font-medium">{monthLabel(m.month)}</td>
+                      <td className="px-4 py-3 tabular-nums">{hm(m.workedSeconds)}</td>
+                      <td className="px-4 py-3 tabular-nums">{m.daysPresent}</td>
+                      <td className="px-4 py-3 tabular-nums">{m.lateLogins}</td>
+                      <td className="px-4 py-3 tabular-nums">{m.leaveDaysTotal}</td>
+                      <td className={cn('px-4 py-3 tabular-nums', m.unapprovedAbsences > 0 && 'text-warning')}>
                         {m.unapprovedAbsences}
                       </td>
                     </tr>

@@ -51,6 +51,14 @@
     --input: 150 27% 91%;
     --ring: 163 94% 24%; /* mirrors --primary */
 
+    /* Sidebar — its OWN dark surface, identical in light + dark app modes (not page-driven). */
+    --sidebar: 216 28% 11%;
+    --sidebar-foreground: 210 24% 92%;
+    --sidebar-muted: 214 14% 62%;
+    --sidebar-active: 163 94% 24%; /* emerald pill — white text is AA (5.5:1) */
+    --sidebar-active-foreground: 0 0% 100%;
+    --sidebar-border: 214 20% 20%;
+
     /* Signature pad — theme-INVARIANT: the signature is captured dark-on-white for the PDF stamp,
        so these are the same in light and dark and must not flip with the theme. */
     --signature-paper: 0 0% 100%;
@@ -96,6 +104,14 @@
     --border: 217 33% 22%;
     --input: 217 33% 22%;
     --ring: 162 94% 30%; /* mirrors --primary */
+
+    /* Sidebar is dark in BOTH modes — same values as :root (its own surface, not page-driven). */
+    --sidebar: 216 28% 11%;
+    --sidebar-foreground: 210 24% 92%;
+    --sidebar-muted: 214 14% 62%;
+    --sidebar-active: 163 94% 24%;
+    --sidebar-active-foreground: 0 0% 100%;
+    --sidebar-border: 214 20% 20%;
 
     /* Signature stays dark-on-white for the PDF stamp even in dark mode. */
     --signature-paper: 0 0% 100%;

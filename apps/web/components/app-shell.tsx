@@ -3,7 +3,16 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, KeyRound, LogOut, Menu, ShieldCheck, UserRound } from 'lucide-react';
+import {
+  Bell,
+  KeyRound,
+  LogOut,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth-provider';
 import { ChangePasswordDialog } from '@/components/change-password-dialog';
@@ -41,7 +50,15 @@ export interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
 }
 
-function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
+function NavLinks({
+  items,
+  onNavigate,
+  collapsed = false,
+}: {
+  items: NavItem[];
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
   const pathname = usePathname();
   // Only the most specific (longest) matching item is active, so an index route like
   // "/hr" doesn't also light up while you're on "/hr/employees" (one highlight at a time).
@@ -66,15 +83,17 @@ function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => 
             href={item.href}
             onClick={onNavigate}
             aria-current={active ? 'page' : undefined}
+            title={collapsed ? item.label : undefined}
             className={cn(
-              'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
+              'flex items-center gap-3 rounded-xl text-sm font-medium transition-colors',
+              collapsed ? 'justify-center px-0 py-2.5' : 'px-3.5 py-2.5',
               active
-                ? 'bg-surface-tint text-primary'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                ? 'bg-sidebar-active text-sidebar-active-foreground'
+                : 'text-sidebar-muted hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground',
             )}
           >
             <item.icon className="size-4 shrink-0" />
-            {item.label}
+            {collapsed ? null : item.label}
           </Link>
         );
       })}
@@ -82,16 +101,23 @@ function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => 
   );
 }
 
-function Brand({ roleLabel }: { roleLabel: string }) {
+function Brand({ roleLabel, collapsed = false }: { roleLabel: string; collapsed?: boolean }) {
   return (
-    <div className="flex h-14 items-center gap-2 border-b px-4">
-      <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+    <div
+      className={cn(
+        'flex h-14 items-center gap-2 border-b border-sidebar-border',
+        collapsed ? 'justify-center px-2' : 'px-4',
+      )}
+    >
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
         <ShieldCheck className="size-4" />
       </div>
-      <div className="leading-tight">
-        <div className="text-sm font-semibold tracking-tight">IHRMS</div>
-        <div className="text-[11px] text-muted-foreground">{roleLabel}</div>
-      </div>
+      {collapsed ? null : (
+        <div className="leading-tight">
+          <div className="text-sm font-semibold tracking-tight text-sidebar-foreground">IHRMS</div>
+          <div className="text-[11px] text-sidebar-muted">{roleLabel}</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -241,19 +267,66 @@ export function AppShell({
   showMail?: boolean;
 }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(false);
+
+  // Persisted collapse — loaded after mount (client-only) to avoid a hydration mismatch.
+  React.useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem('ihrms.sidebarCollapsed') === '1');
+    } catch {
+      /* localStorage unavailable — default expanded */
+    }
+  }, []);
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem('ihrms.sidebarCollapsed', next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
 
   return (
     <div className="flex min-h-dvh bg-background">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r bg-card md:flex">
-        <Brand roleLabel={roleLabel} />
+      {/* Desktop sidebar — its own dark surface (in both app light + dark modes). */}
+      <aside
+        className={cn(
+          'hidden shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex',
+          collapsed ? 'w-16' : 'w-60',
+        )}
+      >
+        <Brand roleLabel={roleLabel} collapsed={collapsed} />
         <div className="flex-1 overflow-y-auto p-3">
-          <NavLinks items={nav} />
+          <NavLinks items={nav} collapsed={collapsed} />
+        </div>
+        <div className="border-t border-sidebar-border p-3">
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-sidebar-muted transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground',
+              collapsed && 'justify-center px-0',
+            )}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="size-4 shrink-0" />
+            ) : (
+              <>
+                <PanelLeftClose className="size-4 shrink-0" />
+                Collapse
+              </>
+            )}
+          </button>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Topbar */}
+        {/* Topbar — stays on the light page surface. */}
         <header className="flex h-14 items-center justify-between gap-3 border-b bg-background px-4 md:px-6">
           <div className="flex items-center gap-2">
             <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -262,7 +335,7 @@ export function AppShell({
                   <Menu />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="left-0 top-0 h-dvh max-w-[16rem] translate-x-0 translate-y-0 gap-0 rounded-none p-0 sm:rounded-none">
+              <DialogContent className="left-0 top-0 h-dvh max-h-dvh max-w-[16rem] translate-x-0 translate-y-0 gap-0 rounded-none border-sidebar-border bg-sidebar p-0 text-sidebar-foreground sm:rounded-none">
                 <DialogTitle className="sr-only">Navigation</DialogTitle>
                 <Brand roleLabel={roleLabel} />
                 <div className="p-3">

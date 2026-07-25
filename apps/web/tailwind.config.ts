@@ -39,6 +39,15 @@ const config: Config = {
         },
         // Mint brand surface (hero/panel/active-nav pill). NOT the neutral `accent` hover tint.
         'surface-tint': 'hsl(var(--surface-tint) / <alpha-value>)',
+        // The dark sidebar surface — its own palette, identical in light + dark app modes.
+        sidebar: {
+          DEFAULT: 'hsl(var(--sidebar) / <alpha-value>)',
+          foreground: 'hsl(var(--sidebar-foreground) / <alpha-value>)',
+          muted: 'hsl(var(--sidebar-muted) / <alpha-value>)',
+          active: 'hsl(var(--sidebar-active) / <alpha-value>)',
+          'active-foreground': 'hsl(var(--sidebar-active-foreground) / <alpha-value>)',
+          border: 'hsl(var(--sidebar-border) / <alpha-value>)',
+        },
         secondary: {
           DEFAULT: 'hsl(var(--secondary) / <alpha-value>)',
           foreground: 'hsl(var(--secondary-foreground) / <alpha-value>)',
