@@ -34,10 +34,10 @@ const config: Config = {
         primary: {
           DEFAULT: 'hsl(var(--primary) / <alpha-value>)',
           foreground: 'hsl(var(--primary-foreground) / <alpha-value>)',
-          // Brighter indigo for tints, chart fills, and decorative accents (not solid-button text bg).
+          // Brighter emerald for tints, chart fills, and decorative accents (not solid-button text bg).
           bright: 'hsl(var(--primary-bright) / <alpha-value>)',
         },
-        // Indigo brand surface (hero/panel/active-nav pill). NOT the neutral `accent` hover tint.
+        // Mint brand surface (hero/panel/active-nav pill). NOT the neutral `accent` hover tint.
         'surface-tint': 'hsl(var(--surface-tint) / <alpha-value>)',
         // The dark sidebar surface — its own palette, identical in light + dark app modes.
         sidebar: {
@@ -90,7 +90,7 @@ const config: Config = {
         card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)',
         // Gentle elevation for card/interactive hover.
         'card-hover': '0 8px 20px -6px rgb(15 23 42 / 0.10), 0 2px 6px -2px rgb(15 23 42 / 0.06)',
-        // Soft indigo-tinted lift for solid buttons on hover.
+        // Soft emerald-tinted lift for solid buttons on hover.
         lift: '0 4px 14px -3px hsl(var(--primary) / 0.30)',
       },
       keyframes: {
