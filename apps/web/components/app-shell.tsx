@@ -88,8 +88,8 @@ function NavLinks({
               'flex items-center gap-3 rounded-xl text-sm font-medium transition-colors',
               collapsed ? 'justify-center px-0 py-2.5' : 'px-3.5 py-2.5',
               active
-                ? 'bg-sidebar-active text-sidebar-active-foreground'
-                : 'text-sidebar-muted hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground',
+                ? 'bg-surface-tint text-primary'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
             )}
           >
             <item.icon className="size-4 shrink-0" />
@@ -105,7 +105,7 @@ function Brand({ roleLabel, collapsed = false }: { roleLabel: string; collapsed?
   return (
     <div
       className={cn(
-        'flex h-14 items-center gap-2 border-b border-sidebar-border',
+        'flex h-14 items-center gap-2 border-b',
         collapsed ? 'justify-center px-2' : 'px-4',
       )}
     >
@@ -114,8 +114,8 @@ function Brand({ roleLabel, collapsed = false }: { roleLabel: string; collapsed?
       </div>
       {collapsed ? null : (
         <div className="leading-tight">
-          <div className="text-sm font-semibold tracking-tight text-sidebar-foreground">IHRMS</div>
-          <div className="text-[11px] text-sidebar-muted">{roleLabel}</div>
+          <div className="text-sm font-semibold tracking-tight">IHRMS</div>
+          <div className="text-[11px] text-muted-foreground">{roleLabel}</div>
         </div>
       )}
     </div>
@@ -290,10 +290,10 @@ export function AppShell({
 
   return (
     <div className="flex min-h-dvh bg-background">
-      {/* Desktop sidebar — its own dark surface (in both app light + dark modes). */}
+      {/* Desktop sidebar — the light card surface. */}
       <aside
         className={cn(
-          'hidden shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex',
+          'hidden shrink-0 flex-col border-r bg-card md:flex',
           collapsed ? 'w-16' : 'w-60',
         )}
       >
@@ -301,7 +301,7 @@ export function AppShell({
         <div className="flex-1 overflow-y-auto p-3">
           <NavLinks items={nav} collapsed={collapsed} />
         </div>
-        <div className="border-t border-sidebar-border p-3">
+        <div className="border-t p-3">
           <button
             type="button"
             onClick={toggleCollapsed}
@@ -309,7 +309,7 @@ export function AppShell({
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className={cn(
-              'flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-sidebar-muted transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground',
+              'flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
               collapsed && 'justify-center px-0',
             )}
           >
@@ -335,7 +335,7 @@ export function AppShell({
                   <Menu />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="left-0 top-0 h-dvh max-h-dvh max-w-[16rem] translate-x-0 translate-y-0 gap-0 rounded-none border-sidebar-border bg-sidebar p-0 text-sidebar-foreground sm:rounded-none">
+              <DialogContent className="left-0 top-0 h-dvh max-h-dvh max-w-[16rem] translate-x-0 translate-y-0 gap-0 rounded-none p-0 sm:rounded-none">
                 <DialogTitle className="sr-only">Navigation</DialogTitle>
                 <Brand roleLabel={roleLabel} />
                 <div className="p-3">
