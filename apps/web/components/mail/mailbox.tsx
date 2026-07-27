@@ -38,6 +38,7 @@ import type {
 } from '@/lib/contract';
 import type { MailFilters, MailScope } from '@/lib/api/mail';
 import { LabelChips, LabelPicker } from '@/components/mail/label-picker';
+import { SidebarWaves } from '@/components/sidebar-waves';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -342,6 +343,7 @@ export function Mailbox() {
         {/* Left rail — the same deep indigo-navy surface as the app sidebar. */}
         <aside className="relative hidden w-52 shrink-0 flex-col gap-1 overflow-hidden border-r border-sidebar-border bg-sidebar p-3 text-sidebar-foreground md:flex">
           <div className="sidebar-gradient pointer-events-none absolute inset-x-0 bottom-0 h-48" aria-hidden />
+          <SidebarWaves />
           <Button className="relative mb-2 justify-start" onClick={() => openCompose({ mode: 'new' })}>
             <SquarePen />
             Compose

@@ -42,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MailButton } from '@/components/mail/mail-button';
+import { SidebarWaves } from '@/components/sidebar-waves';
 
 export interface NavItem {
   label: string;
@@ -331,8 +332,9 @@ export function AppShell({
           collapsed ? 'w-16' : 'w-60',
         )}
       >
-        {/* Decorative soft-indigo wash near the footer (behind content). */}
+        {/* Decorative soft-indigo wash + the wave-line texture near the footer (behind content). */}
         <div className="sidebar-gradient pointer-events-none absolute inset-x-0 bottom-0 h-56" aria-hidden />
+        {collapsed ? null : <SidebarWaves />}
         <Brand roleLabel={roleLabel} collapsed={collapsed} />
         <div className="relative flex-1 overflow-y-auto p-3">
           <NavLinks items={nav} collapsed={collapsed} />
