@@ -3,12 +3,14 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   Archive,
   ArchiveRestore,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  FileText,
   Inbox,
   Mail,
   MailMinus,
@@ -21,15 +23,18 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import type { ThreadListItem, ThreadPage } from '@/lib/contract';
+import type { Draft, DraftListItem, DraftPage, ThreadListItem, ThreadPage } from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import type { ApiError } from '@/lib/api/client';
 import {
   archiveThread,
+  deleteDraft,
   deleteThread,
   getArchived,
+  getDraft,
+  getDrafts,
   getInbox,
   getSent,
   getStarred,
@@ -51,7 +56,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DockedCompose, type ComposeState } from '@/components/mail/docked-compose';
 import { ThreadView } from '@/components/mail/thread-view';
 
-type Folder = 'inbox' | 'sent' | 'starred' | 'archived';
+type Folder = 'inbox' | 'sent' | 'starred' | 'archived' | 'drafts';
 
 /** The full webmail client (§8, Stage 3): Inbox/Sent thread lists + search + reading pane + compose. */
 export function Mailbox() {
@@ -93,9 +98,27 @@ export function Mailbox() {
   const archivedList = useApiQuery(mailKeys.archived(page), (s) => getArchived(page, 20, s), {
     enabled: !searching && folder === 'archived',
   });
+  const draftsList = useApiQuery(mailKeys.drafts(page), (s) => getDrafts(page, 20, s), {
+    enabled: !searching && folder === 'drafts',
+  });
   const results = useApiQuery(mailKeys.search(searchTerm, page), (s) => searchMail(searchTerm, page, 20, s), {
     enabled: searching,
   });
+
+  const isDrafts = !searching && folder === 'drafts';
+
+  // Open a draft in the composer, prefilled + bound to its id (so Save updates it and Send runs /send).
+  const openDraft = React.useCallback(
+    async (id: string) => {
+      try {
+        const d = await getDraft(id);
+        openCompose(composeStateFromDraft(d));
+      } catch {
+        toast.error('Could not open that draft.');
+      }
+    },
+    [openCompose],
+  );
 
   const switchFolder = (next: Folder) => {
     setFolder(next);
@@ -219,6 +242,12 @@ export function Mailbox() {
             active={!searching && folder === 'archived'}
             onClick={() => switchFolder('archived')}
           />
+          <FolderButton
+            icon={FileText}
+            label="Drafts"
+            active={!searching && folder === 'drafts'}
+            onClick={() => switchFolder('drafts')}
+          />
           {searching ? (
             <div className="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
               <span className="truncate">Results for “{searchTerm}”</span>
@@ -264,6 +293,14 @@ export function Mailbox() {
               <Archive />
               Archive
             </Button>
+            <Button
+              variant={!searching && folder === 'drafts' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => switchFolder('drafts')}
+            >
+              <FileText />
+              Drafts
+            </Button>
             <Button size="sm" className="ml-auto" onClick={() => openCompose({ mode: 'new' })}>
               <SquarePen />
               New
@@ -279,36 +316,52 @@ export function Mailbox() {
               className="pl-8"
             />
           </form>
-          <MobilePanes
-            mode={mode}
-            selectedId={selectedId}
-            setSelectedId={setSelectedId}
-            active={active}
-            page={page}
-            setPage={setPage}
-            onReply={openCompose}
-          />
-        </div>
-
-        {/* Desktop: list + reading pane */}
-        <div className="hidden min-w-0 flex-1 md:flex">
-          <div className="flex w-[24rem] shrink-0 flex-col border-r">
-            <ThreadList
+          {isDrafts ? (
+            <div className="flex flex-1 flex-col">
+              <DraftsList query={draftsList} onOpen={openDraft} />
+              <Pager query={draftsList} page={page} setPage={setPage} />
+            </div>
+          ) : (
+            <MobilePanes
               mode={mode}
               selectedId={selectedId}
-              onSelect={setSelectedId}
-              query={active}
-            />
-            <Pager query={active} page={page} setPage={setPage} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <ThreadView
-              threadId={selectedId}
-              onBack={() => setSelectedId(null)}
-              onDeleted={() => setSelectedId(null)}
+              setSelectedId={setSelectedId}
+              active={active}
+              page={page}
+              setPage={setPage}
               onReply={openCompose}
             />
-          </div>
+          )}
+        </div>
+
+        {/* Desktop: list + reading pane (drafts open in the composer, so they get the full width) */}
+        <div className="hidden min-w-0 flex-1 md:flex">
+          {isDrafts ? (
+            <div className="flex min-w-0 flex-1 flex-col">
+              <DraftsList query={draftsList} onOpen={openDraft} />
+              <Pager query={draftsList} page={page} setPage={setPage} />
+            </div>
+          ) : (
+            <>
+              <div className="flex w-[24rem] shrink-0 flex-col border-r">
+                <ThreadList
+                  mode={mode}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  query={active}
+                />
+                <Pager query={active} page={page} setPage={setPage} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <ThreadView
+                  threadId={selectedId}
+                  onBack={() => setSelectedId(null)}
+                  onDeleted={() => setSelectedId(null)}
+                  onReply={openCompose}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -673,7 +726,7 @@ function Pager({
   page,
   setPage,
 }: {
-  query: ListQuery;
+  query: { data?: { totalPages?: number } };
   page: number;
   setPage: (n: number) => void;
 }) {
@@ -729,5 +782,139 @@ function MobilePanes({
       <ThreadList mode={mode} selectedId={selectedId} onSelect={setSelectedId} query={active} />
       <Pager query={active} page={page} setPage={setPage} />
     </div>
+  );
+}
+
+// --- Drafts (author-private, unsent; §8) ------------------------------------
+
+/** Reconstruct the composer state from a draft so it reopens prefilled + bound to its id. */
+function composeStateFromDraft(d: Draft): ComposeState {
+  const initialAttachments = d.attachments.map((a) => ({
+    attachmentId: a.id,
+    name: a.fileName,
+    size: a.sizeBytes,
+  }));
+  if (d.replyToThreadId) {
+    return {
+      mode: d.replyAll ? 'replyAll' : 'reply',
+      threadId: d.replyToThreadId,
+      subject: d.subject ?? undefined,
+      recipients: d.to,
+      draftId: d.id,
+      initialBody: d.body ?? '',
+      initialAttachments,
+    };
+  }
+  return {
+    mode: 'new',
+    draftId: d.id,
+    initialTo: d.to,
+    initialCc: d.cc,
+    initialBcc: d.bcc,
+    initialSubject: d.subject ?? '',
+    initialBody: d.body ?? '',
+    initialAttachments,
+  };
+}
+
+interface DraftQuery {
+  isLoading: boolean;
+  isError: boolean;
+  error: ApiError | null;
+  data?: DraftPage;
+}
+
+function DraftsList({ query, onOpen }: { query: DraftQuery; onOpen: (id: string) => void }) {
+  if (query.isLoading) {
+    return (
+      <div className="flex-1 space-y-1 overflow-y-auto p-2">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="space-y-2 rounded-md p-3">
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-3 w-4/5" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (query.isError) {
+    return (
+      <EmptyState
+        title="Couldn’t load drafts"
+        description={query.error?.message ?? 'Please try again.'}
+        className="m-3 border-0 bg-transparent"
+      />
+    );
+  }
+  const rows = query.data?.content ?? [];
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={FileText}
+        title="No drafts"
+        description="Messages you save without sending appear here. Only you can see your drafts."
+        className="m-3 border-0 bg-transparent"
+      />
+    );
+  }
+  return (
+    <ul className="flex-1 overflow-y-auto" aria-label="Drafts">
+      {rows.map((row) => (
+        <DraftRow key={row.id} row={row} onOpen={onOpen} />
+      ))}
+    </ul>
+  );
+}
+
+function DraftRow({ row, onOpen }: { row: DraftListItem; onOpen: (id: string) => void }) {
+  const queryClient = useQueryClient();
+  const discard = useApiMutation(() => deleteDraft(row.id), {
+    successMessage: 'Draft discarded',
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['mail', 'drafts'] }),
+  });
+
+  const names = row.recipients.map((p) => p.name).join(', ');
+  const subject = row.subject && row.subject.trim() ? row.subject : '(no subject)';
+
+  return (
+    <li className="group relative">
+      <button
+        type="button"
+        onClick={() => onOpen(row.id)}
+        className="flex w-full flex-col gap-0.5 border-b px-4 py-3.5 pr-12 text-left transition-colors hover:bg-accent/50"
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-sm font-medium text-foreground/90">
+            {names || <span className="text-muted-foreground">(no recipients)</span>}
+          </span>
+          <span className="shrink-0 text-[11px] text-muted-foreground">{relativeTime(row.updatedAt)}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded bg-amber-100 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+            Draft
+          </span>
+          <span className="truncate text-sm text-foreground">{subject}</span>
+          {row.hasAttachments ? (
+            <Paperclip className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has attachments" />
+          ) : null}
+        </div>
+        {row.snippet ? <p className="truncate text-xs text-muted-foreground">{row.snippet}</p> : null}
+      </button>
+
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Discard this draft? It will be permanently deleted.')) discard.mutate();
+          }}
+          disabled={discard.isPending}
+          aria-label="Discard draft"
+          title="Discard draft"
+          className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-destructive"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      </div>
+    </li>
   );
 }

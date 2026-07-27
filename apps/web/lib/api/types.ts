@@ -116,6 +116,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mail/drafts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDraft"];
+        put: operations["updateDraft"];
+        post?: never;
+        delete: operations["discardDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/teams/{id}/manager": {
         parameters: {
             query?: never;
@@ -576,6 +592,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDrafts"];
+        put?: never;
+        post: operations["saveDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/drafts/{id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sendDraft"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2055,6 +2103,42 @@ export interface components {
             revisionNote?: string;
             updatedAt?: string;
         };
+        SaveDraftRequest: {
+            toUserIds?: string[];
+            ccUserIds?: string[];
+            bccUserIds?: string[];
+            subject?: string;
+            body?: string;
+            attachmentIds?: string[];
+            replyToThreadId?: string;
+            replyAll?: boolean;
+        };
+        AttachmentView: {
+            id?: string;
+            fileName?: string;
+            contentType?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+        };
+        DraftView: {
+            id?: string;
+            subject?: string;
+            body?: string;
+            to?: components["schemas"]["MailPartyView"][];
+            cc?: components["schemas"]["MailPartyView"][];
+            bcc?: components["schemas"]["MailPartyView"][];
+            attachments?: components["schemas"]["AttachmentView"][];
+            replyToThreadId?: string;
+            replyAll?: boolean;
+            updatedAt?: string;
+        };
+        MailPartyView: {
+            userId?: string;
+            name?: string;
+            address?: string;
+            /** @enum {string} */
+            role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "HIERARCHY" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
+        };
         CreateTeamRequest: {
             name: string;
         };
@@ -2627,20 +2711,6 @@ export interface components {
             exists?: boolean;
             accountant?: components["schemas"]["AccountantView"];
         };
-        AttachmentView: {
-            id?: string;
-            fileName?: string;
-            contentType?: string;
-            /** Format: int64 */
-            sizeBytes?: number;
-        };
-        MailPartyView: {
-            userId?: string;
-            name?: string;
-            address?: string;
-            /** @enum {string} */
-            role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "HIERARCHY" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
-        };
         ThreadDetailView: {
             threadId?: string;
             subject?: string;
@@ -2676,6 +2746,26 @@ export interface components {
         };
         ThreadPage: {
             content?: components["schemas"]["ThreadListItemView"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        DraftListItemView: {
+            id?: string;
+            subject?: string;
+            snippet?: string;
+            recipients?: components["schemas"]["MailPartyView"][];
+            hasAttachments?: boolean;
+            isReply?: boolean;
+            updatedAt?: string;
+        };
+        DraftPage: {
+            content?: components["schemas"]["DraftListItemView"][];
             /** Format: int32 */
             page?: number;
             /** Format: int32 */
@@ -3438,6 +3528,74 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["Form1View"];
                 };
+            };
+        };
+    };
+    getDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DraftView"];
+                };
+            };
+        };
+    };
+    updateDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DraftView"];
+                };
+            };
+        };
+    };
+    discardDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4248,6 +4406,74 @@ export interface operations {
                 "application/json": components["schemas"]["SendMessageRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SendMessageResult"];
+                };
+            };
+        };
+    };
+    listDrafts: {
+        parameters: {
+            query: {
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DraftPage"];
+                };
+            };
+        };
+    };
+    saveDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DraftView"];
+                };
+            };
+        };
+    };
+    sendDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

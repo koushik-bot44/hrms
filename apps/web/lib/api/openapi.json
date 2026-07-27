@@ -292,6 +292,95 @@
         }
       }
     },
+    "/mail/drafts/{id}": {
+      "get": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "getDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "updateDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "discardDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/companies/{companyId}/teams/{id}/manager": {
       "put": {
         "tags": [
@@ -1345,6 +1434,94 @@
           },
           "required": true
         },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendMessageResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mail/drafts": {
+      "get": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "listDrafts",
+        "parameters": [
+          {
+            "name": "pageable",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftPage"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "saveDraft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mail/drafts/{id}/send": {
+      "post": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "sendDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -4956,6 +5133,138 @@
           }
         }
       },
+      "SaveDraftRequest": {
+        "type": "object",
+        "properties": {
+          "toUserIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ccUserIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bccUserIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subject": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "attachmentIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "replyToThreadId": {
+            "type": "string"
+          },
+          "replyAll": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AttachmentView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DraftView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailPartyView"
+            }
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailPartyView"
+            }
+          },
+          "bcc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailPartyView"
+            }
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttachmentView"
+            }
+          },
+          "replyToThreadId": {
+            "type": "string"
+          },
+          "replyAll": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "MailPartyView": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "SUPER_ADMIN",
+              "ACCOUNTS_ADMIN",
+              "HIERARCHY",
+              "COMPANY_ADMIN",
+              "HR",
+              "MANAGER",
+              "ACCOUNTANT"
+            ]
+          }
+        }
+      },
       "CreateTeamRequest": {
         "required": [
           "name"
@@ -6839,50 +7148,6 @@
           }
         }
       },
-      "AttachmentView": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "fileName": {
-            "type": "string"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "MailPartyView": {
-        "type": "object",
-        "properties": {
-          "userId": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "address": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "SUPER_ADMIN",
-              "ACCOUNTS_ADMIN",
-              "HIERARCHY",
-              "COMPANY_ADMIN",
-              "HR",
-              "MANAGER",
-              "ACCOUNTANT"
-            ]
-          }
-        }
-      },
       "ThreadDetailView": {
         "type": "object",
         "properties": {
@@ -7005,6 +7270,62 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ThreadListItemView"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "DraftListItemView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailPartyView"
+            }
+          },
+          "hasAttachments": {
+            "type": "boolean"
+          },
+          "isReply": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "DraftPage": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DraftListItemView"
             }
           },
           "page": {

@@ -1,8 +1,11 @@
 import type {
+  Draft,
+  DraftPage,
   MailAttachmentUpload,
   MailParty,
   MailUnreadCount,
   ReplyMessageInput,
+  SaveDraftInput,
   SendMessageInput,
   SendMessageResult,
   ThreadDetail,
@@ -26,6 +29,8 @@ export const mailKeys = {
   sent: (page: number) => ['mail', 'sent', page] as const,
   starred: (page: number) => ['mail', 'starred', page] as const,
   archived: (page: number) => ['mail', 'archived', page] as const,
+  drafts: (page: number) => ['mail', 'drafts', page] as const,
+  draft: (id: string) => ['mail', 'draft', id] as const,
   search: (q: string, page: number) => ['mail', 'search', q, page] as const,
   thread: (id: string) => ['mail', 'thread', id] as const,
 };
@@ -163,4 +168,39 @@ export function getAttachmentDownloadUrl(attachmentId: string): Promise<{ url: s
   return apiFetch<{ url: string }>(
     `/mail/attachments/${encodeURIComponent(attachmentId)}/download`,
   );
+}
+
+// --- Drafts (author-private, unsent; §8) ----------------------------------
+
+/** The caller's drafts, most-recently-edited first (author-only). */
+export function getDrafts(page = 0, size = 20, signal?: AbortSignal): Promise<DraftPage> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  return apiFetch<DraftPage>(`/mail/drafts?${params.toString()}`, { signal });
+}
+
+/** Open one of the caller's drafts (prefill the composer). */
+export function getDraft(id: string, signal?: AbortSignal): Promise<Draft> {
+  return apiFetch<Draft>(`/mail/drafts/${encodeURIComponent(id)}`, { signal });
+}
+
+/** Create a new draft — permissive (no send-graph check, no required fields). */
+export function createDraft(body: SaveDraftInput): Promise<Draft> {
+  return apiFetch<Draft>('/mail/drafts', { method: 'POST', body });
+}
+
+/** Replace an existing draft's contents (still permissive). */
+export function updateDraft(id: string, body: SaveDraftInput): Promise<Draft> {
+  return apiFetch<Draft>(`/mail/drafts/${encodeURIComponent(id)}`, { method: 'PUT', body });
+}
+
+/** Discard a draft (delete it + best-effort attachment cleanup). */
+export function deleteDraft(id: string): Promise<void> {
+  return apiFetch<void>(`/mail/drafts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/** Send a draft — runs the real send path; on success the draft is gone (now in Sent). */
+export function sendDraft(id: string): Promise<SendMessageResult> {
+  return apiFetch<SendMessageResult>(`/mail/drafts/${encodeURIComponent(id)}/send`, {
+    method: 'POST',
+  });
 }

@@ -2,15 +2,19 @@
 
 import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Maximize2, Minimize2, Minus, Send, X } from 'lucide-react';
-import type { MailParty } from '@/lib/contract';
+import { Maximize2, Minimize2, Minus, Save, Send, X } from 'lucide-react';
+import type { MailParty, SaveDraftInput } from '@/lib/contract';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import {
+  createDraft,
+  deleteDraft,
   getMailContacts,
   mailKeys,
   replyAllToThread,
   replyToThread,
+  sendDraft,
   sendMessage,
+  updateDraft,
 } from '@/lib/api/mail';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,7 +37,19 @@ export type ComposeState = {
   recipients?: MailParty[];
   /** new: an optional preset recipient (e.g. "message this contact"). */
   presetTo?: MailParty[];
+  /** Draft reopen: the draft being edited (Send routes through /drafts/{id}/send; edits update it). */
+  draftId?: string;
+  /** Draft reopen (new-compose): prefilled To/Cc/Bcc, subject, body, and already-uploaded attachments. */
+  initialTo?: MailParty[];
+  initialCc?: MailParty[];
+  initialBcc?: MailParty[];
+  initialSubject?: string;
+  initialBody?: string;
+  initialAttachments?: DraftAttachmentSeed[];
 };
+
+/** A draft's already-uploaded attachment, reconstructed as a "done" staged file for the picker. */
+export type DraftAttachmentSeed = { attachmentId: string; name: string; size: number };
 
 /**
  * The docked compose window (§8 redesign) — bottom-right, Gmail-style, with minimise / expand / close.
@@ -57,21 +73,38 @@ export function DockedCompose({
 
   const [minimised, setMinimised] = React.useState(false);
   const [maximised, setMaximised] = React.useState(false);
-  const [showCcBcc, setShowCcBcc] = React.useState(false);
-  const [to, setTo] = React.useState<MailParty[]>(state.presetTo ?? []);
-  const [cc, setCc] = React.useState<MailParty[]>([]);
-  const [bcc, setBcc] = React.useState<MailParty[]>([]);
-  const [subject, setSubject] = React.useState(state.subject ?? '');
-  const [body, setBody] = React.useState('');
-  const [staged, setStaged] = React.useState<StagedAttachment[]>([]);
+  const [showCcBcc, setShowCcBcc] = React.useState(
+    (state.initialCc?.length ?? 0) > 0 || (state.initialBcc?.length ?? 0) > 0,
+  );
+  const [to, setTo] = React.useState<MailParty[]>(state.presetTo ?? state.initialTo ?? []);
+  const [cc, setCc] = React.useState<MailParty[]>(state.initialCc ?? []);
+  const [bcc, setBcc] = React.useState<MailParty[]>(state.initialBcc ?? []);
+  const [subject, setSubject] = React.useState(state.initialSubject ?? state.subject ?? '');
+  const [body, setBody] = React.useState(state.initialBody ?? '');
+  const [staged, setStaged] = React.useState<StagedAttachment[]>(() =>
+    (state.initialAttachments ?? []).map((a) => ({
+      uid: a.attachmentId,
+      name: a.name,
+      size: a.size,
+      progress: 100,
+      status: 'done' as const,
+      attachmentId: a.attachmentId,
+    })),
+  );
   const [error, setError] = React.useState<string | null>(null);
+  // The draft this composer is bound to (set when reopened, or after the first Save draft).
+  const [draftId, setDraftId] = React.useState<string | undefined>(state.draftId);
 
   const title = state.mode === 'reply' ? 'Reply' : state.mode === 'replyAll' ? 'Reply all' : 'New message';
   const ids = (list: MailParty[]) => list.map((p) => p.userId!).filter(Boolean);
 
+  const invalidateDrafts = () =>
+    void queryClient.invalidateQueries({ queryKey: ['mail', 'drafts'] });
+
   const finish = (threadId: string) => {
     void queryClient.invalidateQueries({ queryKey: ['mail', 'sent'] });
     void queryClient.invalidateQueries({ queryKey: mailKeys.unread });
+    invalidateDrafts(); // a sent draft leaves Drafts
     if (state.threadId) {
       void queryClient.invalidateQueries({ queryKey: mailKeys.thread(state.threadId) });
     }
@@ -79,32 +112,75 @@ export function DockedCompose({
     onClose();
   };
 
+  // The current composition as a permissive draft payload (nothing is required or graph-checked).
+  const draftPayload = (): SaveDraftInput => ({
+    toUserIds: ids(to),
+    ccUserIds: ids(cc),
+    bccUserIds: ids(bcc),
+    subject: subject,
+    body: body,
+    attachmentIds: stagedAttachmentIds(staged),
+    replyToThreadId: state.threadId,
+    replyAll: state.mode === 'replyAll',
+  });
+
+  const hasContent = () =>
+    to.length > 0 ||
+    cc.length > 0 ||
+    bcc.length > 0 ||
+    subject.trim().length > 0 ||
+    body.trim().length > 0 ||
+    stagedAttachmentIds(staged).length > 0;
+
   const sendMut = useApiMutation(
-    () =>
-      sendMessage({
-        toUserIds: ids(to),
-        ccUserIds: ids(cc),
-        bccUserIds: ids(bcc),
-        subject: subject.trim(),
-        body: body.trim(),
-        attachmentIds: stagedAttachmentIds(staged),
-      }),
-    { successMessage: 'Message sent', onSuccess: (r) => finish(r.threadId) },
-  );
-  const replyMut = useApiMutation(
-    () => {
+    async () => {
+      // A reopened/saved draft: persist the latest edits, then run the real send (which deletes the draft).
+      if (draftId) {
+        await updateDraft(draftId, draftPayload());
+        return sendDraft(draftId);
+      }
+      if (state.mode === 'new') {
+        return sendMessage({
+          toUserIds: ids(to),
+          ccUserIds: ids(cc),
+          bccUserIds: ids(bcc),
+          subject: subject.trim(),
+          body: body.trim(),
+          attachmentIds: stagedAttachmentIds(staged),
+        });
+      }
       const payload = { body: body.trim(), attachmentIds: stagedAttachmentIds(staged) };
       return state.mode === 'replyAll'
         ? replyAllToThread(state.threadId!, payload)
         : replyToThread(state.threadId!, payload);
     },
     {
-      successMessage: state.mode === 'replyAll' ? 'Reply sent to everyone' : 'Reply sent',
+      successMessage:
+        state.mode === 'replyAll' ? 'Reply sent to everyone' : state.mode === 'reply' ? 'Reply sent' : 'Message sent',
       onSuccess: (r) => finish(r.threadId),
     },
   );
 
-  const busy = sendMut.isPending || replyMut.isPending || attachmentsUploading(staged);
+  // Save draft (explicit, or on close-with-content). Create the first time, then update.
+  const saveMut = useApiMutation(
+    () => (draftId ? updateDraft(draftId, draftPayload()) : createDraft(draftPayload())),
+    {
+      successMessage: 'Draft saved',
+      onSuccess: (d) => {
+        setDraftId(d.id);
+        invalidateDrafts();
+      },
+    },
+  );
+
+  const discardMut = useApiMutation(() => (draftId ? deleteDraft(draftId) : Promise.resolve()), {
+    onSuccess: () => {
+      invalidateDrafts();
+      onClose();
+    },
+  });
+
+  const busy = sendMut.isPending || attachmentsUploading(staged);
 
   const submit = () => {
     setError(null);
@@ -121,9 +197,33 @@ export function DockedCompose({
         setError('Add a subject.');
         return;
       }
-      sendMut.mutate();
+    }
+    sendMut.mutate();
+  };
+
+  // Closing the composer keeps your work: save it as a draft when there's content (Gmail-style); an
+  // emptied draft is cleaned up. "Discard" is the explicit throw-away.
+  const handleClose = () => {
+    if (busy || sendMut.isSuccess) {
+      onClose();
+      return;
+    }
+    if (hasContent()) {
+      saveMut.mutate(undefined, { onSuccess: () => onClose() });
+      return;
+    }
+    if (draftId) {
+      discardMut.mutate(); // emptied a previously-saved draft -> discard it
+      return;
+    }
+    onClose();
+  };
+
+  const handleDiscard = () => {
+    if (draftId) {
+      discardMut.mutate();
     } else {
-      replyMut.mutate();
+      onClose();
     }
   };
 
@@ -153,7 +253,7 @@ export function DockedCompose({
           <IconBtn label={maximised ? 'Restore' : 'Maximise'} onClick={() => setMaximised((m) => !m)}>
             {maximised ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
           </IconBtn>
-          <IconBtn label="Close" onClick={onClose}>
+          <IconBtn label="Close" onClick={handleClose}>
             <X className="size-4" />
           </IconBtn>
         </div>
@@ -249,7 +349,7 @@ export function DockedCompose({
 
           <AttachmentPicker staged={staged} setStaged={setStaged} />
 
-          <div className="mt-auto flex items-center justify-between pt-1">
+          <div className="mt-auto flex items-center gap-2 pt-1">
             <Button size="sm" disabled={busy} onClick={submit}>
               <Send />
               {attachmentsUploading(staged)
@@ -260,7 +360,23 @@ export function DockedCompose({
                     ? 'Send to all'
                     : 'Send'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy || saveMut.isPending}
+              onClick={() => saveMut.mutate()}
+              title="Save as a draft (not sent)"
+            >
+              <Save />
+              {saveMut.isPending ? 'Saving…' : 'Save draft'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto text-muted-foreground"
+              disabled={discardMut.isPending}
+              onClick={handleDiscard}
+            >
               Discard
             </Button>
           </div>

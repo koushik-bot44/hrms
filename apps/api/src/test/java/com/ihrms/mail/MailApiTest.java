@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,6 +25,7 @@ import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -92,7 +94,7 @@ class MailApiTest {
     jdbc.execute(
         "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\",\"messages\","
             + "\"message_recipients\",\"message_attachments\",\"thread_stars\",\"thread_archives\","
-            + "\"audit_logs\" RESTART IDENTITY CASCADE");
+            + "\"mail_drafts\",\"audit_logs\" RESTART IDENTITY CASCADE");
     anvi = company("ANVI", "anvicorp");
     testco = company("TESTCO", "testco");
 
@@ -632,6 +634,207 @@ class MailApiTest {
     assertThat(audit("MAIL_ARCHIVED")).isZero();
   }
 
+  // --- Drafts (author-private, unsent; §8) ----------------------------------
+
+  @Test
+  void savingADraftIsPermissive_notDelivered_andPrivateToTheAuthor() throws Exception {
+    // A draft addressed to a NOT-PERMITTED recipient (hrA -> hr2A, a different team) with EMPTY subject/body
+    // saves fine — no canSendMail, no required-field validation.
+    Map<String, Object> body = new HashMap<>();
+    body.put("toUserIds", List.of(hr2A.getId()));
+    body.put("subject", "");
+    body.put("body", "");
+    String draftId = json.readTree(postDraft(hrA, body)).get("id").asText();
+    assertThat(audit("DRAFT_SAVED")).isEqualTo(1);
+
+    // It's in the author's Drafts, but was NOT delivered: no MAIL_SENT, nobody's inbox, no unread.
+    assertThat(draftRow(drafts(hrA), draftId)).isNotNull();
+    assertThat(audit("MAIL_SENT")).isZero();
+    assertThat(inbox(hr2A).get("totalElements").asInt()).isZero();
+    assertThat(unread(hr2A)).isZero();
+    // A draft is not a thread — it appears in NONE of the author's own thread lists.
+    assertThat(inbox(hrA).get("totalElements").asInt()).isZero();
+    assertThat(sent(hrA).get("totalElements").asInt()).isZero();
+    assertThat(starred(hrA).get("totalElements").asInt()).isZero();
+    assertThat(archived(hrA).get("totalElements").asInt()).isZero();
+
+    // Author-only: another user can neither list it nor open it (404 — existence never leaked).
+    assertThat(drafts(caA).get("totalElements").asInt()).isZero();
+    mvc.perform(get("/mail/drafts/" + draftId).header("Authorization", "Bearer " + token(caA)))
+        .andExpect(status().isNotFound());
+    mvc.perform(delete("/mail/drafts/" + draftId).header("Authorization", "Bearer " + token(caA)))
+        .andExpect(status().isNotFound());
+    mvc.perform(post("/mail/drafts/" + draftId + "/send").header("Authorization", "Bearer " + token(caA)))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void reopenDraft_isPrefilled_andEditsPersist() throws Exception {
+    Map<String, Object> body = new HashMap<>();
+    body.put("toUserIds", List.of(hrA.getId()));
+    body.put("ccUserIds", List.of(mgrA.getId()));
+    body.put("subject", "Plan");
+    body.put("body", "Draft body.");
+    String draftId = json.readTree(postDraft(caA, body)).get("id").asText();
+
+    JsonNode opened = getDraft(caA, draftId);
+    assertThat(opened.get("subject").asText()).isEqualTo("Plan");
+    assertThat(opened.get("body").asText()).isEqualTo("Draft body.");
+    assertThat(addressesOf(opened.get("to"))).containsExactly("hr@anvicorp");
+    assertThat(addressesOf(opened.get("cc"))).containsExactly("mgr@anvicorp");
+
+    // Edit it -> the update persists.
+    Map<String, Object> edit = new HashMap<>();
+    edit.put("toUserIds", List.of(hrA.getId()));
+    edit.put("subject", "Plan v2");
+    edit.put("body", "Edited body.");
+    mvc.perform(
+            put("/mail/drafts/" + draftId)
+                .header("Authorization", "Bearer " + token(caA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(edit)))
+        .andExpect(status().isOk());
+    JsonNode reopened = getDraft(caA, draftId);
+    assertThat(reopened.get("subject").asText()).isEqualTo("Plan v2");
+    assertThat(reopened.get("body").asText()).isEqualTo("Edited body.");
+  }
+
+  @Test
+  void sendingAValidDraft_delivers_threads_andRemovesTheDraft() throws Exception {
+    Map<String, Object> body = new HashMap<>();
+    body.put("toUserIds", List.of(hrA.getId()));
+    body.put("subject", "Welcome");
+    body.put("body", "Please onboard the new hire.");
+    String draftId = json.readTree(postDraft(caA, body)).get("id").asText();
+
+    String threadId =
+        json.readTree(
+                mvc.perform(
+                        post("/mail/drafts/" + draftId + "/send")
+                            .header("Authorization", "Bearer " + token(caA)))
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString())
+            .get("threadId")
+            .asText();
+
+    // A real message was delivered + threaded; the recipient sees it; MAIL_SENT audited.
+    assertThat(audit("MAIL_SENT")).isEqualTo(1);
+    assertThat(unread(hrA)).isEqualTo(1);
+    assertThat(threadRow(inbox(hrA), threadId)).isNotNull();
+    // The draft is GONE.
+    assertThat(drafts(caA).get("totalElements").asInt()).isZero();
+    mvc.perform(get("/mail/drafts/" + draftId).header("Authorization", "Bearer " + token(caA)))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void sendingADraftThatViolatesTheSendGraph_keepsTheDraft_nothingDelivered() throws Exception {
+    // hrA -> hr2A (different team) is off-graph. Subject/body are valid, so it passes bean-validation but
+    // fails canSendMail at send.
+    Map<String, Object> body = new HashMap<>();
+    body.put("toUserIds", List.of(hr2A.getId()));
+    body.put("subject", "Hi");
+    body.put("body", "Hello.");
+    String draftId = json.readTree(postDraft(hrA, body)).get("id").asText();
+
+    mvc.perform(post("/mail/drafts/" + draftId + "/send").header("Authorization", "Bearer " + token(hrA)))
+        .andExpect(status().isForbidden());
+
+    // Nothing delivered; the draft REMAINS.
+    assertThat(audit("MAIL_SENT")).isZero();
+    assertThat(inbox(hr2A).get("totalElements").asInt()).isZero();
+    assertThat(draftRow(drafts(hrA), draftId)).isNotNull();
+  }
+
+  @Test
+  void sendingAnIncompleteDraft_failsValidation_andKeepsTheDraft() throws Exception {
+    // Empty recipients + empty body: the SAME validation as a normal compose rejects it at send (400).
+    Map<String, Object> body = new HashMap<>();
+    body.put("toUserIds", List.of());
+    body.put("subject", "");
+    body.put("body", "");
+    String draftId = json.readTree(postDraft(caA, body)).get("id").asText();
+
+    mvc.perform(post("/mail/drafts/" + draftId + "/send").header("Authorization", "Bearer " + token(caA)))
+        .andExpect(status().isBadRequest());
+    assertThat(audit("MAIL_SENT")).isZero();
+    assertThat(draftRow(drafts(caA), draftId)).isNotNull(); // still a draft
+  }
+
+  @Test
+  void anAttachmentOnADraft_becomesTheMessageAttachmentOnSend() throws Exception {
+    String att = uploadDraft(caA, "doc.pdf", "application/pdf", 512); // reuses the compose upload handshake
+    Map<String, Object> body = new HashMap<>();
+    body.put("toUserIds", List.of(hrA.getId()));
+    body.put("subject", "Docs");
+    body.put("body", "See attached.");
+    body.put("attachmentIds", List.of(att));
+    String draftId = json.readTree(postDraft(caA, body)).get("id").asText();
+
+    // The draft view exposes the attachment.
+    assertThat(getDraft(caA, draftId).get("attachments")).hasSize(1);
+
+    String threadId =
+        json.readTree(
+                mvc.perform(
+                        post("/mail/drafts/" + draftId + "/send")
+                            .header("Authorization", "Bearer " + token(caA)))
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString())
+            .get("threadId")
+            .asText();
+
+    // It became the sent message's attachment; the draft is gone.
+    JsonNode atts = openThreadJson(hrA, threadId).get("messages").get(0).get("attachments");
+    assertThat(atts).hasSize(1);
+    assertThat(atts.get(0).get("fileName").asText()).isEqualTo("doc.pdf");
+    assertThat(drafts(caA).get("totalElements").asInt()).isZero();
+  }
+
+  @Test
+  void discardingADraft_removesIt_andCleansUpItsUnboundAttachment() throws Exception {
+    String att = uploadDraft(caA, "photo.png", "image/png", 256);
+    Map<String, Object> body = new HashMap<>();
+    body.put("toUserIds", List.of(hrA.getId()));
+    body.put("subject", "Pic");
+    body.put("body", "Here.");
+    body.put("attachmentIds", List.of(att));
+    String draftId = json.readTree(postDraft(caA, body)).get("id").asText();
+
+    mvc.perform(delete("/mail/drafts/" + draftId).header("Authorization", "Bearer " + token(caA)))
+        .andExpect(status().isNoContent());
+    assertThat(audit("DRAFT_DISCARDED")).isEqualTo(1);
+
+    // The draft is gone and its still-unbound attachment row was cleaned up (best-effort S3 delete mocked).
+    assertThat(drafts(caA).get("totalElements").asInt()).isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM \"message_attachments\" WHERE \"id\" = ?", Long.class, att))
+        .isEqualTo(0L);
+  }
+
+  @Test
+  void sendingAReplyDraft_joinsTheExistingThread() throws Exception {
+    String threadId = startThread(caA, hrA, "Question", "When do I start?");
+    // hrA saves a REPLY draft into that thread, then sends it.
+    Map<String, Object> body = new HashMap<>();
+    body.put("body", "Next Monday, thanks.");
+    body.put("replyToThreadId", threadId);
+    String draftId = json.readTree(postDraft(hrA, body)).get("id").asText();
+    assertThat(getDraft(hrA, draftId).get("replyToThreadId").asText()).isEqualTo(threadId);
+
+    mvc.perform(post("/mail/drafts/" + draftId + "/send").header("Authorization", "Bearer " + token(hrA)))
+        .andExpect(status().isOk());
+
+    // The reply joined the SAME thread (caA now sees 2 messages); the draft is gone.
+    assertThat(openThreadJson(caA, threadId).get("messages")).hasSize(2);
+    assertThat(drafts(hrA).get("totalElements").asInt()).isZero();
+  }
+
   // --- Attachments (Stage 4) ------------------------------------------------
 
   @Test
@@ -1129,6 +1332,37 @@ class MailApiTest {
   private ResultActions unarchive(User who, String threadId) throws Exception {
     return mvc.perform(
         delete("/mail/threads/" + threadId + "/archive").header("Authorization", "Bearer " + token(who)));
+  }
+
+  /** Create a draft (expects 200); returns the raw DraftView body. */
+  private String postDraft(User who, Object body) throws Exception {
+    return mvc.perform(
+            post("/mail/drafts")
+                .header("Authorization", "Bearer " + token(who))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(body)))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+  }
+
+  private JsonNode getDraft(User who, String id) throws Exception {
+    return getJson(who, "/mail/drafts/" + id);
+  }
+
+  private JsonNode drafts(User who) throws Exception {
+    return getJson(who, "/mail/drafts");
+  }
+
+  /** Find a draft row in a DraftPage by id, or null. */
+  private JsonNode draftRow(JsonNode page, String id) {
+    for (JsonNode row : page.get("content")) {
+      if (row.get("id").asText().equals(id)) {
+        return row;
+      }
+    }
+    return null;
   }
 
   private long searchCount(User who, String q) throws Exception {

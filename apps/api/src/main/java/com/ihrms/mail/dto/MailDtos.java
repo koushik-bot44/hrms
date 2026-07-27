@@ -117,4 +117,52 @@ public final class MailDtos {
       boolean archived) {}
 
   public record UnreadCountView(long unread) {}
+
+  // --- Drafts (author-private, unsent; §8) ----------------------------------
+
+  /**
+   * Save/replace an author's draft — deliberately PERMISSIVE: every field is optional and nothing is
+   * graph-checked or required (a draft may be blank or addressed to accounts that aren't currently allowed).
+   * {@code canSendMail} + the normal validation run only at {@code /send}. {@code replyToThreadId} (+ {@code
+   * replyAll}) mark a reply-draft, whose recipients are re-derived from the thread when it is sent.
+   */
+  public record SaveDraftRequest(
+      List<String> toUserIds,
+      List<String> ccUserIds,
+      List<String> bccUserIds,
+      String subject,
+      String body,
+      List<String> attachmentIds,
+      String replyToThreadId,
+      boolean replyAll) {}
+
+  /** One row in the Drafts list — a preview of an unsent composition (author-only). */
+  public record DraftListItemView(
+      String id,
+      String subject,
+      String snippet,
+      List<MailPartyView> recipients,
+      boolean hasAttachments,
+      boolean isReply,
+      String updatedAt) {}
+
+  public record DraftPage(
+      List<DraftListItemView> content, int page, int size, long totalElements, int totalPages) {}
+
+  /**
+   * A draft opened for editing — everything the composer needs to reopen it: the resolved recipient parties
+   * (best-effort; may include accounts no longer permitted), subject, body, attachments, and — for a
+   * reply-draft — the thread it replies into.
+   */
+  public record DraftView(
+      String id,
+      String subject,
+      String body,
+      List<MailPartyView> to,
+      List<MailPartyView> cc,
+      List<MailPartyView> bcc,
+      List<AttachmentView> attachments,
+      String replyToThreadId,
+      boolean replyAll,
+      String updatedAt) {}
 }

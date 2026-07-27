@@ -4,8 +4,11 @@ import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.mail.dto.MailDtos.AttachmentDownload;
 import com.ihrms.mail.dto.MailDtos.AttachmentUpload;
 import com.ihrms.mail.dto.MailDtos.AttachmentUploadRequest;
+import com.ihrms.mail.dto.MailDtos.DraftPage;
+import com.ihrms.mail.dto.MailDtos.DraftView;
 import com.ihrms.mail.dto.MailDtos.MailPartyView;
 import com.ihrms.mail.dto.MailDtos.ReplyRequest;
+import com.ihrms.mail.dto.MailDtos.SaveDraftRequest;
 import com.ihrms.mail.dto.MailDtos.SendMessageRequest;
 import com.ihrms.mail.dto.MailDtos.SendMessageResult;
 import com.ihrms.mail.dto.MailDtos.ThreadDetailView;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -223,5 +227,65 @@ public class MailController {
   @GetMapping("/unread-count")
   public UnreadCountView unreadCount(@AuthenticationPrincipal IhrmsPrincipal actor) {
     return mail.unreadCount(actor);
+  }
+
+  // --- Drafts (author-private, unsent; §8) ----------------------------------
+
+  /** The caller's drafts, most-recently-edited first (author-only). */
+  @GetMapping("/drafts")
+  public DraftPage listDrafts(
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      @PageableDefault(size = 20) Pageable pageable) {
+    return mail.listDrafts(actor, pageable);
+  }
+
+  /** Open one of the caller's drafts for editing (author-only; 404 otherwise). */
+  @GetMapping("/drafts/{id}")
+  public DraftView getDraft(@PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal actor) {
+    return mail.getDraft(actor, id);
+  }
+
+  /** Create a new draft — permissive (no send-graph check, no required fields). */
+  @PostMapping("/drafts")
+  public DraftView saveDraft(
+      @RequestBody SaveDraftRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    return mail.saveDraft(actor, body, request.getRemoteAddr());
+  }
+
+  /** Replace an existing draft's contents (still permissive). Author-only. */
+  @PutMapping("/drafts/{id}")
+  public DraftView updateDraft(
+      @PathVariable String id,
+      @RequestBody SaveDraftRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    return mail.updateDraft(actor, id, body, request.getRemoteAddr());
+  }
+
+  /** Discard a draft (delete it + best-effort attachment cleanup). Author-only. */
+  @DeleteMapping("/drafts/{id}")
+  public ResponseEntity<Void> discardDraft(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    mail.discardDraft(actor, id, request.getRemoteAddr());
+    return ResponseEntity.noContent().build();
+  }
+
+  /**
+   * Send a draft — runs the REAL send path (canSendMail + validation + delivery + threading), then removes
+   * the draft. On validation/permission failure the draft REMAINS and the error surfaces. Fires the
+   * after-commit push to recipients, exactly like a normal compose.
+   */
+  @PostMapping("/drafts/{id}/send")
+  public SendMessageResult sendDraft(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    SendMessageResult result = mail.sendDraft(actor, id, request.getRemoteAddr());
+    pushNotifier.notifyRecipients(result.id()); // post-commit, best-effort (§ Web Push N3)
+    return result;
   }
 }

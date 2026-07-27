@@ -563,3 +563,25 @@ export type MailUnreadCount = Required<Schemas['UnreadCountView']>;
 
 /** The created message + the thread it lives in (so the client can open the thread). */
 export type SendMessageResult = Required<Schemas['SendMessageResult']>;
+
+// --- Drafts — author-private, unsent (§8) ----------------------------------
+
+/** Save/replace a draft — permissive; every field is optional (nothing is required or graph-checked). */
+export type SaveDraftInput = Schemas['SaveDraftRequest'];
+
+/** One row in the Drafts list — a preview of an unsent composition (author-only). */
+export type DraftListItem = Omit<Required<Schemas['DraftListItemView']>, 'recipients'> & {
+  recipients: MailParty[];
+};
+
+export type DraftPage = Omit<Required<Schemas['DraftPage']>, 'content'> & {
+  content: DraftListItem[];
+};
+
+/** A draft opened for editing — everything the composer needs to reopen it. */
+export type Draft = Omit<Required<Schemas['DraftView']>, 'to' | 'cc' | 'bcc' | 'attachments'> & {
+  to: MailParty[];
+  cc: MailParty[];
+  bcc: MailParty[];
+  attachments: MailAttachment[];
+};

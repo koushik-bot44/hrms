@@ -9,6 +9,7 @@ import com.ihrms.domain.enums.RecipientType;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.MailDraft;
 import com.ihrms.domain.model.Message;
 import com.ihrms.domain.model.MessageAttachment;
 import com.ihrms.domain.model.MessageRecipient;
@@ -17,6 +18,7 @@ import com.ihrms.domain.model.ThreadStar;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.repository.MailDraftRepository;
 import com.ihrms.domain.repository.MessageAttachmentRepository;
 import com.ihrms.domain.repository.MessageRecipientRepository;
 import com.ihrms.domain.repository.MessageRepository;
@@ -28,8 +30,12 @@ import com.ihrms.mail.dto.MailDtos.AttachmentDownload;
 import com.ihrms.mail.dto.MailDtos.AttachmentUpload;
 import com.ihrms.mail.dto.MailDtos.AttachmentUploadRequest;
 import com.ihrms.mail.dto.MailDtos.AttachmentView;
+import com.ihrms.mail.dto.MailDtos.DraftListItemView;
+import com.ihrms.mail.dto.MailDtos.DraftPage;
+import com.ihrms.mail.dto.MailDtos.DraftView;
 import com.ihrms.mail.dto.MailDtos.MailPartyView;
 import com.ihrms.mail.dto.MailDtos.ReplyRequest;
+import com.ihrms.mail.dto.MailDtos.SaveDraftRequest;
 import com.ihrms.mail.dto.MailDtos.SendMessageRequest;
 import com.ihrms.mail.dto.MailDtos.SendMessageResult;
 import com.ihrms.mail.dto.MailDtos.ThreadDetailView;
@@ -39,6 +45,9 @@ import com.ihrms.mail.dto.MailDtos.ThreadPage;
 import com.ihrms.mail.dto.MailDtos.UnreadCountView;
 import com.ihrms.storage.StorageService;
 import com.ihrms.support.Hashing;
+import com.ihrms.web.ValidationException;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -53,6 +62,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -77,6 +88,8 @@ public class InternalMailService {
 
   private static final int SNIPPET = 140;
 
+  private static final Logger log = LoggerFactory.getLogger(InternalMailService.class);
+
   private final UserRepository users;
   private final EmployeeRepository employees;
   private final CompanyRepository companies;
@@ -85,10 +98,12 @@ public class InternalMailService {
   private final MessageAttachmentRepository attachments;
   private final ThreadStarRepository threadStars;
   private final ThreadArchiveRepository threadArchives;
+  private final MailDraftRepository drafts;
   private final AuthorizationService authz;
   private final AuditService audit;
   private final StorageService storage;
   private final MailAttachments attachmentRules;
+  private final Validator validator;
 
   public InternalMailService(
       UserRepository users,
@@ -99,10 +114,12 @@ public class InternalMailService {
       MessageAttachmentRepository attachments,
       ThreadStarRepository threadStars,
       ThreadArchiveRepository threadArchives,
+      MailDraftRepository drafts,
       AuthorizationService authz,
       AuditService audit,
       StorageService storage,
-      MailAttachments attachmentRules) {
+      MailAttachments attachmentRules,
+      Validator validator) {
     this.users = users;
     this.employees = employees;
     this.companies = companies;
@@ -111,10 +128,12 @@ public class InternalMailService {
     this.attachments = attachments;
     this.threadStars = threadStars;
     this.threadArchives = threadArchives;
+    this.drafts = drafts;
     this.authz = authz;
     this.audit = audit;
     this.storage = storage;
     this.attachmentRules = attachmentRules;
+    this.validator = validator;
   }
 
   // --- Contacts -----------------------------------------------------------------
@@ -624,6 +643,219 @@ public class InternalMailService {
         threadId,
         Map.of("hiddenMessages", hideReceived.size() + hideSent.size()),
         ip);
+  }
+
+  // --- Drafts (author-private, unsent; §8) --------------------------------------
+
+  /** The author's drafts, most-recently-edited first (author-only — never anyone else's). */
+  @Transactional(readOnly = true)
+  public DraftPage listDrafts(IhrmsPrincipal actor, Pageable pageable) {
+    MailParticipant me = resolveActor(actor);
+    Page<MailDraft> page = drafts.findByAuthorAccountIdOrderByUpdatedAtDesc(me.id(), pageable);
+    List<MailDraft> ds = page.getContent();
+
+    // Batch-resolve recipient parties + attachment ids across the whole page (no N+1).
+    Set<String> recipientIds = new LinkedHashSet<>();
+    Set<String> attIds = new LinkedHashSet<>();
+    for (MailDraft d : ds) {
+      recipientIds.addAll(draftRecipientOrder(d));
+      if (d.getAttachmentIds() != null) {
+        attIds.addAll(d.getAttachmentIds());
+      }
+    }
+    Map<String, MailPartyView> parties = partiesById(recipientIds);
+    Set<String> liveAtt =
+        attIds.isEmpty()
+            ? Set.of()
+            : attachments.findAllById(attIds).stream()
+                .filter(a -> a.getMessageId() == null && me.id().equals(a.uploaderAccountId()))
+                .map(MessageAttachment::getId)
+                .collect(Collectors.toSet());
+
+    List<DraftListItemView> rows =
+        ds.stream()
+            .map(
+                d ->
+                    new DraftListItemView(
+                        d.getId(),
+                        d.getSubject(),
+                        snippet(d.getBody()),
+                        draftRecipientOrder(d).stream()
+                            .map(parties::get)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList()),
+                        d.getAttachmentIds() != null
+                            && d.getAttachmentIds().stream().anyMatch(liveAtt::contains),
+                        d.getReplyToThreadId() != null,
+                        d.getUpdatedAt().toString()))
+            .collect(Collectors.toList());
+    return new DraftPage(
+        rows, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+  }
+
+  /** Open one of the author's drafts for editing — everything the composer needs to reopen it. */
+  @Transactional(readOnly = true)
+  public DraftView getDraft(IhrmsPrincipal actor, String id) {
+    MailParticipant me = resolveActor(actor);
+    return draftView(requireOwnDraft(me, id));
+  }
+
+  /** Create a NEW draft (permissive — no canSendMail, no required fields). Audited {@code DRAFT_SAVED}. */
+  @Transactional
+  public DraftView saveDraft(IhrmsPrincipal actor, SaveDraftRequest input, String ip) {
+    MailParticipant me = resolveActor(actor);
+    MailDraft d = new MailDraft(me.id());
+    applyDraft(d, input);
+    drafts.saveAndFlush(d); // flush so @CreationTimestamp/@UpdateTimestamp are populated for the response
+    audit.record(actorOf(me), "DRAFT_SAVED", "MailDraft", d.getId(), Map.of(), ip);
+    return draftView(d);
+  }
+
+  /** Replace an existing draft's contents (still permissive). Author-only. Audited {@code DRAFT_SAVED}. */
+  @Transactional
+  public DraftView updateDraft(IhrmsPrincipal actor, String id, SaveDraftRequest input, String ip) {
+    MailParticipant me = resolveActor(actor);
+    MailDraft d = requireOwnDraft(me, id);
+    applyDraft(d, input);
+    drafts.saveAndFlush(d); // flush so the refreshed @UpdateTimestamp is in the response
+    audit.record(actorOf(me), "DRAFT_SAVED", "MailDraft", id, Map.of(), ip);
+    return draftView(d);
+  }
+
+  /** Discard a draft: delete it + best-effort remove its still-unbound attachment objects. Author-only. */
+  @Transactional
+  public void discardDraft(IhrmsPrincipal actor, String id, String ip) {
+    MailParticipant me = resolveActor(actor);
+    MailDraft d = requireOwnDraft(me, id);
+    cleanupDraftAttachments(d, me.id());
+    drafts.delete(d);
+    audit.record(actorOf(me), "DRAFT_DISCARDED", "MailDraft", id, Map.of(), ip);
+  }
+
+  /**
+   * Send a draft — runs the REAL send path. Reconstructs the compose (or reply) request, applies the SAME
+   * validation as a normal compose (≥1 recipient, non-empty subject/body, ≤5 attachments) and — via
+   * {@link #send}/{@link #reply}/{@link #replyAll} — {@code canSendMail} per recipient + delivery + threading
+   * + attachment binding, then DELETES the draft. All one transaction: if validation or the send graph
+   * rejects it, nothing is delivered and the draft REMAINS (the error surfaces). Returns the sent message so
+   * the controller can fire the after-commit push, exactly like a normal compose.
+   */
+  @Transactional
+  public SendMessageResult sendDraft(IhrmsPrincipal actor, String id, String ip) {
+    MailParticipant me = resolveActor(actor);
+    MailDraft d = requireOwnDraft(me, id);
+
+    SendMessageResult result;
+    if (d.getReplyToThreadId() != null) {
+      ReplyRequest req = new ReplyRequest(d.getBody(), d.getAttachmentIds());
+      validateOrThrow(req);
+      result =
+          d.isReplyAll()
+              ? replyAll(actor, d.getReplyToThreadId(), req, ip)
+              : reply(actor, d.getReplyToThreadId(), req, ip);
+    } else {
+      SendMessageRequest req =
+          new SendMessageRequest(
+              d.getToIds(), d.getCcIds(), d.getBccIds(), d.getSubject(), d.getBody(), d.getAttachmentIds());
+      validateOrThrow(req);
+      result = send(actor, req, ip);
+    }
+    drafts.delete(d); // the draft became the sent message
+    return result;
+  }
+
+  private MailDraft requireOwnDraft(MailParticipant me, String id) {
+    return drafts
+        .findByIdAndAuthorAccountId(id, me.id())
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Draft not found"));
+  }
+
+  private void applyDraft(MailDraft d, SaveDraftRequest in) {
+    d.setToIds(in.toUserIds());
+    d.setCcIds(in.ccUserIds());
+    d.setBccIds(in.bccUserIds());
+    d.setSubject(in.subject());
+    d.setBody(in.body());
+    d.setAttachmentIds(in.attachmentIds());
+    d.setReplyToThreadId(in.replyToThreadId());
+    d.setReplyAll(in.replyAll());
+  }
+
+  /** The draft's recipients in TO→CC→BCC order, de-duped, skipping blanks (for display resolution). */
+  private List<String> draftRecipientOrder(MailDraft d) {
+    LinkedHashSet<String> ids = new LinkedHashSet<>();
+    for (List<String> list : List.of(orEmpty(d.getToIds()), orEmpty(d.getCcIds()), orEmpty(d.getBccIds()))) {
+      for (String s : list) {
+        if (s != null && !s.isBlank()) {
+          ids.add(s);
+        }
+      }
+    }
+    return new ArrayList<>(ids);
+  }
+
+  private DraftView draftView(MailDraft d) {
+    Map<String, MailPartyView> parties = partiesById(draftRecipientOrder(d));
+    return new DraftView(
+        d.getId(),
+        d.getSubject(),
+        d.getBody(),
+        partiesInOrder(d.getToIds(), parties),
+        partiesInOrder(d.getCcIds(), parties),
+        partiesInOrder(d.getBccIds(), parties),
+        attachmentViews(draftAttachments(d)),
+        d.getReplyToThreadId(),
+        d.isReplyAll(),
+        d.getUpdatedAt().toString());
+  }
+
+  private List<MailPartyView> partiesInOrder(List<String> ids, Map<String, MailPartyView> resolved) {
+    if (ids == null) {
+      return List.of();
+    }
+    return ids.stream().map(resolved::get).filter(Objects::nonNull).collect(Collectors.toList());
+  }
+
+  /** The draft's own, still-unbound attachment rows (author-scoped — never another account's uploads). */
+  private List<MessageAttachment> draftAttachments(MailDraft d) {
+    if (d.getAttachmentIds() == null || d.getAttachmentIds().isEmpty()) {
+      return List.of();
+    }
+    return attachments.findAllById(d.getAttachmentIds()).stream()
+        .filter(a -> a.getMessageId() == null && d.getAuthorAccountId().equals(a.uploaderAccountId()))
+        .collect(Collectors.toList());
+  }
+
+  private void cleanupDraftAttachments(MailDraft d, String meId) {
+    for (MessageAttachment a : draftAttachments(d)) {
+      try {
+        storage.delete(a.getStorageKey());
+      } catch (RuntimeException e) {
+        log.warn("Draft attachment object delete failed (best-effort): {}", e.getMessage());
+      }
+      try {
+        attachments.delete(a);
+      } catch (RuntimeException e) {
+        log.warn("Draft attachment row delete failed (best-effort): {}", e.getMessage());
+      }
+    }
+  }
+
+  /** Run bean validation on the reconstructed compose/reply request — same 400s as a normal @Valid send. */
+  private void validateOrThrow(Object request) {
+    Set<ConstraintViolation<Object>> violations = validator.validate(request);
+    if (!violations.isEmpty()) {
+      List<String> messages =
+          violations.stream()
+              .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+              .sorted()
+              .collect(Collectors.toList());
+      throw new ValidationException(messages);
+    }
+  }
+
+  private static List<String> orEmpty(List<String> list) {
+    return list == null ? List.of() : list;
   }
 
   // --- Thread building ----------------------------------------------------------

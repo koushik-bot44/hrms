@@ -607,6 +607,23 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     the rows are **never destroyed** and the counterparty still sees their copy. Deleted threads vanish
     from the viewer's lists; a later reply (an un-hidden message) resurfaces the thread. Audited
     `MAIL_DELETED`.
+  - **Drafts are author-private, UNSENT compositions** (a dedicated `mail_drafts` table — **never** a
+    `Message`, so no delivery row, no thread, no inbox, no notification). A draft holds whatever the author
+    has entered so far: `to`/`cc`/`bcc` recipient ids (may be empty or point at accounts **not currently
+    permitted**), `subject`, `body` (both may be empty), attachment ids, and — for a reply-draft — the
+    `replyToThreadId` (+ `replyAll`) it would reply into. **Save is permissive:** `POST /mail/drafts` +
+    `PUT /mail/drafts/{id}` store the composition with **NO `canSendMail` check and NO required-field
+    validation**; `GET /mail/drafts` (list) + `GET /mail/drafts/{id}` (open) and `DELETE` (discard) are all
+    **author-only** (others get `404` — a draft's existence is never leaked). Attachments **reuse the same
+    unbound `message_attachments` upload→confirm handshake** as compose (the draft just remembers their ids);
+    on discard they're best-effort deleted (row + S3 object). **Sending a draft runs the REAL send path:**
+    `POST /mail/drafts/{id}/send` reconstructs the compose (or reply) request, applies the **same validation
+    as a normal compose** (≥1 recipient, non-empty subject/body, ≤5 attachments) **and `canSendMail` per
+    TO/CC/BCC**, creates the real `Message` + delivery + threading + the **after-commit push**, binds the
+    draft's attachments onto the sent message, then **deletes the draft** — all in one transaction, so if
+    validation or the send graph rejects it **nothing is delivered and the draft REMAINS** (with the error
+    surfaced). Audited `DRAFT_SAVED` / `DRAFT_DISCARDED` (a successful send audits as the normal
+    `MAIL_SENT`). Drafts appear in the **Drafts** view only — never in Inbox/Sent/Starred/Archive/Search.
 - **Attachments (Stage 4):** a message (new send or reply) may carry files, stored in **S3 via the same
   presigned upload→confirm handshake as employee documents** (`storage.buildKey` → presigned PUT →
   server reads the bytes to compute + store the **sha256**). Attachment rows (`message_attachments`) are
