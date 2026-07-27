@@ -1,18 +1,19 @@
 'use client';
 
 import * as React from 'react';
-import { CalendarClock, Download, Users } from 'lucide-react';
+import { AlarmClock, CalendarClock, Clock, Download, Plane, Users } from 'lucide-react';
 import type { TeamAttendanceMemberRow, TeamAttendanceSummary } from '@/lib/contract';
 import { getTeamAttendanceSummary } from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
 import { formatDuration, istMonthIso } from '@/lib/date';
 import { downloadCsv, toCsv } from '@/lib/csv';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/loading-skeleton';
 import { MonthPicker } from '@/components/accountant/month-picker';
 import { EmployeeAttendanceDetail } from '@/components/accountant/employee-attendance-detail';
+import { StatTile } from '@/components/dashboard/stat-tile';
+import { LiveIndicator } from '@/components/dashboard/live-indicator';
 import { cn } from '@/lib/utils';
 
 const REFRESH_MS = 45_000;
@@ -80,16 +81,7 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          {refreshing ? (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="size-1.5 animate-pulse rounded-full bg-primary" />
-              Refreshing…
-            </span>
-          ) : (
-            'Live — updates automatically'
-          )}
-        </p>
+        <LiveIndicator label={refreshing ? 'Refreshing…' : 'Live — updates automatically'} />
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -106,7 +98,7 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
       </div>
 
       {query.isLoading ? (
-        <TableSkeleton rows={6} cols={7} />
+        <TableSkeleton rows={6} cols={6} />
       ) : query.isError ? (
         <EmptyState
           icon={CalendarClock}
@@ -115,11 +107,18 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
         />
       ) : data ? (
         <div className={cn('space-y-4 transition-opacity', refreshing && 'opacity-70')}>
+          {/* Today's snapshot — REAL team-summary roll-ups, semantic tones. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Tile label="Present today" value={data.presentToday} />
-            <Tile label="Clocked in now" value={data.clockedInNow} tone="success" live />
-            <Tile label="On leave today" value={data.onLeaveToday} />
-            <Tile label="Late this month" value={data.totalLateThisMonth} tone={data.totalLateThisMonth > 0 ? 'warning' : undefined} />
+            <StatTile icon={Users} label="Present today" value={data.presentToday} tone="primary" size="sm" />
+            <StatTile icon={Clock} label="Clocked in now" value={data.clockedInNow} tone="success" size="sm" />
+            <StatTile icon={Plane} label="On leave today" value={data.onLeaveToday} tone="primary" size="sm" />
+            <StatTile
+              icon={AlarmClock}
+              label="Late this month"
+              value={data.totalLateThisMonth}
+              tone={data.totalLateThisMonth > 0 ? 'warning' : 'neutral'}
+              size="sm"
+            />
           </div>
 
           {data.employees.length === 0 ? (
@@ -129,95 +128,62 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
               description="This team has no approved employees yet."
             />
           ) : (
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Employee</th>
-                    <th className="px-3 py-2 font-medium">Employee ID</th>
-                    <th className="px-3 py-2 font-medium">Now</th>
-                    <th className="px-3 py-2 font-medium">Worked (month)</th>
-                    <th className="px-3 py-2 font-medium">Late</th>
-                    <th className="px-3 py-2 font-medium">Leave days</th>
-                    <th className="px-3 py-2 font-medium">Absent</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.employees.map((e) => (
-                    <tr
-                      key={e.employeeId}
-                      onClick={() => setSelected(e)}
-                      className="cursor-pointer border-t hover:bg-accent/40"
-                    >
-                      <td className="px-3 py-2">
-                        <span className="font-medium text-foreground hover:text-primary hover:underline">
-                          {e.fullName ?? '—'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                        {e.employeeCode ?? '—'}
-                      </td>
-                      <td className="px-3 py-2">
-                        {e.clockedInNow ? (
-                          <span className="inline-flex items-center gap-1.5 text-success">
-                            <span className="size-2 rounded-full bg-success" />
-                            In
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                            <span className="size-2 rounded-full bg-muted-foreground/40" />
-                            Out
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 tabular-nums">{hm(e.workedSeconds)}</td>
-                      <td className={cn('px-3 py-2 tabular-nums', e.lateLogins > 0 && 'text-warning')}>
-                        {e.lateLogins}
-                      </td>
-                      <td className="px-3 py-2 tabular-nums">{e.leaveDaysTotal}</td>
-                      <td className={cn('px-3 py-2 tabular-nums', e.unapprovedAbsences > 0 && 'text-warning')}>
-                        {e.unapprovedAbsences}
-                      </td>
+            /* Roster — carded DataTable style; row → the existing employee attendance drill. */
+            <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Employee</th>
+                      <th className="px-4 py-3 font-medium">Employee ID</th>
+                      <th className="px-4 py-3 font-medium">Now</th>
+                      <th className="px-4 py-3 font-medium">Worked (month)</th>
+                      <th className="px-4 py-3 font-medium">Late</th>
+                      <th className="px-4 py-3 font-medium">Leave days</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.employees.map((e) => (
+                      <tr
+                        key={e.employeeId}
+                        onClick={() => setSelected(e)}
+                        className="cursor-pointer border-t transition-colors hover:bg-accent/40"
+                      >
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-foreground hover:text-primary hover:underline">
+                            {e.fullName ?? '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                          {e.employeeCode ?? '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          {e.clockedInNow ? (
+                            <span className="inline-flex items-center gap-1.5 text-success">
+                              <span className="size-2 rounded-full bg-success" />
+                              In
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                              <span className="size-2 rounded-full bg-muted-foreground/40" />
+                              Out
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums">{hm(e.workedSeconds)}</td>
+                        <td className={cn('px-4 py-3 tabular-nums', e.lateLogins > 0 && 'text-warning')}>
+                          {e.lateLogins}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums">{e.leaveDaysTotal}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
       ) : null}
     </div>
-  );
-}
-
-function Tile({
-  label,
-  value,
-  tone,
-  live,
-}: {
-  label: string;
-  value: number;
-  tone?: 'success' | 'warning';
-  live?: boolean;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          {live ? <span className="size-1.5 rounded-full bg-success" /> : null}
-          {label}
-        </p>
-        <p
-          className={cn(
-            'mt-0.5 text-2xl font-semibold tabular-nums',
-            tone === 'success' && 'text-success',
-            tone === 'warning' && 'text-warning',
-          )}
-        >
-          {value}
-        </p>
-      </CardContent>
-    </Card>
   );
 }

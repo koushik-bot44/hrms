@@ -6,7 +6,7 @@ import type { ViewerCompanyRow, ViewerTeamRow } from '@/lib/contract';
 import { getCompanyTeams, getViewerCompanies } from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Breadcrumb, type Crumb } from '@/components/ui/breadcrumb';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { TeamViewTabs } from '@/components/accountant/team-view-tabs';
@@ -20,17 +20,19 @@ export function AccountsAdminBrowser() {
   const [company, setCompany] = React.useState<ViewerCompanyRow | null>(null);
   const [team, setTeam] = React.useState<ViewerTeamRow | null>(null);
 
+  const toRoot = () => {
+    setCompany(null);
+    setTeam(null);
+  };
+
+  // Shared breadcrumb (home chip + Companies > {company} > {team}); the last crumb is the current page.
+  const crumbs: Crumb[] = [{ label: 'Companies', onClick: toRoot }];
+  if (company) crumbs.push({ label: company.name, onClick: () => setTeam(null) });
+  if (team) crumbs.push({ label: team.name });
+
   return (
     <div className="space-y-5">
-      <Breadcrumbs
-        company={company}
-        team={team}
-        onRoot={() => {
-          setCompany(null);
-          setTeam(null);
-        }}
-        onCompany={() => setTeam(null)}
-      />
+      <Breadcrumb items={crumbs} onHome={toRoot} homeLabel="Companies" />
       {!company ? (
         <CompanyList onPick={setCompany} />
       ) : !team ? (
@@ -39,48 +41,6 @@ export function AccountsAdminBrowser() {
         <TeamViewTabs teamId={team.id} />
       )}
     </div>
-  );
-}
-
-function Breadcrumbs({
-  company,
-  team,
-  onRoot,
-  onCompany,
-}: {
-  company: ViewerCompanyRow | null;
-  team: ViewerTeamRow | null;
-  onRoot: () => void;
-  onCompany: () => void;
-}) {
-  return (
-    <nav
-      className="flex flex-wrap items-center gap-2 rounded-full border bg-card px-4 py-2 text-sm"
-      aria-label="Breadcrumb"
-    >
-      <Crumb label="Companies" active={!company} onClick={onRoot} />
-      {company ? (
-        <>
-          <ChevronRight className="size-4 text-muted-foreground" />
-          <Crumb label={company.name} active={!team} onClick={onCompany} />
-        </>
-      ) : null}
-      {team ? (
-        <>
-          <ChevronRight className="size-4 text-muted-foreground" />
-          <span className="font-medium text-foreground">{team.name}</span>
-        </>
-      ) : null}
-    </nav>
-  );
-}
-
-function Crumb({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  if (active) return <span className="font-medium text-foreground">{label}</span>;
-  return (
-    <button type="button" onClick={onClick} className="text-muted-foreground hover:text-primary hover:underline">
-      {label}
-    </button>
   );
 }
 

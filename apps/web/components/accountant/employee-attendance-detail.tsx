@@ -1,17 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import {
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   AlarmClock,
   ArrowLeft,
@@ -36,7 +26,12 @@ import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { MonthPicker } from '@/components/accountant/month-picker';
 import { StatTile, MeterRow } from '@/components/dashboard/stat-tile';
+import { Donut } from '@/components/dashboard/donut';
+import { LiveIndicator } from '@/components/dashboard/live-indicator';
 import { cn } from '@/lib/utils';
+
+/** The employee's initial for the avatar chip. */
+const initial = (name?: string | null) => (name?.trim()?.[0] ?? 'E').toUpperCase();
 
 // Theme-aware chart colors from the IHRMS design tokens (work each look via CSS vars).
 const WORKED = 'hsl(var(--primary))';
@@ -87,6 +82,12 @@ export function EmployeeAttendanceDetail({
               Back
             </Button>
           ) : null}
+          <span
+            aria-hidden
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-tint text-sm font-semibold text-primary"
+          >
+            {initial(employeeName)}
+          </span>
           <div>
             <h3 className="text-sm font-semibold">{employeeName ?? 'Employee'}</h3>
             <p className="text-xs text-muted-foreground">
@@ -108,7 +109,10 @@ export function EmployeeAttendanceDetail({
             </p>
           </div>
         </div>
-        <MonthPicker value={month} onChange={onMonthChange} />
+        <div className="flex items-center gap-3">
+          <LiveIndicator className="hidden sm:inline-flex" />
+          <MonthPicker value={month} onChange={onMonthChange} />
+        </div>
       </div>
 
       {summary.isLoading ? (
@@ -164,34 +168,13 @@ function SummaryBody({ data }: { data: EmployeeMonthSummary }) {
             <p className="py-8 text-center text-sm text-muted-foreground">No clocked time this month.</p>
           ) : (
             <>
-              <div className="h-44">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={52}
-                      outerRadius={76}
-                      paddingAngle={2}
-                      strokeWidth={0}
-                    >
-                      {pieData.map((d) => (
-                        <Cell key={d.name} fill={d.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(v, n) => [`${hm(Number(v))} · ${pct(Number(v))}%`, String(n)]}
-                      contentStyle={{
-                        borderRadius: 'var(--radius)',
-                        border: '1px solid hsl(var(--border))',
-                        background: 'hsl(var(--card))',
-                        fontSize: 12,
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+              {/* Center total = total clocked time (worked + break) — the shared Donut primitive. */}
+              <Donut
+                data={pieData}
+                centerValue={hm(gross)}
+                centerLabel="Total time"
+                tooltipFormatter={(v, n) => [`${hm(v)} · ${pct(v)}%`, n]}
+              />
               {/* Same worked/break split as the donut, as same-unit progress bars (of gross clocked time). */}
               <div className="mt-3 space-y-3">
                 <MeterRow
@@ -340,19 +323,28 @@ function MonthlyReport({
           <>
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chart} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                <AreaChart data={chart} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                  <defs>
+                    {/* Soft indigo gradient fill, token-derived. */}
+                    <linearGradient id="workedArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
                   <Tooltip
                     formatter={(v) => [`${Number(v)}h`, 'Worked']}
                     contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
                   />
-                  <Bar dataKey="workedHours" radius={[4, 4, 0, 0]}>
-                    {chart.map((c) => (
-                      <Cell key={c.key} fill={c.key === activeMonth ? WORKED : 'hsl(var(--primary) / 0.35)'} />
-                    ))}
-                  </Bar>
-                </BarChart>
+                  <Area
+                    type="monotone"
+                    dataKey="workedHours"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    fill="url(#workedArea)"
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
             <div className="overflow-x-auto rounded-xl border">
