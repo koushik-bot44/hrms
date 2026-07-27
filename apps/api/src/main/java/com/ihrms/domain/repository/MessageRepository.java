@@ -125,6 +125,30 @@ public interface MessageRepository extends JpaRepository<Message, String> {
       nativeQuery = true)
   Page<String> findArchivedThreadIds(@Param("uid") String uid, Pageable pageable);
 
+  /**
+   * A LABEL VIEW as THREADS (§8): the viewer's OWN threads (a non-deleted sent OR received message — the
+   * same soft-delete scoping as Inbox/Search) tagged with {@code :labelId}, newest activity first. The
+   * caller has already verified the label belongs to {@code :uid}. INDEPENDENT of archive — a label is a
+   * tag overlay, so an archived-but-labelled thread still appears here (only soft-deleted copies drop out).
+   */
+  @Query(
+      value =
+          "SELECT m.\"threadId\" FROM \"messages\" m"
+              + " WHERE (((m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL)"
+              + "   OR EXISTS (SELECT 1 FROM \"message_recipients\" r WHERE r.\"messageId\" = m.\"id\""
+              + "     AND (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL))"
+              + " AND EXISTS (SELECT 1 FROM \"label_threads\" lt WHERE lt.\"threadId\" = m.\"threadId\" AND lt.\"labelId\" = :labelId)"
+              + " GROUP BY m.\"threadId\" ORDER BY MAX(m.\"createdAt\") DESC",
+      countQuery =
+          "SELECT count(DISTINCT m.\"threadId\") FROM \"messages\" m"
+              + " WHERE (((m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL)"
+              + "   OR EXISTS (SELECT 1 FROM \"message_recipients\" r WHERE r.\"messageId\" = m.\"id\""
+              + "     AND (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL))"
+              + " AND EXISTS (SELECT 1 FROM \"label_threads\" lt WHERE lt.\"threadId\" = m.\"threadId\" AND lt.\"labelId\" = :labelId)",
+      nativeQuery = true)
+  Page<String> findLabelThreadIds(
+      @Param("uid") String uid, @Param("labelId") String labelId, Pageable pageable);
+
   /** Thread-level unread badge (§8): distinct threads with a non-deleted, unopened received message. */
   @Query(
       value =

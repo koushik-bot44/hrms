@@ -11,8 +11,10 @@ import {
   Reply,
   ReplyAll,
   Star,
+  Tag,
   Trash2,
 } from 'lucide-react';
+import { LabelChips, LabelPicker } from '@/components/mail/label-picker';
 import type { ThreadDetail, ThreadPage } from '@/lib/contract';
 import {
   archiveThread,
@@ -222,8 +224,19 @@ export function ThreadView({
               With {thread.participants.map((p) => `${p.name} <${p.address}>`).join(', ')}
             </p>
           ) : null}
+          {thread.labels.length > 0 ? (
+            <div className="mt-2 flex flex-wrap items-center gap-1">
+              <LabelChips labels={thread.labels} />
+            </div>
+          ) : null}
         </div>
         <div className="flex shrink-0 gap-1">
+          <LabelPicker threadId={thread.threadId} labels={thread.labels}>
+            <Button variant="ghost" size="sm" title="Label this conversation">
+              <Tag />
+              <span className="hidden sm:inline">Label</span>
+            </Button>
+          </LabelPicker>
           <Button
             variant="ghost"
             size="sm"

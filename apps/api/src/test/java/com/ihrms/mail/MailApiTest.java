@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -94,7 +95,7 @@ class MailApiTest {
     jdbc.execute(
         "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\",\"messages\","
             + "\"message_recipients\",\"message_attachments\",\"thread_stars\",\"thread_archives\","
-            + "\"mail_drafts\",\"audit_logs\" RESTART IDENTITY CASCADE");
+            + "\"mail_drafts\",\"mail_labels\",\"label_threads\",\"audit_logs\" RESTART IDENTITY CASCADE");
     anvi = company("ANVI", "anvicorp");
     testco = company("TESTCO", "testco");
 
@@ -927,6 +928,134 @@ class MailApiTest {
     assertThat(drafts(hrA).get("totalElements").asInt()).isZero();
   }
 
+  // --- Labels (author-private tags; §8) -------------------------------------
+
+  @Test
+  void labelCrud_nameUniquePerAuthorCaseInsensitive() throws Exception {
+    String id = json.readTree(postLabel(hrA, "Projects")).get("id").asText();
+    assertThat(audit("LABEL_CREATED")).isEqualTo(1);
+    assertThat(labels(hrA)).hasSize(1);
+    assertThat(labels(hrA).get(0).get("name").asText()).isEqualTo("Projects");
+
+    // Duplicate name (case-insensitive) is a 409.
+    labelExpect(hrA, "projects", status().isConflict());
+    labelExpect(hrA, "PROJECTS", status().isConflict());
+
+    // Rename.
+    mvc.perform(
+            patch("/mail/labels/" + id)
+                .header("Authorization", "Bearer " + token(hrA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("name", "Work"))))
+        .andExpect(status().isOk());
+    assertThat(labels(hrA).get(0).get("name").asText()).isEqualTo("Work");
+    assertThat(audit("LABEL_RENAMED")).isEqualTo(1);
+
+    // Another user may reuse the same name independently (uniqueness is PER author).
+    postLabel(caA, "Work");
+    assertThat(labels(caA)).hasSize(1);
+  }
+
+  @Test
+  void applyingALabelIsATag_threadStaysInInbox_manyLabels_idempotent() throws Exception {
+    String threadId = startThread(caA, hrA, "Kickoff", "hi");
+    String work = json.readTree(postLabel(hrA, "Work")).get("id").asText();
+    String urgent = json.readTree(postLabel(hrA, "Urgent")).get("id").asText();
+
+    applyLabel(hrA, threadId, work).andExpect(status().isNoContent());
+    assertThat(audit("THREAD_LABELED")).isEqualTo(1);
+
+    // The thread STAYS in Inbox (a tag, not a move), shows in the label view, and carries the chip.
+    assertThat(threadRow(inbox(hrA), threadId)).isNotNull();
+    assertThat(labelNames(threadRow(inbox(hrA), threadId))).containsExactly("Work");
+    assertThat(threadRow(labelView(hrA, work), threadId)).isNotNull();
+
+    // Idempotent apply — no duplicate row, no second audit.
+    applyLabel(hrA, threadId, work).andExpect(status().isNoContent());
+    assertThat(audit("THREAD_LABELED")).isEqualTo(1);
+    assertThat(labelView(hrA, work).get("totalElements").asInt()).isEqualTo(1);
+
+    // A SECOND label — the thread carries both, appears in both views; the count reflects it.
+    applyLabel(hrA, threadId, urgent).andExpect(status().isNoContent());
+    assertThat(labelNames(threadRow(inbox(hrA), threadId))).containsExactlyInAnyOrder("Work", "Urgent");
+    assertThat(threadRow(labelView(hrA, urgent), threadId)).isNotNull();
+    assertThat(labelNamed(hrA, "Work").get("threadCount").asInt()).isEqualTo(1);
+
+    // Remove one — it leaves that view, stays in Inbox, keeps the other label.
+    removeLabel(hrA, threadId, work).andExpect(status().isNoContent());
+    assertThat(audit("THREAD_UNLABELED")).isEqualTo(1);
+    assertThat(threadRow(labelView(hrA, work), threadId)).isNull();
+    assertThat(threadRow(inbox(hrA), threadId)).isNotNull();
+    assertThat(labelNames(threadRow(inbox(hrA), threadId))).containsExactly("Urgent");
+  }
+
+  @Test
+  void labelViewIncludesArchivedThreads_butRespectsSoftDelete() throws Exception {
+    String threadId = startThread(caA, hrA, "Doc", "body");
+    String keep = json.readTree(postLabel(hrA, "Keep")).get("id").asText();
+    applyLabel(hrA, threadId, keep).andExpect(status().isNoContent());
+
+    // Archiving hides it from Inbox but NOT from the label view (a label is an overlay, independent of archive).
+    archive(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(threadRow(inbox(hrA), threadId)).isNull();
+    assertThat(threadRow(labelView(hrA, keep), threadId)).isNotNull();
+
+    // Soft-deleting the viewer's copy DOES drop it from the label view (same soft-delete scoping).
+    mvc.perform(delete("/mail/threads/" + threadId).header("Authorization", "Bearer " + token(hrA)))
+        .andExpect(status().isNoContent());
+    assertThat(labelView(hrA, keep).get("totalElements").asInt()).isZero();
+  }
+
+  @Test
+  void labelsArePerUser_andParticipantOnly() throws Exception {
+    String threadId = startThread(caA, hrA, "Shared", "x");
+    String mine = json.readTree(postLabel(hrA, "Mine")).get("id").asText();
+    applyLabel(hrA, threadId, mine).andExpect(status().isNoContent());
+
+    // caA participates in the SAME thread but sees NONE of hrA's labels, and has no labels of their own.
+    assertThat(labelNames(threadRow(sent(caA), threadId))).isEmpty();
+    assertThat(labels(caA)).isEmpty();
+    // caA cannot open hrA's label view, nor apply hrA's label (not caA's label -> 404).
+    mvc.perform(get("/mail/labels/" + mine + "/threads").header("Authorization", "Bearer " + token(caA)))
+        .andExpect(status().isNotFound());
+    mvc.perform(
+            post("/mail/threads/" + threadId + "/labels/" + mine)
+                .header("Authorization", "Bearer " + token(caA)))
+        .andExpect(status().isNotFound());
+
+    // A NON-participant cannot label the thread even with their own label (403).
+    String mgrLabel = json.readTree(postLabel(mgrA, "MgrLabel")).get("id").asText();
+    mvc.perform(
+            post("/mail/threads/" + threadId + "/labels/" + mgrLabel)
+                .header("Authorization", "Bearer " + token(mgrA)))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void deletingALabel_untagsThreads_doesNotDeleteThem() throws Exception {
+    String threadId = startThread(caA, hrA, "Note", "x");
+    String a = json.readTree(postLabel(hrA, "A")).get("id").asText();
+    String b = json.readTree(postLabel(hrA, "B")).get("id").asText();
+    applyLabel(hrA, threadId, a).andExpect(status().isNoContent());
+    applyLabel(hrA, threadId, b).andExpect(status().isNoContent());
+
+    mvc.perform(delete("/mail/labels/" + a).header("Authorization", "Bearer " + token(hrA)))
+        .andExpect(status().isNoContent());
+    assertThat(audit("LABEL_DELETED")).isEqualTo(1);
+
+    // Label A + its assignment are gone; the thread REMAINS in Inbox and keeps label B.
+    assertThat(labels(hrA)).hasSize(1);
+    assertThat(threadRow(inbox(hrA), threadId)).isNotNull();
+    assertThat(labelNames(threadRow(inbox(hrA), threadId))).containsExactly("B");
+    // The message rows were never touched.
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM \"messages\" WHERE \"threadId\" = ?", Long.class, threadId))
+        .isEqualTo(1L);
+    // The cascade removed A's assignment row.
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM \"label_threads\"", Long.class)).isEqualTo(1L);
+  }
+
   // --- Attachments (Stage 4) ------------------------------------------------
 
   @Test
@@ -1455,6 +1584,71 @@ class MailApiTest {
       }
     }
     return null;
+  }
+
+  // --- Label helpers --------------------------------------------------------
+
+  /** Create a label (expects 200); returns the LabelView body. */
+  private String postLabel(User who, String name) throws Exception {
+    return mvc.perform(
+            post("/mail/labels")
+                .header("Authorization", "Bearer " + token(who))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("name", name))))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+  }
+
+  private void labelExpect(
+      User who, String name, org.springframework.test.web.servlet.ResultMatcher expected) throws Exception {
+    mvc.perform(
+            post("/mail/labels")
+                .header("Authorization", "Bearer " + token(who))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("name", name))))
+        .andExpect(expected);
+  }
+
+  private JsonNode labels(User who) throws Exception {
+    return getJson(who, "/mail/labels");
+  }
+
+  /** The caller's label named {@code name} (from GET /mail/labels), or null. */
+  private JsonNode labelNamed(User who, String name) throws Exception {
+    for (JsonNode l : labels(who)) {
+      if (l.get("name").asText().equals(name)) {
+        return l;
+      }
+    }
+    return null;
+  }
+
+  private JsonNode labelView(User who, String labelId) throws Exception {
+    return getJson(who, "/mail/labels/" + labelId + "/threads");
+  }
+
+  private ResultActions applyLabel(User who, String threadId, String labelId) throws Exception {
+    return mvc.perform(
+        post("/mail/threads/" + threadId + "/labels/" + labelId)
+            .header("Authorization", "Bearer " + token(who)));
+  }
+
+  private ResultActions removeLabel(User who, String threadId, String labelId) throws Exception {
+    return mvc.perform(
+        delete("/mail/threads/" + threadId + "/labels/" + labelId)
+            .header("Authorization", "Bearer " + token(who)));
+  }
+
+  /** The label names on a thread-list row (its `labels` chips). */
+  private java.util.List<String> labelNames(JsonNode row) {
+    java.util.List<String> out = new java.util.ArrayList<>();
+    JsonNode labels = row.get("labels");
+    if (labels != null) {
+      labels.forEach(l -> out.add(l.get("name").asText()));
+    }
+    return out;
   }
 
   private long searchCount(User who, String q) throws Exception {

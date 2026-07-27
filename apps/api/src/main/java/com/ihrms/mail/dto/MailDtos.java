@@ -71,6 +71,9 @@ public final class MailDtos {
    * participant(s), subject, a snippet, the latest activity time, how many messages, and whether any is
    * unread for the viewer.
    */
+  /** A label as it appears on a thread (chip) — the viewer's own tag. */
+  public record LabelRef(String id, String name) {}
+
   public record ThreadListItemView(
       String threadId,
       String subject,
@@ -81,7 +84,8 @@ public final class MailDtos {
       boolean unread,
       boolean hasAttachments,
       boolean starred,
-      boolean archived) {}
+      boolean archived,
+      List<LabelRef> labels) {}
 
   public record ThreadPage(
       List<ThreadListItemView> content, int page, int size, long totalElements, int totalPages) {}
@@ -114,7 +118,8 @@ public final class MailDtos {
       MailPartyView counterparty,
       List<ThreadMessageView> messages,
       boolean starred,
-      boolean archived) {}
+      boolean archived,
+      List<LabelRef> labels) {}
 
   public record UnreadCountView(long unread) {}
 
@@ -165,4 +170,14 @@ public final class MailDtos {
       String replyToThreadId,
       boolean replyAll,
       String updatedAt) {}
+
+  // --- Labels (author-private tags; §8) -------------------------------------
+
+  /** Create or rename a label. Names are unique per author, case-insensitively. */
+  public record LabelNameRequest(
+      @NotBlank(message = "A label name is required") @Size(max = 50, message = "Label name is too long")
+          String name) {}
+
+  /** One of the author's labels, with how many threads it currently tags. */
+  public record LabelView(String id, String name, long threadCount) {}
 }

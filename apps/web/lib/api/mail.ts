@@ -2,6 +2,7 @@ import type {
   Draft,
   DraftPage,
   MailAttachmentUpload,
+  MailLabel,
   MailParty,
   MailUnreadCount,
   ReplyMessageInput,
@@ -31,6 +32,8 @@ export const mailKeys = {
   archived: (page: number) => ['mail', 'archived', page] as const,
   drafts: (page: number) => ['mail', 'drafts', page] as const,
   draft: (id: string) => ['mail', 'draft', id] as const,
+  labels: ['mail', 'labels'] as const,
+  labelThreads: (id: string, page: number) => ['mail', 'label-threads', id, page] as const,
   search: (q: string, filters: MailFilters, page: number) =>
     ['mail', 'search', q, filters, page] as const,
   thread: (id: string) => ['mail', 'thread', id] as const,
@@ -254,4 +257,58 @@ export function sendDraft(id: string): Promise<SendMessageResult> {
   return apiFetch<SendMessageResult>(`/mail/drafts/${encodeURIComponent(id)}/send`, {
     method: 'POST',
   });
+}
+
+// --- Labels (author-private tags; §8) -------------------------------------
+
+/** The caller's labels (alphabetical) with thread-tag counts. */
+export function getLabels(signal?: AbortSignal): Promise<MailLabel[]> {
+  return apiFetch<MailLabel[]>('/mail/labels', { signal });
+}
+
+/** Create a label (name unique per author, case-insensitive; 409 on a dup). */
+export function createLabel(name: string): Promise<MailLabel> {
+  return apiFetch<MailLabel>('/mail/labels', { method: 'POST', body: { name } });
+}
+
+/** Rename one of the caller's labels. */
+export function renameLabel(id: string, name: string): Promise<MailLabel> {
+  return apiFetch<MailLabel>(`/mail/labels/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: { name },
+  });
+}
+
+/** Delete a label + its assignments (threads untouched). */
+export function deleteLabel(id: string): Promise<void> {
+  return apiFetch<void>(`/mail/labels/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/** The threads tagged with a label (a label view — same shape as the other thread lists). */
+export function getLabelThreads(
+  id: string,
+  page = 0,
+  size = 20,
+  signal?: AbortSignal,
+): Promise<ThreadPage> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  return apiFetch<ThreadPage>(`/mail/labels/${encodeURIComponent(id)}/threads?${params.toString()}`, {
+    signal,
+  });
+}
+
+/** Tag a thread with one of the caller's labels (idempotent). */
+export function applyLabel(threadId: string, labelId: string): Promise<void> {
+  return apiFetch<void>(
+    `/mail/threads/${encodeURIComponent(threadId)}/labels/${encodeURIComponent(labelId)}`,
+    { method: 'POST' },
+  );
+}
+
+/** Remove a label from a thread (idempotent). */
+export function removeLabel(threadId: string, labelId: string): Promise<void> {
+  return apiFetch<void>(
+    `/mail/threads/${encodeURIComponent(threadId)}/labels/${encodeURIComponent(labelId)}`,
+    { method: 'DELETE' },
+  );
 }

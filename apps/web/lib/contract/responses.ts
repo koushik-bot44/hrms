@@ -521,9 +521,16 @@ export type MailParty = Required<Schemas['MailPartyView']>;
 /** Attachment metadata shown on a message — never the storage key (§6/§8). */
 export type MailAttachment = Required<Schemas['AttachmentView']>;
 
+/** One of the viewer's labels (a tag on a thread) — the chip shape. */
+export type MailLabelRef = Required<Schemas['LabelRef']>;
+
+/** One of the viewer's labels with its thread-tag count (the rail list). */
+export type MailLabel = Required<Schemas['LabelView']>;
+
 /** One row in an Inbox / Sent / Search list — a THREAD from the viewer's perspective. */
-export type ThreadListItem = Omit<Required<Schemas['ThreadListItemView']>, 'participants'> & {
+export type ThreadListItem = Omit<Required<Schemas['ThreadListItemView']>, 'participants' | 'labels'> & {
   participants: MailParty[];
+  labels: MailLabelRef[];
 };
 
 export type ThreadPage = Omit<Required<Schemas['ThreadPage']>, 'content'> & {
@@ -552,11 +559,12 @@ export type MailAttachmentUpload = Required<Schemas['AttachmentUpload']>;
 /** An open thread: its messages in order + the counterparty a reply would go to. */
 export type ThreadDetail = Omit<
   Required<Schemas['ThreadDetailView']>,
-  'participants' | 'counterparty' | 'messages'
+  'participants' | 'counterparty' | 'messages' | 'labels'
 > & {
   participants: MailParty[];
   counterparty: MailParty | null;
   messages: ThreadMessage[];
+  labels: MailLabelRef[];
 };
 
 export type MailUnreadCount = Required<Schemas['UnreadCountView']>;

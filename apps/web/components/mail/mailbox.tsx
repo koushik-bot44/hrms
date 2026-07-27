@@ -15,29 +15,51 @@ import {
   Mail,
   MailMinus,
   MailOpen,
+  MoreHorizontal,
   Paperclip,
+  Pencil,
+  Plus,
   Search,
   Send,
   SlidersHorizontal,
   SquarePen,
   Star,
+  Tag,
   Trash2,
   X,
 } from 'lucide-react';
-import type { Draft, DraftListItem, DraftPage, ThreadListItem, ThreadPage } from '@/lib/contract';
+import type {
+  Draft,
+  DraftListItem,
+  DraftPage,
+  MailLabel,
+  ThreadListItem,
+  ThreadPage,
+} from '@/lib/contract';
 import type { MailFilters, MailScope } from '@/lib/api/mail';
+import { LabelChips, LabelPicker } from '@/components/mail/label-picker';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import type { ApiError } from '@/lib/api/client';
 import {
   archiveThread,
+  createLabel,
   deleteDraft,
+  deleteLabel,
   deleteThread,
   getArchived,
   getDraft,
   getDrafts,
   getInbox,
+  getLabels,
+  getLabelThreads,
   getSent,
   getStarred,
   getUnreadCount,
@@ -45,6 +67,7 @@ import {
   mailKeys,
   markThreadRead,
   markThreadUnread,
+  renameLabel,
   searchMail,
   starThread,
   unarchiveThread,
@@ -90,6 +113,8 @@ export function Mailbox() {
   const [filters, setFilters] = React.useState<MailFilters>(EMPTY_FILTERS);
   const [filterDraft, setFilterDraft] = React.useState<MailFilters>(EMPTY_FILTERS);
   const [showFilters, setShowFilters] = React.useState(false);
+  // The label view currently open (a tag overlay list), or null.
+  const [labelView, setLabelView] = React.useState<MailLabel | null>(null);
   const filtersActive = hasActiveFilters(filters);
   const searching = searchTerm.trim().length > 0 || filtersActive;
 
@@ -105,27 +130,43 @@ export function Mailbox() {
     staleTime: 15_000,
   });
   const inbox = useApiQuery(mailKeys.inbox(page), (s) => getInbox(page, 20, s), {
-    enabled: !searching && folder === 'inbox',
+    enabled: !searching && !labelView && folder === 'inbox',
   });
   const sent = useApiQuery(mailKeys.sent(page), (s) => getSent(page, 20, s), {
-    enabled: !searching && folder === 'sent',
+    enabled: !searching && !labelView && folder === 'sent',
   });
   const starred = useApiQuery(mailKeys.starred(page), (s) => getStarred(page, 20, s), {
-    enabled: !searching && folder === 'starred',
+    enabled: !searching && !labelView && folder === 'starred',
   });
   const archivedList = useApiQuery(mailKeys.archived(page), (s) => getArchived(page, 20, s), {
-    enabled: !searching && folder === 'archived',
+    enabled: !searching && !labelView && folder === 'archived',
   });
   const draftsList = useApiQuery(mailKeys.drafts(page), (s) => getDrafts(page, 20, s), {
-    enabled: !searching && folder === 'drafts',
+    enabled: !searching && !labelView && folder === 'drafts',
   });
+  const labelThreadsQuery = useApiQuery(
+    mailKeys.labelThreads(labelView?.id ?? '__none__', page),
+    (s) => getLabelThreads(labelView!.id, page, 20, s),
+    { enabled: !searching && labelView != null },
+  );
+  const labelsQuery = useApiQuery(mailKeys.labels, getLabels);
   const results = useApiQuery(
     mailKeys.search(searchTerm, filters, page),
     (s) => searchMail(searchTerm, filters, page, 20, s),
     { enabled: searching },
   );
 
-  const isDrafts = !searching && folder === 'drafts';
+  const isDrafts = !searching && !labelView && folder === 'drafts';
+
+  const openLabel = (label: MailLabel) => {
+    setLabelView(label);
+    setPage(0);
+    setSelectedId(null);
+    setSearchTerm('');
+    setSearchInput('');
+    setFilters(EMPTY_FILTERS);
+    setShowFilters(false);
+  };
 
   const applyFilters = () => {
     setFilters(filterDraft);
@@ -172,6 +213,7 @@ export function Mailbox() {
     setFilters(EMPTY_FILTERS);
     setFilterDraft(EMPTY_FILTERS);
     setShowFilters(false);
+    setLabelView(null);
   };
 
   const submitSearch = (e: React.FormEvent) => {
@@ -192,15 +234,17 @@ export function Mailbox() {
 
   const active = searching
     ? results
-    : folder === 'inbox'
-      ? inbox
-      : folder === 'sent'
-        ? sent
-        : folder === 'starred'
-          ? starred
-          : archivedList;
+    : labelView
+      ? labelThreadsQuery
+      : folder === 'inbox'
+        ? inbox
+        : folder === 'sent'
+          ? sent
+          : folder === 'starred'
+            ? starred
+            : archivedList;
   const unreadCount = unread.data?.unread ?? 0;
-  const mode: ListMode = searching ? 'search' : folder;
+  const mode: ListMode = searching ? 'search' : labelView ? 'label' : folder;
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
@@ -304,33 +348,41 @@ export function Mailbox() {
           <FolderButton
             icon={Inbox}
             label="Inbox"
-            active={!searching && folder === 'inbox'}
+            active={!searching && !labelView && folder === 'inbox'}
             badge={unreadCount}
             onClick={() => switchFolder('inbox')}
           />
           <FolderButton
             icon={Send}
             label="Sent"
-            active={!searching && folder === 'sent'}
+            active={!searching && !labelView && folder === 'sent'}
             onClick={() => switchFolder('sent')}
           />
           <FolderButton
             icon={Star}
             label="Starred"
-            active={!searching && folder === 'starred'}
+            active={!searching && !labelView && folder === 'starred'}
             onClick={() => switchFolder('starred')}
           />
           <FolderButton
             icon={Archive}
             label="Archive"
-            active={!searching && folder === 'archived'}
+            active={!searching && !labelView && folder === 'archived'}
             onClick={() => switchFolder('archived')}
           />
           <FolderButton
             icon={FileText}
             label="Drafts"
-            active={!searching && folder === 'drafts'}
+            active={!searching && !labelView && folder === 'drafts'}
             onClick={() => switchFolder('drafts')}
+          />
+          <LabelRail
+            labels={labelsQuery.data ?? []}
+            activeId={labelView?.id ?? null}
+            onOpen={openLabel}
+            onChanged={(deletedId) => {
+              if (deletedId && labelView?.id === deletedId) switchFolder('inbox');
+            }}
           />
           {searching ? (
             <div className="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
@@ -346,7 +398,7 @@ export function Mailbox() {
         <div className="flex w-full flex-col md:hidden">
           <div className="flex items-center gap-2 border-b p-2">
             <Button
-              variant={!searching && folder === 'inbox' ? 'secondary' : 'ghost'}
+              variant={!searching && !labelView && folder === 'inbox' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => switchFolder('inbox')}
             >
@@ -354,7 +406,7 @@ export function Mailbox() {
               Inbox{unreadCount > 0 ? ` (${unreadCount})` : ''}
             </Button>
             <Button
-              variant={!searching && folder === 'sent' ? 'secondary' : 'ghost'}
+              variant={!searching && !labelView && folder === 'sent' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => switchFolder('sent')}
             >
@@ -362,7 +414,7 @@ export function Mailbox() {
               Sent
             </Button>
             <Button
-              variant={!searching && folder === 'starred' ? 'secondary' : 'ghost'}
+              variant={!searching && !labelView && folder === 'starred' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => switchFolder('starred')}
             >
@@ -370,7 +422,7 @@ export function Mailbox() {
               Starred
             </Button>
             <Button
-              variant={!searching && folder === 'archived' ? 'secondary' : 'ghost'}
+              variant={!searching && !labelView && folder === 'archived' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => switchFolder('archived')}
             >
@@ -378,7 +430,7 @@ export function Mailbox() {
               Archive
             </Button>
             <Button
-              variant={!searching && folder === 'drafts' ? 'secondary' : 'ghost'}
+              variant={!searching && !labelView && folder === 'drafts' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => switchFolder('drafts')}
             >
@@ -478,7 +530,7 @@ export function Mailbox() {
   );
 }
 
-type ListMode = Folder | 'search';
+type ListMode = Folder | 'search' | 'label';
 
 function FolderButton({
   icon: Icon,
@@ -567,7 +619,9 @@ function ThreadList({
             ? Star
             : mode === 'archived'
               ? Archive
-              : Send;
+              : mode === 'label'
+                ? Tag
+                : Send;
     return (
       <EmptyState
         icon={emptyIcon}
@@ -580,7 +634,9 @@ function ThreadList({
                 ? 'No starred conversations'
                 : mode === 'archived'
                   ? 'No archived conversations'
-                  : 'Nothing sent yet'
+                  : mode === 'label'
+                    ? 'No conversations with this label'
+                    : 'Nothing sent yet'
         }
         description={
           mode === 'search'
@@ -591,7 +647,9 @@ function ThreadList({
                 ? 'Star a conversation to keep it here. Only you can see your stars.'
                 : mode === 'archived'
                   ? 'Archived conversations leave your Inbox but stay here (and in Sent/Search). A new reply brings one back.'
-                  : 'Conversations you start will appear here.'
+                  : mode === 'label'
+                    ? 'Tag a conversation with this label (from a row or the reading pane) and it shows up here — the conversation stays in Inbox too.'
+                    : 'Conversations you start will appear here.'
         }
         className="m-3 border-0 bg-transparent"
       />
@@ -607,7 +665,9 @@ function ThreadList({
           ? 'Starred'
           : mode === 'archived'
             ? 'Archive'
-            : 'Search results';
+            : mode === 'label'
+              ? 'Label'
+              : 'Search results';
   return (
     <ul className="flex-1 overflow-y-auto" aria-label={listLabel}>
       {rows.map((row) => (
@@ -756,6 +816,11 @@ function ThreadRow({
           ) : null}
         </div>
         {row.snippet ? <p className="truncate text-xs text-muted-foreground">{row.snippet}</p> : null}
+        {row.labels.length > 0 ? (
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            <LabelChips labels={row.labels} />
+          </div>
+        ) : null}
       </button>
 
       {/* Star (per-user, thread-level): a filled amber star when starred is ALWAYS visible so you can
@@ -777,8 +842,18 @@ function ThreadRow({
         <Star className={cn('size-4', row.starred && 'fill-current')} />
       </button>
 
-      {/* Read + delete (appear on hover / focus-within; always tappable on touch) */}
+      {/* Label + read + delete (appear on hover / focus-within; always tappable on touch) */}
       <div className="absolute bottom-2 right-2 flex gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <LabelPicker threadId={row.threadId} labels={row.labels}>
+          <button
+            type="button"
+            aria-label="Label conversation"
+            title="Label"
+            className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
+          >
+            <Tag className="size-4" />
+          </button>
+        </LabelPicker>
         <button
           type="button"
           onClick={() => toggleRead.mutate()}
@@ -1193,6 +1268,126 @@ function FilterChips({
       >
         Clear all
       </button>
+    </div>
+  );
+}
+
+// --- Labels rail (author-private tags; §8) ----------------------------------
+
+function LabelRail({
+  labels,
+  activeId,
+  onOpen,
+  onChanged,
+}: {
+  labels: MailLabel[];
+  activeId: string | null;
+  onOpen: (label: MailLabel) => void;
+  onChanged: (deletedId?: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: mailKeys.labels });
+    void queryClient.invalidateQueries({ queryKey: ['mail', 'label-threads'] });
+  };
+  const create = useApiMutation(
+    async () => {
+      const name = window.prompt('New label name')?.trim();
+      return name ? createLabel(name) : null;
+    },
+    { onSuccess: (l) => (l ? invalidate() : undefined) },
+  );
+  const rename = useApiMutation(
+    (v: { id: string; current: string }) => {
+      const name = window.prompt('Rename label', v.current)?.trim();
+      return name && name !== v.current ? renameLabel(v.id, name) : Promise.resolve(null);
+    },
+    { onSuccess: (l) => (l ? invalidate() : undefined) },
+  );
+  const remove = useApiMutation((id: string) => deleteLabel(id), {
+    successMessage: 'Label deleted',
+    onSuccess: (_d, id) => {
+      invalidate();
+      onChanged(id);
+    },
+  });
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <div className="mb-1 flex items-center justify-between px-3">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Labels
+        </span>
+        <button
+          type="button"
+          onClick={() => create.mutate()}
+          aria-label="New label"
+          title="New label"
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
+      {labels.length === 0 ? (
+        <p className="px-3.5 py-1 text-xs text-muted-foreground">No labels yet.</p>
+      ) : (
+        labels.map((l) => (
+          <div
+            key={l.id}
+            className={cn(
+              'group/label flex items-center rounded-xl',
+              activeId === l.id ? 'bg-surface-tint' : 'hover:bg-accent',
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => onOpen(l)}
+              aria-current={activeId === l.id ? 'page' : undefined}
+              className={cn(
+                'flex min-w-0 flex-1 items-center gap-3 px-3.5 py-2 text-sm',
+                activeId === l.id ? 'font-medium text-primary' : 'text-muted-foreground',
+              )}
+            >
+              <Tag className="size-4 shrink-0" />
+              <span className="flex-1 truncate text-left">{l.name}</span>
+              {l.threadCount > 0 ? (
+                <span className="text-[11px] text-muted-foreground">{l.threadCount}</span>
+              ) : null}
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Manage ${l.name}`}
+                  className="mr-1 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus:opacity-100 group-hover/label:opacity-100"
+                >
+                  <MoreHorizontal className="size-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => rename.mutate({ id: l.id, current: l.name })}>
+                  <Pencil className="size-4" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => {
+                    if (
+                      window.confirm(
+                        `Delete label “${l.name}”? Conversations keep their place — they just lose this tag.`,
+                      )
+                    )
+                      remove.mutate(l.id);
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ))
+      )}
     </div>
   );
 }

@@ -6,6 +6,8 @@ import com.ihrms.mail.dto.MailDtos.AttachmentUpload;
 import com.ihrms.mail.dto.MailDtos.AttachmentUploadRequest;
 import com.ihrms.mail.dto.MailDtos.DraftPage;
 import com.ihrms.mail.dto.MailDtos.DraftView;
+import com.ihrms.mail.dto.MailDtos.LabelNameRequest;
+import com.ihrms.mail.dto.MailDtos.LabelView;
 import com.ihrms.mail.dto.MailDtos.MailPartyView;
 import com.ihrms.mail.dto.MailDtos.ReplyRequest;
 import com.ihrms.mail.dto.MailDtos.SaveDraftRequest;
@@ -23,6 +25,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -298,5 +301,73 @@ public class MailController {
     SendMessageResult result = mail.sendDraft(actor, id, request.getRemoteAddr());
     pushNotifier.notifyRecipients(result.id()); // post-commit, best-effort (§ Web Push N3)
     return result;
+  }
+
+  // --- Labels (author-private tags; §8) -------------------------------------
+
+  /** The caller's labels (alphabetical), each with its thread-tag count. */
+  @GetMapping("/labels")
+  public List<LabelView> listLabels(@AuthenticationPrincipal IhrmsPrincipal actor) {
+    return mail.listLabels(actor);
+  }
+
+  /** Create a label (name unique per author, case-insensitive; 409 on a dup). */
+  @PostMapping("/labels")
+  public LabelView createLabel(
+      @Valid @RequestBody LabelNameRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    return mail.createLabel(actor, body, request.getRemoteAddr());
+  }
+
+  /** Rename one of the caller's labels. Author-only (404 otherwise). */
+  @PatchMapping("/labels/{id}")
+  public LabelView renameLabel(
+      @PathVariable String id,
+      @Valid @RequestBody LabelNameRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    return mail.renameLabel(actor, id, body, request.getRemoteAddr());
+  }
+
+  /** Delete a label + its assignments (the threads themselves are untouched). Author-only. */
+  @DeleteMapping("/labels/{id}")
+  public ResponseEntity<Void> deleteLabel(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    mail.deleteLabel(actor, id, request.getRemoteAddr());
+    return ResponseEntity.noContent().build();
+  }
+
+  /** The threads tagged with the caller's label (a label view). Author-only (404 otherwise). */
+  @GetMapping("/labels/{id}/threads")
+  public ThreadPage labelThreads(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      @PageableDefault(size = 20) Pageable pageable) {
+    return mail.labelThreads(actor, id, pageable);
+  }
+
+  /** Tag a thread with one of the caller's labels (idempotent). Participant-only (403/404). */
+  @PostMapping("/threads/{threadId}/labels/{labelId}")
+  public ResponseEntity<Void> applyLabel(
+      @PathVariable String threadId,
+      @PathVariable String labelId,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    mail.applyLabel(actor, threadId, labelId, request.getRemoteAddr());
+    return ResponseEntity.noContent().build();
+  }
+
+  /** Remove a label from a thread (idempotent). Author-only label + participant-only thread. */
+  @DeleteMapping("/threads/{threadId}/labels/{labelId}")
+  public ResponseEntity<Void> removeLabel(
+      @PathVariable String threadId,
+      @PathVariable String labelId,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    mail.removeLabel(actor, threadId, labelId, request.getRemoteAddr());
+    return ResponseEntity.noContent().build();
   }
 }

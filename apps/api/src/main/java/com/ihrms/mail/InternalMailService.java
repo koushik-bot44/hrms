@@ -9,7 +9,9 @@ import com.ihrms.domain.enums.RecipientType;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
+import com.ihrms.domain.model.LabelThread;
 import com.ihrms.domain.model.MailDraft;
+import com.ihrms.domain.model.MailLabel;
 import com.ihrms.domain.model.Message;
 import com.ihrms.domain.model.MessageAttachment;
 import com.ihrms.domain.model.MessageRecipient;
@@ -18,7 +20,9 @@ import com.ihrms.domain.model.ThreadStar;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
+import com.ihrms.domain.repository.LabelThreadRepository;
 import com.ihrms.domain.repository.MailDraftRepository;
+import com.ihrms.domain.repository.MailLabelRepository;
 import com.ihrms.domain.repository.MessageAttachmentRepository;
 import com.ihrms.domain.repository.MessageRecipientRepository;
 import com.ihrms.domain.repository.MessageRepository;
@@ -33,6 +37,9 @@ import com.ihrms.mail.dto.MailDtos.AttachmentView;
 import com.ihrms.mail.dto.MailDtos.DraftListItemView;
 import com.ihrms.mail.dto.MailDtos.DraftPage;
 import com.ihrms.mail.dto.MailDtos.DraftView;
+import com.ihrms.mail.dto.MailDtos.LabelNameRequest;
+import com.ihrms.mail.dto.MailDtos.LabelRef;
+import com.ihrms.mail.dto.MailDtos.LabelView;
 import com.ihrms.mail.dto.MailDtos.MailPartyView;
 import com.ihrms.mail.dto.MailDtos.ReplyRequest;
 import com.ihrms.mail.dto.MailDtos.SaveDraftRequest;
@@ -99,6 +106,8 @@ public class InternalMailService {
   private final ThreadStarRepository threadStars;
   private final ThreadArchiveRepository threadArchives;
   private final MailDraftRepository drafts;
+  private final MailLabelRepository labels;
+  private final LabelThreadRepository labelThreads;
   private final AuthorizationService authz;
   private final AuditService audit;
   private final StorageService storage;
@@ -115,6 +124,8 @@ public class InternalMailService {
       ThreadStarRepository threadStars,
       ThreadArchiveRepository threadArchives,
       MailDraftRepository drafts,
+      MailLabelRepository labels,
+      LabelThreadRepository labelThreads,
       AuthorizationService authz,
       AuditService audit,
       StorageService storage,
@@ -129,6 +140,8 @@ public class InternalMailService {
     this.threadStars = threadStars;
     this.threadArchives = threadArchives;
     this.drafts = drafts;
+    this.labels = labels;
+    this.labelThreads = labelThreads;
     this.authz = authz;
     this.audit = audit;
     this.storage = storage;
@@ -629,6 +642,7 @@ public class InternalMailService {
 
     boolean isStarred = threadStars.existsByThreadIdAndAccountId(threadId, me.id());
     boolean isArchived = threadArchives.existsByThreadIdAndAccountId(threadId, me.id());
+    List<LabelRef> labelRefs = labelsByThread(me.id(), List.of(threadId)).getOrDefault(threadId, List.of());
     return new ThreadDetailView(
         threadId,
         msgs.get(0).getSubject(),
@@ -636,7 +650,8 @@ public class InternalMailService {
         counterparty,
         messageViews,
         isStarred,
-        isArchived);
+        isArchived,
+        labelRefs);
   }
 
   // --- Read state ---------------------------------------------------------------
@@ -919,6 +934,119 @@ public class InternalMailService {
     return list == null ? List.of() : list;
   }
 
+  // --- Labels (author-private tags; §8) -----------------------------------------
+
+  /** The caller's labels (alphabetical), each with its current thread-tag count. */
+  @Transactional(readOnly = true)
+  public List<LabelView> listLabels(IhrmsPrincipal actor) {
+    MailParticipant me = resolveActor(actor);
+    return labels.findByAuthorAccountIdOrderByNameAsc(me.id()).stream()
+        .map(l -> new LabelView(l.getId(), l.getName(), labelThreads.countByLabelId(l.getId())))
+        .collect(Collectors.toList());
+  }
+
+  /** Create a label for the caller. Names are unique per author, case-insensitively (409 on a dup). Audited. */
+  @Transactional
+  public LabelView createLabel(IhrmsPrincipal actor, LabelNameRequest input, String ip) {
+    MailParticipant me = resolveActor(actor);
+    String name = input.name().strip();
+    if (labels.existsByAuthorAccountIdAndNameIgnoreCase(me.id(), name)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "A label with that name already exists");
+    }
+    MailLabel label = labels.save(new MailLabel(me.id(), name));
+    audit.record(actorOf(me), "LABEL_CREATED", "MailLabel", label.getId(), Map.of("name", name), ip);
+    return new LabelView(label.getId(), label.getName(), 0);
+  }
+
+  /** Rename one of the caller's labels (still unique per author). Author-only. Audited. */
+  @Transactional
+  public LabelView renameLabel(IhrmsPrincipal actor, String id, LabelNameRequest input, String ip) {
+    MailParticipant me = resolveActor(actor);
+    MailLabel label = requireOwnLabel(me, id);
+    String name = input.name().strip();
+    if (labels.existsByAuthorAccountIdAndNameIgnoreCaseAndIdNot(me.id(), name, id)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "A label with that name already exists");
+    }
+    label.setName(name);
+    labels.save(label);
+    audit.record(actorOf(me), "LABEL_RENAMED", "MailLabel", id, Map.of("name", name), ip);
+    return new LabelView(id, name, labelThreads.countByLabelId(id));
+  }
+
+  /** Delete one of the caller's labels + all its assignments (threads untouched). Author-only. Audited. */
+  @Transactional
+  public void deleteLabel(IhrmsPrincipal actor, String id, String ip) {
+    MailParticipant me = resolveActor(actor);
+    MailLabel label = requireOwnLabel(me, id);
+    int tagged = (int) labelThreads.countByLabelId(id);
+    labels.delete(label); // FK ON DELETE CASCADE removes the label_threads assignments
+    audit.record(actorOf(me), "LABEL_DELETED", "MailLabel", id, Map.of("untagged", tagged), ip);
+  }
+
+  /** Tag a thread with one of the caller's labels (idempotent). Participant-only on the thread. Audited. */
+  @Transactional
+  public void applyLabel(IhrmsPrincipal actor, String threadId, String labelId, String ip) {
+    MailParticipant me = requireThreadParticipant(actor, threadId);
+    requireOwnLabel(me, labelId);
+    if (!labelThreads.existsByLabelIdAndThreadId(labelId, threadId)) {
+      labelThreads.save(new LabelThread(labelId, threadId));
+      audit.record(actorOf(me), "THREAD_LABELED", "Thread", threadId, Map.of("labelId", labelId), ip);
+    }
+  }
+
+  /** Remove a label from a thread (idempotent). Author-only label + participant-only thread. Audited. */
+  @Transactional
+  public void removeLabel(IhrmsPrincipal actor, String threadId, String labelId, String ip) {
+    MailParticipant me = requireThreadParticipant(actor, threadId);
+    requireOwnLabel(me, labelId);
+    if (labelThreads.existsByLabelIdAndThreadId(labelId, threadId)) {
+      labelThreads.deleteByLabelIdAndThreadId(labelId, threadId);
+      audit.record(actorOf(me), "THREAD_UNLABELED", "Thread", threadId, Map.of("labelId", labelId), ip);
+    }
+  }
+
+  /**
+   * A LABEL VIEW: the caller's threads tagged with their label — same list shape + soft-delete scoping as
+   * Inbox, but INDEPENDENT of archive (a label is a tag overlay). Author-only (404 if the label isn't theirs).
+   */
+  @Transactional(readOnly = true)
+  public ThreadPage labelThreads(IhrmsPrincipal actor, String labelId, Pageable pageable) {
+    MailParticipant me = resolveActor(actor);
+    requireOwnLabel(me, labelId);
+    Page<String> ids = messages.findLabelThreadIds(me.id(), labelId, pageable);
+    return page(ids, buildThreadList(me.id(), ids.getContent()));
+  }
+
+  private MailLabel requireOwnLabel(MailParticipant me, String labelId) {
+    return labels
+        .findByIdAndAuthorAccountId(labelId, me.id())
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Label not found"));
+  }
+
+  /** The viewer's OWN labels applied to each of a page of threads (chips), alphabetical. Batched — no N+1. */
+  private Map<String, List<LabelRef>> labelsByThread(String meId, Collection<String> threadIds) {
+    if (threadIds.isEmpty()) {
+      return Map.of();
+    }
+    List<MailLabel> mine = labels.findByAuthorAccountIdOrderByNameAsc(meId);
+    if (mine.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, MailLabel> byId = new HashMap<>();
+    mine.forEach(l -> byId.put(l.getId(), l));
+    Map<String, List<LabelRef>> out = new HashMap<>();
+    for (LabelThread lt : labelThreads.findByLabelIdInAndThreadIdIn(byId.keySet(), threadIds)) {
+      MailLabel l = byId.get(lt.getLabelId());
+      if (l != null) {
+        out.computeIfAbsent(lt.getThreadId(), k -> new ArrayList<>())
+            .add(new LabelRef(l.getId(), l.getName()));
+      }
+    }
+    out.values()
+        .forEach(list -> list.sort(Comparator.comparing(LabelRef::name, String.CASE_INSENSITIVE_ORDER)));
+    return out;
+  }
+
   // --- Thread building ----------------------------------------------------------
 
   private ThreadPage page(Page<String> ids, List<ThreadListItemView> content) {
@@ -956,6 +1084,8 @@ public class InternalMailService {
         threadArchives.findByAccountIdAndThreadIdIn(meId, threadIds).stream()
             .map(ThreadArchive::getThreadId)
             .collect(Collectors.toSet());
+    // The viewer's own labels on each of these threads (batched — no N+1).
+    Map<String, List<LabelRef>> labelsByThread = labelsByThread(meId, threadIds);
 
     List<ThreadListItemView> out = new ArrayList<>();
     for (String threadId : threadIds) {
@@ -989,7 +1119,8 @@ public class InternalMailService {
               unread,
               hasAttachments,
               starredThreadIds.contains(threadId),
-              archivedThreadIds.contains(threadId)));
+              archivedThreadIds.contains(threadId),
+              labelsByThread.getOrDefault(threadId, List.of())));
     }
     return out;
   }

@@ -1190,6 +1190,66 @@
         }
       }
     },
+    "/mail/threads/{threadId}/labels/{labelId}": {
+      "post": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "applyLabel",
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "labelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "removeLabel",
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "labelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/mail/threads/{id}/unread": {
       "post": {
         "tags": [
@@ -1441,6 +1501,57 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/SendMessageResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mail/labels": {
+      "get": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "listLabels",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LabelView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "createLabel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelView"
                 }
               }
             }
@@ -2580,6 +2691,67 @@
         }
       }
     },
+    "/mail/labels/{id}": {
+      "delete": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "deleteLabel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "renameLabel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/employees/{id}/forms/{form}": {
       "patch": {
         "tags": [
@@ -3472,6 +3644,44 @@
             "name": "scope",
             "in": "query",
             "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageable",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mail/labels/{id}/threads": {
+      "get": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "labelThreads",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -6168,6 +6378,34 @@
           }
         }
       },
+      "LabelNameRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 50,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
+      "LabelView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "threadCount": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "AttachmentUploadRequest": {
         "required": [
           "contentType",
@@ -7207,6 +7445,17 @@
           }
         }
       },
+      "LabelRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "ThreadDetailView": {
         "type": "object",
         "properties": {
@@ -7236,6 +7485,12 @@
           },
           "archived": {
             "type": "boolean"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LabelRef"
+            }
           }
         }
       },
@@ -7319,6 +7574,12 @@
           },
           "archived": {
             "type": "boolean"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LabelRef"
+            }
           }
         }
       },

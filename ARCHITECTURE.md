@@ -642,6 +642,28 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     validation or the send graph rejects it **nothing is delivered and the draft REMAINS** (with the error
     surfaced). Audited `DRAFT_SAVED` / `DRAFT_DISCARDED` (a successful send audits as the normal
     `MAIL_SENT`). Drafts appear in the **Drafts** view only — never in Inbox/Sent/Starred/Archive/Search.
+  - **Labels are author-private, per-user TAGS** — user-created named tags for organizing conversations
+    (`mail_labels` = the labels; `label_threads` = the per-user, thread-level `(labelId, threadId)`
+    assignments, mirroring the `thread_stars`/`thread_archives` shape but with a label FK). A label belongs
+    to **one** user, a conversation can carry **many** labels, and a label lists **many** conversations
+    (many-to-many). **Applying a label is a TAG, not a move:** the conversation stays exactly where it is
+    (Inbox/Sent/…) — it is **not** removed from Inbox, moved, or deleted — and is now **also** viewable under
+    the label. Each label is a **view** (`GET /mail/labels/{id}/threads`) = the author's threads tagged with
+    it, using the **same thread-list scoping** as the other views (participant + soft-delete, the viewer's
+    `starred`/`archived`/`unread` flags) but **independent of archive** — a label view shows every tagged
+    thread the author still participates in, whether or not it's archived (only their soft-deleted copies are
+    excluded). **CRUD** (`POST /mail/labels {name}`, `GET /mail/labels`, `PATCH /mail/labels/{id} {name}`,
+    `DELETE /mail/labels/{id}`) and **apply/remove** (`POST` / `DELETE /mail/threads/{threadId}/labels/{labelId}`)
+    are all **author-only**: the label must be the caller's (`404` otherwise), and a thread can only be
+    labelled by someone who **participates** in it (`403`/`404`). Names are **unique per author,
+    case-insensitively** (`UNIQUE(authorAccountId, lower(name))`; a duplicate is a `409`); `(labelId,
+    threadId)` is unique so applying is **idempotent**. **Delete** removes the label + all its assignments
+    (the threads themselves are untouched — they just lose that tag); **rename** changes the name only.
+    **Per-user isolation:** another participant in a labelled thread never sees the label or the assignment —
+    labels + assignments belong to their author. Every thread row/detail exposes the **viewer's own** labels
+    (batched, no N+1) so the UI shows label chips; a thread can be starred **and** archived **and** labelled
+    independently. Audited `LABEL_CREATED` / `LABEL_RENAMED` / `LABEL_DELETED` / `THREAD_LABELED` /
+    `THREAD_UNLABELED`.
 - **Attachments (Stage 4):** a message (new send or reply) may carry files, stored in **S3 via the same
   presigned upload→confirm handshake as employee documents** (`storage.buildKey` → presigned PUT →
   server reads the bytes to compute + store the **sha256**). Attachment rows (`message_attachments`) are
