@@ -91,7 +91,8 @@ class MailApiTest {
   void setup() {
     jdbc.execute(
         "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\",\"messages\","
-            + "\"message_recipients\",\"message_attachments\",\"audit_logs\" RESTART IDENTITY CASCADE");
+            + "\"message_recipients\",\"message_attachments\",\"thread_stars\",\"audit_logs\""
+            + " RESTART IDENTITY CASCADE");
     anvi = company("ANVI", "anvicorp");
     testco = company("TESTCO", "testco");
 
@@ -449,6 +450,86 @@ class MailApiTest {
     assertThat(row).isNotNull();
     assertThat(row.get("messageCount").asInt()).isEqualTo(1); // the original is still hidden from HR
     assertThat(row.get("unread").asBoolean()).isTrue();
+  }
+
+  // --- Starred (per-user, thread-level, §8) ---------------------------------
+
+  @Test
+  void starIsPerUser_threadLevel_listsInStarredView_andUnstarClearsIt() throws Exception {
+    String threadId = startThread(caA, hrA, "Roadmap", "The Q3 plan is attached.");
+
+    // hrA (a recipient) stars the whole conversation.
+    star(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(audit("MAIL_STARRED")).isEqualTo(1);
+
+    // It appears in hrA's Starred view AND the inbox row is flagged starred.
+    assertThat(threadRow(starred(hrA), threadId)).isNotNull();
+    assertThat(threadRow(inbox(hrA), threadId).get("starred").asBoolean()).isTrue();
+
+    // PER-USER: caA (the sender, a participant of the SAME thread) does NOT see it starred, and their
+    // own Starred view is empty — my stars are mine alone.
+    assertThat(threadRow(sent(caA), threadId).get("starred").asBoolean()).isFalse();
+    assertThat(starred(caA).get("totalElements").asInt()).isZero();
+
+    // Starring NEVER moves or deletes: the thread still sits in hrA's inbox and stays UNREAD (independent
+    // of read-state) — starred AND unread AND in Inbox simultaneously.
+    assertThat(threadRow(inbox(hrA), threadId).get("unread").asBoolean()).isTrue();
+    assertThat(unread(hrA)).isEqualTo(1);
+
+    // Star is idempotent (a second star does not add a second audit / a duplicate row).
+    star(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(audit("MAIL_STARRED")).isEqualTo(1);
+
+    // Unstar removes it from Starred and clears the row flag; audited once.
+    unstar(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(audit("MAIL_UNSTARRED")).isEqualTo(1);
+    assertThat(starred(hrA).get("totalElements").asInt()).isZero();
+    assertThat(threadRow(inbox(hrA), threadId).get("starred").asBoolean()).isFalse();
+
+    // Unstar is idempotent too (clearing an already-clear star does not audit again).
+    unstar(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(audit("MAIL_UNSTARRED")).isEqualTo(1);
+  }
+
+  @Test
+  void aSenderCanStarASentOnlyThread_provingItIsThreadLevelNotPerMessage() throws Exception {
+    // caA is ONLY a sender here (no recipient row of their own). Because a star is thread-level, they can
+    // still star it — and only they see it starred.
+    String threadId = startThread(caA, hrA, "FYI", "For your information.");
+    star(caA, threadId).andExpect(status().isNoContent());
+
+    assertThat(threadRow(starred(caA), threadId)).isNotNull();
+    assertThat(threadRow(sent(caA), threadId).get("starred").asBoolean()).isTrue();
+    // The recipient (hrA) does NOT see the sender's star.
+    assertThat(threadRow(inbox(hrA), threadId).get("starred").asBoolean()).isFalse();
+    assertThat(starred(hrA).get("totalElements").asInt()).isZero();
+
+    // The OPEN-thread view also exposes the viewer's per-user star (true for caA, false for hrA).
+    assertThat(openThreadJson(caA, threadId).get("starred").asBoolean()).isTrue();
+    assertThat(openThreadJson(hrA, threadId).get("starred").asBoolean()).isFalse();
+  }
+
+  @Test
+  void aNonParticipantCannotStar_andAMissingThreadIs404() throws Exception {
+    String threadId = startThread(caA, hrA, "Private", "Between us.");
+    // mgrA is not in this thread -> 403 (a participant-only action).
+    star(mgrA, threadId).andExpect(status().isForbidden());
+    // A thread that does not exist -> 404.
+    star(caA, "does-not-exist").andExpect(status().isNotFound());
+    assertThat(audit("MAIL_STARRED")).isZero();
+  }
+
+  @Test
+  void starredViewRespectsTheViewersSoftDelete() throws Exception {
+    String threadId = startThread(caA, hrA, "Note", "A note.");
+    star(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(threadRow(starred(hrA), threadId)).isNotNull();
+
+    // hrA soft-deletes their copy — the starred thread no longer surfaces (same soft-delete scoping as
+    // Inbox). The star row itself is untouched; it just isn't listed while the copy is hidden.
+    mvc.perform(delete("/mail/threads/" + threadId).header("Authorization", "Bearer " + token(hrA)))
+        .andExpect(status().isNoContent());
+    assertThat(starred(hrA).get("totalElements").asInt()).isZero();
   }
 
   // --- Attachments (Stage 4) ------------------------------------------------
@@ -920,6 +1001,20 @@ class MailApiTest {
 
   private JsonNode sent(User who) throws Exception {
     return getJson(who, "/mail/sent");
+  }
+
+  private JsonNode starred(User who) throws Exception {
+    return getJson(who, "/mail/starred");
+  }
+
+  private ResultActions star(User who, String threadId) throws Exception {
+    return mvc.perform(
+        post("/mail/threads/" + threadId + "/star").header("Authorization", "Bearer " + token(who)));
+  }
+
+  private ResultActions unstar(User who, String threadId) throws Exception {
+    return mvc.perform(
+        delete("/mail/threads/" + threadId + "/star").header("Authorization", "Bearer " + token(who)));
   }
 
   private long searchCount(User who, String q) throws Exception {

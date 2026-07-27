@@ -1131,6 +1131,50 @@
         }
       }
     },
+    "/mail/threads/{id}/star": {
+      "post": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "star",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "unstar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/mail/threads/{id}/reply": {
       "post": {
         "tags": [
@@ -3073,6 +3117,36 @@
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/mail/starred": {
+      "get": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "starred",
+        "parameters": [
+          {
+            "name": "pageable",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadPage"
+                }
+              }
+            }
           }
         }
       }
@@ -6758,6 +6832,9 @@
             "items": {
               "$ref": "#/components/schemas/ThreadMessageView"
             }
+          },
+          "starred": {
+            "type": "boolean"
           }
         }
       },
@@ -6834,6 +6911,9 @@
             "type": "boolean"
           },
           "hasAttachments": {
+            "type": "boolean"
+          },
+          "starred": {
             "type": "boolean"
           }
         }

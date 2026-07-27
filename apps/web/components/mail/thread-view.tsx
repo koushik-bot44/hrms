@@ -2,8 +2,16 @@
 
 import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, MailMinus, MailOpen, Reply, ReplyAll, Trash2 } from 'lucide-react';
-import { getThread, deleteThread, mailKeys, markThreadUnread } from '@/lib/api/mail';
+import { ArrowLeft, MailMinus, MailOpen, Reply, ReplyAll, Star, Trash2 } from 'lucide-react';
+import type { ThreadDetail, ThreadPage } from '@/lib/contract';
+import {
+  getThread,
+  deleteThread,
+  mailKeys,
+  markThreadUnread,
+  starThread,
+  unstarThread,
+} from '@/lib/api/mail';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { absoluteTime, relativeTime } from '@/lib/date';
 import { cn } from '@/lib/utils';
@@ -66,6 +74,34 @@ export function ThreadView({
       onDeleted?.();
     },
   });
+
+  // Per-user star toggle (thread-level): flip both the open-thread cache and any list page holding it,
+  // then reconcile the Starred view (whose membership changed). Optimistic — reverts on failure.
+  const currentStarred = query.data?.starred ?? false;
+  const patchStar = React.useCallback(
+    (next: boolean) => {
+      queryClient.setQueryData<ThreadDetail>(mailKeys.thread(threadId as string), (old) =>
+        old ? { ...old, starred: next } : old,
+      );
+      queryClient.setQueriesData<ThreadPage>({ queryKey: ['mail'] }, (old) => {
+        if (!old || !Array.isArray(old.content)) return old;
+        if (!old.content.some((r) => r.threadId === threadId)) return old;
+        return {
+          ...old,
+          content: old.content.map((r) => (r.threadId === threadId ? { ...r, starred: next } : r)),
+        };
+      });
+    },
+    [queryClient, threadId],
+  );
+  const starMutation = useApiMutation(
+    () => (currentStarred ? unstarThread(threadId as string) : starThread(threadId as string)),
+    {
+      onMutate: () => patchStar(!currentStarred),
+      onError: () => patchStar(currentStarred),
+      onSettled: () => queryClient.invalidateQueries({ queryKey: ['mail', 'starred'] }),
+    },
+  );
 
   if (!threadId) {
     return (
@@ -136,6 +172,18 @@ export function ThreadView({
           ) : null}
         </div>
         <div className="flex shrink-0 gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => starMutation.mutate()}
+            disabled={starMutation.isPending}
+            aria-pressed={thread.starred}
+            title={thread.starred ? 'Starred — click to unstar' : 'Star this conversation'}
+            className={cn(thread.starred && 'text-amber-500 hover:text-amber-500 dark:text-amber-400')}
+          >
+            <Star className={cn(thread.starred && 'fill-current')} />
+            <span className="hidden sm:inline">{thread.starred ? 'Starred' : 'Star'}</span>
+          </Button>
           <Button
             variant="ghost"
             size="sm"

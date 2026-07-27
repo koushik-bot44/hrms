@@ -575,6 +575,17 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     cross-company.
   - **Read state** is explicit per thread (`POST /mail/threads/{id}/read` | `/unread`); the unread badge
     counts **unread threads**.
+  - **Starred is a per-user, thread-level flag** (like read/unread — the viewer's own relationship to the
+    conversation): `POST` / `DELETE /mail/threads/{id}/star` set/clear the acting user's star (only on a
+    thread they participate in — `403` if it isn't theirs, `404` if it doesn't exist; both are idempotent),
+    and `GET /mail/starred` lists **their** starred threads
+    (same list shape + soft-delete scoping as Inbox, newest activity first). It is stored per-user-per-thread
+    in `thread_stars` (one row per `threadId` + `accountId`; row-exists = starred) — the first of the
+    per-user-thread states (Archive + Labels will reuse the same shape). Starring is **independent** of
+    Inbox/Sent/Search/read/deleted: a thread can be starred **and** unread **and** in Inbox at once, and
+    starring **never moves or deletes** it. Every thread row exposes the viewer's `starred` flag. Only the
+    acting user sees their stars — other participants' views are unaffected. Audited `MAIL_STARRED` /
+    `MAIL_UNSTARRED`.
   - **Delete is a per-user soft-hide:** deleting a thread stamps the viewer's own copies
     (`message_recipients.deletedAt` for received messages, `messages.senderDeletedAt` for sent ones) —
     the rows are **never destroyed** and the counterparty still sees their copy. Deleted threads vanish

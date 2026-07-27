@@ -68,6 +68,27 @@ public interface MessageRepository extends JpaRepository<Message, String> {
       nativeQuery = true)
   Page<String> searchThreadIds(@Param("uid") String uid, @Param("q") String q, Pageable pageable);
 
+  /**
+   * Starred as THREADS (§8): the viewer's OWN threads (a non-deleted sent OR received message — the same
+   * soft-delete scoping as Inbox/Search) that they have starred, newest activity first.
+   */
+  @Query(
+      value =
+          "SELECT m.\"threadId\" FROM \"messages\" m"
+              + " WHERE (((m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL)"
+              + "   OR EXISTS (SELECT 1 FROM \"message_recipients\" r WHERE r.\"messageId\" = m.\"id\""
+              + "     AND (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL))"
+              + " AND EXISTS (SELECT 1 FROM \"thread_stars\" s WHERE s.\"threadId\" = m.\"threadId\" AND s.\"accountId\" = :uid)"
+              + " GROUP BY m.\"threadId\" ORDER BY MAX(m.\"createdAt\") DESC",
+      countQuery =
+          "SELECT count(DISTINCT m.\"threadId\") FROM \"messages\" m"
+              + " WHERE (((m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL)"
+              + "   OR EXISTS (SELECT 1 FROM \"message_recipients\" r WHERE r.\"messageId\" = m.\"id\""
+              + "     AND (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL))"
+              + " AND EXISTS (SELECT 1 FROM \"thread_stars\" s WHERE s.\"threadId\" = m.\"threadId\" AND s.\"accountId\" = :uid)",
+      nativeQuery = true)
+  Page<String> findStarredThreadIds(@Param("uid") String uid, Pageable pageable);
+
   /** Thread-level unread badge (§8): distinct threads with a non-deleted, unopened received message. */
   @Query(
       value =

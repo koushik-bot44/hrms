@@ -130,6 +130,14 @@ public class MailController {
     return mail.search(actor, q, pageable);
   }
 
+  /** Starred — the caller's starred conversations (per-user), same shape + scoping as Inbox. */
+  @GetMapping("/starred")
+  public ThreadPage starred(
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      @PageableDefault(size = 20) Pageable pageable) {
+    return mail.starred(actor, pageable);
+  }
+
   /** Open one thread — participant only (else 403). Marks it read. */
   @GetMapping("/threads/{id}")
   public ThreadDetailView thread(
@@ -160,6 +168,26 @@ public class MailController {
       @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
     mail.delete(actor, id, request.getRemoteAddr());
+    return ResponseEntity.noContent().build();
+  }
+
+  /** Star a thread for the caller only (per-user; idempotent). Participant only (404/403). */
+  @PostMapping("/threads/{id}/star")
+  public ResponseEntity<Void> star(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    mail.star(actor, id, request.getRemoteAddr());
+    return ResponseEntity.noContent().build();
+  }
+
+  /** Unstar a thread for the caller only (per-user; idempotent). Participant only (404/403). */
+  @DeleteMapping("/threads/{id}/star")
+  public ResponseEntity<Void> unstar(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    mail.unstar(actor, id, request.getRemoteAddr());
     return ResponseEntity.noContent().build();
   }
 

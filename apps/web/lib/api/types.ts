@@ -486,6 +486,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mail/threads/{id}/star": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["star"];
+        delete: operations["unstar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mail/threads/{id}/reply": {
         parameters: {
             query?: never;
@@ -1266,6 +1282,22 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/starred": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["starred"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2583,6 +2615,7 @@ export interface components {
             participants?: components["schemas"]["MailPartyView"][];
             counterparty?: components["schemas"]["MailPartyView"];
             messages?: components["schemas"]["ThreadMessageView"][];
+            starred?: boolean;
         };
         ThreadMessageView: {
             id?: string;
@@ -2605,6 +2638,7 @@ export interface components {
             messageCount?: number;
             unread?: boolean;
             hasAttachments?: boolean;
+            starred?: boolean;
         };
         ThreadPage: {
             content?: components["schemas"]["ThreadListItemView"][];
@@ -4014,6 +4048,46 @@ export interface operations {
             };
         };
     };
+    star: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unstar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     reply: {
         parameters: {
             query?: never;
@@ -5402,6 +5476,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    starred: {
+        parameters: {
+            query: {
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ThreadPage"];
+                };
             };
         };
     };

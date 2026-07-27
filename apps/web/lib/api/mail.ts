@@ -24,6 +24,7 @@ export const mailKeys = {
   contacts: ['mail', 'contacts'] as const,
   inbox: (page: number) => ['mail', 'inbox', page] as const,
   sent: (page: number) => ['mail', 'sent', page] as const,
+  starred: (page: number) => ['mail', 'starred', page] as const,
   search: (q: string, page: number) => ['mail', 'search', q, page] as const,
   thread: (id: string) => ['mail', 'thread', id] as const,
 };
@@ -47,6 +48,12 @@ export function getInbox(page = 0, size = 20, signal?: AbortSignal): Promise<Thr
 export function getSent(page = 0, size = 20, signal?: AbortSignal): Promise<ThreadPage> {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
   return apiFetch<ThreadPage>(`/mail/sent?${params.toString()}`, { signal });
+}
+
+/** The caller's starred conversations (per-user), same shape + soft-delete scoping as Inbox. */
+export function getStarred(page = 0, size = 20, signal?: AbortSignal): Promise<ThreadPage> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  return apiFetch<ThreadPage>(`/mail/starred?${params.toString()}`, { signal });
 }
 
 /** Search the caller's own mail (subject + body, case-insensitive). */
@@ -96,6 +103,16 @@ export function markThreadUnread(id: string): Promise<MailUnreadCount> {
 /** Delete a thread for the caller only (per-user soft-hide). */
 export function deleteThread(id: string): Promise<void> {
   return apiFetch<void>(`/mail/threads/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/** Star a thread for the caller only (per-user, thread-level; idempotent). */
+export function starThread(id: string): Promise<void> {
+  return apiFetch<void>(`/mail/threads/${encodeURIComponent(id)}/star`, { method: 'POST' });
+}
+
+/** Unstar a thread for the caller only (per-user; idempotent). */
+export function unstarThread(id: string): Promise<void> {
+  return apiFetch<void>(`/mail/threads/${encodeURIComponent(id)}/star`, { method: 'DELETE' });
 }
 
 // --- Attachments (§8, Stage 4) --------------------------------------------

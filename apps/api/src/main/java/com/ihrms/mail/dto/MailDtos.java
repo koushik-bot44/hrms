@@ -79,7 +79,8 @@ public final class MailDtos {
       List<MailPartyView> participants,
       int messageCount,
       boolean unread,
-      boolean hasAttachments) {}
+      boolean hasAttachments,
+      boolean starred) {}
 
   public record ThreadPage(
       List<ThreadListItemView> content, int page, int size, long totalElements, int totalPages) {}
@@ -110,7 +111,8 @@ public final class MailDtos {
       String subject,
       List<MailPartyView> participants,
       MailPartyView counterparty,
-      List<ThreadMessageView> messages) {}
+      List<ThreadMessageView> messages,
+      boolean starred) {}
 
   public record UnreadCountView(long unread) {}
 }

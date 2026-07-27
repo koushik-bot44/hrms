@@ -15,6 +15,7 @@ import {
   Search,
   Send,
   SquarePen,
+  Star,
   Trash2,
   X,
 } from 'lucide-react';
@@ -27,11 +28,14 @@ import {
   deleteThread,
   getInbox,
   getSent,
+  getStarred,
   getUnreadCount,
   mailKeys,
   markThreadRead,
   markThreadUnread,
   searchMail,
+  starThread,
+  unstarThread,
 } from '@/lib/api/mail';
 import { relativeTime } from '@/lib/date';
 import { cn } from '@/lib/utils';
@@ -42,7 +46,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DockedCompose, type ComposeState } from '@/components/mail/docked-compose';
 import { ThreadView } from '@/components/mail/thread-view';
 
-type Folder = 'inbox' | 'sent';
+type Folder = 'inbox' | 'sent' | 'starred';
 
 /** The full webmail client (§8, Stage 3): Inbox/Sent thread lists + search + reading pane + compose. */
 export function Mailbox() {
@@ -78,6 +82,9 @@ export function Mailbox() {
   const sent = useApiQuery(mailKeys.sent(page), (s) => getSent(page, 20, s), {
     enabled: !searching && folder === 'sent',
   });
+  const starred = useApiQuery(mailKeys.starred(page), (s) => getStarred(page, 20, s), {
+    enabled: !searching && folder === 'starred',
+  });
   const results = useApiQuery(mailKeys.search(searchTerm, page), (s) => searchMail(searchTerm, page, 20, s), {
     enabled: searching,
   });
@@ -103,7 +110,13 @@ export function Mailbox() {
     setSelectedId(null);
   };
 
-  const active = searching ? results : folder === 'inbox' ? inbox : sent;
+  const active = searching
+    ? results
+    : folder === 'inbox'
+      ? inbox
+      : folder === 'sent'
+        ? sent
+        : starred;
   const unreadCount = unread.data?.unread ?? 0;
   const mode: ListMode = searching ? 'search' : folder;
 
@@ -184,6 +197,12 @@ export function Mailbox() {
             active={!searching && folder === 'sent'}
             onClick={() => switchFolder('sent')}
           />
+          <FolderButton
+            icon={Star}
+            label="Starred"
+            active={!searching && folder === 'starred'}
+            onClick={() => switchFolder('starred')}
+          />
           {searching ? (
             <div className="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
               <span className="truncate">Results for “{searchTerm}”</span>
@@ -212,6 +231,14 @@ export function Mailbox() {
             >
               <Send />
               Sent
+            </Button>
+            <Button
+              variant={!searching && folder === 'starred' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => switchFolder('starred')}
+            >
+              <Star />
+              Starred
             </Button>
             <Button size="sm" className="ml-auto" onClick={() => openCompose({ mode: 'new' })}>
               <SquarePen />
@@ -358,24 +385,38 @@ function ThreadList({
 
   const rows = query.data?.content ?? [];
   if (rows.length === 0) {
+    const emptyIcon =
+      mode === 'search' ? Search : mode === 'inbox' ? Inbox : mode === 'starred' ? Star : Send;
     return (
       <EmptyState
-        icon={mode === 'search' ? Search : mode === 'inbox' ? Inbox : Send}
-        title={mode === 'search' ? 'No results' : mode === 'inbox' ? 'No conversations yet' : 'Nothing sent yet'}
+        icon={emptyIcon}
+        title={
+          mode === 'search'
+            ? 'No results'
+            : mode === 'inbox'
+              ? 'No conversations yet'
+              : mode === 'starred'
+                ? 'No starred conversations'
+                : 'Nothing sent yet'
+        }
         description={
           mode === 'search'
             ? 'Try a different word from a subject or message.'
             : mode === 'inbox'
               ? 'Conversations from your contacts will appear here.'
-              : 'Conversations you start will appear here.'
+              : mode === 'starred'
+                ? 'Star a conversation to keep it here. Only you can see your stars.'
+                : 'Conversations you start will appear here.'
         }
         className="m-3 border-0 bg-transparent"
       />
     );
   }
 
+  const listLabel =
+    mode === 'inbox' ? 'Inbox' : mode === 'sent' ? 'Sent' : mode === 'starred' ? 'Starred' : 'Search results';
   return (
-    <ul className="flex-1 overflow-y-auto" aria-label={mode === 'inbox' ? 'Inbox' : mode === 'sent' ? 'Sent' : 'Search results'}>
+    <ul className="flex-1 overflow-y-auto" aria-label={listLabel}>
       {rows.map((row) => (
         <ThreadRow key={row.threadId} row={row} selected={selectedId === row.threadId} onSelect={onSelect} />
       ))}
@@ -397,8 +438,28 @@ function ThreadRow({
     void queryClient.invalidateQueries({ queryKey: mailKeys.unread });
     void queryClient.invalidateQueries({ queryKey: ['mail', 'inbox'] });
     void queryClient.invalidateQueries({ queryKey: ['mail', 'sent'] });
+    void queryClient.invalidateQueries({ queryKey: ['mail', 'starred'] });
     void queryClient.invalidateQueries({ queryKey: ['mail', 'search'] });
   }, [queryClient]);
+
+  // Optimistically flip this thread's `starred` flag in every cached mail LIST page that holds it
+  // (inbox/sent/starred/search). The guard makes this a no-op for the non-list mail caches
+  // (unread-count, thread detail, contacts), which don't carry a `content` array.
+  const patchStarred = React.useCallback(
+    (next: boolean) => {
+      queryClient.setQueriesData<ThreadPage>({ queryKey: ['mail'] }, (old) => {
+        if (!old || !Array.isArray(old.content)) return old;
+        if (!old.content.some((r) => r.threadId === row.threadId)) return old;
+        return {
+          ...old,
+          content: old.content.map((r) =>
+            r.threadId === row.threadId ? { ...r, starred: next } : r,
+          ),
+        };
+      });
+    },
+    [queryClient, row.threadId],
+  );
 
   const toggleRead = useApiMutation(
     () => (row.unread ? markThreadRead(row.threadId) : markThreadUnread(row.threadId)),
@@ -408,6 +469,16 @@ function ThreadRow({
     successMessage: 'Removed from your mailbox',
     onSuccess: refresh,
   });
+  const wasStarred = row.starred;
+  const toggleStar = useApiMutation(
+    () => (wasStarred ? unstarThread(row.threadId) : starThread(row.threadId)),
+    {
+      onMutate: () => patchStarred(!wasStarred), // optimistic: fill/outline immediately
+      onError: () => patchStarred(wasStarred), // revert on failure (the error toast still fires)
+      // The Starred view's membership changed — refetch it so an unstarred row drops out.
+      onSettled: () => queryClient.invalidateQueries({ queryKey: ['mail', 'starred'] }),
+    },
+  );
 
   const names = row.participants.map((p) => p.name).join(', ') || '(no one)';
 
@@ -448,8 +519,27 @@ function ThreadRow({
         {row.snippet ? <p className="truncate text-xs text-muted-foreground">{row.snippet}</p> : null}
       </button>
 
-      {/* Row actions (appear on hover / focus-within; always tappable on touch) */}
-      <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+      {/* Star (per-user, thread-level): a filled amber star when starred is ALWAYS visible so you can
+          see your stars at a glance; when unstarred it's an outline that appears on hover / focus. */}
+      <button
+        type="button"
+        onClick={() => toggleStar.mutate()}
+        disabled={toggleStar.isPending}
+        aria-pressed={row.starred}
+        aria-label={row.starred ? 'Unstar conversation' : 'Star conversation'}
+        title={row.starred ? 'Starred — click to unstar' : 'Star this conversation'}
+        className={cn(
+          'absolute right-2 top-2 rounded p-1.5 transition-opacity hover:bg-background',
+          row.starred
+            ? 'text-amber-500 opacity-100 dark:text-amber-400'
+            : 'text-muted-foreground opacity-0 hover:text-foreground focus:opacity-100 group-hover:opacity-100',
+        )}
+      >
+        <Star className={cn('size-4', row.starred && 'fill-current')} />
+      </button>
+
+      {/* Read + delete (appear on hover / focus-within; always tappable on touch) */}
+      <div className="absolute bottom-2 right-2 flex gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
         <button
           type="button"
           onClick={() => toggleRead.mutate()}

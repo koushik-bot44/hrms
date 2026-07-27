@@ -12,12 +12,14 @@ import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Message;
 import com.ihrms.domain.model.MessageAttachment;
 import com.ihrms.domain.model.MessageRecipient;
+import com.ihrms.domain.model.ThreadStar;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.MessageAttachmentRepository;
 import com.ihrms.domain.repository.MessageRecipientRepository;
 import com.ihrms.domain.repository.MessageRepository;
+import com.ihrms.domain.repository.ThreadStarRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.Cuids;
 import com.ihrms.mail.dto.MailDtos.AttachmentDownload;
@@ -79,6 +81,7 @@ public class InternalMailService {
   private final MessageRepository messages;
   private final MessageRecipientRepository recipients;
   private final MessageAttachmentRepository attachments;
+  private final ThreadStarRepository threadStars;
   private final AuthorizationService authz;
   private final AuditService audit;
   private final StorageService storage;
@@ -91,6 +94,7 @@ public class InternalMailService {
       MessageRepository messages,
       MessageRecipientRepository recipients,
       MessageAttachmentRepository attachments,
+      ThreadStarRepository threadStars,
       AuthorizationService authz,
       AuditService audit,
       StorageService storage,
@@ -101,6 +105,7 @@ public class InternalMailService {
     this.messages = messages;
     this.recipients = recipients;
     this.attachments = attachments;
+    this.threadStars = threadStars;
     this.authz = authz;
     this.audit = audit;
     this.storage = storage;
@@ -384,6 +389,52 @@ public class InternalMailService {
     return page(ids, buildThreadList(me.id(), ids.getContent()));
   }
 
+  // --- Starred (per-user, thread-level, §8) -------------------------------------
+
+  /** Starred as THREADS: the viewer's starred conversations — same list shape + soft-delete scoping as Inbox. */
+  @Transactional(readOnly = true)
+  public ThreadPage starred(IhrmsPrincipal actor, Pageable pageable) {
+    MailParticipant me = resolveActor(actor);
+    Page<String> ids = messages.findStarredThreadIds(me.id(), pageable);
+    return page(ids, buildThreadList(me.id(), ids.getContent()));
+  }
+
+  /** Star a thread for the caller only (idempotent). Only a participant may star it. Audited. */
+  @Transactional
+  public void star(IhrmsPrincipal actor, String threadId, String ip) {
+    MailParticipant me = requireThreadParticipant(actor, threadId);
+    if (!threadStars.existsByThreadIdAndAccountId(threadId, me.id())) {
+      threadStars.save(new ThreadStar(threadId, me.id()));
+      audit.record(actorOf(me), "MAIL_STARRED", "Thread", threadId, Map.of(), ip);
+    }
+  }
+
+  /** Unstar a thread for the caller only (idempotent). Audited only when a star is actually cleared. */
+  @Transactional
+  public void unstar(IhrmsPrincipal actor, String threadId, String ip) {
+    MailParticipant me = requireThreadParticipant(actor, threadId);
+    threadStars
+        .findByThreadIdAndAccountId(threadId, me.id())
+        .ifPresent(
+            s -> {
+              threadStars.delete(s);
+              audit.record(actorOf(me), "MAIL_UNSTARRED", "Thread", threadId, Map.of(), ip);
+            });
+  }
+
+  /** Resolve the caller + confirm they participate in the thread (404 if it doesn't exist, 403 if not theirs). */
+  private MailParticipant requireThreadParticipant(IhrmsPrincipal actor, String threadId) {
+    MailParticipant me = resolveActor(actor);
+    List<Message> msgs = messages.findByThreadIdOrderByCreatedAtAsc(threadId);
+    if (msgs.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found");
+    }
+    if (!isParticipant(me.id(), msgs, recipientsByMessage(msgs))) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot star this conversation");
+    }
+    return me;
+  }
+
   // --- Open one thread ----------------------------------------------------------
 
   /**
@@ -453,8 +504,9 @@ public class InternalMailService {
     audit.record(
         actorOf(me), "MAIL_VIEWED", "Thread", threadId, Map.of("messageCount", visible.size()), ip);
 
+    boolean isStarred = threadStars.existsByThreadIdAndAccountId(threadId, me.id());
     return new ThreadDetailView(
-        threadId, msgs.get(0).getSubject(), participants, counterparty, messageViews);
+        threadId, msgs.get(0).getSubject(), participants, counterparty, messageViews, isStarred);
   }
 
   // --- Read state ---------------------------------------------------------------
@@ -552,6 +604,11 @@ public class InternalMailService {
             .stream()
             .map(MessageAttachment::getMessageId)
             .collect(Collectors.toSet());
+    // Which of these threads the viewer has starred (the per-row star flag) — one batched lookup.
+    Set<String> starredThreadIds =
+        threadStars.findByAccountIdAndThreadIdIn(meId, threadIds).stream()
+            .map(ThreadStar::getThreadId)
+            .collect(Collectors.toSet());
 
     List<ThreadListItemView> out = new ArrayList<>();
     for (String threadId : threadIds) {
@@ -583,7 +640,8 @@ public class InternalMailService {
               participants,
               visible.size(),
               unread,
-              hasAttachments));
+              hasAttachments,
+              starredThreadIds.contains(threadId)));
     }
     return out;
   }
