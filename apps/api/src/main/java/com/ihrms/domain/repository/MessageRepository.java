@@ -50,26 +50,37 @@ public interface MessageRepository extends JpaRepository<Message, String> {
   Page<String> findSentThreadIds(@Param("uid") String uid, Pageable pageable);
 
   /**
-   * Search the viewer's OWN mail (threads with a message they sent or received, excluding their
-   * soft-deleted copies) by case-insensitive subject/body match. Never leaks another mailbox (§8).
-   * {@code q} must already be a lowercased {@code %term%} pattern.
+   * Search + FILTER the viewer's OWN mail (§8). ONE parameterized query: the base is participant-scoped
+   * (threads with a non-deleted message the viewer sent or received) and every criterion below is OPTIONAL
+   * (null-guarded) and ANDed — narrowing only, never widening. Returns distinct threads, newest activity
+   * first. {@code q}/{@code sender} are lowercased {@code %term%} patterns (or null); {@code scope} is one
+   * of ALL/INBOX/SENT/STARRED/ARCHIVE. Never leaks another mailbox — the base scope makes cross-user rows
+   * impossible; filters only reference the same {@code :uid}. Fragments live in {@link MailSearchSql}.
    */
   @Query(
       value =
-          "SELECT m.\"threadId\" FROM \"messages\" m"
-              + " WHERE (((m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL)"
-              + "   OR EXISTS (SELECT 1 FROM \"message_recipients\" r WHERE r.\"messageId\" = m.\"id\""
-              + "     AND (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL))"
-              + " AND (lower(m.\"subject\") LIKE :q OR lower(m.\"body\") LIKE :q)"
-              + " GROUP BY m.\"threadId\" ORDER BY MAX(m.\"createdAt\") DESC",
+          MailSearchSql.SELECT
+              + MailSearchSql.WHERE
+              + MailSearchSql.GROUP
+              + " ORDER BY MAX(m.\"createdAt\") DESC",
       countQuery =
-          "SELECT count(DISTINCT m.\"threadId\") FROM \"messages\" m"
-              + " WHERE (((m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL)"
-              + "   OR EXISTS (SELECT 1 FROM \"message_recipients\" r WHERE r.\"messageId\" = m.\"id\""
-              + "     AND (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL))"
-              + " AND (lower(m.\"subject\") LIKE :q OR lower(m.\"body\") LIKE :q)",
+          "SELECT count(*) FROM ("
+              + MailSearchSql.SELECT
+              + MailSearchSql.WHERE
+              + MailSearchSql.GROUP
+              + ") sub",
       nativeQuery = true)
-  Page<String> searchThreadIds(@Param("uid") String uid, @Param("q") String q, Pageable pageable);
+  Page<String> searchThreadIds(
+      @Param("uid") String uid,
+      @Param("q") String q,
+      @Param("sender") String sender,
+      @Param("after") java.time.Instant after,
+      @Param("before") java.time.Instant before,
+      @Param("hasAttachment") boolean hasAttachment,
+      @Param("unread") boolean unread,
+      @Param("starred") boolean starred,
+      @Param("scope") String scope,
+      Pageable pageable);
 
   /**
    * Starred as THREADS (§8): the viewer's OWN threads (a non-deleted sent OR received message — the same

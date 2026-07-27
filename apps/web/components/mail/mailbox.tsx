@@ -18,12 +18,14 @@ import {
   Paperclip,
   Search,
   Send,
+  SlidersHorizontal,
   SquarePen,
   Star,
   Trash2,
   X,
 } from 'lucide-react';
 import type { Draft, DraftListItem, DraftPage, ThreadListItem, ThreadPage } from '@/lib/contract';
+import type { MailFilters, MailScope } from '@/lib/api/mail';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
@@ -39,6 +41,7 @@ import {
   getSent,
   getStarred,
   getUnreadCount,
+  hasActiveFilters,
   mailKeys,
   markThreadRead,
   markThreadUnread,
@@ -58,7 +61,17 @@ import { ThreadView } from '@/components/mail/thread-view';
 
 type Folder = 'inbox' | 'sent' | 'starred' | 'archived' | 'drafts';
 
-/** The full webmail client (§8, Stage 3): Inbox/Sent thread lists + search + reading pane + compose. */
+const EMPTY_FILTERS: MailFilters = { scope: 'ALL' };
+
+const SCOPE_LABELS: Record<MailScope, string> = {
+  ALL: 'All mail',
+  INBOX: 'Inbox',
+  SENT: 'Sent',
+  STARRED: 'Starred',
+  ARCHIVE: 'Archive',
+};
+
+/** The full webmail client (§8, Stage 3): Inbox/Sent thread lists + search + filters + reading pane + compose. */
 export function Mailbox() {
   const { session } = useAuth();
   const [folder, setFolder] = React.useState<Folder>('inbox');
@@ -73,7 +86,12 @@ export function Mailbox() {
   }, []);
   const [searchInput, setSearchInput] = React.useState('');
   const [searchTerm, setSearchTerm] = React.useState('');
-  const searching = searchTerm.trim().length > 0;
+  // Committed filters (drive the query) + the draft being edited in the filter bar.
+  const [filters, setFilters] = React.useState<MailFilters>(EMPTY_FILTERS);
+  const [filterDraft, setFilterDraft] = React.useState<MailFilters>(EMPTY_FILTERS);
+  const [showFilters, setShowFilters] = React.useState(false);
+  const filtersActive = hasActiveFilters(filters);
+  const searching = searchTerm.trim().length > 0 || filtersActive;
 
   // Staff: the login email IS the address. Employee: their assigned mailbox address (§8, Stage 5).
   const myAddress =
@@ -101,11 +119,36 @@ export function Mailbox() {
   const draftsList = useApiQuery(mailKeys.drafts(page), (s) => getDrafts(page, 20, s), {
     enabled: !searching && folder === 'drafts',
   });
-  const results = useApiQuery(mailKeys.search(searchTerm, page), (s) => searchMail(searchTerm, page, 20, s), {
-    enabled: searching,
-  });
+  const results = useApiQuery(
+    mailKeys.search(searchTerm, filters, page),
+    (s) => searchMail(searchTerm, filters, page, 20, s),
+    { enabled: searching },
+  );
 
   const isDrafts = !searching && folder === 'drafts';
+
+  const applyFilters = () => {
+    setFilters(filterDraft);
+    setPage(0);
+    setSelectedId(null);
+    setShowFilters(false);
+  };
+  const clearFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    setFilterDraft(EMPTY_FILTERS);
+    setPage(0);
+    setShowFilters(false);
+  };
+  const toggleFilters = () => {
+    setFilterDraft(filters); // start the bar from the committed filters
+    setShowFilters((v) => !v);
+  };
+  const removeFilter = (patch: MailFilters) => {
+    const next = { ...filters, ...patch };
+    setFilters(next);
+    setFilterDraft(next);
+    setPage(0);
+  };
 
   // Open a draft in the composer, prefilled + bound to its id (so Save updates it and Send runs /send).
   const openDraft = React.useCallback(
@@ -126,6 +169,9 @@ export function Mailbox() {
     setSelectedId(null);
     setSearchTerm('');
     setSearchInput('');
+    setFilters(EMPTY_FILTERS);
+    setFilterDraft(EMPTY_FILTERS);
+    setShowFilters(false);
   };
 
   const submitSearch = (e: React.FormEvent) => {
@@ -137,6 +183,9 @@ export function Mailbox() {
   const clearSearch = () => {
     setSearchTerm('');
     setSearchInput('');
+    setFilters(EMPTY_FILTERS);
+    setFilterDraft(EMPTY_FILTERS);
+    setShowFilters(false);
     setPage(0);
     setSelectedId(null);
   };
@@ -171,27 +220,48 @@ export function Mailbox() {
           </div>
         </div>
 
-        <form onSubmit={submitSearch} className="relative hidden max-w-xs flex-1 sm:block">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search your mail"
-            aria-label="Search your mail"
-            className="pl-8 pr-8"
-          />
-          {searchInput ? (
-            <button
-              type="button"
-              onClick={clearSearch}
-              aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
-          ) : null}
-        </form>
+        <div className="hidden max-w-md flex-1 items-center gap-2 sm:flex">
+          <form onSubmit={submitSearch} className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search your mail"
+              aria-label="Search your mail"
+              className="pl-8 pr-8"
+            />
+            {searchInput ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput('');
+                  setSearchTerm('');
+                }}
+                aria-label="Clear search text"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            ) : null}
+          </form>
+          <Button
+            type="button"
+            variant={showFilters || filtersActive ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={toggleFilters}
+            aria-pressed={showFilters}
+            className="shrink-0"
+          >
+            <SlidersHorizontal />
+            Filters
+            {countActiveFilters(filters) > 0 ? (
+              <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                {countActiveFilters(filters)}
+              </span>
+            ) : null}
+          </Button>
+        </div>
 
         <div className="flex items-center gap-2">
           <a
@@ -208,6 +278,20 @@ export function Mailbox() {
           </Button>
         </div>
       </header>
+
+      {/* Search filter bar (toggle) + active-filter chips */}
+      {showFilters ? (
+        <FilterBar
+          draft={filterDraft}
+          setDraft={setFilterDraft}
+          onApply={applyFilters}
+          onClear={clearFilters}
+          onClose={() => setShowFilters(false)}
+        />
+      ) : null}
+      {filtersActive && !showFilters ? (
+        <FilterChips filters={filters} onRemove={removeFilter} onClear={clearFilters} />
+      ) : null}
 
       {/* Body */}
       <div className="flex min-h-0 flex-1">
@@ -306,16 +390,28 @@ export function Mailbox() {
               New
             </Button>
           </div>
-          <form onSubmit={submitSearch} className="relative border-b p-2">
-            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search your mail"
-              className="pl-8"
-            />
-          </form>
+          <div className="flex items-center gap-2 border-b p-2">
+            <form onSubmit={submitSearch} className="relative flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search your mail"
+                className="pl-8"
+              />
+            </form>
+            <Button
+              type="button"
+              variant={showFilters || filtersActive ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={toggleFilters}
+              className="shrink-0"
+            >
+              <SlidersHorizontal />
+              {countActiveFilters(filters) > 0 ? countActiveFilters(filters) : ''}
+            </Button>
+          </div>
           {isDrafts ? (
             <div className="flex flex-1 flex-col">
               <DraftsList query={draftsList} onOpen={openDraft} />
@@ -477,7 +573,7 @@ function ThreadList({
         icon={emptyIcon}
         title={
           mode === 'search'
-            ? 'No results'
+            ? 'No mail matches'
             : mode === 'inbox'
               ? 'No conversations yet'
               : mode === 'starred'
@@ -488,7 +584,7 @@ function ThreadList({
         }
         description={
           mode === 'search'
-            ? 'Try a different word from a subject or message.'
+            ? 'No mail matches your search and filters. Try broadening the text or removing a filter.'
             : mode === 'inbox'
               ? 'Conversations from your contacts will appear here.'
               : mode === 'starred'
@@ -916,5 +1012,187 @@ function DraftRow({ row, onOpen }: { row: DraftListItem; onOpen: (id: string) =>
         </button>
       </div>
     </li>
+  );
+}
+
+// --- Search filters UI (§8) -------------------------------------------------
+
+function countActiveFilters(f: MailFilters): number {
+  let n = 0;
+  if (f.from?.trim()) n++;
+  if (f.after) n++;
+  if (f.before) n++;
+  if (f.hasAttachment) n++;
+  if (f.unread) n++;
+  if (f.starred) n++;
+  if (f.scope && f.scope !== 'ALL') n++;
+  return n;
+}
+
+function FilterBar({
+  draft,
+  setDraft,
+  onApply,
+  onClear,
+  onClose,
+}: {
+  draft: MailFilters;
+  setDraft: React.Dispatch<React.SetStateAction<MailFilters>>;
+  onApply: () => void;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  const set = (patch: Partial<MailFilters>) => setDraft((d) => ({ ...d, ...patch }));
+  return (
+    <div className="border-b bg-muted/40 px-4 py-3 md:px-6">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onApply();
+        }}
+        className="flex flex-wrap items-end gap-x-4 gap-y-3"
+      >
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="font-medium text-muted-foreground">From (name or address)</span>
+          <Input
+            value={draft.from ?? ''}
+            onChange={(e) => set({ from: e.target.value })}
+            placeholder="e.g. steve"
+            className="h-9 w-48"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="font-medium text-muted-foreground">After</span>
+          <Input
+            type="date"
+            value={draft.after ?? ''}
+            onChange={(e) => set({ after: e.target.value || undefined })}
+            className="h-9 w-40"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="font-medium text-muted-foreground">Before</span>
+          <Input
+            type="date"
+            value={draft.before ?? ''}
+            onChange={(e) => set({ before: e.target.value || undefined })}
+            className="h-9 w-40"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="font-medium text-muted-foreground">In</span>
+          <select
+            value={draft.scope ?? 'ALL'}
+            onChange={(e) => set({ scope: e.target.value as MailScope })}
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {(Object.keys(SCOPE_LABELS) as MailScope[]).map((s) => (
+              <option key={s} value={s}>
+                {SCOPE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex items-center gap-4 pb-2">
+          <CheckboxLabel checked={!!draft.hasAttachment} onChange={(v) => set({ hasAttachment: v })}>
+            Has attachment
+          </CheckboxLabel>
+          <CheckboxLabel checked={!!draft.unread} onChange={(v) => set({ unread: v })}>
+            Unread
+          </CheckboxLabel>
+          <CheckboxLabel checked={!!draft.starred} onChange={(v) => set({ starred: v })}>
+            Starred
+          </CheckboxLabel>
+        </div>
+        <div className="ml-auto flex items-center gap-2 pb-1">
+          <Button type="submit" size="sm">
+            Apply
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onClear}>
+            Clear
+          </Button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close filters"
+            className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function CheckboxLabel({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="size-4 rounded border-input accent-[hsl(var(--primary))]"
+      />
+      {children}
+    </label>
+  );
+}
+
+function FilterChips({
+  filters,
+  onRemove,
+  onClear,
+}: {
+  filters: MailFilters;
+  onRemove: (patch: MailFilters) => void;
+  onClear: () => void;
+}) {
+  const chips: { label: string; clear: MailFilters }[] = [];
+  if (filters.from?.trim()) chips.push({ label: `From: ${filters.from}`, clear: { from: undefined } });
+  if (filters.after) chips.push({ label: `After: ${filters.after}`, clear: { after: undefined } });
+  if (filters.before) chips.push({ label: `Before: ${filters.before}`, clear: { before: undefined } });
+  if (filters.hasAttachment) chips.push({ label: 'Has attachment', clear: { hasAttachment: false } });
+  if (filters.unread) chips.push({ label: 'Unread', clear: { unread: false } });
+  if (filters.starred) chips.push({ label: 'Starred', clear: { starred: false } });
+  if (filters.scope && filters.scope !== 'ALL') {
+    chips.push({ label: `In: ${SCOPE_LABELS[filters.scope]}`, clear: { scope: 'ALL' } });
+  }
+  if (chips.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b bg-card px-4 py-2 md:px-6">
+      <span className="text-xs text-muted-foreground">Filters:</span>
+      {chips.map((c) => (
+        <span
+          key={c.label}
+          className="inline-flex items-center gap-1 rounded-full bg-surface-tint px-2.5 py-0.5 text-xs font-medium text-primary"
+        >
+          {c.label}
+          <button
+            type="button"
+            onClick={() => onRemove(c.clear)}
+            aria-label={`Remove filter ${c.label}`}
+            className="hover:text-foreground"
+          >
+            <X className="size-3" />
+          </button>
+        </span>
+      ))}
+      <button
+        type="button"
+        onClick={onClear}
+        className="ml-1 text-xs text-muted-foreground underline-offset-2 hover:underline"
+      >
+        Clear all
+      </button>
+    </div>
   );
 }

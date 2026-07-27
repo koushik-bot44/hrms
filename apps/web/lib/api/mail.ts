@@ -31,9 +31,43 @@ export const mailKeys = {
   archived: (page: number) => ['mail', 'archived', page] as const,
   drafts: (page: number) => ['mail', 'drafts', page] as const,
   draft: (id: string) => ['mail', 'draft', id] as const,
-  search: (q: string, page: number) => ['mail', 'search', q, page] as const,
+  search: (q: string, filters: MailFilters, page: number) =>
+    ['mail', 'search', q, filters, page] as const,
   thread: (id: string) => ['mail', 'thread', id] as const,
 };
+
+// --- Search filters (§8) --------------------------------------------------
+
+/** Restrict a search to a view; ALL = all my mail (global, archived included). */
+export type MailScope = 'ALL' | 'INBOX' | 'SENT' | 'STARRED' | 'ARCHIVE';
+
+/**
+ * Optional, ANDed search filters. `from` matches the sender by address or name; `after`/`before` are
+ * calendar dates (`yyyy-MM-dd`) bounding the thread's latest activity; the booleans are the viewer's own
+ * thread flags. Empty = plain text search.
+ */
+export interface MailFilters {
+  from?: string;
+  after?: string; // yyyy-MM-dd
+  before?: string; // yyyy-MM-dd
+  hasAttachment?: boolean;
+  unread?: boolean;
+  starred?: boolean;
+  scope?: MailScope;
+}
+
+/** True when any filter is set (so the UI knows it's in filtered mode even with empty text). */
+export function hasActiveFilters(f: MailFilters): boolean {
+  return Boolean(
+    f.from?.trim() ||
+      f.after ||
+      f.before ||
+      f.hasAttachment ||
+      f.unread ||
+      f.starred ||
+      (f.scope && f.scope !== 'ALL'),
+  );
+}
 
 // --- Reads ----------------------------------------------------------------
 
@@ -68,9 +102,26 @@ export function getArchived(page = 0, size = 20, signal?: AbortSignal): Promise<
   return apiFetch<ThreadPage>(`/mail/archived?${params.toString()}`, { signal });
 }
 
-/** Search the caller's own mail (subject + body, case-insensitive). */
-export function searchMail(q: string, page = 0, size = 20, signal?: AbortSignal): Promise<ThreadPage> {
-  const params = new URLSearchParams({ q, page: String(page), size: String(size) });
+/**
+ * Search + FILTER the caller's own mail (§8). Text `q` (subject/body) ANDs with any of the optional
+ * filters. Calendar dates become inclusive day bounds on the thread's latest activity (UTC).
+ */
+export function searchMail(
+  q: string,
+  filters: MailFilters = {},
+  page = 0,
+  size = 20,
+  signal?: AbortSignal,
+): Promise<ThreadPage> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  if (q.trim()) params.set('q', q.trim());
+  if (filters.from?.trim()) params.set('from', filters.from.trim());
+  if (filters.after) params.set('after', `${filters.after}T00:00:00.000Z`);
+  if (filters.before) params.set('before', `${filters.before}T23:59:59.999Z`);
+  if (filters.hasAttachment) params.set('hasAttachment', 'true');
+  if (filters.unread) params.set('unread', 'true');
+  if (filters.starred) params.set('starred', 'true');
+  if (filters.scope && filters.scope !== 'ALL') params.set('scope', filters.scope);
   return apiFetch<ThreadPage>(`/mail/search?${params.toString()}`, { signal });
 }
 

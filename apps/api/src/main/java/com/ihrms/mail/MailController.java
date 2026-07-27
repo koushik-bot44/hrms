@@ -125,13 +125,24 @@ public class MailController {
     return mail.sent(actor, pageable);
   }
 
-  /** Search the caller's own mail (subject + body, case-insensitive). */
+  /**
+   * Search + FILTER the caller's own mail (§8). {@code q} (subject/body text) ANDs with optional {@code
+   * from}, {@code after}/{@code before} (ISO-8601 instants), {@code hasAttachment}/{@code unread}/{@code
+   * starred}, and {@code scope} (ALL/INBOX/SENT/STARRED/ARCHIVE; default ALL). All optional.
+   */
   @GetMapping("/search")
   public ThreadPage search(
       @RequestParam(name = "q", required = false) String q,
+      @RequestParam(name = "from", required = false) String from,
+      @RequestParam(name = "after", required = false) String after,
+      @RequestParam(name = "before", required = false) String before,
+      @RequestParam(name = "hasAttachment", required = false, defaultValue = "false") boolean hasAttachment,
+      @RequestParam(name = "unread", required = false, defaultValue = "false") boolean unread,
+      @RequestParam(name = "starred", required = false, defaultValue = "false") boolean starred,
+      @RequestParam(name = "scope", required = false) String scope,
       @AuthenticationPrincipal IhrmsPrincipal actor,
       @PageableDefault(size = 20) Pageable pageable) {
-    return mail.search(actor, q, pageable);
+    return mail.search(actor, q, from, after, before, hasAttachment, unread, starred, scope, pageable);
   }
 
   /** Starred — the caller's starred conversations (per-user), same shape + scoping as Inbox. */

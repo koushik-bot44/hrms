@@ -397,6 +397,98 @@ class MailApiTest {
     assertThat(searchCount(caA, "budget")).isEqualTo(1);
   }
 
+  // --- Search FILTERS (from / date / hasAttachment / unread / starred / scope, §8) ---
+
+  @Test
+  void filtersCombineWithTextAndEachOther_withAndSemantics() throws Exception {
+    String invoice =
+        startThreadWith(
+            caA, hrA, "Invoice March", "the invoice is attached",
+            List.of(uploadDraft(caA, "inv.pdf", "application/pdf", 512)));
+    String budget = startThread(mgrA, hrA, "Budget", "quarterly budget"); // team HR<->Manager
+    String hello = startThread(caA, hrA, "Hello", "hi there");
+
+    // Each filter alone.
+    assertThat(searchIds(hrA, "q=invoice")).containsExactly(invoice); // text
+    assertThat(searchIds(hrA, "from=admin")).containsExactlyInAnyOrder(invoice, hello); // sender (caA)
+    assertThat(searchIds(hrA, "from=mgr")).containsExactly(budget);
+    assertThat(searchIds(hrA, "hasAttachment=true")).containsExactly(invoice);
+
+    // AND across text + filters: only the thread matching ALL.
+    assertThat(searchIds(hrA, "q=invoice&from=admin&hasAttachment=true")).containsExactly(invoice);
+    // Dropping hasAttachment keeps it (invoice is still from admin + matches text).
+    assertThat(searchIds(hrA, "q=invoice&from=admin")).containsExactly(invoice);
+    // A contradictory combination matches nothing.
+    assertThat(searchIds(hrA, "q=invoice&from=mgr")).isEmpty();
+  }
+
+  @Test
+  void unreadAndStarredFilters_reflectTheViewersOwnFlags() throws Exception {
+    String a = startThread(caA, hrA, "Alpha", "a");
+    String b = startThread(mgrA, hrA, "Beta", "b");
+    String c = startThread(caA, hrA, "Gamma", "c");
+    openThreadJson(hrA, c); // hrA reads c
+    star(hrA, b).andExpect(status().isNoContent());
+
+    assertThat(searchIds(hrA, "unread=true")).containsExactlyInAnyOrder(a, b); // c was opened
+    assertThat(searchIds(hrA, "starred=true")).containsExactly(b);
+    assertThat(searchIds(hrA, "unread=true&starred=true")).containsExactly(b); // AND
+
+    // PER-USER: the flags are the VIEWER's. caA's star is caA's own; hrA's star (b) is invisible to caA.
+    star(caA, a).andExpect(status().isNoContent());
+    assertThat(searchIds(caA, "starred=true")).containsExactly(a);
+  }
+
+  @Test
+  void dateRangeBoundsByTheThreadsLatestActivity() throws Exception {
+    String oldThread = startThread(caA, hrA, "OldOne", "old");
+    String newThread = startThread(caA, hrA, "NewOne", "new");
+    // Backdate the old thread's messages so latest-activity is in 2020 (server timestamps are "now").
+    jdbc.update(
+        "UPDATE \"messages\" SET \"createdAt\" = '2020-01-01 00:00:00'::timestamp WHERE \"threadId\" = ?",
+        oldThread);
+
+    assertThat(searchIds(hrA, "from=admin&after=2021-01-01T00:00:00Z")).containsExactly(newThread);
+    assertThat(searchIds(hrA, "from=admin&before=2021-01-01T00:00:00Z")).containsExactly(oldThread);
+    assertThat(searchIds(hrA, "from=admin&after=2019-01-01T00:00:00Z&before=2021-01-01T00:00:00Z"))
+        .containsExactly(oldThread);
+  }
+
+  @Test
+  void scopeRestrictsToTheView() throws Exception {
+    String inboxT = startThread(caA, hrA, "InboxThread", "x");
+    String archivedT = startThread(caA, hrA, "ArchivedThread", "x");
+    String starredT = startThread(mgrA, hrA, "StarredThread", "x");
+    String sentT = startThread(hrA, caA, "SentByHr", "x"); // hrA is the sender here
+    archive(hrA, archivedT).andExpect(status().isNoContent());
+    star(hrA, starredT).andExpect(status().isNoContent());
+
+    // Default scope (ALL) includes archived — both caA-sent threads match from=admin.
+    assertThat(searchIds(hrA, "from=admin")).containsExactlyInAnyOrder(inboxT, archivedT);
+    // INBOX excludes the viewer's archived threads.
+    assertThat(searchIds(hrA, "scope=INBOX&from=admin")).containsExactly(inboxT);
+    // ARCHIVE / STARRED / SENT each restrict to their view.
+    assertThat(searchIds(hrA, "scope=ARCHIVE")).containsExactly(archivedT);
+    assertThat(searchIds(hrA, "scope=STARRED")).containsExactly(starredT);
+    assertThat(searchIds(hrA, "scope=SENT")).containsExactly(sentT);
+  }
+
+  @Test
+  void filtersAreParticipantScoped_andEmptyCriteriaReturnsNothing() throws Exception {
+    String t = startThread(caA, hrA, "Shared", "the invoice");
+    // Both participants find it; a non-participant sees nothing.
+    assertThat(searchIds(hrA, "q=invoice")).containsExactly(t);
+    assertThat(searchIds(caA, "q=invoice")).containsExactly(t);
+    assertThat(searchIds(mgrA, "q=invoice")).isEmpty();
+
+    // Empty criteria (blank text, no filters, default scope=ALL) returns nothing — prior behavior.
+    assertThat(search(hrA, "q=").get("totalElements").asInt()).isZero();
+    assertThat(search(hrA, "").get("totalElements").asInt()).isZero();
+    // A malformed date bound is a 400 (never a silent no-op).
+    mvc.perform(get("/mail/search?after=not-a-date").header("Authorization", "Bearer " + token(hrA)))
+        .andExpect(status().isBadRequest());
+  }
+
   // --- Read state (explicit + thread-level badge) ---------------------------
 
   @Test
@@ -1367,6 +1459,18 @@ class MailApiTest {
 
   private long searchCount(User who, String q) throws Exception {
     return getJson(who, "/mail/search?q=" + q).get("totalElements").asLong();
+  }
+
+  /** GET /mail/search with a raw query string (expects 200); returns the ThreadPage body. */
+  private JsonNode search(User who, String queryString) throws Exception {
+    return getJson(who, "/mail/search" + (queryString.isEmpty() ? "" : "?" + queryString));
+  }
+
+  /** The thread ids in a search/filter result page, in order. */
+  private List<String> searchIds(User who, String queryString) throws Exception {
+    List<String> out = new java.util.ArrayList<>();
+    search(who, queryString).get("content").forEach(r -> out.add(r.get("threadId").asText()));
+    return out;
   }
 
   private long unread(User who) throws Exception {

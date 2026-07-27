@@ -403,16 +403,77 @@ public class InternalMailService {
     return page(ids, buildThreadList(me.id(), ids.getContent()));
   }
 
-  /** Search the caller's OWN mail (subject + body, case-insensitive). Never another mailbox (§8). */
+  /**
+   * Search + FILTER the caller's OWN mail (§8). Text {@code q} (subject/body) ANDs with any of: {@code
+   * from} (sender by address/name), {@code after}/{@code before} (thread latest-activity bounds, ISO
+   * instants), {@code hasAttachment}/{@code unread}/{@code starred} (the viewer's own thread flags), and
+   * {@code scope} (ALL/INBOX/SENT/STARRED/ARCHIVE, default ALL). All optional; empty criteria returns
+   * nothing (as before). One participant-scoped query — never another mailbox.
+   */
   @Transactional(readOnly = true)
-  public ThreadPage search(IhrmsPrincipal actor, String q, Pageable pageable) {
+  public ThreadPage search(
+      IhrmsPrincipal actor,
+      String q,
+      String from,
+      String after,
+      String before,
+      boolean hasAttachment,
+      boolean unread,
+      boolean starred,
+      String scope,
+      Pageable pageable) {
     MailParticipant me = resolveActor(actor);
-    String term = q == null ? "" : q.strip().toLowerCase();
-    if (term.isEmpty()) {
+    String term = like(q);
+    String sender = like(from);
+    Instant afterAt = parseInstant(after, "after");
+    Instant beforeAt = parseInstant(before, "before");
+    String view = normalizeScope(scope);
+
+    boolean anyCriteria =
+        term != null
+            || sender != null
+            || afterAt != null
+            || beforeAt != null
+            || hasAttachment
+            || unread
+            || starred
+            || !"ALL".equals(view);
+    if (!anyCriteria) {
+      // No text and no filters — same as the prior search: nothing (don't dump the whole mailbox).
       return new ThreadPage(List.of(), 0, pageable.getPageSize(), 0, 0);
     }
-    Page<String> ids = messages.searchThreadIds(me.id(), "%" + term + "%", pageable);
+    Page<String> ids =
+        messages.searchThreadIds(
+            me.id(), term, sender, afterAt, beforeAt, hasAttachment, unread, starred, view, pageable);
     return page(ids, buildThreadList(me.id(), ids.getContent()));
+  }
+
+  /** A lowercased {@code %term%} LIKE pattern, or null when blank (=> the clause is skipped). */
+  private static String like(String s) {
+    return s == null || s.isBlank() ? null : "%" + s.strip().toLowerCase() + "%";
+  }
+
+  /** Parse an optional ISO-8601 instant filter bound; a malformed value is a 400 (never a silent no-op). */
+  private static Instant parseInstant(String s, String field) {
+    if (s == null || s.isBlank()) {
+      return null;
+    }
+    try {
+      return Instant.parse(s.strip());
+    } catch (java.time.format.DateTimeParseException e) {
+      throw new ValidationException(List.of(field + ": expected an ISO-8601 timestamp"));
+    }
+  }
+
+  private static String normalizeScope(String scope) {
+    if (scope == null || scope.isBlank()) {
+      return "ALL";
+    }
+    String s = scope.strip().toUpperCase();
+    return switch (s) {
+      case "INBOX", "SENT", "STARRED", "ARCHIVE", "ALL" -> s;
+      default -> "ALL";
+    };
   }
 
   // --- Starred (per-user, thread-level, §8) -------------------------------------

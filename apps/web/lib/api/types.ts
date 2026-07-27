@@ -5827,6 +5827,13 @@ export interface operations {
         parameters: {
             query: {
                 q?: string;
+                from?: string;
+                after?: string;
+                before?: string;
+                hasAttachment?: boolean;
+                unread?: boolean;
+                starred?: boolean;
+                scope?: string;
                 pageable: components["schemas"]["Pageable"];
             };
             header?: never;

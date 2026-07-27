@@ -570,9 +570,27 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     all BCC. A reply **is a send**, so every derived recipient is re-validated through `canSendMail` every
     time (403 if the graph would now forbid it, e.g. a participant changed company/role after the thread
     started). Audited `MAIL_SENT`.
-  - **Search** (`GET /mail/search?q=`) runs over the viewer's **own mail only** (threads with a message
-    they sent or received), matching **subject + body** case-insensitively — never another mailbox, never
-    cross-company.
+  - **Search + structured filters** (`GET /mail/search`) runs over the viewer's **own mail only** (threads
+    with a message they sent or received, respecting their soft-delete) — never another mailbox, never
+    cross-company. The text `q` matches **subject + body** case-insensitively, and it **ANDs** with any
+    combination of optional filters (all thread-level, all narrowing — never widening the participant scope):
+    * `from` — the thread has a viewer-visible message whose **sender** matches by **address or name**
+      (`users.email`/`users.name` or `employees.mailAddress`/`employees.fullName`), case-insensitive.
+    * `after` / `before` — bound the thread's **latest activity** (`MAX(createdAt)`), both inclusive.
+    * `hasAttachment` — the thread has a viewer-visible message with ≥1 attachment.
+    * `unread` — the viewer has an unopened message in the thread (their per-user read state).
+    * `starred` — the viewer has starred the thread (`thread_stars`).
+    * `scope` — restrict to `INBOX` (received, not archived) | `SENT` | `STARRED` | `ARCHIVE`, reusing each
+      view's own rule; **default `ALL`** (all my mail, archived included — like today's global search).
+
+    Every criterion is optional and **ANDed**; a thread is returned only if it satisfies **all** supplied
+    ones. The whole thing is **one parameterized query** — the base participant/soft-delete-scoped
+    `searchThreadIds` extended with null-guarded `EXISTS`/join/`HAVING` clauses (no forked search path, no
+    N+1, no Java post-filtering). **Empty criteria** (no `q`, no filters, `scope=ALL`) returns nothing, as
+    before; any single filter (or a non-`ALL` scope) runs even with blank text. Results are the same
+    thread-list rows (with the viewer's `unread`/`starred`/`archived`/`hasAttachments` flags), so the UI
+    reuses the list. `unread`/`starred` always reflect the **viewer's** own flags — cross-user leakage is
+    impossible because the base query is already participant-scoped and filters only narrow it.
   - **Read state** is explicit per thread (`POST /mail/threads/{id}/read` | `/unread`); the unread badge
     counts **unread threads**.
   - **Starred is a per-user, thread-level flag** (like read/unread — the viewer's own relationship to the
