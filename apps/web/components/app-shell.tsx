@@ -41,7 +41,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ApiStatusIndicator } from '@/components/api-status-indicator';
 import { MailButton } from '@/components/mail/mail-button';
 
 export interface NavItem {
@@ -346,7 +345,6 @@ export function AppShell({
             <span className="text-sm font-semibold tracking-tight md:hidden">IHRMS</span>
           </div>
           <div className="flex items-center gap-3">
-            <ApiStatusIndicator className="hidden sm:inline-flex" />
             {showMail ? <MailButton /> : null}
             <UserMenu roleLabel={roleLabel} />
           </div>

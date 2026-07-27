@@ -3,7 +3,6 @@ import { ArrowRight, ClipboardCheck, ScrollText, ShieldCheck, UserPlus } from 'l
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ApiStatusIndicator } from '@/components/api-status-indicator';
 
 const FEATURES = [
   {
@@ -34,7 +33,6 @@ export default function Home() {
           <span className="font-semibold tracking-tight">IHRMS</span>
         </div>
         <div className="flex items-center gap-4">
-          <ApiStatusIndicator className="hidden sm:inline-flex" />
           <Button asChild size="sm" variant="outline">
             <Link href="/login">Sign in</Link>
           </Button>
