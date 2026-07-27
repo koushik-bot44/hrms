@@ -49,8 +49,8 @@ export function StatTile({
   const body = (
     <Card variant={href ? 'interactive' : 'default'} className={cn('h-full', className)} title={title}>
       <CardContent className="flex items-start gap-4 p-5">
-        <div className={cn('flex size-11 shrink-0 items-center justify-center rounded-xl', TILE_TONES[tone])}>
-          <Icon className="size-5" />
+        <div className={cn('flex size-12 shrink-0 items-center justify-center rounded-xl', TILE_TONES[tone])}>
+          <Icon className="size-6" />
         </div>
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="text-xs font-medium text-muted-foreground">{label}</p>

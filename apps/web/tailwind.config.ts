@@ -37,8 +37,17 @@ const config: Config = {
           // Brighter emerald for tints, chart fills, and decorative accents (not solid-button text bg).
           bright: 'hsl(var(--primary-bright) / <alpha-value>)',
         },
-        // Mint brand surface (hero/panel/active-nav pill). NOT the neutral `accent` hover tint.
+        // Soft-indigo brand surface (hero/panel/active-nav pill). NOT the neutral `accent` hover tint.
         'surface-tint': 'hsl(var(--surface-tint) / <alpha-value>)',
+        // The sidebar's own deep indigo-navy surface (dark in both app modes).
+        sidebar: {
+          DEFAULT: 'hsl(var(--sidebar) / <alpha-value>)',
+          foreground: 'hsl(var(--sidebar-foreground) / <alpha-value>)',
+          muted: 'hsl(var(--sidebar-muted) / <alpha-value>)',
+          active: 'hsl(var(--sidebar-active) / <alpha-value>)',
+          'active-foreground': 'hsl(var(--sidebar-active-foreground) / <alpha-value>)',
+          border: 'hsl(var(--sidebar-border) / <alpha-value>)',
+        },
         secondary: {
           DEFAULT: 'hsl(var(--secondary) / <alpha-value>)',
           foreground: 'hsl(var(--secondary-foreground) / <alpha-value>)',
@@ -107,6 +116,8 @@ const config: Config = {
         'accordion-up': 'accordion-up 0.2s ease-out',
         'fade-in': 'fade-in 0.3s ease-out both',
         rise: 'rise 0.4s ease-out both',
+        // Shared page/content mount: fade + slight rise, kept subtle (reuses the `rise` keyframe).
+        'page-enter': 'rise 0.24s ease-out both',
       },
     },
   },

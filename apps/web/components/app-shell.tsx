@@ -84,11 +84,11 @@ function NavLinks({
             aria-current={active ? 'page' : undefined}
             title={collapsed ? item.label : undefined}
             className={cn(
-              'flex items-center gap-3 rounded-xl text-sm font-medium transition-colors',
+              'flex items-center gap-3 rounded-xl text-sm font-medium transition-colors duration-150',
               collapsed ? 'justify-center px-0 py-2.5' : 'px-3.5 py-2.5',
               active
-                ? 'bg-surface-tint text-primary'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                ? 'bg-sidebar-active text-sidebar-active-foreground shadow-sm'
+                : 'text-sidebar-muted hover:bg-white/5 hover:text-sidebar-foreground',
             )}
           >
             <item.icon className="size-4 shrink-0" />
@@ -104,19 +104,53 @@ function Brand({ roleLabel, collapsed = false }: { roleLabel: string; collapsed?
   return (
     <div
       className={cn(
-        'flex h-14 items-center gap-2 border-b',
+        'flex h-14 items-center gap-2 border-b border-sidebar-border',
         collapsed ? 'justify-center px-2' : 'px-4',
       )}
     >
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
         <ShieldCheck className="size-4" />
       </div>
       {collapsed ? null : (
         <div className="leading-tight">
-          <div className="text-sm font-semibold tracking-tight">IHRMS</div>
-          <div className="text-[11px] text-muted-foreground">{roleLabel}</div>
+          <div className="text-sm font-semibold tracking-tight text-sidebar-foreground">IHRMS</div>
+          <div className="text-[11px] text-sidebar-muted">{roleLabel}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Static, decorative trust badge pinned to the sidebar footer (per the design direction). */
+function SecurityBadge() {
+  return (
+    <div className="flex items-start gap-2.5 rounded-xl bg-black/20 p-3 ring-1 ring-inset ring-sidebar-border">
+      <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary-bright" aria-hidden />
+      <div className="leading-snug">
+        <p className="text-xs font-semibold text-sidebar-foreground">Secure &amp; compliant</p>
+        <p className="mt-0.5 text-[11px] text-sidebar-muted">
+          Your data is protected with enterprise-grade security and encryption.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Topbar welcome cluster — REAL session data only (name/code + role). */
+function WelcomeCluster({ roleLabel }: { roleLabel: string }) {
+  const { session } = useAuth();
+  const name =
+    session?.type === 'USER'
+      ? session.name || session.email
+      : session?.type === 'EMPLOYEE'
+        ? session.name || session.employeeCode
+        : null;
+  return (
+    <div className="hidden min-w-0 leading-tight md:block">
+      <p className="truncate text-sm font-semibold tracking-tight">
+        {name ? <>Welcome back, {name}</> : 'Welcome back'}
+      </p>
+      <p className="truncate text-xs text-muted-foreground">{roleLabel}</p>
     </div>
   );
 }
@@ -267,6 +301,7 @@ export function AppShell({
 }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState(false);
+  const pathname = usePathname();
 
   // Persisted collapse — loaded after mount (client-only) to avoid a hydration mismatch.
   React.useEffect(() => {
@@ -289,18 +324,21 @@ export function AppShell({
 
   return (
     <div className="flex min-h-dvh bg-background">
-      {/* Desktop sidebar — the light card surface. */}
+      {/* Desktop sidebar — its own deep indigo-navy surface (dark in both app modes). */}
       <aside
         className={cn(
-          'hidden shrink-0 flex-col border-r bg-card md:flex',
+          'relative hidden shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex',
           collapsed ? 'w-16' : 'w-60',
         )}
       >
+        {/* Decorative soft-indigo wash near the footer (behind content). */}
+        <div className="sidebar-gradient pointer-events-none absolute inset-x-0 bottom-0 h-56" aria-hidden />
         <Brand roleLabel={roleLabel} collapsed={collapsed} />
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="relative flex-1 overflow-y-auto p-3">
           <NavLinks items={nav} collapsed={collapsed} />
         </div>
-        <div className="border-t p-3">
+        <div className="relative space-y-3 border-t border-sidebar-border p-3">
+          {collapsed ? null : <SecurityBadge />}
           <button
             type="button"
             onClick={toggleCollapsed}
@@ -308,7 +346,7 @@ export function AppShell({
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className={cn(
-              'flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+              'flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-sidebar-muted transition-colors duration-150 hover:bg-white/5 hover:text-sidebar-foreground',
               collapsed && 'justify-center px-0',
             )}
           >
@@ -325,24 +363,28 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Topbar — stays on the light page surface. */}
+        {/* Topbar — welcome cluster on the light page surface. */}
         <header className="flex h-14 items-center justify-between gap-3 border-b bg-background px-4 md:px-6">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
               <DialogTrigger asChild>
                 <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open menu">
                   <Menu />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="left-0 top-0 h-dvh max-h-dvh max-w-[16rem] translate-x-0 translate-y-0 gap-0 rounded-none p-0 sm:rounded-none">
+              <DialogContent className="left-0 top-0 flex h-dvh max-h-dvh max-w-[16rem] translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-sidebar-border bg-sidebar p-0 text-sidebar-foreground sm:rounded-none">
                 <DialogTitle className="sr-only">Navigation</DialogTitle>
                 <Brand roleLabel={roleLabel} />
-                <div className="p-3">
+                <div className="flex-1 overflow-y-auto p-3">
                   <NavLinks items={nav} onNavigate={() => setMobileOpen(false)} />
+                </div>
+                <div className="border-t border-sidebar-border p-3">
+                  <SecurityBadge />
                 </div>
               </DialogContent>
             </Dialog>
             <span className="text-sm font-semibold tracking-tight md:hidden">IHRMS</span>
+            <WelcomeCluster roleLabel={roleLabel} />
           </div>
           <div className="flex items-center gap-3">
             {showMail ? <MailButton /> : null}
@@ -351,7 +393,10 @@ export function AppShell({
         </header>
 
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-6xl animate-fade-in p-4 md:p-8">{children}</div>
+          {/* Keyed on the route so the subtle page-enter replays on navigation. */}
+          <div key={pathname} className="mx-auto max-w-6xl animate-page-enter p-4 md:p-8">
+            {children}
+          </div>
         </main>
       </div>
     </div>

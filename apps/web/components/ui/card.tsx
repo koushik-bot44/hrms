@@ -7,7 +7,7 @@ const cardVariants = cva('rounded-2xl border text-card-foreground', {
     variant: {
       // Static container — the default. Does NOT lift on hover (a card wrapping a table/form must not twitch).
       default: 'bg-card shadow-card',
-      // Mint brand surface (stat "moment" / hero panel). Ink text reads AA-safe on the light mint.
+      // Soft-indigo brand surface (stat "moment" / hero panel). Ink text reads AA-safe on the light tint.
       tint: 'border-transparent bg-surface-tint text-foreground',
       // Clickable card — the gentle hover elevation lives here (opt-in only).
       interactive:

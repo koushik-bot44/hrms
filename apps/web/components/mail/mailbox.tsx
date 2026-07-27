@@ -339,9 +339,10 @@ export function Mailbox() {
 
       {/* Body */}
       <div className="flex min-h-0 flex-1">
-        {/* Left rail */}
-        <aside className="hidden w-52 shrink-0 flex-col gap-1 border-r bg-card p-3 md:flex">
-          <Button className="mb-2 justify-start" onClick={() => openCompose({ mode: 'new' })}>
+        {/* Left rail — the same deep indigo-navy surface as the app sidebar. */}
+        <aside className="relative hidden w-52 shrink-0 flex-col gap-1 overflow-hidden border-r border-sidebar-border bg-sidebar p-3 text-sidebar-foreground md:flex">
+          <div className="sidebar-gradient pointer-events-none absolute inset-x-0 bottom-0 h-48" aria-hidden />
+          <Button className="relative mb-2 justify-start" onClick={() => openCompose({ mode: 'new' })}>
             <SquarePen />
             Compose
           </Button>
@@ -385,9 +386,14 @@ export function Mailbox() {
             }}
           />
           {searching ? (
-            <div className="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
+            <div className="relative mt-2 flex items-center justify-between rounded-md bg-white/5 px-3 py-2 text-xs text-sidebar-muted">
               <span className="truncate">Results for “{searchTerm}”</span>
-              <button type="button" onClick={clearSearch} aria-label="Clear search">
+              <button
+                type="button"
+                onClick={clearSearch}
+                aria-label="Clear search"
+                className="hover:text-sidebar-foreground"
+              >
                 <X className="size-3.5" />
               </button>
             </div>
@@ -551,16 +557,21 @@ function FolderButton({
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
+        'relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors duration-150',
         active
-          ? 'bg-surface-tint text-primary'
-          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+          ? 'bg-sidebar-active text-sidebar-active-foreground shadow-sm'
+          : 'text-sidebar-muted hover:bg-white/5 hover:text-sidebar-foreground',
       )}
     >
       <Icon className="size-4 shrink-0" />
       <span className="flex-1 text-left">{label}</span>
       {badge && badge > 0 ? (
-        <span className="rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+        <span
+          className={cn(
+            'rounded-full px-1.5 text-[11px] font-semibold',
+            active ? 'bg-white/20 text-sidebar-active-foreground' : 'bg-primary text-primary-foreground',
+          )}
+        >
           {badge > 99 ? '99+' : badge}
         </span>
       ) : null}
@@ -1313,9 +1324,9 @@ function LabelRail({
   });
 
   return (
-    <div className="mt-3 border-t pt-3">
+    <div className="relative mt-3 border-t border-sidebar-border pt-3">
       <div className="mb-1 flex items-center justify-between px-3">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-sidebar-muted">
           Labels
         </span>
         <button
@@ -1323,20 +1334,20 @@ function LabelRail({
           onClick={() => create.mutate()}
           aria-label="New label"
           title="New label"
-          className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="rounded p-1 text-sidebar-muted transition-colors hover:bg-white/5 hover:text-sidebar-foreground"
         >
           <Plus className="size-4" />
         </button>
       </div>
       {labels.length === 0 ? (
-        <p className="px-3.5 py-1 text-xs text-muted-foreground">No labels yet.</p>
+        <p className="px-3.5 py-1 text-xs text-sidebar-muted">No labels yet.</p>
       ) : (
         labels.map((l) => (
           <div
             key={l.id}
             className={cn(
               'group/label flex items-center rounded-xl',
-              activeId === l.id ? 'bg-surface-tint' : 'hover:bg-accent',
+              activeId === l.id ? 'bg-sidebar-active' : 'hover:bg-white/5',
             )}
           >
             <button
@@ -1345,13 +1356,22 @@ function LabelRail({
               aria-current={activeId === l.id ? 'page' : undefined}
               className={cn(
                 'flex min-w-0 flex-1 items-center gap-3 px-3.5 py-2 text-sm',
-                activeId === l.id ? 'font-medium text-primary' : 'text-muted-foreground',
+                activeId === l.id
+                  ? 'font-medium text-sidebar-active-foreground'
+                  : 'text-sidebar-muted',
               )}
             >
               <Tag className="size-4 shrink-0" />
               <span className="flex-1 truncate text-left">{l.name}</span>
               {l.threadCount > 0 ? (
-                <span className="text-[11px] text-muted-foreground">{l.threadCount}</span>
+                <span
+                  className={cn(
+                    'text-[11px]',
+                    activeId === l.id ? 'text-sidebar-active-foreground/80' : 'text-sidebar-muted',
+                  )}
+                >
+                  {l.threadCount}
+                </span>
               ) : null}
             </button>
             <DropdownMenu>
@@ -1359,7 +1379,12 @@ function LabelRail({
                 <button
                   type="button"
                   aria-label={`Manage ${l.name}`}
-                  className="mr-1 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus:opacity-100 group-hover/label:opacity-100"
+                  className={cn(
+                    'mr-1 rounded p-1 opacity-0 transition-opacity hover:bg-white/10 focus:opacity-100 group-hover/label:opacity-100',
+                    activeId === l.id
+                      ? 'text-sidebar-active-foreground/80 hover:text-sidebar-active-foreground'
+                      : 'text-sidebar-muted hover:text-sidebar-foreground',
+                  )}
                 >
                   <MoreHorizontal className="size-4" />
                 </button>

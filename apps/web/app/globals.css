@@ -5,38 +5,39 @@
 /*
  * IHRMS design tokens — premium, calm, trustworthy. Light-first (dark optional).
  * HSL triplets consumed via `hsl(var(--token))`. Palette:
- *   brand emerald #047857 (bright #10B981) · surface mint #ECFBF4 · bg #F7FAF9
- *   card #FFFFFF · border #E3EFE9 · muted-text #5B6B66 · ink #0E1A16
- *   success #16A34A · warning #D97706 · danger #DC2626
- * Dark mode keeps its coherent cool-neutral ramp; only the brand tokens are greened.
+ *   brand INDIGO #4F46E5 (bright #6366F1) · surface soft-indigo #EEF0FE · bg cool near-white
+ *   card #FFFFFF · border cool-neutral · muted-text slate · ink slate #0F172A
+ *   success #16A34A · warning #D97706 · danger #DC2626  (semantic tones UNCHANGED)
+ * The SIDEBAR is its own deep indigo-navy surface in BOTH app modes (--sidebar-* tokens).
+ * Dark mode keeps its coherent cool-neutral ramp; only the brand tokens are indigo-ed.
  */
 @layer base {
   :root {
-    --background: 152 30% 96%; /* mint-neutral — a step deeper so white cards float */
-    --foreground: 162 30% 8%; /* #0E1A16 ink */
+    --background: 240 30% 98%; /* cool near-white with a faint indigo whisper — white cards float */
+    --foreground: 222 47% 11%; /* slate ink #0F172A */
 
     --card: 0 0% 100%; /* #FFFFFF */
-    --card-foreground: 162 30% 8%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 162 30% 8%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 163 94% 24%; /* emerald #047857 — AA on white */
+    --primary: 243 75% 59%; /* indigo #4F46E5 — AA for white text on solid */
     --primary-foreground: 0 0% 100%;
-    --primary-bright: 160 84% 39%; /* #10B981 — tints, chart fills, decorative (NOT solid-button text bg) */
+    --primary-bright: 239 84% 67%; /* #6366F1 — tints, chart fills, decorative gradients */
 
-    --secondary: 210 40% 96%;
+    --secondary: 240 40% 96%;
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 162 8% 39%; /* #5B6B66 green-neutral */
+    --muted: 240 40% 96%;
+    --muted-foreground: 222 13% 44%; /* slate muted */
 
     /* Neutral hover tint (shadcn `accent`) — deliberately unchanged (NOT the brand). */
-    --accent: 210 40% 96%;
+    --accent: 240 40% 96%;
     --accent-foreground: 222 47% 11%;
 
-    /* Mint brand surface (hero/panel/active-nav pill). */
-    --surface-tint: 152 65% 95%; /* #ECFBF4 */
+    /* Soft-indigo brand surface (hero/panel/active-nav pill / chips). */
+    --surface-tint: 233 89% 96%; /* #EEF0FE */
 
     --destructive: 0 72% 51%; /* #DC2626 */
     --destructive-foreground: 0 0% 100%;
@@ -47,9 +48,17 @@
     --warning: 32 95% 44%; /* #D97706 */
     --warning-foreground: 0 0% 100%;
 
-    --border: 150 27% 91%; /* #E3EFE9 mint-tinted neutral */
-    --input: 150 27% 91%;
-    --ring: 163 94% 24%; /* mirrors --primary */
+    --border: 232 24% 90%; /* cool neutral */
+    --input: 232 24% 90%;
+    --ring: 243 75% 59%; /* mirrors --primary */
+
+    /* Sidebar — its OWN deep indigo-navy surface (dark in BOTH app modes). Active = the indigo pill. */
+    --sidebar: 245 42% 11%; /* deep indigo-navy */
+    --sidebar-foreground: 240 20% 92%;
+    --sidebar-muted: 240 14% 66%;
+    --sidebar-active: 243 75% 59%; /* indigo pill #4F46E5 — white text is AA */
+    --sidebar-active-foreground: 0 0% 100%;
+    --sidebar-border: 245 28% 20%;
 
     /* Signature pad — theme-INVARIANT: the signature is captured dark-on-white for the PDF stamp,
        so these are the same in light and dark and must not flip with the theme. */
@@ -69,9 +78,9 @@
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 96%;
 
-    --primary: 162 94% 30%; /* emerald #059669 — lighter for dark surfaces */
-    --primary-foreground: 162 40% 10%; /* dark ink on the lighter emerald (AA) */
-    --primary-bright: 160 84% 45%;
+    --primary: 243 75% 64%; /* lifted indigo for dark surfaces — white text stays AA (~4.8:1) */
+    --primary-foreground: 0 0% 100%;
+    --primary-bright: 239 84% 70%;
 
     --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 96%;
@@ -82,7 +91,7 @@
     --accent: 217 33% 20%;
     --accent-foreground: 210 40% 96%;
 
-    --surface-tint: 162 34% 15%; /* deep mint panel on the cool-dark ramp */
+    --surface-tint: 244 42% 17%; /* deep indigo panel on the cool-dark ramp */
 
     --destructive: 0 63% 50%;
     --destructive-foreground: 0 0% 100%;
@@ -95,7 +104,15 @@
 
     --border: 217 33% 22%;
     --input: 217 33% 22%;
-    --ring: 162 94% 30%; /* mirrors --primary */
+    --ring: 243 75% 64%; /* mirrors --primary */
+
+    /* Sidebar — deep indigo-navy, a touch deeper than in light mode. */
+    --sidebar: 245 40% 9%;
+    --sidebar-foreground: 240 20% 92%;
+    --sidebar-muted: 240 12% 64%;
+    --sidebar-active: 243 75% 64%; /* matches dark --primary; white text AA */
+    --sidebar-active-foreground: 0 0% 100%;
+    --sidebar-border: 245 26% 18%;
 
     /* Signature stays dark-on-white for the PDF stamp even in dark mode. */
     --signature-paper: 0 0% 100%;
@@ -118,5 +135,34 @@
   h3,
   h4 {
     @apply font-medium tracking-tight text-foreground;
+  }
+}
+
+@layer utilities {
+  /*
+   * Decorative indigo gradient convention (token-derived only). A soft wash of --primary-bright fading
+   * to transparent — used on the sidebar footer, topbar, and hero surfaces per the design direction.
+   * Purely decorative (behind content); never the only signal for anything.
+   */
+  .surface-gradient {
+    background-image: linear-gradient(to top, hsl(var(--primary-bright) / 0.1), transparent 70%);
+  }
+  .sidebar-gradient {
+    background-image: linear-gradient(to top, hsl(var(--primary-bright) / 0.16), transparent 78%);
+  }
+}
+
+/*
+ * Motion accessibility: honour prefers-reduced-motion by neutralising animations/transitions globally.
+ * The design's page-enter / hover-lift / tab / dialog motions all collapse to ~instant here.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

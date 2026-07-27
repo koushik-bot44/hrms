@@ -14,7 +14,7 @@ export default function HrDashboardPage() {
         actions={<OnboardEmployeeDialog />}
         editorial
       />
-      {/* Cap the mint to the first 3 stats — HR has up to 5, and 5 tinted cards over-uses the accent. */}
+      {/* Cap the tint to the first 3 stats — HR has up to 5, and 5 tinted cards over-uses the accent. */}
       <RoleDashboard heroStats={3} />
     </div>
   );

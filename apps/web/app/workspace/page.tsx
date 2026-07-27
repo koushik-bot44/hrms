@@ -23,7 +23,7 @@ export default function WorkspacePage() {
 
   return (
     <div className="space-y-8">
-      {/* Editorial identity hero — the mint moment. */}
+      {/* Editorial identity hero — the brand-tint moment. */}
       <Card variant="tint">
         <CardContent className="space-y-6 p-8">
           <div className="space-y-1">

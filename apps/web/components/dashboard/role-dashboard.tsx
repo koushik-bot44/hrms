@@ -38,8 +38,8 @@ export function RoleDashboard({
 }: {
   show?: 'all' | 'stats' | 'activity';
   /**
-   * Render the stat cards as the "moment" — the oversized (text-4xl) number + emerald label. `true` also
-   * tints ALL cards mint; a NUMBER tints only the first N (the rest stay white) so the accent doesn't
+   * Render the stat cards as the "moment" — the oversized (text-4xl) number + brand label. `true` also
+   * tints ALL cards indigo; a NUMBER tints only the first N (the rest stay white) so the accent doesn't
    * flood a landing with many stats. Opt-in per page; backward-compatible (`true` = the prior behaviour).
    */
   heroStats?: boolean | number;
@@ -117,9 +117,9 @@ function StatCardView({
 }: {
   card: StatCard;
   href?: string;
-  /** The oversized number + emerald label treatment. */
+  /** The oversized number + brand label treatment. */
   hero?: boolean;
-  /** The mint tinted surface (a capped subset of hero cards). */
+  /** The soft-indigo tinted surface (a capped subset of hero cards). */
   tint?: boolean;
 }) {
   const inner = (
