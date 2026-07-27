@@ -586,6 +586,22 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     starring **never moves or deletes** it. Every thread row exposes the viewer's `starred` flag. Only the
     acting user sees their stars — other participants' views are unaffected. Audited `MAIL_STARRED` /
     `MAIL_UNSTARRED`.
+  - **Archive is a per-user, thread-level state** — the same per-user-thread shape as Starred
+    (`thread_archives`, one row per `threadId` + `accountId`, row-exists = archived), but with one behavioural
+    difference: **an archived thread is HIDDEN FROM THE VIEWER'S INBOX** (the Inbox query excludes any thread
+    the viewer has archived — `AND NOT EXISTS thread_archives`). It is **not deleted**: it remains in the
+    viewer's **Archive** view (`GET /mail/archived`, same list shape + soft-delete scoping as Inbox), and
+    still appears in their **Sent** (if they sent in it), in **Search**, in **Starred** (an archived thread
+    can be starred), and it exists **normally for every other participant**. `POST` / `DELETE
+    /mail/threads/{id}/archive` set/clear the acting user's archive (participant-only — `403` if it isn't
+    theirs, `404` if it doesn't exist; both idempotent). Un-archiving returns the thread to their Inbox.
+    Archive is **independent** of read/star/delete: archiving does **not** mark read and does **not** delete;
+    an archived thread can still be unread and starred. **Resurface on new activity (Gmail-style):** when a
+    **new message is delivered** into a thread, each recipient's archive row for that thread is **cleared in
+    the same transaction as delivery** — so a reply brings the thread **back to their Inbox** (mirroring how a
+    soft-deleted thread resurfaces when a fresh, non-deleted message row arrives; the sender's own archive is
+    left as-is, exactly like the soft-delete model). Every thread row/detail exposes the viewer's `archived`
+    flag; only the acting user's views are affected. Audited `MAIL_ARCHIVED` / `MAIL_UNARCHIVED`.
   - **Delete is a per-user soft-hide:** deleting a thread stamps the viewer's own copies
     (`message_recipients.deletedAt` for received messages, `messages.senderDeletedAt` for sent ones) —
     the rows are **never destroyed** and the counterparty still sees their copy. Deleted threads vanish

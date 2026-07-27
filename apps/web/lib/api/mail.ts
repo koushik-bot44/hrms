@@ -25,6 +25,7 @@ export const mailKeys = {
   inbox: (page: number) => ['mail', 'inbox', page] as const,
   sent: (page: number) => ['mail', 'sent', page] as const,
   starred: (page: number) => ['mail', 'starred', page] as const,
+  archived: (page: number) => ['mail', 'archived', page] as const,
   search: (q: string, page: number) => ['mail', 'search', q, page] as const,
   thread: (id: string) => ['mail', 'thread', id] as const,
 };
@@ -54,6 +55,12 @@ export function getSent(page = 0, size = 20, signal?: AbortSignal): Promise<Thre
 export function getStarred(page = 0, size = 20, signal?: AbortSignal): Promise<ThreadPage> {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
   return apiFetch<ThreadPage>(`/mail/starred?${params.toString()}`, { signal });
+}
+
+/** The caller's archived conversations (per-user) — these are HIDDEN from their Inbox. Same list shape. */
+export function getArchived(page = 0, size = 20, signal?: AbortSignal): Promise<ThreadPage> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  return apiFetch<ThreadPage>(`/mail/archived?${params.toString()}`, { signal });
 }
 
 /** Search the caller's own mail (subject + body, case-insensitive). */
@@ -113,6 +120,16 @@ export function starThread(id: string): Promise<void> {
 /** Unstar a thread for the caller only (per-user; idempotent). */
 export function unstarThread(id: string): Promise<void> {
   return apiFetch<void>(`/mail/threads/${encodeURIComponent(id)}/star`, { method: 'DELETE' });
+}
+
+/** Archive a thread for the caller only (per-user; idempotent) — hides it from their Inbox. */
+export function archiveThread(id: string): Promise<void> {
+  return apiFetch<void>(`/mail/threads/${encodeURIComponent(id)}/archive`, { method: 'POST' });
+}
+
+/** Unarchive a thread for the caller only (per-user; idempotent) — returns it to their Inbox. */
+export function unarchiveThread(id: string): Promise<void> {
+  return apiFetch<void>(`/mail/threads/${encodeURIComponent(id)}/archive`, { method: 'DELETE' });
 }
 
 // --- Attachments (§8, Stage 4) --------------------------------------------

@@ -4,6 +4,8 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  Archive,
+  ArchiveRestore,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -25,7 +27,9 @@ import { homePathForSession } from '@/lib/auth/routes';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import type { ApiError } from '@/lib/api/client';
 import {
+  archiveThread,
   deleteThread,
+  getArchived,
   getInbox,
   getSent,
   getStarred,
@@ -35,6 +39,7 @@ import {
   markThreadUnread,
   searchMail,
   starThread,
+  unarchiveThread,
   unstarThread,
 } from '@/lib/api/mail';
 import { relativeTime } from '@/lib/date';
@@ -46,7 +51,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DockedCompose, type ComposeState } from '@/components/mail/docked-compose';
 import { ThreadView } from '@/components/mail/thread-view';
 
-type Folder = 'inbox' | 'sent' | 'starred';
+type Folder = 'inbox' | 'sent' | 'starred' | 'archived';
 
 /** The full webmail client (§8, Stage 3): Inbox/Sent thread lists + search + reading pane + compose. */
 export function Mailbox() {
@@ -85,6 +90,9 @@ export function Mailbox() {
   const starred = useApiQuery(mailKeys.starred(page), (s) => getStarred(page, 20, s), {
     enabled: !searching && folder === 'starred',
   });
+  const archivedList = useApiQuery(mailKeys.archived(page), (s) => getArchived(page, 20, s), {
+    enabled: !searching && folder === 'archived',
+  });
   const results = useApiQuery(mailKeys.search(searchTerm, page), (s) => searchMail(searchTerm, page, 20, s), {
     enabled: searching,
   });
@@ -116,7 +124,9 @@ export function Mailbox() {
       ? inbox
       : folder === 'sent'
         ? sent
-        : starred;
+        : folder === 'starred'
+          ? starred
+          : archivedList;
   const unreadCount = unread.data?.unread ?? 0;
   const mode: ListMode = searching ? 'search' : folder;
 
@@ -203,6 +213,12 @@ export function Mailbox() {
             active={!searching && folder === 'starred'}
             onClick={() => switchFolder('starred')}
           />
+          <FolderButton
+            icon={Archive}
+            label="Archive"
+            active={!searching && folder === 'archived'}
+            onClick={() => switchFolder('archived')}
+          />
           {searching ? (
             <div className="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
               <span className="truncate">Results for “{searchTerm}”</span>
@@ -239,6 +255,14 @@ export function Mailbox() {
             >
               <Star />
               Starred
+            </Button>
+            <Button
+              variant={!searching && folder === 'archived' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => switchFolder('archived')}
+            >
+              <Archive />
+              Archive
             </Button>
             <Button size="sm" className="ml-auto" onClick={() => openCompose({ mode: 'new' })}>
               <SquarePen />
@@ -386,7 +410,15 @@ function ThreadList({
   const rows = query.data?.content ?? [];
   if (rows.length === 0) {
     const emptyIcon =
-      mode === 'search' ? Search : mode === 'inbox' ? Inbox : mode === 'starred' ? Star : Send;
+      mode === 'search'
+        ? Search
+        : mode === 'inbox'
+          ? Inbox
+          : mode === 'starred'
+            ? Star
+            : mode === 'archived'
+              ? Archive
+              : Send;
     return (
       <EmptyState
         icon={emptyIcon}
@@ -397,7 +429,9 @@ function ThreadList({
               ? 'No conversations yet'
               : mode === 'starred'
                 ? 'No starred conversations'
-                : 'Nothing sent yet'
+                : mode === 'archived'
+                  ? 'No archived conversations'
+                  : 'Nothing sent yet'
         }
         description={
           mode === 'search'
@@ -406,7 +440,9 @@ function ThreadList({
               ? 'Conversations from your contacts will appear here.'
               : mode === 'starred'
                 ? 'Star a conversation to keep it here. Only you can see your stars.'
-                : 'Conversations you start will appear here.'
+                : mode === 'archived'
+                  ? 'Archived conversations leave your Inbox but stay here (and in Sent/Search). A new reply brings one back.'
+                  : 'Conversations you start will appear here.'
         }
         className="m-3 border-0 bg-transparent"
       />
@@ -414,7 +450,15 @@ function ThreadList({
   }
 
   const listLabel =
-    mode === 'inbox' ? 'Inbox' : mode === 'sent' ? 'Sent' : mode === 'starred' ? 'Starred' : 'Search results';
+    mode === 'inbox'
+      ? 'Inbox'
+      : mode === 'sent'
+        ? 'Sent'
+        : mode === 'starred'
+          ? 'Starred'
+          : mode === 'archived'
+            ? 'Archive'
+            : 'Search results';
   return (
     <ul className="flex-1 overflow-y-auto" aria-label={listLabel}>
       {rows.map((row) => (
@@ -480,6 +524,52 @@ function ThreadRow({
     },
   );
 
+  // Archive flips the `archived` flag everywhere the row appears AND removes it from the list it should
+  // leave: archiving drops it from Inbox (hidden from Inbox only), unarchiving drops it from Archive.
+  const patchArchived = React.useCallback(
+    (next: boolean) => {
+      queryClient.setQueriesData<ThreadPage>({ queryKey: ['mail'] }, (old) => {
+        if (!old || !Array.isArray(old.content)) return old;
+        if (!old.content.some((r) => r.threadId === row.threadId)) return old;
+        return {
+          ...old,
+          content: old.content.map((r) =>
+            r.threadId === row.threadId ? { ...r, archived: next } : r,
+          ),
+        };
+      });
+      // Membership: archived → leaves Inbox; unarchived → leaves Archive.
+      queryClient.setQueriesData<ThreadPage>(
+        { queryKey: ['mail', next ? 'inbox' : 'archived'] },
+        (old) => {
+          if (!old || !Array.isArray(old.content)) return old;
+          return { ...old, content: old.content.filter((r) => r.threadId !== row.threadId) };
+        },
+      );
+    },
+    [queryClient, row.threadId],
+  );
+  const wasArchived = row.archived;
+  const toggleArchive = useApiMutation(
+    // Reconciliation lives INSIDE the mutation fn so it still runs after the row unmounts (archiving
+    // removes it from the Inbox list, which unmounts this ThreadRow before onSettled could fire).
+    async () => {
+      try {
+        await (wasArchived ? unarchiveThread(row.threadId) : archiveThread(row.threadId));
+      } catch (e) {
+        await queryClient.invalidateQueries({ queryKey: ['mail'] }); // failed — resync from server
+        throw e;
+      }
+      // The membership-affected lists reconcile with the server (Inbox regains/loses it; Archive too).
+      await queryClient.invalidateQueries({ queryKey: ['mail', 'inbox'] });
+      await queryClient.invalidateQueries({ queryKey: ['mail', 'archived'] });
+    },
+    {
+      successMessage: wasArchived ? 'Moved to Inbox' : 'Archived',
+      onMutate: () => patchArchived(!wasArchived), // optimistic: remove from Inbox immediately
+    },
+  );
+
   const names = row.participants.map((p) => p.name).join(', ') || '(no one)';
 
   return (
@@ -489,7 +579,7 @@ function ThreadRow({
         onClick={() => onSelect(row.threadId)}
         aria-current={selected ? 'true' : undefined}
         className={cn(
-          'flex w-full flex-col gap-0.5 border-b px-4 py-3.5 pr-16 text-left transition-colors',
+          'flex w-full flex-col gap-0.5 border-b px-4 py-3.5 pr-24 text-left transition-colors',
           selected ? 'bg-surface-tint' : 'hover:bg-accent/50',
         )}
       >
@@ -549,6 +639,16 @@ function ThreadRow({
           className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
         >
           {row.unread ? <MailOpen className="size-4" /> : <MailMinus className="size-4" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleArchive.mutate()}
+          disabled={toggleArchive.isPending}
+          aria-label={row.archived ? 'Move to Inbox' : 'Archive'}
+          title={row.archived ? 'Move to Inbox' : 'Archive (hide from Inbox)'}
+          className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
+        >
+          {row.archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
         </button>
         <button
           type="button"

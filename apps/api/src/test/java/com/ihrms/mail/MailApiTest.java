@@ -91,8 +91,8 @@ class MailApiTest {
   void setup() {
     jdbc.execute(
         "TRUNCATE \"users\",\"employees\",\"companies\",\"teams\",\"messages\","
-            + "\"message_recipients\",\"message_attachments\",\"thread_stars\",\"audit_logs\""
-            + " RESTART IDENTITY CASCADE");
+            + "\"message_recipients\",\"message_attachments\",\"thread_stars\",\"thread_archives\","
+            + "\"audit_logs\" RESTART IDENTITY CASCADE");
     anvi = company("ANVI", "anvicorp");
     testco = company("TESTCO", "testco");
 
@@ -530,6 +530,106 @@ class MailApiTest {
     mvc.perform(delete("/mail/threads/" + threadId).header("Authorization", "Bearer " + token(hrA)))
         .andExpect(status().isNoContent());
     assertThat(starred(hrA).get("totalElements").asInt()).isZero();
+  }
+
+  // --- Archived (per-user, thread-level; hides from Inbox, §8) --------------
+
+  @Test
+  void archiveHidesFromInbox_showsInArchive_perUser_andUnarchiveReturnsIt() throws Exception {
+    String threadId = startThread(caA, hrA, "Roadmap", "Q3 plan.");
+    assertThat(threadRow(inbox(hrA), threadId)).isNotNull();
+    assertThat(unread(hrA)).isEqualTo(1);
+
+    // hrA archives it.
+    archive(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(audit("MAIL_ARCHIVED")).isEqualTo(1);
+
+    // GONE from hrA's Inbox, PRESENT in hrA's Archive (flagged archived), and it did NOT mark read.
+    assertThat(threadRow(inbox(hrA), threadId)).isNull();
+    assertThat(threadRow(archived(hrA), threadId)).isNotNull();
+    assertThat(threadRow(archived(hrA), threadId).get("archived").asBoolean()).isTrue();
+    assertThat(unread(hrA)).isEqualTo(1); // archive does NOT mark read
+
+    // PER-USER: the sender caA is unaffected — the thread is still in caA's Sent (not archived), and caA's
+    // own Archive is empty.
+    assertThat(threadRow(sent(caA), threadId)).isNotNull();
+    assertThat(threadRow(sent(caA), threadId).get("archived").asBoolean()).isFalse();
+    assertThat(archived(caA).get("totalElements").asInt()).isZero();
+
+    // Idempotent archive (no second audit).
+    archive(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(audit("MAIL_ARCHIVED")).isEqualTo(1);
+
+    // Unarchive returns it to hrA's Inbox and empties their Archive; audited once.
+    unarchive(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(audit("MAIL_UNARCHIVED")).isEqualTo(1);
+    assertThat(threadRow(inbox(hrA), threadId)).isNotNull();
+    assertThat(threadRow(inbox(hrA), threadId).get("archived").asBoolean()).isFalse();
+    assertThat(archived(hrA).get("totalElements").asInt()).isZero();
+
+    // Unarchive is idempotent too (no second audit).
+    unarchive(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(audit("MAIL_UNARCHIVED")).isEqualTo(1);
+  }
+
+  @Test
+  void aNewInboundMessageResurfacesAnArchivedThreadToTheInbox() throws Exception {
+    String threadId = startThread(caA, hrA, "Kickoff", "Please start.");
+    archive(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(threadRow(inbox(hrA), threadId)).isNull(); // archived → hidden from Inbox
+
+    // caA replies — a NEW inbound message for hrA. Gmail-style resurface: hrA's archive is cleared and the
+    // thread returns to their Inbox (mirrors the soft-delete-on-reply behavior).
+    replyOk(caA, threadId, "Following up.");
+    assertThat(threadRow(inbox(hrA), threadId)).isNotNull();
+    assertThat(threadRow(inbox(hrA), threadId).get("archived").asBoolean()).isFalse();
+    assertThat(archived(hrA).get("totalElements").asInt()).isZero();
+  }
+
+  @Test
+  void archiveIsIndependentOfStar_anArchivedThreadCanStillBeStarred() throws Exception {
+    String threadId = startThread(caA, hrA, "Notice", "Body.");
+    star(hrA, threadId).andExpect(status().isNoContent());
+    archive(hrA, threadId).andExpect(status().isNoContent());
+
+    // Hidden from Inbox, but STILL in Starred (archive hides from Inbox only, not from Starred), and the
+    // Starred row shows both flags true.
+    assertThat(threadRow(inbox(hrA), threadId)).isNull();
+    JsonNode starRow = threadRow(starred(hrA), threadId);
+    assertThat(starRow).isNotNull();
+    assertThat(starRow.get("starred").asBoolean()).isTrue();
+    assertThat(starRow.get("archived").asBoolean()).isTrue();
+    // And it's in Archive too, still starred + still unread.
+    JsonNode archRow = threadRow(archived(hrA), threadId);
+    assertThat(archRow.get("starred").asBoolean()).isTrue();
+    assertThat(archRow.get("unread").asBoolean()).isTrue();
+  }
+
+  @Test
+  void archivedThreadStillAppearsInSearch() throws Exception {
+    String threadId = startThread(caA, hrA, "Payroll", "The payroll run details.");
+    archive(hrA, threadId).andExpect(status().isNoContent());
+    assertThat(threadRow(inbox(hrA), threadId)).isNull(); // not in Inbox
+    // ...but search (own-mail, subject+body) still finds it.
+    assertThat(searchCount(hrA, "payroll")).isEqualTo(1);
+    assertThat(searchCount(hrA, "run")).isEqualTo(1);
+  }
+
+  @Test
+  void theOpenThreadViewExposesTheViewersArchivedFlag() throws Exception {
+    String threadId = startThread(caA, hrA, "FYI", "For your information.");
+    archive(hrA, threadId).andExpect(status().isNoContent());
+    // hrA sees archived=true; caA (who did not archive) sees archived=false.
+    assertThat(openThreadJson(hrA, threadId).get("archived").asBoolean()).isTrue();
+    assertThat(openThreadJson(caA, threadId).get("archived").asBoolean()).isFalse();
+  }
+
+  @Test
+  void aNonParticipantCannotArchive_andAMissingThreadIs404() throws Exception {
+    String threadId = startThread(caA, hrA, "Private", "Between us.");
+    archive(mgrA, threadId).andExpect(status().isForbidden()); // not a participant
+    archive(caA, "does-not-exist").andExpect(status().isNotFound()); // missing thread
+    assertThat(audit("MAIL_ARCHIVED")).isZero();
   }
 
   // --- Attachments (Stage 4) ------------------------------------------------
@@ -1015,6 +1115,20 @@ class MailApiTest {
   private ResultActions unstar(User who, String threadId) throws Exception {
     return mvc.perform(
         delete("/mail/threads/" + threadId + "/star").header("Authorization", "Bearer " + token(who)));
+  }
+
+  private JsonNode archived(User who) throws Exception {
+    return getJson(who, "/mail/archived");
+  }
+
+  private ResultActions archive(User who, String threadId) throws Exception {
+    return mvc.perform(
+        post("/mail/threads/" + threadId + "/archive").header("Authorization", "Bearer " + token(who)));
+  }
+
+  private ResultActions unarchive(User who, String threadId) throws Exception {
+    return mvc.perform(
+        delete("/mail/threads/" + threadId + "/archive").header("Authorization", "Bearer " + token(who)));
   }
 
   private long searchCount(User who, String q) throws Exception {

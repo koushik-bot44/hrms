@@ -1285,6 +1285,50 @@
         }
       }
     },
+    "/mail/threads/{id}/archive": {
+      "post": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "unarchive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/mail/messages": {
       "post": {
         "tags": [
@@ -3295,6 +3339,36 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/AttachmentDownload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mail/archived": {
+      "get": {
+        "tags": [
+          "mail-controller"
+        ],
+        "operationId": "archived",
+        "parameters": [
+          {
+            "name": "pageable",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadPage"
                 }
               }
             }
@@ -6835,6 +6909,9 @@
           },
           "starred": {
             "type": "boolean"
+          },
+          "archived": {
+            "type": "boolean"
           }
         }
       },
@@ -6914,6 +6991,9 @@
             "type": "boolean"
           },
           "starred": {
+            "type": "boolean"
+          },
+          "archived": {
             "type": "boolean"
           }
         }

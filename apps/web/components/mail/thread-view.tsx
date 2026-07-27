@@ -2,14 +2,26 @@
 
 import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, MailMinus, MailOpen, Reply, ReplyAll, Star, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  MailMinus,
+  MailOpen,
+  Reply,
+  ReplyAll,
+  Star,
+  Trash2,
+} from 'lucide-react';
 import type { ThreadDetail, ThreadPage } from '@/lib/contract';
 import {
+  archiveThread,
   getThread,
   deleteThread,
   mailKeys,
   markThreadUnread,
   starThread,
+  unarchiveThread,
   unstarThread,
 } from '@/lib/api/mail';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
@@ -103,6 +115,46 @@ export function ThreadView({
     },
   );
 
+  // Per-user archive toggle (thread-level): flip the open-thread cache + list rows, and drop the row from
+  // the list it leaves (Inbox on archive, Archive on unarchive). Archiving hides from Inbox only.
+  const currentArchived = query.data?.archived ?? false;
+  const patchArchive = React.useCallback(
+    (next: boolean) => {
+      queryClient.setQueryData<ThreadDetail>(mailKeys.thread(threadId as string), (old) =>
+        old ? { ...old, archived: next } : old,
+      );
+      queryClient.setQueriesData<ThreadPage>({ queryKey: ['mail'] }, (old) => {
+        if (!old || !Array.isArray(old.content)) return old;
+        if (!old.content.some((r) => r.threadId === threadId)) return old;
+        return {
+          ...old,
+          content: old.content.map((r) => (r.threadId === threadId ? { ...r, archived: next } : r)),
+        };
+      });
+      queryClient.setQueriesData<ThreadPage>(
+        { queryKey: ['mail', next ? 'inbox' : 'archived'] },
+        (old) => {
+          if (!old || !Array.isArray(old.content)) return old;
+          return { ...old, content: old.content.filter((r) => r.threadId !== threadId) };
+        },
+      );
+    },
+    [queryClient, threadId],
+  );
+  const archiveMutation = useApiMutation(() => (currentArchived ? unarchiveThread(threadId as string) : archiveThread(threadId as string)), {
+    successMessage: currentArchived ? 'Moved to Inbox' : 'Archived',
+    onMutate: () => patchArchive(!currentArchived),
+    onError: () => patchArchive(currentArchived),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mail', 'inbox'] });
+      void queryClient.invalidateQueries({ queryKey: ['mail', 'archived'] });
+    },
+    onSuccess: () => {
+      // Archiving moved it out of the Inbox — close the reading pane (Gmail-style). Unarchiving stays.
+      if (!currentArchived) onDeleted?.();
+    },
+  });
+
   if (!threadId) {
     return (
       <EmptyState
@@ -183,6 +235,17 @@ export function ThreadView({
           >
             <Star className={cn(thread.starred && 'fill-current')} />
             <span className="hidden sm:inline">{thread.starred ? 'Starred' : 'Star'}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => archiveMutation.mutate()}
+            disabled={archiveMutation.isPending}
+            aria-pressed={thread.archived}
+            title={thread.archived ? 'Move to Inbox' : 'Archive (hide from Inbox)'}
+          >
+            {thread.archived ? <ArchiveRestore /> : <Archive />}
+            <span className="hidden sm:inline">{thread.archived ? 'Unarchive' : 'Archive'}</span>
           </Button>
           <Button
             variant="ghost"

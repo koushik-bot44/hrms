@@ -138,6 +138,14 @@ public class MailController {
     return mail.starred(actor, pageable);
   }
 
+  /** Archived — the caller's archived conversations (per-user); these are HIDDEN from their Inbox. */
+  @GetMapping("/archived")
+  public ThreadPage archived(
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      @PageableDefault(size = 20) Pageable pageable) {
+    return mail.archived(actor, pageable);
+  }
+
   /** Open one thread — participant only (else 403). Marks it read. */
   @GetMapping("/threads/{id}")
   public ThreadDetailView thread(
@@ -188,6 +196,26 @@ public class MailController {
       @AuthenticationPrincipal IhrmsPrincipal actor,
       HttpServletRequest request) {
     mail.unstar(actor, id, request.getRemoteAddr());
+    return ResponseEntity.noContent().build();
+  }
+
+  /** Archive a thread for the caller only (per-user; idempotent) — hides it from their Inbox. 404/403. */
+  @PostMapping("/threads/{id}/archive")
+  public ResponseEntity<Void> archive(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    mail.archive(actor, id, request.getRemoteAddr());
+    return ResponseEntity.noContent().build();
+  }
+
+  /** Unarchive a thread for the caller only (per-user; idempotent) — returns it to their Inbox. 404/403. */
+  @DeleteMapping("/threads/{id}/archive")
+  public ResponseEntity<Void> unarchive(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    mail.unarchive(actor, id, request.getRemoteAddr());
     return ResponseEntity.noContent().build();
   }
 

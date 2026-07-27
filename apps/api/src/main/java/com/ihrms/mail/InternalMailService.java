@@ -12,6 +12,7 @@ import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Message;
 import com.ihrms.domain.model.MessageAttachment;
 import com.ihrms.domain.model.MessageRecipient;
+import com.ihrms.domain.model.ThreadArchive;
 import com.ihrms.domain.model.ThreadStar;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.CompanyRepository;
@@ -19,6 +20,7 @@ import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.MessageAttachmentRepository;
 import com.ihrms.domain.repository.MessageRecipientRepository;
 import com.ihrms.domain.repository.MessageRepository;
+import com.ihrms.domain.repository.ThreadArchiveRepository;
 import com.ihrms.domain.repository.ThreadStarRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.Cuids;
@@ -82,6 +84,7 @@ public class InternalMailService {
   private final MessageRecipientRepository recipients;
   private final MessageAttachmentRepository attachments;
   private final ThreadStarRepository threadStars;
+  private final ThreadArchiveRepository threadArchives;
   private final AuthorizationService authz;
   private final AuditService audit;
   private final StorageService storage;
@@ -95,6 +98,7 @@ public class InternalMailService {
       MessageRecipientRepository recipients,
       MessageAttachmentRepository attachments,
       ThreadStarRepository threadStars,
+      ThreadArchiveRepository threadArchives,
       AuthorizationService authz,
       AuditService audit,
       StorageService storage,
@@ -106,6 +110,7 @@ public class InternalMailService {
     this.recipients = recipients;
     this.attachments = attachments;
     this.threadStars = threadStars;
+    this.threadArchives = threadArchives;
     this.authz = authz;
     this.audit = audit;
     this.storage = storage;
@@ -189,6 +194,7 @@ public class InternalMailService {
     message.setBody(input.body());
     messages.save(message);
     typed.forEach((id, type) -> saveRecipient(message.getId(), resolved.get(id), type));
+    clearRecipientArchives(threadId, resolved.values()); // new inbound activity resurfaces to Inbox
     int bound = bindAttachments(me, message.getId(), input.attachmentIds());
 
     auditSent(me, message, typed.size(), bound, ip);
@@ -244,6 +250,7 @@ public class InternalMailService {
     reply.setBody(input.body());
     messages.save(reply);
     resolved.values().forEach(to -> saveRecipient(reply.getId(), to, RecipientType.TO)); // replies address TO
+    clearRecipientArchives(threadId, resolved.values()); // a reply resurfaces the thread to each recipient's Inbox
     int bound = bindAttachments(me, reply.getId(), input.attachmentIds());
 
     auditSent(me, reply, resolved.size(), bound, ip);
@@ -422,6 +429,42 @@ public class InternalMailService {
             });
   }
 
+  // --- Archived (per-user, thread-level, §8 — like Starred, but hides from Inbox) ------------------
+
+  /** Archived as THREADS: the viewer's archived conversations — same list shape + soft-delete scoping as Inbox. */
+  @Transactional(readOnly = true)
+  public ThreadPage archived(IhrmsPrincipal actor, Pageable pageable) {
+    MailParticipant me = resolveActor(actor);
+    Page<String> ids = messages.findArchivedThreadIds(me.id(), pageable);
+    return page(ids, buildThreadList(me.id(), ids.getContent()));
+  }
+
+  /**
+   * Archive a thread for the caller only (idempotent) — hides it from THEIR Inbox (not deleted; still in
+   * Archive/Sent/Search/Starred, and normal for others). Only a participant may archive it. Audited.
+   */
+  @Transactional
+  public void archive(IhrmsPrincipal actor, String threadId, String ip) {
+    MailParticipant me = requireThreadParticipant(actor, threadId);
+    if (!threadArchives.existsByThreadIdAndAccountId(threadId, me.id())) {
+      threadArchives.save(new ThreadArchive(threadId, me.id()));
+      audit.record(actorOf(me), "MAIL_ARCHIVED", "Thread", threadId, Map.of(), ip);
+    }
+  }
+
+  /** Unarchive a thread for the caller only (idempotent) — returns it to their Inbox. Audited on a real clear. */
+  @Transactional
+  public void unarchive(IhrmsPrincipal actor, String threadId, String ip) {
+    MailParticipant me = requireThreadParticipant(actor, threadId);
+    threadArchives
+        .findByThreadIdAndAccountId(threadId, me.id())
+        .ifPresent(
+            a -> {
+              threadArchives.delete(a);
+              audit.record(actorOf(me), "MAIL_UNARCHIVED", "Thread", threadId, Map.of(), ip);
+            });
+  }
+
   /** Resolve the caller + confirm they participate in the thread (404 if it doesn't exist, 403 if not theirs). */
   private MailParticipant requireThreadParticipant(IhrmsPrincipal actor, String threadId) {
     MailParticipant me = resolveActor(actor);
@@ -430,7 +473,7 @@ public class InternalMailService {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found");
     }
     if (!isParticipant(me.id(), msgs, recipientsByMessage(msgs))) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot star this conversation");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not part of this conversation");
     }
     return me;
   }
@@ -505,8 +548,15 @@ public class InternalMailService {
         actorOf(me), "MAIL_VIEWED", "Thread", threadId, Map.of("messageCount", visible.size()), ip);
 
     boolean isStarred = threadStars.existsByThreadIdAndAccountId(threadId, me.id());
+    boolean isArchived = threadArchives.existsByThreadIdAndAccountId(threadId, me.id());
     return new ThreadDetailView(
-        threadId, msgs.get(0).getSubject(), participants, counterparty, messageViews, isStarred);
+        threadId,
+        msgs.get(0).getSubject(),
+        participants,
+        counterparty,
+        messageViews,
+        isStarred,
+        isArchived);
   }
 
   // --- Read state ---------------------------------------------------------------
@@ -604,10 +654,14 @@ public class InternalMailService {
             .stream()
             .map(MessageAttachment::getMessageId)
             .collect(Collectors.toSet());
-    // Which of these threads the viewer has starred (the per-row star flag) — one batched lookup.
+    // Which of these threads the viewer has starred / archived (the per-row flags) — two batched lookups.
     Set<String> starredThreadIds =
         threadStars.findByAccountIdAndThreadIdIn(meId, threadIds).stream()
             .map(ThreadStar::getThreadId)
+            .collect(Collectors.toSet());
+    Set<String> archivedThreadIds =
+        threadArchives.findByAccountIdAndThreadIdIn(meId, threadIds).stream()
+            .map(ThreadArchive::getThreadId)
             .collect(Collectors.toSet());
 
     List<ThreadListItemView> out = new ArrayList<>();
@@ -641,7 +695,8 @@ public class InternalMailService {
               visible.size(),
               unread,
               hasAttachments,
-              starredThreadIds.contains(threadId)));
+              starredThreadIds.contains(threadId),
+              archivedThreadIds.contains(threadId)));
     }
     return out;
   }
@@ -827,6 +882,21 @@ public class InternalMailService {
     }
     row.setRecipientType(type);
     recipients.save(row);
+  }
+
+  /**
+   * Resurface-on-reply for ARCHIVE (§8, Gmail-style): a newly delivered message clears each recipient's
+   * archive of the thread — so an archived thread returns to their Inbox on new inbound activity. Runs in the
+   * SAME transaction as delivery (like the soft-delete resurface, where a fresh non-deleted recipient row
+   * naturally re-lists the thread). A no-op for recipients who hadn't archived it. The SENDER's own archive
+   * is intentionally left as-is (mirrors the soft-delete model, where a sender's deleted copies stay hidden).
+   */
+  private void clearRecipientArchives(String threadId, Collection<MailParticipant> recipients) {
+    if (recipients.isEmpty()) {
+      return;
+    }
+    List<String> ids = recipients.stream().map(MailParticipant::id).distinct().toList();
+    threadArchives.deleteByThreadIdAndAccountIdIn(threadId, ids);
   }
 
   private void auditSent(

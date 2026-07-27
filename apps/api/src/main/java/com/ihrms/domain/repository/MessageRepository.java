@@ -19,18 +19,21 @@ public interface MessageRepository extends JpaRepository<Message, String> {
 
   /**
    * Inbox as THREADS: distinct threads in which the viewer has a non-deleted received message, newest
-   * activity first. Paginated (the count is the distinct-thread total).
+   * activity first, EXCLUDING threads the viewer has archived (§8 — archive hides from Inbox only; the same
+   * thread still shows in Archive/Sent/Search/Starred). Paginated (the count is the distinct-thread total).
    */
   @Query(
       value =
           "SELECT m.\"threadId\" FROM \"messages\" m"
               + " JOIN \"message_recipients\" r ON r.\"messageId\" = m.\"id\""
               + " WHERE (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL"
+              + " AND NOT EXISTS (SELECT 1 FROM \"thread_archives\" a WHERE a.\"threadId\" = m.\"threadId\" AND a.\"accountId\" = :uid)"
               + " GROUP BY m.\"threadId\" ORDER BY MAX(m.\"createdAt\") DESC",
       countQuery =
           "SELECT count(DISTINCT m.\"threadId\") FROM \"messages\" m"
               + " JOIN \"message_recipients\" r ON r.\"messageId\" = m.\"id\""
-              + " WHERE (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL",
+              + " WHERE (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL"
+              + " AND NOT EXISTS (SELECT 1 FROM \"thread_archives\" a WHERE a.\"threadId\" = m.\"threadId\" AND a.\"accountId\" = :uid)",
       nativeQuery = true)
   Page<String> findInboxThreadIds(@Param("uid") String uid, Pageable pageable);
 
@@ -88,6 +91,28 @@ public interface MessageRepository extends JpaRepository<Message, String> {
               + " AND EXISTS (SELECT 1 FROM \"thread_stars\" s WHERE s.\"threadId\" = m.\"threadId\" AND s.\"accountId\" = :uid)",
       nativeQuery = true)
   Page<String> findStarredThreadIds(@Param("uid") String uid, Pageable pageable);
+
+  /**
+   * Archived as THREADS (§8): the viewer's OWN threads (a non-deleted sent OR received message — the same
+   * soft-delete scoping as Inbox/Search) that they have archived, newest activity first. Mirrors {@code
+   * findStarredThreadIds} against {@code thread_archives}.
+   */
+  @Query(
+      value =
+          "SELECT m.\"threadId\" FROM \"messages\" m"
+              + " WHERE (((m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL)"
+              + "   OR EXISTS (SELECT 1 FROM \"message_recipients\" r WHERE r.\"messageId\" = m.\"id\""
+              + "     AND (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL))"
+              + " AND EXISTS (SELECT 1 FROM \"thread_archives\" a WHERE a.\"threadId\" = m.\"threadId\" AND a.\"accountId\" = :uid)"
+              + " GROUP BY m.\"threadId\" ORDER BY MAX(m.\"createdAt\") DESC",
+      countQuery =
+          "SELECT count(DISTINCT m.\"threadId\") FROM \"messages\" m"
+              + " WHERE (((m.\"senderUserId\" = :uid OR m.\"senderEmployeeId\" = :uid) AND m.\"senderDeletedAt\" IS NULL)"
+              + "   OR EXISTS (SELECT 1 FROM \"message_recipients\" r WHERE r.\"messageId\" = m.\"id\""
+              + "     AND (r.\"recipientUserId\" = :uid OR r.\"recipientEmployeeId\" = :uid) AND r.\"deletedAt\" IS NULL))"
+              + " AND EXISTS (SELECT 1 FROM \"thread_archives\" a WHERE a.\"threadId\" = m.\"threadId\" AND a.\"accountId\" = :uid)",
+      nativeQuery = true)
+  Page<String> findArchivedThreadIds(@Param("uid") String uid, Pageable pageable);
 
   /** Thread-level unread badge (§8): distinct threads with a non-deleted, unopened received message. */
   @Query(
