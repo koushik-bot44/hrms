@@ -25,7 +25,7 @@ export function AuthShell({
   description,
   children,
   footer,
-  portalLabel = 'Portal',
+  portalLabel = 'Integrated HR Management',
   badgeLabel = 'Secure access',
 }: {
   icon: React.ReactNode;
@@ -33,7 +33,7 @@ export function AuthShell({
   description: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  /** Left-panel sub-label under IHRMS (e.g. "Employee portal" / "Staff portal"). */
+  /** Left-panel sub-label under HRORGS (defaults to the "Integrated HR Management" tagline). */
   portalLabel?: string;
   /** Secure-badge heading (e.g. "Secure employee access" / "Secure staff access"). */
   badgeLabel?: string;
@@ -51,7 +51,7 @@ export function AuthShell({
             <ShieldCheck className="size-5 text-primary-bright" aria-hidden />
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-semibold tracking-tight text-sidebar-foreground">IHRMS</div>
+            <div className="text-sm font-semibold tracking-tight text-sidebar-foreground">HRORGS</div>
             <div className="text-[11px] text-sidebar-muted">{portalLabel}</div>
           </div>
         </div>

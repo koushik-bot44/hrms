@@ -34,9 +34,9 @@ export default function LoginPage() {
   return (
     <AuthShell
       icon={<ShieldCheck className="size-6" />}
-      title="Welcome to IHRMS"
-      description="Sign in to IHRMS with your email and password."
-      portalLabel="Staff portal"
+      title="Welcome to HRORGS"
+      description="Sign in to HRORGS with your email and password."
+      portalLabel="Integrated HR Management"
       badgeLabel="Secure staff access"
       footer={
         <Link href="/employee/login" className="text-sm text-muted-foreground hover:text-foreground">

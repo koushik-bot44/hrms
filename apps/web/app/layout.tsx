@@ -8,7 +8,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: { default: 'IHRMS', template: '%s · IHRMS' },
+  title: { default: 'HRORGS', template: '%s · HRORGS' },
   description: 'Employee information & onboarding management system.',
 };
 

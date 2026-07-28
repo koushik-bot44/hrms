@@ -5,7 +5,7 @@ import type { Config } from 'tailwindcss';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const animate = require('tailwindcss-animate');
 
-// IHRMS theme. Tailwind PINNED at v3.4 (deliberate — do not drift to v4).
+// HRORGS theme. Tailwind PINNED at v3.4 (deliberate — do not drift to v4).
 // Colors use the `hsl(var(--x) / <alpha-value>)` form so opacity modifiers work.
 const config: Config = {
   darkMode: ['class'],
