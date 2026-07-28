@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 import {
-  Bar,
-  BarChart,
+  Area,
+  AreaChart,
   CartesianGrid,
   Legend,
   ResponsiveContainer,
@@ -79,12 +79,23 @@ export function HierarchyTrends() {
           <>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }} barGap={2}>
+                <AreaChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                  <defs>
+                    {/* Soft token-derived gradient fills — indigo for onboarded, green for approved. */}
+                    <linearGradient id="areaJoined" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={JOINED} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={JOINED} stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="areaApproved" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={APPROVED} stopOpacity={0.3} />
+                      <stop offset="100%" stopColor={APPROVED} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
                   <Tooltip
-                    cursor={{ fill: 'hsl(var(--accent))', opacity: 0.4 }}
+                    cursor={{ stroke: 'hsl(var(--border))' }}
                     formatter={(v, n) => [String(v), n === 'joined' ? 'Onboarded' : 'Approved']}
                     labelFormatter={(_l, p) => (p?.[0]?.payload ? monthLabel(p[0].payload.key) : '')}
                     contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
@@ -95,9 +106,9 @@ export function HierarchyTrends() {
                     formatter={(value) => (value === 'joined' ? 'Onboarded' : 'Approved')}
                     wrapperStyle={{ fontSize: 12 }}
                   />
-                  <Bar dataKey="joined" name="joined" fill={JOINED} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="approved" name="approved" fill={APPROVED} radius={[3, 3, 0, 0]} />
-                </BarChart>
+                  <Area type="monotone" dataKey="joined" name="joined" stroke={JOINED} strokeWidth={2} fill="url(#areaJoined)" />
+                  <Area type="monotone" dataKey="approved" name="approved" stroke={APPROVED} strokeWidth={2} fill="url(#areaApproved)" />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
             {/* Offboarding series exists in the payload but is a labeled placeholder — no faked data. */}

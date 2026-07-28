@@ -21,6 +21,7 @@ import { DeleteCompanyDialog } from '@/components/super-admin/delete-company-dia
 import { RestoreCompanyDialog } from '@/components/super-admin/restore-company-dialog';
 import { PurgeCompanyDialog } from '@/components/super-admin/purge-company-dialog';
 import { RoleDashboard } from '@/components/dashboard/role-dashboard';
+import { TodayChip } from '@/components/accountant/today-chip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -157,6 +158,7 @@ function CompaniesView() {
         description="Every company in the portal. Provision each company's admin, or archive one."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <TodayChip />
             <CreateAccountantDialog />
             <CreateHierarchyDialog />
             <SuperAdminOnboardDialog />

@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { StatusBadge } from '@/components/status-badge';
+import { TodayChip } from '@/components/accountant/today-chip';
 import { Card, CardContent } from '@/components/ui/card';
 import { OnboardingStepper } from '@/components/employee/onboarding-stepper';
 import { RevisionPanel } from '@/components/employee/revision-panel';
@@ -45,7 +46,12 @@ export default function EmployeeOnboardingPage() {
       <PageHeader
         title="My onboarding"
         description="Complete the four forms, upload your documents, sign, and submit for verification."
-        actions={<StatusBadge status={data.status} />}
+        actions={
+          <>
+            <TodayChip />
+            <StatusBadge status={data.status} />
+          </>
+        }
         editorial
       />
 

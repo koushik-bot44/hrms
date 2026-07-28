@@ -13,6 +13,7 @@ import { TableSkeleton } from '@/components/loading-skeleton';
 import { CreateTeamDialog } from '@/components/company-admin/create-team-dialog';
 import { TeamStatusBadge } from '@/components/company-admin/team-status-badge';
 import { RoleDashboard } from '@/components/dashboard/role-dashboard';
+import { TodayChip } from '@/components/accountant/today-chip';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -100,7 +101,12 @@ export default function TeamsPage() {
       <PageHeader
         title="Company workspace"
         description="Your company at a glance — teams, onboarding progress, and recent activity."
-        actions={<CreateTeamDialog />}
+        actions={
+          <>
+            <TodayChip />
+            <CreateTeamDialog />
+          </>
+        }
         editorial
       />
 

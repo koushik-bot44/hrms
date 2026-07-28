@@ -1,7 +1,5 @@
 'use client';
 
-import * as React from 'react';
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import {
   Building2,
   CheckCircle2,
@@ -20,6 +18,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
+import { StatTile } from '@/components/dashboard/stat-tile';
+import { Donut } from '@/components/dashboard/donut';
+import { LiveIndicator } from '@/components/dashboard/live-indicator';
+import { TodayChip } from '@/components/accountant/today-chip';
 import { cn } from '@/lib/utils';
 import { ALL_STATUSES, funnelTotal, MAIN_PATH, OFF_PATH, STATUS_META } from '@/components/hierarchy/status-meta';
 import { HierarchyTrends } from '@/components/hierarchy/hierarchy-trends';
@@ -49,7 +51,12 @@ export function PlatformOverview() {
       <PageHeader
         title="Platform Overview"
         description="Cross-platform, read-only summaries and counts. Individual records, PII, attendance and leave are never shown here."
-        actions={<LiveDot refreshing={refreshing} loading={query.isLoading} />}
+        actions={
+          <div className="flex items-center gap-3">
+            {!query.isLoading ? <LiveIndicator /> : null}
+            <TodayChip />
+          </div>
+        }
         editorial
       />
 
@@ -80,14 +87,15 @@ function OverviewBody({ data }: { data: Overview }) {
     <>
       {/* 1 — Headline totals. */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Stat
+        <StatTile
           icon={Building2}
+          tone="primary"
           label="Companies"
           value={n(totals.companies.total)}
           sub={`${n(totals.companies.active)} active · ${n(totals.companies.archived)} archived`}
         />
-        <Stat icon={Layers} label="Teams" value={n(totals.teams)} />
-        <Stat icon={Users} label="Employees" value={n(totals.employees)} />
+        <StatTile icon={Layers} tone="primary" label="Teams" value={n(totals.teams)} />
+        <StatTile icon={Users} tone="primary" label="Employees" value={n(totals.employees)} />
       </div>
 
       <Card>
@@ -109,15 +117,19 @@ function OverviewBody({ data }: { data: Overview }) {
       </Card>
 
       {/* 2 — Ops health. */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <OpsCard
+      <div className="grid items-start gap-4 sm:grid-cols-3">
+        <StatTile
           icon={CheckCircle2}
+          tone="success"
+          size="sm"
           label="Onboarding completion"
           value={`${(ops.onboardingCompletionRate * 100).toFixed(1)}%`}
           sub={`${n(ops.approved)} approved of ${n(ops.totalOnboarded)} onboarded`}
         />
-        <OpsCard
+        <StatTile
           icon={Clock}
+          tone="neutral"
+          size="sm"
           label="Avg. time to approval"
           value={ops.averageTimeToApprovalDays == null ? '—' : `${ops.averageTimeToApprovalDays} days`}
           sub="Onboard → Manager approval"
@@ -206,21 +218,15 @@ function DistributionCard({ funnel }: { funnel: OnboardingFunnel }) {
           <EmptyState icon={PieIcon} title="No employees yet" description="The distribution appears once employees are onboarded." />
         ) : (
           <div className="grid items-center gap-4 sm:grid-cols-[minmax(0,11rem)_1fr]">
-            <div className="h-44">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={slices} dataKey="value" nameKey="label" innerRadius={48} outerRadius={72} paddingAngle={2} strokeWidth={0}>
-                    {slices.map((s) => (
-                      <Cell key={s.key} fill={s.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(v, label) => [`${n(Number(v))} · ${pct(Number(v), total)}%`, String(label)]}
-                    contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            <Donut
+              data={slices.map((s) => ({ name: s.label, value: s.value, color: s.color }))}
+              centerValue={n(total)}
+              centerLabel="Total"
+              innerRadius={48}
+              outerRadius={72}
+              tooltipFormatter={(v, name) => [`${n(v)} · ${pct(v, total)}%`, name]}
+              className="w-full"
+            />
             <ul className="space-y-1.5 text-sm">
               {slices.map((s) => (
                 <li key={s.key} className="flex items-center justify-between gap-3">
@@ -244,82 +250,29 @@ function DistributionCard({ funnel }: { funnel: OnboardingFunnel }) {
 
 // --- small building blocks -------------------------------------------------
 
+/** Stuck onboardings as a warning-toned StatTile, with the per-stage breakdown kept beneath it. */
 function StuckCard({ ops }: { ops: OpsMetrics }) {
   return (
-    <Card>
-      <CardContent className="space-y-2 p-4">
-        <div className="flex items-center justify-between">
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <ShieldAlert className="size-4" />
-            Stuck onboardings
-          </p>
-        </div>
-        <p className={cn('text-2xl font-semibold tabular-nums', ops.stuckOnboardings > 0 && 'text-warning')}>
-          {n(ops.stuckOnboardings)}
-        </p>
-        <p className="text-xs text-muted-foreground">Pre-approval &gt; {ops.stuckThresholdDays} days</p>
-        {ops.stuckByStage.length > 0 ? (
-          <ul className="space-y-0.5 pt-1 text-xs text-muted-foreground">
-            {ops.stuckByStage.map((s) => (
-              <li key={s.status} className="flex items-center justify-between">
-                <span>{statusLabel(s.status)}</span>
-                <span className="font-medium tabular-nums text-foreground">{n(s.count)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function Stat({
-  icon: Icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <Card variant="tint">
-      <CardContent className="space-y-1 p-6">
-        <p className="flex items-center gap-1.5 text-sm font-medium text-primary">
-          <Icon className="size-4" />
-          {label}
-        </p>
-        <p className="text-4xl font-semibold tracking-tight tabular-nums text-foreground">{value}</p>
-        {sub ? <p className="text-xs text-muted-foreground">{sub}</p> : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function OpsCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  sub: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="space-y-1 p-4">
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Icon className="size-4" />
-          {label}
-        </p>
-        <p className="text-2xl font-semibold tabular-nums">{value}</p>
-        <p className="text-xs text-muted-foreground">{sub}</p>
-      </CardContent>
-    </Card>
+    <div className="space-y-2">
+      <StatTile
+        icon={ShieldAlert}
+        tone={ops.stuckOnboardings > 0 ? 'warning' : 'neutral'}
+        size="sm"
+        label="Stuck onboardings"
+        value={n(ops.stuckOnboardings)}
+        sub={`Pre-approval > ${ops.stuckThresholdDays} days`}
+      />
+      {ops.stuckByStage.length > 0 ? (
+        <ul className="space-y-0.5 rounded-2xl border bg-card px-4 py-3 text-xs text-muted-foreground shadow-card">
+          {ops.stuckByStage.map((s) => (
+            <li key={s.status} className="flex items-center justify-between">
+              <span>{statusLabel(s.status)}</span>
+              <span className="font-medium tabular-nums text-foreground">{n(s.count)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -329,16 +282,6 @@ function MiniStat({ label, value }: { label: string; value: number }) {
       <p className="text-2xl font-semibold tabular-nums">{n(value)}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
     </div>
-  );
-}
-
-function LiveDot({ refreshing, loading }: { refreshing: boolean; loading: boolean }) {
-  if (loading) return null;
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span className={cn('size-1.5 rounded-full', refreshing ? 'animate-pulse bg-primary' : 'bg-success')} />
-      {refreshing ? 'Refreshing…' : 'Live — updates automatically'}
-    </span>
   );
 }
 

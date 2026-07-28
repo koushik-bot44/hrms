@@ -1,14 +1,26 @@
 'use client';
 
-import Link from 'next/link';
-import { Activity, ArrowUpRight, Building2 } from 'lucide-react';
+import * as React from 'react';
+import {
+  Activity,
+  Archive,
+  Bell,
+  Building2,
+  CheckCircle2,
+  Clock,
+  FileClock,
+  FilePen,
+  Inbox,
+  UserPlus,
+  Users,
+  XCircle,
+} from 'lucide-react';
 import type { ActivityItem, StatCard } from '@/lib/contract';
 import { getDashboardSummary } from '@/lib/api/dashboard';
 import { useApiQuery } from '@/lib/api/hooks';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/empty-state';
-import { cn } from '@/lib/utils';
+import { StatTile, type StatTone } from '@/components/dashboard/stat-tile';
 
 /** Where each stat card drills into — the existing filtered list route (reused, not new pages). */
 const DRILL: Record<string, string> = {
@@ -27,6 +39,40 @@ const DRILL: Record<string, string> = {
   'manager.unreadNotifications': '/manager/notifications',
 };
 
+/** A semantic icon per stat key (falls back to Activity) — the tile's rounded icon tile. */
+const STAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  'super.companiesActive': Building2,
+  'super.companiesArchived': Archive,
+  'ca.teams': Users,
+  'hr.onboarded': UserPlus,
+  'hr.inProgress': Clock,
+  'hr.pendingVerification': FileClock,
+  'hr.inRevision': FilePen,
+  'hr.approved': CheckCircle2,
+  'hr.rejected': XCircle,
+  'manager.pendingApprovals': Inbox,
+  'manager.approved': CheckCircle2,
+  'manager.rejected': XCircle,
+  'manager.unreadNotifications': Bell,
+};
+
+/** The tone per stat key (falls back to primary): counts=primary, waiting/stuck=warning, done=success, negative=danger. */
+const STAT_TONE: Record<string, StatTone> = {
+  'super.companiesActive': 'primary',
+  'super.companiesArchived': 'neutral',
+  'ca.teams': 'primary',
+  'hr.onboarded': 'primary',
+  'hr.inProgress': 'primary',
+  'hr.pendingVerification': 'warning',
+  'hr.inRevision': 'warning',
+  'hr.approved': 'success',
+  'hr.rejected': 'danger',
+  'manager.pendingApprovals': 'warning',
+  'manager.approved': 'success',
+  'manager.rejected': 'danger',
+  'manager.unreadNotifications': 'primary',
+};
+
 /**
  * Live, role-scoped dashboard: stat cards (clickable → filtered lists) + a recent-activity feed.
  * `show` renders only one section so a page can place them apart (e.g. stats above a list, activity
@@ -34,18 +80,14 @@ const DRILL: Record<string, string> = {
  */
 export function RoleDashboard({
   show = 'all',
-  heroStats = false,
 }: {
   show?: 'all' | 'stats' | 'activity';
   /**
-   * Render the stat cards as the "moment" — the oversized (text-4xl) number + brand label. `true` also
-   * tints ALL cards indigo; a NUMBER tints only the first N (the rest stay white) so the accent doesn't
-   * flood a landing with many stats. Opt-in per page; backward-compatible (`true` = the prior behaviour).
+   * Retained for backward-compatibility with existing call sites. Stats now render as the shared
+   * {@link StatTile} (one visual language across every landing), so this no longer changes presentation.
    */
   heroStats?: boolean | number;
 }) {
-  const heroOn = Boolean(heroStats);
-  const tintCap = heroStats === true ? Infinity : typeof heroStats === 'number' ? heroStats : 0;
   const query = useApiQuery(['dashboard'], getDashboardSummary, { refetchOnWindowFocus: true });
   const wantStats = show !== 'activity';
   const wantActivity = show !== 'stats';
@@ -81,8 +123,8 @@ export function RoleDashboard({
     <div className="space-y-6">
       {wantStats && stats.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((s, i) => (
-            <StatCardView key={s.key} card={s} href={DRILL[s.key]} hero={heroOn} tint={heroOn && i < tintCap} />
+          {stats.map((s) => (
+            <StatCardView key={s.key} card={s} href={DRILL[s.key]} />
           ))}
         </div>
       ) : null}
@@ -109,49 +151,16 @@ export function RoleDashboard({
   );
 }
 
-function StatCardView({
-  card,
-  href,
-  hero = false,
-  tint = false,
-}: {
-  card: StatCard;
-  href?: string;
-  /** The oversized number + brand label treatment. */
-  hero?: boolean;
-  /** The soft-indigo tinted surface (a capped subset of hero cards). */
-  tint?: boolean;
-}) {
-  const inner = (
-    <Card
-      variant={tint ? 'tint' : href ? 'interactive' : 'default'}
-      className={cn('h-full', !tint && href && 'transition-colors hover:border-primary/50')}
-    >
-      <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle
-          className={cn(
-            'text-sm font-medium',
-            hero ? 'text-primary dark:text-foreground' : 'text-muted-foreground',
-          )}
-        >
-          {card.label}
-        </CardTitle>
-        {href ? <ArrowUpRight className="size-4 text-muted-foreground" aria-hidden /> : null}
-      </CardHeader>
-      <CardContent>
-        {/* A 0 renders as "0" (never a placeholder). */}
-        <div className={cn('font-semibold tabular-nums tracking-tight', hero ? 'text-4xl' : 'text-2xl')}>
-          {card.value}
-        </div>
-      </CardContent>
-    </Card>
-  );
-  return href ? (
-    <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg">
-      {inner}
-    </Link>
-  ) : (
-    inner
+/** One dashboard stat, rendered in the shared icon-tile visual language (a 0 renders as "0"). */
+function StatCardView({ card, href }: { card: StatCard; href?: string }) {
+  return (
+    <StatTile
+      icon={STAT_ICON[card.key] ?? Activity}
+      label={card.label}
+      value={card.value}
+      tone={STAT_TONE[card.key] ?? 'primary'}
+      href={href}
+    />
   );
 }
 
