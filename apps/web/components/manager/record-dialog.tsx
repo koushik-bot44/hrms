@@ -49,7 +49,7 @@ export function ManagerRecordDialog({
           View record
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{label}</DialogTitle>
           <DialogDescription>The sections and documents HR verified for this employee.</DialogDescription>

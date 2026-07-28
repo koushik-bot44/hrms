@@ -169,7 +169,7 @@ export function SignaturePad({
         onPointerUp={end}
         onPointerLeave={end}
         className={cn(
-          'w-full touch-none rounded-md border border-input bg-white',
+          'w-full touch-none rounded-md border border-input bg-[hsl(var(--signature-paper))]',
           mode === 'draw' && !disabled ? 'cursor-crosshair' : 'cursor-default',
         )}
       />

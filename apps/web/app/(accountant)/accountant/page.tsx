@@ -15,7 +15,7 @@ export default function AccountantOverviewPage() {
         description="Read-only oversight of approved employees and their records, scoped to your access."
         actions={<TodayChip />}
       />
-      <RoleDashboard show="stats" heroStats />
+      <RoleDashboard show="stats" />
       <ViewerEmployeesBrowser />
     </div>
   );

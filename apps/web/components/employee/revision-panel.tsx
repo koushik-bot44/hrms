@@ -15,6 +15,7 @@ import { reviseDocument, resubmitOnboarding } from '@/lib/api/onboarding';
 import { useApiMutation } from '@/lib/api/hooks';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
+import { surface } from '@/components/ui/surface';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -166,7 +167,7 @@ function FlaggedDocument({ doc, onReplaced }: { doc: DocumentDto; onReplaced: ()
   });
 
   return (
-    <div className="space-y-2 rounded-md border p-3">
+    <div className={cn(surface(), 'space-y-2 p-3')}>
       <div className="flex flex-wrap items-center gap-2">
         <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">
@@ -183,7 +184,7 @@ function FlaggedDocument({ doc, onReplaced }: { doc: DocumentDto; onReplaced: ()
       <div
         {...getRootProps()}
         className={cn(
-          'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed px-4 py-5 text-center text-sm transition-colors',
+          'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed bg-muted/30 px-4 py-5 text-center text-sm transition-colors',
           isDragActive ? 'border-primary bg-primary/5' : 'hover:border-primary/50',
           progress !== null && 'pointer-events-none opacity-70',
         )}

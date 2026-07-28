@@ -18,7 +18,7 @@ export default function ManagerApprovalsPage() {
       />
       {/* Stats up top, then approvals, then the activity feed below — both dashboard sections share the
           one deduped ['dashboard'] query. */}
-      <RoleDashboard show="stats" heroStats />
+      <RoleDashboard show="stats" />
       {/* ApprovalsWorkspace reads the query string (tab/status) → needs a Suspense boundary. */}
       <Suspense>
         <ApprovalsWorkspace />

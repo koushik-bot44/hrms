@@ -82,11 +82,6 @@ export function RoleDashboard({
   show = 'all',
 }: {
   show?: 'all' | 'stats' | 'activity';
-  /**
-   * Retained for backward-compatibility with existing call sites. Stats now render as the shared
-   * {@link StatTile} (one visual language across every landing), so this no longer changes presentation.
-   */
-  heroStats?: boolean | number;
 }) {
   const query = useApiQuery(['dashboard'], getDashboardSummary, { refetchOnWindowFocus: true });
   const wantStats = show !== 'activity';

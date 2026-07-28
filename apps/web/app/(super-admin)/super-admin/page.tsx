@@ -168,7 +168,7 @@ function CompaniesView() {
         editorial
       />
 
-      <RoleDashboard show="stats" heroStats />
+      <RoleDashboard show="stats" />
 
       <h2 className="text-sm font-semibold text-muted-foreground">Companies</h2>
 

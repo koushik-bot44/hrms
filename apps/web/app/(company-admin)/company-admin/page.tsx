@@ -112,7 +112,7 @@ export default function TeamsPage() {
 
       {/* Stats up top, the Teams block next, then the activity feed below — both dashboard sections
           share the one deduped ['dashboard'] query. */}
-      <RoleDashboard show="stats" heroStats />
+      <RoleDashboard show="stats" />
 
       <h2 id="teams" className="scroll-mt-24 text-sm font-semibold text-muted-foreground">Teams</h2>
 

@@ -20,8 +20,7 @@ export default function HrDashboardPage() {
         }
         editorial
       />
-      {/* Cap the tint to the first 3 stats — HR has up to 5, and 5 tinted cards over-uses the accent. */}
-      <RoleDashboard heroStats={3} />
+      <RoleDashboard />
     </div>
   );
 }

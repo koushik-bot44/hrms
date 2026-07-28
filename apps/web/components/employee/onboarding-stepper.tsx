@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { surface } from '@/components/ui/surface';
 import { DocumentUploader } from '@/components/employee/document-uploader';
 import { SignaturePad } from '@/components/employee/signature-pad';
 
@@ -310,8 +311,8 @@ export function Form1Step({
           />
 
           <div className="space-y-2">
-            <span className="text-sm font-medium">Declaration</span>
-            <p className="rounded-md border border-input bg-muted/30 p-3 text-sm leading-relaxed text-muted-foreground">
+            <span className="text-sm font-semibold">Declaration</span>
+            <p className={cn(surface(), 'p-3 text-sm leading-relaxed text-muted-foreground')}>
               {DECLARATION_TEXT}
             </p>
             <label className="flex items-start gap-2 text-sm">
@@ -375,7 +376,7 @@ function ArraySection({
           {rows.map((row, i) => {
             const names = fieldNames(i);
             return (
-              <div key={row.id} className="flex flex-wrap items-start gap-2 rounded-md border p-2">
+              <div key={row.id} className={cn(surface(), 'flex flex-wrap items-start gap-2 p-2')}>
                 {cols.map((col, ci) => (
                   <div key={col} className="min-w-[140px] flex-1 space-y-1">
                     <label className="text-[11px] text-muted-foreground">{col}</label>
@@ -474,7 +475,7 @@ export function Form3Step({
             </p>
           ) : (
             entries.fields.map((row, i) => (
-              <div key={row.id} className="space-y-3 rounded-md border p-3">
+              <div key={row.id} className={cn(surface(), 'space-y-3 p-3')}>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">Employer {i + 1}</span>
                   {!disabled ? (
