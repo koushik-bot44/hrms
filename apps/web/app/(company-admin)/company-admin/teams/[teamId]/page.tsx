@@ -6,6 +6,7 @@ import type { TeamMember, TeamRole } from '@/lib/contract';
 import { getTeam } from '@/lib/api/teams';
 import { useApiQuery } from '@/lib/api/hooks';
 import { PageHeader } from '@/components/page-header';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { TeamStatusBadge } from '@/components/company-admin/team-status-badge';
@@ -63,7 +64,11 @@ export default function TeamDetailPage({ params }: { params: { teamId: string } 
 
   return (
     <div className="space-y-6">
-      {backLink}
+      <Breadcrumb
+        homeHref="/company-admin"
+        homeLabel="Teams"
+        items={[{ label: data.name }]}
+      />
       <PageHeader
         title={data.name}
         description="One HR, one Manager and one Accountant run each team."

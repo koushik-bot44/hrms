@@ -92,7 +92,12 @@ export function RecordView({
             <p className="text-xs text-muted-foreground">
               {record.designation ?? '—'}
               {record.dateOfJoining ? ` · joins ${record.dateOfJoining}` : ''}
-              {record.employeeCode ? ` · ${record.employeeCode}` : ''}
+              {record.employeeCode ? (
+                <>
+                  {' · '}
+                  <span className="font-mono">{record.employeeCode}</span>
+                </>
+              ) : null}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -254,7 +259,7 @@ export function RecordView({
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
             {record.generatedDocuments.map((g) => (
-              <div key={g.id} className="flex items-center gap-3 rounded-md border p-3">
+              <div key={g.id} className={cn(surface('subtle'), 'flex items-center gap-3 p-3')}>
                 <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{GENERATED_LABELS[g.kind] ?? g.fileName}</p>

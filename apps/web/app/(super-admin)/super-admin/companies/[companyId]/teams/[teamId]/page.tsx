@@ -7,6 +7,7 @@ import { getTeam, teamKey } from '@/lib/api/teams';
 import { getCompany } from '@/lib/api/companies';
 import { useApiQuery } from '@/lib/api/hooks';
 import { PageHeader } from '@/components/page-header';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { TeamStatusBadge } from '@/components/company-admin/team-status-badge';
@@ -72,7 +73,14 @@ export default function SuperAdminTeamDetailPage({
 
   return (
     <div className="space-y-6">
-      {backLink}
+      <Breadcrumb
+        homeHref="/super-admin"
+        homeLabel="Companies"
+        items={[
+          { label: company.data?.name ?? 'Company', href: `/super-admin/companies/${companyId}` },
+          { label: data.name },
+        ]}
+      />
       <PageHeader
         title={data.name}
         description="One HR, one Manager and one Accountant run each team."

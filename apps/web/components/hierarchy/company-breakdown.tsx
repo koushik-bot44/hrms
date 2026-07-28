@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { cn } from '@/lib/utils';
+import { surface } from '@/components/ui/surface';
 import { ALL_STATUSES, STATUS_META } from '@/components/hierarchy/status-meta';
 
 const REFRESH_MS = 60_000;
@@ -201,7 +202,7 @@ function CompanyDetail({ companyId }: { companyId: string }) {
         ))}
       </div>
 
-      <div className="flex items-center gap-2 rounded-md bg-muted/40 px-4 py-3 text-sm">
+      <div className={cn(surface('subtle'), 'flex items-center gap-2 px-4 py-3 text-sm')}>
         <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
         <span className="text-muted-foreground">Company Admin:</span>
         <StaffName staff={b.companyAdmin} />
@@ -222,7 +223,7 @@ function CompanyDetail({ companyId }: { companyId: string }) {
           <tbody>
             {b.teams.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-3 text-center text-muted-foreground">
+                <td colSpan={5} className="px-4 py-3 text-center text-muted-foreground">
                   No teams in this company.
                 </td>
               </tr>
@@ -251,7 +252,7 @@ function StaffName({ staff }: { staff: StaffRef | null }) {
   return (
     <span className="min-w-0">
       <span className="font-medium">{staff.name}</span>
-      {staff.email ? <span className="block truncate text-xs text-muted-foreground">{staff.email}</span> : null}
+      {staff.email ? <span className="block truncate font-mono text-xs text-muted-foreground">{staff.email}</span> : null}
     </span>
   );
 }

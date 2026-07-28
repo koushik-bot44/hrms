@@ -9,7 +9,7 @@ import { useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { TableSkeleton } from '@/components/loading-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { StatusBadge } from '@/components/status-badge';
 import { cn } from '@/lib/utils';
@@ -99,11 +99,7 @@ export function CompanyEmployeesSection({ companyId }: { companyId: string }) {
         </div>
 
         {query.isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-11 w-full" />
-            <Skeleton className="h-11 w-full" />
-            <Skeleton className="h-11 w-full" />
-          </div>
+          <TableSkeleton rows={5} cols={5} />
         ) : query.isError ? (
           <EmptyState
             icon={UserRound}
@@ -117,27 +113,27 @@ export function CompanyEmployeesSection({ companyId }: { companyId: string }) {
             description="Onboard an employee into a team, or adjust the search and status filters."
           />
         ) : (
-          <div className={cn('overflow-x-auto rounded-md border transition-opacity', dim && 'opacity-60')}>
+          <div className={cn('overflow-x-auto rounded-xl border transition-opacity', dim && 'opacity-60')}>
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Name</th>
-                  <th className="px-3 py-2 font-medium">Email</th>
-                  <th className="px-3 py-2 font-medium">Designation</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2" />
+                  <th className="px-4 py-3 font-medium">Name</th>
+                  <th className="px-4 py-3 font-medium">Email</th>
+                  <th className="px-4 py-3 font-medium">Designation</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
                 {data.content.map((e) => (
                   <tr key={e.id} className="border-t hover:bg-accent/40">
-                    <td className="px-3 py-2 font-medium">{e.fullName ?? '—'}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{e.email}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{e.designation ?? '—'}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-3 font-medium">{e.fullName ?? '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{e.email}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{e.designation ?? '—'}</td>
+                    <td className="px-4 py-3">
                       <StatusBadge status={e.status} />
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
                       <Link
                         href={`/super-admin/companies/${companyId}/employees/${e.id}`}
                         className="text-sm font-medium text-primary hover:underline"

@@ -1074,7 +1074,7 @@ function DraftRow({ row, onOpen }: { row: DraftListItem; onOpen: (id: string) =>
           <span className="shrink-0 text-[11px] text-muted-foreground">{relativeTime(row.updatedAt)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded bg-amber-100 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+          <span className="rounded bg-warning/10 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
             Draft
           </span>
           <span className="truncate text-sm text-foreground">{subject}</span>

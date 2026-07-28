@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Users } from 'lucide-react';
 import { listTeams, teamsKey } from '@/lib/api/teams';
 import { useApiQuery } from '@/lib/api/hooks';
-import { Skeleton } from '@/components/ui/skeleton';
+import { TableSkeleton } from '@/components/loading-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { TeamStatusBadge } from '@/components/company-admin/team-status-badge';
 import { CreateTeamDialog } from '@/components/company-admin/create-team-dialog';
@@ -21,10 +21,7 @@ export function CompanyTeamsSection({ companyId }: { companyId: string }) {
       </div>
 
       {query.isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </div>
+        <TableSkeleton rows={4} cols={6} />
       ) : query.isError ? (
         <EmptyState
           icon={Users}
@@ -39,22 +36,23 @@ export function CompanyTeamsSection({ companyId }: { companyId: string }) {
           action={<CreateTeamDialog companyId={companyId} />}
         />
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 font-medium">Team</th>
-                <th className="px-3 py-2 font-medium">HR</th>
-                <th className="px-3 py-2 font-medium">Manager</th>
-                <th className="px-3 py-2 font-medium">Accountant</th>
-                <th className="px-3 py-2 font-medium">Members</th>
-                <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Team</th>
+                <th className="px-4 py-3 font-medium">HR</th>
+                <th className="px-4 py-3 font-medium">Manager</th>
+                <th className="px-4 py-3 font-medium">Accountant</th>
+                <th className="px-4 py-3 font-medium">Members</th>
+                <th className="px-4 py-3 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
               {query.data.map((team) => (
                 <tr key={team.id} className="border-t hover:bg-accent/40">
-                  <td className="px-3 py-2 font-medium">
+                  <td className="px-4 py-3 font-medium">
                     <Link
                       href={`/super-admin/companies/${companyId}/teams/${team.id}`}
                       className="text-primary hover:underline"
@@ -62,21 +60,22 @@ export function CompanyTeamsSection({ companyId }: { companyId: string }) {
                       {team.name}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">{team.hr?.name ?? 'Unassigned'}</td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="px-4 py-3 text-muted-foreground">{team.hr?.name ?? 'Unassigned'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
                     {team.manager?.name ?? 'Unassigned'}
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="px-4 py-3 text-muted-foreground">
                     {team.accountant?.name ?? 'Unassigned'}
                   </td>
-                  <td className="px-3 py-2 tabular-nums">{team.memberCount}</td>
-                  <td className="px-3 py-2">
+                  <td className="px-4 py-3 tabular-nums">{team.memberCount}</td>
+                  <td className="px-4 py-3">
                     <TeamStatusBadge complete={team.complete} />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </section>

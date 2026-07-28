@@ -178,7 +178,7 @@ export function RecipientAutocomplete({
                   )}
                 >
                   <span className="truncate font-medium">{o.name}</span>
-                  <span className="shrink-0 truncate text-xs text-muted-foreground">{o.address}</span>
+                  <span className="shrink-0 truncate font-mono text-xs text-muted-foreground">{o.address}</span>
                 </button>
               </li>
             ))}

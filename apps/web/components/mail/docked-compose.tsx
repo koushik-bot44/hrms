@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { surface } from '@/components/ui/surface';
 import { RecipientAutocomplete } from '@/components/mail/recipient-autocomplete';
 import {
   AttachmentPicker,
@@ -317,7 +318,7 @@ export function DockedCompose({
               />
             </>
           ) : (
-            <div className="rounded-md bg-muted px-3 py-2 text-xs">
+            <div className={cn(surface('subtle'), 'px-3 py-2 text-xs')}>
               <div className="truncate">
                 <span className="text-muted-foreground">To </span>
                 <span className="font-medium">

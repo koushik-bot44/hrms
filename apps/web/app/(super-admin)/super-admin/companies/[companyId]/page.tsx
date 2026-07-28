@@ -5,6 +5,7 @@ import { ArrowLeft, Building2, ShieldCheck, UserRound, Users } from 'lucide-reac
 import { getCompany } from '@/lib/api/companies';
 import { useApiQuery } from '@/lib/api/hooks';
 import { PageHeader } from '@/components/page-header';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { CompanyStatusBadge } from '@/components/super-admin/company-status-badge';
@@ -63,7 +64,11 @@ export default function CompanyDetailPage({ params }: { params: { companyId: str
 
   return (
     <div className="space-y-6">
-      {backLink}
+      <Breadcrumb
+        homeHref="/super-admin"
+        homeLabel="Companies"
+        items={[{ label: data.name }]}
+      />
       <PageHeader
         title={data.name}
         description={`Code ${data.code} · Mail domain @${data.mailDomain}`}

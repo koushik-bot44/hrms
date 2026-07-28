@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { surface } from '@/components/ui/surface';
+import { cn } from '@/lib/utils';
 
 interface Props {
   /** Fetches one page of day-grouped history for the chosen IST range. */
@@ -119,7 +121,7 @@ export function AttendanceHistory({ fetchPage, queryKey, title = 'History' }: Pr
                     {formatDuration(day.totalSeconds)} worked
                   </span>
                 </div>
-                <ul className="divide-y rounded-md border">
+                <ul className={cn(surface('subtle'), 'divide-y')}>
                   {day.sessions.map((s) => (
                     <li key={s.id} className="space-y-1 px-3 py-2 text-sm">
                       <div className="flex items-center justify-between">

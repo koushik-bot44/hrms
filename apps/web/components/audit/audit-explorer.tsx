@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 25;
 const SELECT_CLASS =
-  'h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'h-11 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 const COLUMNS: ColumnDef<AuditLogEntry>[] = [
   {
