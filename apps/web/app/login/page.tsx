@@ -6,14 +6,14 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { ShieldCheck } from 'lucide-react';
+import { Lock, LogIn, Mail, ShieldCheck } from 'lucide-react';
 import { StaffLoginSchema, type StaffLoginInput } from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
 import { ApiError } from '@/lib/api/client';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { IconInput } from '@/components/ui/icon-input';
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError && error.message ? error.message : fallback;
@@ -34,8 +34,10 @@ export default function LoginPage() {
   return (
     <AuthShell
       icon={<ShieldCheck className="size-6" />}
-      title="Welcome back"
+      title="Welcome to IHRMS"
       description="Sign in to IHRMS with your email and password."
+      portalLabel="Staff portal"
+      badgeLabel="Secure staff access"
       footer={
         <Link href="/employee/login" className="text-sm text-muted-foreground hover:text-foreground">
           Onboarding employee? Sign in here
@@ -68,7 +70,8 @@ function StaffSignInForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
       <Field id="staff-email" label="Email" error={form.formState.errors.email?.message}>
-        <Input
+        <IconInput
+          icon={Mail}
           id="staff-email"
           type="text"
           inputMode="email"
@@ -81,7 +84,8 @@ function StaffSignInForm() {
         />
       </Field>
       <Field id="staff-password" label="Password" error={form.formState.errors.password?.message}>
-        <Input
+        <IconInput
+          icon={Lock}
           id="staff-password"
           type="password"
           autoComplete="current-password"
@@ -91,6 +95,7 @@ function StaffSignInForm() {
         />
       </Field>
       <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+        <LogIn />
         {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
       </Button>
     </form>

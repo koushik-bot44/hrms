@@ -98,7 +98,7 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
       </div>
 
       {query.isLoading ? (
-        <TableSkeleton rows={6} cols={6} />
+        <TableSkeleton rows={6} cols={7} />
       ) : query.isError ? (
         <EmptyState
           icon={CalendarClock}
@@ -140,6 +140,7 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
                       <th className="px-4 py-3 font-medium">Worked (month)</th>
                       <th className="px-4 py-3 font-medium">Late</th>
                       <th className="px-4 py-3 font-medium">Leave days</th>
+                      <th className="px-4 py-3 font-medium">Unapproved absences</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -175,6 +176,9 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
                           {e.lateLogins}
                         </td>
                         <td className="px-4 py-3 tabular-nums">{e.leaveDaysTotal}</td>
+                        <td className={cn('px-4 py-3 tabular-nums', e.unapprovedAbsences > 0 && 'text-destructive')}>
+                          {e.unapprovedAbsences}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

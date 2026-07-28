@@ -6,14 +6,14 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { ArrowLeft, UserRound } from 'lucide-react';
+import { ArrowLeft, KeyRound, Mail, Send, User, UserRound } from 'lucide-react';
 import { OtpRequestSchema, OtpVerifySchema, type OtpRequestInput } from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
 import { ApiError } from '@/lib/api/client';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { IconInput } from '@/components/ui/icon-input';
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError && error.message ? error.message : fallback;
@@ -39,6 +39,8 @@ export default function EmployeeLoginPage() {
       icon={<UserRound className="size-6" />}
       title="Welcome to IHRMS"
       description="Enter your full name and email and we'll send you a one-time code."
+      portalLabel="Employee portal"
+      badgeLabel="Secure employee access"
       footer={
         <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">
           Staff member? Sign in here
@@ -110,7 +112,8 @@ function SignInForm() {
     return (
       <form onSubmit={onRequest} className="space-y-4" noValidate>
         <Field id="emp-name" label="Full Name" error={requestForm.formState.errors.fullName?.message}>
-          <Input
+          <IconInput
+            icon={User}
             id="emp-name"
             autoComplete="name"
             placeholder="Alex Doe"
@@ -119,7 +122,8 @@ function SignInForm() {
           />
         </Field>
         <Field id="emp-email" label="Email" error={requestForm.formState.errors.email?.message}>
-          <Input
+          <IconInput
+            icon={Mail}
             id="emp-email"
             type="email"
             autoComplete="email"
@@ -129,6 +133,7 @@ function SignInForm() {
           />
         </Field>
         <Button type="submit" className="w-full" disabled={requestForm.formState.isSubmitting}>
+          <Send />
           {requestForm.formState.isSubmitting ? 'Sending…' : 'Send code'}
         </Button>
       </form>
@@ -146,7 +151,8 @@ function SignInForm() {
         </p>
       ) : null}
       <Field id="emp-otp" label="6-Digit Code" error={verifyForm.formState.errors.otp?.message}>
-        <Input
+        <IconInput
+          icon={KeyRound}
           id="emp-otp"
           inputMode="numeric"
           autoComplete="one-time-code"
