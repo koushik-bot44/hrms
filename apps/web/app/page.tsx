@@ -30,7 +30,7 @@ export default function Home() {
           <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <ShieldCheck className="size-4" />
           </div>
-          <span className="font-semibold tracking-tight">HRORGS</span>
+          <span className="font-semibold tracking-tight">hrorg.in</span>
         </div>
         <div className="flex items-center gap-4">
           <Button asChild size="sm" variant="outline">
@@ -49,7 +49,7 @@ export default function Home() {
               A calm, secure home for every employee record.
             </h1>
             <p className="max-w-md text-muted-foreground">
-              HRORGS manages onboarding, identity & background documents, and approvals under one
+              hrorg.in manages onboarding, identity & background documents, and approvals under one
               unique employee ID — multi-tenant, audited, and scoped to the role hierarchy.
             </p>
             <div className="flex flex-wrap gap-3">

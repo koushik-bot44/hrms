@@ -104,7 +104,7 @@ export function NotificationsDialog({
         <DialogHeader>
           <DialogTitle>Notifications</DialogTitle>
           <DialogDescription>
-            Get HRORGS alerts as system notifications — even when this tab is minimized or closed.
+            Get hrorg.in alerts as system notifications — even when this tab is minimized or closed.
           </DialogDescription>
         </DialogHeader>
 

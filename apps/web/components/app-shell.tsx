@@ -114,7 +114,7 @@ function Brand({ roleLabel, collapsed = false }: { roleLabel: string; collapsed?
       </div>
       {collapsed ? null : (
         <div className="leading-tight">
-          <div className="text-sm font-semibold tracking-tight text-sidebar-foreground">HRORGS</div>
+          <div className="text-sm font-semibold tracking-tight text-sidebar-foreground">hrorg.in</div>
           <div className="text-[11px] text-sidebar-muted">{roleLabel}</div>
         </div>
       )}
@@ -385,7 +385,7 @@ export function AppShell({
                 </div>
               </DialogContent>
             </Dialog>
-            <span className="text-sm font-semibold tracking-tight md:hidden">HRORGS</span>
+            <span className="text-sm font-semibold tracking-tight md:hidden">hrorg.in</span>
             <WelcomeCluster roleLabel={roleLabel} />
           </div>
           <div className="flex items-center gap-3">

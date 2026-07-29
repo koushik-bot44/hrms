@@ -33,7 +33,7 @@ import { cn } from '@/lib/utils';
 /** The employee's initial for the avatar chip. */
 const initial = (name?: string | null) => (name?.trim()?.[0] ?? 'E').toUpperCase();
 
-// Theme-aware chart colors from the HRORGS design tokens (work each look via CSS vars).
+// Theme-aware chart colors from the hrorg.in design tokens (work each look via CSS vars).
 const WORKED = 'hsl(var(--primary))';
 const BREAK = 'hsl(var(--warning))';
 

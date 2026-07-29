@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
- * HRORGS design tokens — premium, calm, trustworthy. Light-first (dark optional).
+ * hrorg.in design tokens — premium, calm, trustworthy. Light-first (dark optional).
  * HSL triplets consumed via `hsl(var(--token))`. Palette:
  *   brand INDIGO #4F46E5 (bright #6366F1) · surface soft-indigo #EEF0FE · bg cool near-white
  *   card #FFFFFF · border cool-neutral · muted-text slate · ink slate #0F172A

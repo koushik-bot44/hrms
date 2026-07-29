@@ -1,5 +1,5 @@
 /**
- * Canonical HRORGS enums (ARCHITECTURE.md §4). Kept as local constants (the Java backend is the
+ * Canonical hrorg.in enums (ARCHITECTURE.md §4). Kept as local constants (the Java backend is the
  * authoritative source; the OpenAPI schema renders these as matching string-literal unions). The
  * web imports them from `@/lib/contract`.
  *

@@ -37,7 +37,7 @@ export default function EmployeeLoginPage() {
   return (
     <AuthShell
       icon={<UserRound className="size-6" />}
-      title="Welcome to HRORGS"
+      title="Welcome to hrorg.in"
       description="Enter your full name and email and we'll send you a one-time code."
       portalLabel="Integrated HR Management"
       badgeLabel="Secure employee access"

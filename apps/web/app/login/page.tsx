@@ -34,8 +34,8 @@ export default function LoginPage() {
   return (
     <AuthShell
       icon={<ShieldCheck className="size-6" />}
-      title="Welcome to HRORGS"
-      description="Sign in to HRORGS with your email and password."
+      title="Welcome to hrorg.in"
+      description="Sign in to hrorg.in with your email and password."
       portalLabel="Integrated HR Management"
       badgeLabel="Secure staff access"
       footer={

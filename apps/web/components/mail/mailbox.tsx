@@ -256,7 +256,7 @@ export function Mailbox() {
             <Mail className="size-4" />
           </div>
           <div className="min-w-0 leading-tight">
-            <div className="text-sm font-semibold tracking-tight">HRORGS Mail</div>
+            <div className="text-sm font-semibold tracking-tight">hrorg.in Mail</div>
             {myAddress ? (
               <div className="truncate text-[11px] text-muted-foreground" title={`${myName} <${myAddress}>`}>
                 {myAddress}
