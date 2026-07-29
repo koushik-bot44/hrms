@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { Users } from 'lucide-react';
 import { listTeams, teamsKey } from '@/lib/api/teams';
 import { useApiQuery } from '@/lib/api/hooks';
+import { companyParam } from '@/lib/company-url';
 import { TableSkeleton } from '@/components/loading-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { TeamStatusBadge } from '@/components/company-admin/team-status-badge';
 import { CreateTeamDialog } from '@/components/company-admin/create-team-dialog';
 
 /** Super Admin's teams management for one company: list + create, each row drilling into the team. */
-export function CompanyTeamsSection({ companyId }: { companyId: string }) {
+export function CompanyTeamsSection({ companyId, companyName }: { companyId: string; companyName: string }) {
   const query = useApiQuery(teamsKey(companyId), (signal) => listTeams(companyId, signal));
 
   return (
@@ -54,7 +55,7 @@ export function CompanyTeamsSection({ companyId }: { companyId: string }) {
                 <tr key={team.id} className="border-t hover:bg-accent/40">
                   <td className="px-4 py-3 font-medium">
                     <Link
-                      href={`/super-admin/companies/${companyId}/teams/${team.id}`}
+                      href={`/super-admin/companies/${companyParam(companyName, companyId)}/teams/${team.id}`}
                       className="text-primary hover:underline"
                     >
                       {team.name}

@@ -6,6 +6,7 @@ import type { TeamMember, TeamRole } from '@/lib/contract';
 import { getTeam, teamKey } from '@/lib/api/teams';
 import { getCompany } from '@/lib/api/companies';
 import { useApiQuery } from '@/lib/api/hooks';
+import { companyIdFromParam } from '@/lib/company-url';
 import { PageHeader } from '@/components/page-header';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
@@ -23,7 +24,8 @@ export default function SuperAdminTeamDetailPage({
 }: {
   params: { companyId: string; teamId: string };
 }) {
-  const { companyId, teamId } = params;
+  const { companyId: companySlugId, teamId } = params;
+  const companyId = companyIdFromParam(companySlugId);
   const { data, isLoading, isError, error } = useApiQuery(teamKey(teamId, companyId), (signal) =>
     getTeam(teamId, companyId, signal),
   );
@@ -33,7 +35,7 @@ export default function SuperAdminTeamDetailPage({
 
   const backLink = (
     <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit text-muted-foreground">
-      <Link href={`/super-admin/companies/${companyId}`}>
+      <Link href={`/super-admin/companies/${companySlugId}`}>
         <ArrowLeft className="size-4" />
         Company
       </Link>
@@ -63,7 +65,7 @@ export default function SuperAdminTeamDetailPage({
           description={error?.message ?? 'It may have been removed.'}
           action={
             <Button asChild size="sm">
-              <Link href={`/super-admin/companies/${companyId}`}>Back to company</Link>
+              <Link href={`/super-admin/companies/${companySlugId}`}>Back to company</Link>
             </Button>
           }
         />
@@ -77,7 +79,7 @@ export default function SuperAdminTeamDetailPage({
         homeHref="/super-admin"
         homeLabel="Companies"
         items={[
-          { label: company.data?.name ?? 'Company', href: `/super-admin/companies/${companyId}` },
+          { label: company.data?.name ?? 'Company', href: `/super-admin/companies/${companySlugId}` },
           { label: data.name },
         ]}
       />

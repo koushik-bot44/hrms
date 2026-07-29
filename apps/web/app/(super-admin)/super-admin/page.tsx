@@ -8,6 +8,7 @@ import { Archive, Building2, MoreHorizontal, RotateCcw, Trash2, XOctagon } from 
 import type { CompanySummary } from '@/lib/contract';
 import { listCompanies, listDeletedCompanies } from '@/lib/api/companies';
 import { useApiQuery } from '@/lib/api/hooks';
+import { companyParam } from '@/lib/company-url';
 import { PageHeader } from '@/components/page-header';
 import { DataTable } from '@/components/data-table';
 import { EmptyState } from '@/components/empty-state';
@@ -73,7 +74,7 @@ function CompaniesView() {
         header: 'Name',
         cell: ({ row }) => (
           <Link
-            href={`/super-admin/companies/${row.original.id}`}
+            href={`/super-admin/companies/${companyParam(row.original.name, row.original.id)}`}
             className="font-medium text-foreground hover:text-primary hover:underline"
           >
             {row.original.name}
@@ -118,7 +119,7 @@ function CompaniesView() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
-                  <Link href={`/super-admin/companies/${row.original.id}`}>View details</Link>
+                  <Link href={`/super-admin/companies/${companyParam(row.original.name, row.original.id)}`}>View details</Link>
                 </DropdownMenuItem>
                 {view === 'active' ? (
                   <DropdownMenuItem

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Building2, ShieldCheck, UserRound, Users } from 'lucide-react';
 import { getCompany } from '@/lib/api/companies';
 import { useApiQuery } from '@/lib/api/hooks';
+import { companyIdFromParam } from '@/lib/company-url';
 import { PageHeader } from '@/components/page-header';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
@@ -17,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function CompanyDetailPage({ params }: { params: { companyId: string } }) {
-  const id = params.companyId;
+  const id = companyIdFromParam(params.companyId);
   const { data, isLoading, isError, error } = useApiQuery(['company', id], (signal) =>
     getCompany(id, signal),
   );
@@ -105,9 +106,9 @@ export default function CompanyDetailPage({ params }: { params: { companyId: str
         </CardContent>
       </Card>
 
-      <CompanyTeamsSection companyId={data.id} />
+      <CompanyTeamsSection companyId={data.id} companyName={data.name} />
 
-      <CompanyEmployeesSection companyId={data.id} />
+      <CompanyEmployeesSection companyId={data.id} companyName={data.name} />
     </div>
   );
 }

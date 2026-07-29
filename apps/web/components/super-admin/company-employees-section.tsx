@@ -6,6 +6,7 @@ import { UserRound } from 'lucide-react';
 import type { EmployeeStatus } from '@/lib/contract';
 import { getCompanyEmployees } from '@/lib/api/employees';
 import { useApiQuery } from '@/lib/api/hooks';
+import { companyParam } from '@/lib/company-url';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,7 +29,7 @@ const SELECT_CLASS =
 const PAGE_SIZE = 20;
 
 /** The Super Admin's view of a company's employees (all teams) — open a record to review or edit Form 2. */
-export function CompanyEmployeesSection({ companyId }: { companyId: string }) {
+export function CompanyEmployeesSection({ companyId, companyName }: { companyId: string; companyName: string }) {
   const [search, setSearch] = React.useState('');
   const [debounced, setDebounced] = React.useState('');
   const [status, setStatus] = React.useState<EmployeeStatus | ''>('');
@@ -135,7 +136,7 @@ export function CompanyEmployeesSection({ companyId }: { companyId: string }) {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <Link
-                        href={`/super-admin/companies/${companyId}/employees/${e.id}`}
+                        href={`/super-admin/companies/${companyParam(companyName, companyId)}/employees/${e.id}`}
                         className="text-sm font-medium text-primary hover:underline"
                       >
                         Open
