@@ -8,6 +8,7 @@ import { Plus } from 'lucide-react';
 import { CreateCompanySchema, type CompanySummary, type CreateCompanyInput } from '@/lib/contract';
 import { createCompany } from '@/lib/api/companies';
 import { useApiMutation } from '@/lib/api/hooks';
+import { slugifyCompanyName } from '@/lib/company-url';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -68,6 +69,8 @@ export function CreateCompanyDialog() {
         id: `optimistic-${vars.code}`,
         name: vars.name,
         code: vars.code,
+        // Placeholder only — the real permanent slug is minted server-side and arrives on refetch.
+        slug: slugifyCompanyName(vars.name),
         status: 'ACTIVE',
         teamCount: 0,
         employeeCount: 0,

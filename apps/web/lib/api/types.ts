@@ -1703,6 +1703,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/by-slug/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["resolve_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -2594,6 +2610,7 @@ export interface components {
             id?: string;
             name?: string;
             code?: string;
+            slug?: string;
             mailDomain?: string;
             status?: string;
             /** Format: int64 */
@@ -3001,6 +3018,7 @@ export interface components {
             id?: string;
             name?: string;
             code?: string;
+            slug?: string;
             archived?: boolean;
             /** Format: int64 */
             teamCount?: number;
@@ -3011,6 +3029,7 @@ export interface components {
         CompanyBreakdown: {
             companyId?: string;
             name?: string;
+            slug?: string;
             archived?: boolean;
             /** Format: int64 */
             teamCount?: number;
@@ -3079,6 +3098,7 @@ export interface components {
             id?: string;
             name?: string;
             code?: string;
+            slug?: string;
             status?: string;
             /** Format: int64 */
             teamCount?: number;
@@ -3087,6 +3107,12 @@ export interface components {
             hasAdmin?: boolean;
             createdAt?: string;
             deletedAt?: string;
+        };
+        CompanyRefView: {
+            id?: string;
+            slug?: string;
+            name?: string;
+            code?: string;
         };
         AuditLogView: {
             id?: string;
@@ -3370,6 +3396,7 @@ export interface components {
             id?: string;
             name?: string;
             code?: string;
+            slug?: string;
             /**
              * Format: int64
              * @description Number of teams in the company.
@@ -6411,6 +6438,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["TeamMemberView"][];
+                };
+            };
+        };
+    };
+    resolve_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CompanyRefView"];
                 };
             };
         };

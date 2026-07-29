@@ -58,6 +58,12 @@ public class SecurityConfig {
                     // (a presigned-URL equivalent), so no JWT is required.
                     .requestMatchers("/storage/blobs/**")
                     .permitAll()
+                    // Slug -> company resolver (Stage 2 routing): open to any authenticated session;
+                    // CompaniesService.resolveBySlug authorizes it like a by-id read (SUPER_ADMIN /
+                    // ACCOUNTS_ADMIN any, a company-scoped session only its OWN company) and 404s
+                    // otherwise. Must precede the SUPER_ADMIN-only rule below.
+                    .requestMatchers(HttpMethod.GET, "/companies/by-slug/*")
+                    .authenticated()
                     .requestMatchers("/companies/**")
                     .hasRole("SUPER_ADMIN")
                     .requestMatchers("/teams/**")

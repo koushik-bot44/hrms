@@ -1,5 +1,6 @@
 package com.ihrms.domain.model;
 
+import com.ihrms.domain.support.CompanySlug;
 import com.ihrms.domain.support.CuidId;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -34,6 +35,14 @@ public class Company {
   @Column(name = "code", nullable = false)
   private String code;
 
+  /**
+   * PERMANENT, URL-safe identifier (ARCHITECTURE.md §4) — the only human-readable name allowed in a
+   * URL. Minted once from the name at creation (backfilled for pre-existing rows), globally unique
+   * (case-insensitive), and NEVER changed on rename: {@code updatable = false}.
+   */
+  @Column(name = "slug", nullable = false, updatable = false, length = 60)
+  private String slug;
+
   /** The company's internal-mail domain (e.g. {@code anvicorp}); unique across companies (§8). */
   @Column(name = "mailDomain", nullable = false)
   private String mailDomain;
@@ -62,14 +71,19 @@ public class Company {
   private Instant updatedAt;
 
   /**
-   * Default the mandatory mail domain (§8) from {@code code} when the caller didn't set one — mirrors
-   * the V12 backfill so a company is always mailable. {@code CompaniesService} still sets/normalizes it
-   * explicitly (Super Admin can edit it at creation).
+   * Self-default the mandatory mail domain (§8) and URL slug (§4) for callers that didn't set them.
+   * {@code CompaniesService} sets both explicitly on the real create path — the mail domain from the
+   * (editable) input and the slug via the deduped, reserved-safe {@link CompanySlug#generate} from the
+   * NAME. This fallback only fires for DIRECT persists (seeders/tests); the slug is derived from the
+   * unique {@code code} (alphanumeric, unique index) so a direct save is always collision-free.
    */
   @PrePersist
-  void defaultMailDomain() {
+  void applyDefaults() {
     if ((mailDomain == null || mailDomain.isBlank()) && code != null) {
       mailDomain = code.toLowerCase();
+    }
+    if (slug == null || slug.isBlank()) {
+      slug = CompanySlug.slugify(code != null && !code.isBlank() ? code : name);
     }
   }
 }

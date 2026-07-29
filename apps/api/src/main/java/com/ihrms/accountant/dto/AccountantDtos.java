@@ -68,6 +68,7 @@ public final class AccountantDtos {
       String id,
       String name,
       String code,
+      String slug,
       @Schema(description = "Number of teams in the company.") long teamCount,
       @Schema(description = "Number of APPROVED employees in the company.") long employeeCount) {}
 

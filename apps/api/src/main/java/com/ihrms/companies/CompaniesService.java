@@ -7,6 +7,7 @@ import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
 import com.ihrms.companies.dto.CompanyDtos.CompanyAdminView;
 import com.ihrms.companies.dto.CompanyDtos.CompanyDetailView;
+import com.ihrms.companies.dto.CompanyDtos.CompanyRefView;
 import com.ihrms.companies.dto.CompanyDtos.CompanySummaryView;
 import com.ihrms.companies.dto.CompanyDtos.CreateCompanyRequest;
 import com.ihrms.companies.dto.CompanyDtos.ProvisionAdminRequest;
@@ -20,11 +21,14 @@ import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
+import com.ihrms.domain.support.CompanySlug;
 import com.ihrms.domain.support.EmployeeCodes;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -95,6 +99,7 @@ public class CompaniesService {
     company.setName(input.name().trim());
     company.setCode(code);
     company.setMailDomain(mailDomain);
+    company.setSlug(mintSlug(company.getName()));
     try {
       companies.save(company);
     } catch (DataIntegrityViolationException e) {
@@ -115,6 +120,22 @@ public class CompaniesService {
 
   public CompanyDetailView getDetail(String id) {
     return detail(id);
+  }
+
+  /**
+   * Resolve a company by slug for routing (Stage 2). Authorized like a by-id company read: SUPER_ADMIN
+   * and ACCOUNTS_ADMIN may resolve any; a company-scoped session (COMPANY_ADMIN/HR/MANAGER/ACCOUNTANT)
+   * only its OWN company. Any other principal (HIERARCHY, EMPLOYEE) or an unknown slug yields 404 — the
+   * resolver never leaks a company's existence across a tenant boundary.
+   */
+  public CompanyRefView resolveBySlug(String slug, IhrmsPrincipal principal) {
+    Company company =
+        companies.findBySlugIgnoreCase(slug).orElseThrow(() -> notFound("Company not found"));
+    if (!canResolve(company, principal)) {
+      throw notFound("Company not found");
+    }
+    return new CompanyRefView(
+        company.getId(), company.getSlug(), company.getName(), company.getCode());
   }
 
   /** Archive a company (soft-delete): reversible, retains all data + audit (§2/§7). Idempotent. */
@@ -298,6 +319,7 @@ public class CompaniesService {
         company.getId(),
         company.getName(),
         company.getCode(),
+        company.getSlug(),
         company.getMailDomain(),
         company.getStatus(),
         teams.countByCompanyId(id),
@@ -314,6 +336,7 @@ public class CompaniesService {
         id,
         company.getName(),
         company.getCode(),
+        company.getSlug(),
         company.getStatus(),
         teams.countByCompanyId(id),
         employees.countByCompanyId(id),
@@ -349,6 +372,28 @@ public class CompaniesService {
           "Code must be 2-16 uppercase letters/digits, starting with a letter");
     }
     return code;
+  }
+
+  /** Mint the permanent URL slug from the name — deduped (case-insensitive) + reserved-safe (§4). */
+  private String mintSlug(String name) {
+    Set<String> taken = new HashSet<>();
+    for (String existing : companies.findAllSlugs()) {
+      if (existing != null) {
+        taken.add(existing.toLowerCase());
+      }
+    }
+    return CompanySlug.generate(name, taken, CompanySlug.RESERVED);
+  }
+
+  /** by-slug resolver authz: SUPER_ADMIN/ACCOUNTS_ADMIN any; a company-scoped user its own company only. */
+  private boolean canResolve(Company company, IhrmsPrincipal principal) {
+    if (principal instanceof IhrmsPrincipal.User user) {
+      if (user.role() == UserRole.SUPER_ADMIN || user.role() == UserRole.ACCOUNTS_ADMIN) {
+        return true;
+      }
+      return user.companyId() != null && user.companyId().equals(company.getId());
+    }
+    return false;
   }
 
   private void audit(

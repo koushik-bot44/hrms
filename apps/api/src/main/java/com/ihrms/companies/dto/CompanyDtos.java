@@ -47,6 +47,8 @@ public final class CompanyDtos {
       String id,
       String name,
       String code,
+      // Permanent URL identifier (ARCHITECTURE.md §4) — Stages 2/3 route on it.
+      String slug,
       String status,
       long teamCount,
       long employeeCount,
@@ -59,6 +61,8 @@ public final class CompanyDtos {
       String id,
       String name,
       String code,
+      // Permanent URL identifier (ARCHITECTURE.md §4).
+      String slug,
       // The company's internal-mail domain (§8) — drives the address preview when provisioning staff.
       String mailDomain,
       String status,
@@ -68,6 +72,9 @@ public final class CompanyDtos {
       String createdAt,
       String deletedAt,
       CompanyAdminView admin) {}
+
+  /** Minimal company reference returned by the by-slug resolver (routing metadata; no counts/admin). */
+  public record CompanyRefView(String id, String slug, String name, String code) {}
 
   /** {@code devPassword} omitted (not null) in production. */
   public record ProvisionAdminResult(

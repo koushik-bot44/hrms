@@ -278,12 +278,36 @@ indicative. **Schema is additive-only thereafter.**
 
 ### Organisation
 - **Company** — `id`, `name`, `code` (short mnemonic, e.g. `ACME`; used in the employee ID),
-  `status` (`ACTIVE` | `SUSPENDED` | `DELETED`), `deletedAt?` + `deletedByUserId?` (→ User) — set
-  when archived (soft-delete), cleared on restore, `createdAt`.
+  `slug` (the **permanent URL identifier** — see below), `status` (`ACTIVE` | `SUSPENDED` | `DELETED`),
+  `deletedAt?` + `deletedByUserId?` (→ User) — set when archived (soft-delete), cleared on restore,
+  `createdAt`.
 - **Team** — `id`, `companyId`, `name`, `hrUserId` (→ User), `managerUserId` (→ User),
   `accountantUserId` (→ User, nullable). Holding the three single FKs structurally enforces the
   "exactly one HR + one Manager + one Accountant" rule (each slot holds at most one person). A team may
   transiently be missing a slot (surfaced as a "needs …" state) until filled.
+
+**Company slug & URL naming policy** (Stage 1 = the slug foundation; Stages 2/3 build `/{companySlug}/…`
+routing on it). Every company has a **`slug`** — a permanent, URL-safe identifier derived from its name.
+- **Format:** trim → lowercase → strip diacritics → replace each run of non-`[a-z0-9]` with a single `-`
+  → trim leading/trailing `-` → truncate to ~50 chars at a hyphen boundary. An empty result (all-symbol
+  name) falls back to `company`.
+- **Uniqueness:** globally unique across **all** companies **including archived** (it is a URL segment),
+  **case-insensitive** — lowercase storage + a `lower(slug)` unique index. On collision the lowest free
+  numeric suffix is appended (`-2`, `-3`, …).
+- **Reserved words:** a generated slug may never equal an app top-level route name. Reserved:
+  `super-admin, company-admin, hr, manager, accountant, hierarchy, employee, login, mail, workspace,
+  accounts, api, requests, push, provisioning`. A reserved hit is suffixed (`-2`) like any other collision.
+- **Permanence:** minted **once** at creation (backfilled for pre-existing companies), then **IMMUTABLE**
+  — a company **rename changes the display `name` only, never the slug**; no endpoint may update it.
+- **Resolution:** `GET /companies/by-slug/{slug}` maps a slug → its company for routing, authorized like
+  the by-id read (SUPER_ADMIN / ACCOUNTS_ADMIN any; a company-scoped session resolves only its **own**
+  company); never a public resolver.
+
+**URL NAMING POLICY (hard rule for every stage).** The **company slug is the ONLY human-readable name
+that may EVER appear in a URL.** Team names, employee/person names, and any other entity names are
+**FORBIDDEN** as URL segments — those entities are referenced by their **opaque id** only. Thus
+`/{companySlug}/hr` and `/{companySlug}/teams/{teamId}` are allowed; a team name or person name as a path
+segment is not. **Only Company has a slug** — no slug column/generator exists for teams or any other entity.
 
 ### Employee record (the four onboarding forms)
 - **Form1Personal** — Personal Details: `name`, `dob`, `email`, `mobile`, `designation`,

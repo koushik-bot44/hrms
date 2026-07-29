@@ -4152,6 +4152,36 @@
         }
       }
     },
+    "/companies/by-slug/{slug}": {
+      "get": {
+        "tags": [
+          "company-resolve-controller"
+        ],
+        "operationId": "resolve_1",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyRefView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/me": {
       "get": {
         "tags": [
@@ -6867,6 +6897,9 @@
           "code": {
             "type": "string"
           },
+          "slug": {
+            "type": "string"
+          },
           "mailDomain": {
             "type": "string"
           },
@@ -7972,6 +8005,9 @@
           "code": {
             "type": "string"
           },
+          "slug": {
+            "type": "string"
+          },
           "archived": {
             "type": "boolean"
           },
@@ -7993,6 +8029,9 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "slug": {
             "type": "string"
           },
           "archived": {
@@ -8180,6 +8219,9 @@
           "code": {
             "type": "string"
           },
+          "slug": {
+            "type": "string"
+          },
           "status": {
             "type": "string"
           },
@@ -8198,6 +8240,23 @@
             "type": "string"
           },
           "deletedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "CompanyRefView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
             "type": "string"
           }
         }
@@ -8766,6 +8825,9 @@
             "type": "string"
           },
           "code": {
+            "type": "string"
+          },
+          "slug": {
             "type": "string"
           },
           "teamCount": {

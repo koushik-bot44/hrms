@@ -231,6 +231,7 @@ public class AccountantService {
                     c.getId(),
                     c.getName(),
                     c.getCode(),
+                    c.getSlug(),
                     teams.findByCompanyId(c.getId()).size(),
                     employees.countByCompanyIdAndStatus(c.getId(), EmployeeStatus.APPROVED)))
         .toList();

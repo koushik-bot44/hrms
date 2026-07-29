@@ -146,6 +146,7 @@ public class HierarchyAnalyticsService {
               c.getId(),
               c.getName(),
               c.getCode(),
+              c.getSlug(),
               ARCHIVED.equals(c.getStatus()),
               teamCounts.getOrDefault(c.getId(), 0L),
               empCounts.getOrDefault(c.getId(), 0L)));
@@ -188,6 +189,7 @@ public class HierarchyAnalyticsService {
     return new CompanyBreakdown(
         company.getId(),
         company.getName(),
+        company.getSlug(),
         ARCHIVED.equals(company.getStatus()),
         teamRows.size(),
         employees.countByCompanyId(companyId),

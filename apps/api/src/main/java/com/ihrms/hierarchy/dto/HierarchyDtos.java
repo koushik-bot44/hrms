@@ -103,7 +103,13 @@ public final class HierarchyDtos {
 
   @Schema(description = "One company's size row: name, archived flag, team + employee counts.")
   public record CompanySizeRow(
-      String id, String name, String code, boolean archived, long teamCount, long employeeCount) {}
+      String id,
+      String name,
+      String code,
+      String slug,
+      boolean archived,
+      long teamCount,
+      long employeeCount) {}
 
   public record CompaniesResponse(List<CompanySizeRow> companies) {}
 
@@ -128,6 +134,7 @@ public final class HierarchyDtos {
   public record CompanyBreakdown(
       String companyId,
       String name,
+      String slug,
       boolean archived,
       long teamCount,
       long employeeCount,
