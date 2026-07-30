@@ -27,6 +27,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -158,7 +159,14 @@ public class ViewerAttendanceService {
           0,
           0,
           0,
-          List.of());
+          List.of(),
+          new TimeComposition(0, 0, null),
+          0,
+          new LeavesByType(0, 0, 0),
+          0,
+          0,
+          0,
+          null);
     }
 
     // 4 batched reads for the whole team.
@@ -182,42 +190,49 @@ public class ViewerAttendanceService {
     LocalDate todayShift = ShiftConfig.shiftDateOf(Instant.now());
     LocalDate todayCal = LocalDate.now(ShiftConfig.ZONE);
 
-    List<TeamAttendanceMemberRow> rows =
-        members.stream()
-            .map(
-                e -> {
-                  List<AttendanceSession> ss = sessionsByEmp.getOrDefault(e.getId(), List.of());
-                  long worked =
-                      ss.stream()
-                          .filter(s -> !s.isOpen())
-                          .mapToLong(s -> AttendanceMath.workedSeconds(s, breaksById))
-                          .sum();
-                  long late = ss.stream().filter(AttendanceSession::isLate).count();
-                  List<LeaveRequest> empLeaves = leavesByEmp.getOrDefault(e.getId(), List.of());
-                  long leaveDays =
-                      empLeaves.stream()
-                          .mapToLong(lr -> leaveDaysInRange(lr, periodStart, periodEnd))
-                          .sum();
-                  Set<LocalDate> present =
-                      ss.stream().map(AttendanceSession::getShiftDate).collect(Collectors.toSet());
-                  long absences =
-                      countAbsences(
-                          workingDays,
-                          present,
-                          leaveWorkingDays(workingDays, empLeaves, periodStart, periodEnd),
-                          todayCal);
-                  return new TeamAttendanceMemberRow(
-                      e.getId(),
-                      e.getEmployeeCode(),
-                      e.getFullName(),
-                      openNow.contains(e.getId()),
-                      worked,
-                      late,
-                      leaveDays,
-                      absences);
-                })
-            .sorted(Comparator.comparing(r -> r.fullName() == null ? "" : r.fullName().toLowerCase()))
-            .toList();
+    // Each member's full metrics come from the ONE aggregation (computePeriod) — the member row AND the
+    // team totals are built from the same numbers, so a team total is literally the sum of its members.
+    List<TeamAttendanceMemberRow> rows = new ArrayList<>();
+    long teamWorked = 0;
+    long teamBreak = 0;
+    long teamDaysPresent = 0;
+    long teamLeaveDays = 0;
+    long teamAbsences = 0;
+    long teamExpected = 0;
+    long teamPresentWorking = 0; // numerator for the team adherence (Σ present-on-working)
+    long teamCasual = 0;
+    long teamSick = 0;
+    long teamUnpaid = 0;
+    for (Employee e : members) {
+      List<AttendanceSession> ss = sessionsByEmp.getOrDefault(e.getId(), List.of());
+      List<LeaveRequest> empLeaves = leavesByEmp.getOrDefault(e.getId(), List.of());
+      EmployeeMonthSummary ms =
+          computePeriod(period, ss, breaksById, empLeaves, todayCal, openNow.contains(e.getId()));
+      rows.add(
+          new TeamAttendanceMemberRow(
+              e.getId(),
+              e.getEmployeeCode(),
+              e.getFullName(),
+              openNow.contains(e.getId()),
+              ms.workedSeconds(),
+              ms.lateLogins(),
+              ms.leaveDaysTotal(),
+              ms.unapprovedAbsences()));
+      teamWorked += ms.workedSeconds();
+      teamBreak += ms.breakSeconds();
+      teamDaysPresent += ms.daysPresent();
+      teamLeaveDays += ms.leaveDaysTotal();
+      teamAbsences += ms.unapprovedAbsences();
+      teamExpected += ms.expectedDays();
+      teamCasual += ms.leavesByType().casual();
+      teamSick += ms.leavesByType().sick();
+      teamUnpaid += ms.leavesByType().unpaid();
+      // present-on-working (Mon–Fri days with a session) — the adherence numerator computePeriod uses.
+      Set<LocalDate> present =
+          ss.stream().map(AttendanceSession::getShiftDate).collect(Collectors.toSet());
+      teamPresentWorking += workingDays.stream().filter(present::contains).count();
+    }
+    rows.sort(Comparator.comparing(r -> r.fullName() == null ? "" : r.fullName().toLowerCase()));
 
     long presentToday =
         members.stream()
@@ -234,6 +249,8 @@ public class ViewerAttendanceService {
                         .anyMatch(lr -> covers(lr, todayCal)))
             .count();
     long totalLate = rows.stream().mapToLong(TeamAttendanceMemberRow::lateLogins).sum();
+    Integer teamAdherence =
+        teamExpected <= 0 ? null : (int) Math.round((teamPresentWorking * 100.0) / teamExpected);
 
     return new TeamAttendanceSummary(
         team.getId(),
@@ -247,7 +264,14 @@ public class ViewerAttendanceService {
         onLeaveToday,
         totalLate,
         members.size(),
-        rows);
+        rows,
+        new TimeComposition(teamWorked, teamBreak, null),
+        teamDaysPresent,
+        new LeavesByType(teamCasual, teamSick, teamUnpaid),
+        teamLeaveDays,
+        teamAbsences,
+        teamExpected,
+        teamAdherence);
   }
 
   // --- Core computation (ONE place) -----------------------------------------

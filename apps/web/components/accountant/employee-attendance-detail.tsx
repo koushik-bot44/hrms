@@ -2,18 +2,7 @@
 
 import * as React from 'react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import {
-  AlarmClock,
-  ArrowLeft,
-  CalendarCheck2,
-  CalendarClock,
-  CalendarX2,
-  Clock,
-  Coffee,
-  Download,
-  Gauge,
-  CalendarOff,
-} from 'lucide-react';
+import { ArrowLeft, CalendarClock, Download } from 'lucide-react';
 import type { EmployeeMonthSummary } from '@/lib/contract';
 import {
   getEmployeeAttendanceMonthly,
@@ -28,18 +17,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
-import { PeriodPicker, selectionLabel } from '@/components/accountant/period-picker';
-import { StatTile, MeterRow } from '@/components/dashboard/stat-tile';
-import { Donut } from '@/components/dashboard/donut';
+import { PeriodPicker, selectionLabel, lateLabel } from '@/components/accountant/period-picker';
+import { AttendanceComposition } from '@/components/accountant/attendance-composition';
 import { LiveIndicator } from '@/components/dashboard/live-indicator';
 import { cn } from '@/lib/utils';
 
 /** The employee's initial for the avatar chip. */
 const initial = (name?: string | null) => (name?.trim()?.[0] ?? 'E').toUpperCase();
-
-// Theme-aware chart colors from the hrorg.in design tokens (work each look via CSS vars).
-const WORKED = 'hsl(var(--primary))';
-const BREAK = 'hsl(var(--warning))';
 
 const REFRESH_MS = 45_000;
 
@@ -129,7 +113,7 @@ export function EmployeeAttendanceDetail({
           description={summary.error?.message ?? 'Please try again.'}
         />
       ) : summary.data ? (
-        <SummaryBody data={summary.data} />
+        <SummaryBody data={summary.data} selection={selection} />
       ) : null}
 
       <MonthlyReport
@@ -137,13 +121,13 @@ export function EmployeeAttendanceDetail({
         months={series.data?.months ?? []}
         loading={series.isLoading}
         activeMonth={activeMonth}
-        onPickMonth={(m) => onSelectionChange({ month: m })}
+        onPickMonth={(m) => onSelectionChange({ mode: 'month', month: m })}
       />
     </div>
   );
 }
 
-function SummaryBody({ data }: { data: EmployeeMonthSummary }) {
+function SummaryBody({ data, selection }: { data: EmployeeMonthSummary; selection: AttendanceSelection }) {
   const gross = data.timeComposition.workedSeconds + data.timeComposition.breakSeconds;
   const noData = gross === 0 && data.daysPresent === 0 && data.leaveDaysTotal === 0;
   if (noData) {
@@ -151,101 +135,31 @@ function SummaryBody({ data }: { data: EmployeeMonthSummary }) {
       <EmptyState
         icon={CalendarClock}
         title="No attendance in this window"
-        description="This employee has no sessions or leave recorded for the selected month or range."
+        description="This employee has no sessions or leave recorded for the selected window."
       />
     );
   }
-  const pct = (v: number) => (gross > 0 ? Math.round((v / gross) * 100) : 0);
-  const pieData = [
-    { name: 'Worked', value: data.timeComposition.workedSeconds, color: WORKED },
-    { name: 'Break', value: data.timeComposition.breakSeconds, color: BREAK },
-  ];
-
+  // In Today mode, past-only Absences and a one-day Adherence would mislead — hide them (§8a).
+  const isToday = selection.mode === 'today';
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      {/* Donut — worked vs break only (sums to gross clocked time). */}
-      <Card className="lg:col-span-1">
-        <CardHeader>
-          <CardTitle className="text-base">Time composition</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {gross === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No clocked time this month.</p>
-          ) : (
-            <>
-              {/* Center total = total clocked time (worked + break) — the shared Donut primitive. */}
-              <Donut
-                data={pieData}
-                centerValue={hm(gross)}
-                centerLabel="Total time"
-                tooltipFormatter={(v, n) => [`${hm(v)} · ${pct(v)}%`, n]}
-              />
-              {/* Same worked/break split as the donut, as same-unit progress bars (of gross clocked time). */}
-              <div className="mt-3 space-y-3">
-                <MeterRow
-                  label="Worked"
-                  value={data.timeComposition.workedSeconds}
-                  max={gross}
-                  tone="primary"
-                  display={`${hm(data.timeComposition.workedSeconds)} · ${pct(data.timeComposition.workedSeconds)}%`}
-                />
-                <MeterRow
-                  label="Break"
-                  value={data.timeComposition.breakSeconds}
-                  max={gross}
-                  tone="warning"
-                  display={`${hm(data.timeComposition.breakSeconds)} · ${pct(data.timeComposition.breakSeconds)}%`}
-                />
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Counts / other units — never in the donut. Icon-tile cards, semantic tints, SAME data as before. */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:col-span-2">
-        <StatTile icon={Clock} label="Worked" value={hm(data.workedSeconds)} tone="primary" size="sm" />
-        <StatTile icon={Coffee} label="Break time" value={hm(data.breakSeconds)} tone="neutral" size="sm" />
-        <StatTile icon={CalendarCheck2} label="Days present" value={String(data.daysPresent)} tone="primary" size="sm" />
-        <StatTile
-          icon={AlarmClock}
-          label="Late logins"
-          value={String(data.lateLogins)}
-          tone={data.lateLogins > 0 ? 'warning' : 'neutral'}
-          size="sm"
-        />
-        <StatTile
-          icon={Gauge}
-          label="Adherence"
-          value={data.adherencePct === null ? 'N/A' : `${data.adherencePct}%`}
-          tone="primary"
-          size="sm"
-          sub={
-            data.adherencePct === null
-              ? 'No expected working days'
-              : `of ${data.expectedDays} expected · ${data.workingDays} working days`
-          }
-          title={data.workingDaysDefinition}
-        />
-        <StatTile
-          icon={CalendarX2}
-          label="Unapproved Absences"
-          value={String(data.unapprovedAbsences)}
-          tone={data.unapprovedAbsences > 0 ? 'danger' : 'neutral'}
-          size="sm"
-          sub="Past working days, no session or leave"
-          title={data.workingDaysDefinition}
-        />
-        <StatTile
-          icon={CalendarOff}
-          label="Leaves taken"
-          value={String(data.leaveDaysTotal)}
-          tone="neutral"
-          size="sm"
-          sub={`C ${data.leavesByType.casual} · S ${data.leavesByType.sick} · U ${data.leavesByType.unpaid}`}
-        />
-      </div>
-    </div>
+    <AttendanceComposition
+      data={{
+        workedSeconds: data.workedSeconds,
+        breakSeconds: data.breakSeconds,
+        daysPresent: data.daysPresent,
+        lateLogins: data.lateLogins,
+        leaveDaysTotal: data.leaveDaysTotal,
+        leavesByType: data.leavesByType,
+        expectedDays: data.expectedDays,
+        workingDays: data.workingDays,
+        unapprovedAbsences: data.unapprovedAbsences,
+        adherencePct: data.adherencePct,
+        workingDaysDefinition: data.workingDaysDefinition,
+      }}
+      lateLabel={lateLabel(selection)}
+      hideAbsences={isToday}
+      hideAdherence={isToday}
+    />
   );
 }
 

@@ -468,12 +468,14 @@ export type EmployeeMonthlySeries = Omit<DeepRequired<Schemas['EmployeeMonthlySe
 export type TeamAttendanceMemberRow = DeepRequired<Schemas['TeamAttendanceMemberRow']>;
 export type TeamAttendanceSummary = Omit<
   DeepRequired<Schemas['TeamAttendanceSummary']>,
-  'employees' | 'month'
+  'employees' | 'month' | 'teamAdherencePct'
 > & {
   employees: TeamAttendanceMemberRow[];
   month: string | null;
   periodStart: string;
   periodEnd: string;
+  // Nullable at runtime (N/A when Σ expectedDays = 0), like adherencePct — DeepRequired strips the null.
+  teamAdherencePct: number | null;
 };
 
 // --- Hierarchy platform overview (§2) — cross-company aggregates, server-populated ----

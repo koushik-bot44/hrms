@@ -399,6 +399,72 @@ class ViewerAttendanceApiTest {
     }
   }
 
+  // --- Period modes (Today = single day) + Team composition aggregate -------
+
+  @Test
+  void range_singleDay_returnsThatDaysNumbers_theTodayModeShape() throws Exception {
+    // A single-day window (from == to) is the Today-mode call shape. Jan 12 2026 (a Monday) has only
+    // empA's LATE session S2 (worked 27300, no break).
+    JsonNode d =
+        getJson(
+            "/accountant/employees/" + empA.getId() + "/attendance/summary?from=2026-01-12&to=2026-01-12",
+            adminToken);
+    assertThat(d.get("periodStart").asText()).isEqualTo("2026-01-12");
+    assertThat(d.get("periodEnd").asText()).isEqualTo("2026-01-12");
+    assertThat(d.get("month").isNull()).isTrue();
+    assertThat(d.get("workedSeconds").asLong()).isEqualTo(27300L);
+    assertThat(d.get("daysPresent").asLong()).isEqualTo(1L);
+    assertThat(d.get("lateLogins").asLong()).isEqualTo(1L);
+    assertThat(d.get("workingDays").asInt()).isEqualTo(1); // Jan 12 is a working day (Mon)
+  }
+
+  @Test
+  void teamComposition_aggregatesAreTheSumOfMemberSummaries() throws Exception {
+    // Add a SECOND member on team A (onboarded by the same HR) with its own session + break + a 1-day leave.
+    Employee empA2 = approved(companyA, empA.getOnboardingHrId(), "AAA-EMP-000050", "Dan Second");
+    AttendanceSession s =
+        session(empA2, ist(2026, 1, 14, 19, 0), ist(2026, 1, 15, 3, 0), LocalDate.of(2026, 1, 14), false);
+    brk(s, ist(2026, 1, 14, 22, 0), ist(2026, 1, 14, 22, 20)); // 20-min break
+    leave(empA2, LeaveType.SICK, LocalDate.of(2026, 1, 19), LocalDate.of(2026, 1, 19)); // 1 working day
+
+    JsonNode team = getJson("/accountant/teams/" + teamA.getId() + "/attendance/summary?month=2026-01", adminToken);
+    JsonNode m1 = getJson("/accountant/employees/" + empA.getId() + "/attendance/summary?month=2026-01", adminToken);
+    JsonNode m2 = getJson("/accountant/employees/" + empA2.getId() + "/attendance/summary?month=2026-01", adminToken);
+
+    assertThat(team.get("employeeCount").asInt()).isEqualTo(2);
+    // Every team aggregate is EXACTLY the sum of the two members' computePeriod results.
+    assertThat(team.get("teamTimeComposition").get("workedSeconds").asLong())
+        .isEqualTo(m1.get("workedSeconds").asLong() + m2.get("workedSeconds").asLong());
+    assertThat(team.get("teamTimeComposition").get("breakSeconds").asLong())
+        .isEqualTo(m1.get("breakSeconds").asLong() + m2.get("breakSeconds").asLong());
+    assertThat(team.get("teamDaysPresent").asLong())
+        .isEqualTo(m1.get("daysPresent").asLong() + m2.get("daysPresent").asLong());
+    assertThat(team.get("teamLeaveDaysTotal").asLong())
+        .isEqualTo(m1.get("leaveDaysTotal").asLong() + m2.get("leaveDaysTotal").asLong());
+    assertThat(team.get("teamUnapprovedAbsences").asLong())
+        .isEqualTo(m1.get("unapprovedAbsences").asLong() + m2.get("unapprovedAbsences").asLong());
+    assertThat(team.get("teamExpectedDays").asLong())
+        .isEqualTo(m1.get("expectedDays").asLong() + m2.get("expectedDays").asLong());
+    assertThat(team.get("teamLeavesByType").get("sick").asLong())
+        .isEqualTo(m1.get("leavesByType").get("sick").asLong() + m2.get("leavesByType").get("sick").asLong());
+    assertThat(team.get("teamAdherencePct").isNull()).isFalse(); // Σ expected > 0 here
+  }
+
+  @Test
+  void teamComposition_presentForAllThreeRoles_crossMonthSpan_echoesWindow() throws Exception {
+    // A payroll-cycle-shaped span (26 Jan → 25 Feb) is just a range; the team aggregate is returned for
+    // every viewer within scope (ACCOUNTS_ADMIN any, ACCOUNTANT + MANAGER own team — unchanged authz).
+    String q = "?from=2026-01-26&to=2026-02-25";
+    for (String tok : List.of(adminToken, accountantToken, managerToken)) {
+      JsonNode t = getJson("/accountant/teams/" + teamA.getId() + "/attendance/summary" + q, tok);
+      assertThat(t.get("periodStart").asText()).isEqualTo("2026-01-26");
+      assertThat(t.get("periodEnd").asText()).isEqualTo("2026-02-25");
+      assertThat(t.get("month").isNull()).isTrue();
+      assertThat(t.has("teamTimeComposition")).isTrue();
+      assertThat(t.get("teamTimeComposition").has("workedSeconds")).isTrue();
+    }
+  }
+
   // --- helpers --------------------------------------------------------------
 
   private void bad(String path) throws Exception {

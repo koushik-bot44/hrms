@@ -879,25 +879,37 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
     `periodStart` / `periodEnd` (always) and `month` (the `YYYY-MM` for a month, **null** for a range). The
     per-month **series** `…/attendance/monthly?months=N` (default 6) is **inherently monthly** — it takes
     neither `from/to` nor `month`. The team roll-up adds a live **today** snapshot (presentToday,
-    clockedInNow, onLeaveToday, totalLateThisMonth) + a per-employee row; the team read is **batched** (~4
-    queries, no N+1). The today-snapshot tiles are **always NOW** — a selected range never moves them. Every
-    query is `companyId`/team scoped.
+    clockedInNow, onLeaveToday, totalLateThisMonth) + a per-employee row + a **team COMPOSITION aggregate**
+    (`teamTimeComposition` = worked/break, `teamDaysPresent`, `teamLeavesByType`, `teamLeaveDaysTotal`,
+    `teamUnapprovedAbsences`, `teamExpectedDays`, `teamAdherencePct`) — each field is the **sum of the
+    per-member `computePeriod` results** for the window (no new aggregation; team adherence = Σ
+    present-on-working ÷ Σ expectedDays, null when Σ = 0). The team read is **batched** (~4 queries, no N+1).
+    The today-snapshot tiles are **always NOW** — a selected range never moves them. Every query is
+    `companyId`/team scoped.
   - **Web (read-only dashboard).** ONE shared implementation of the dashboard, mounted by all three roles
     with **no screen duplication**: the viewer team view carries an **Employees | Work Log** tab
     (ACCOUNTS_ADMIN via company→team, ACCOUNTANT own team), and the **Manager** area gains a **Live roster |
     Work Log** tab that mounts the SAME Work-Log components for the manager's own team (teamId resolved via
     `GET /manager/my-team`) — **alongside**, not replacing, the manager's existing live roster + activity
-    feed. Work Log shows the roll-up tiles + a per-employee roster with a **live clocked-in dot**, a **period
-    picker** (Month _or_ Custom range → two date pickers), and ~45s polling + refetch-on-focus; a row opens
-    the employee detail — a **worked-vs-break donut** (recharts; the only same-unit split — counts never go
-    in the pie), separate **stat cards** for the counts (worked, break, days present, late, adherence + its
-    label [N/A when there are no expected days], **unapproved absences**, leaves by type), and a **month-wise
-    report** (bar + table with an Absent column, from the series — always monthly). The today-snapshot tiles
-    carry a note that they stay **live (now)** regardless of the selected window. Numbers use the shared
-    duration formatter (e.g. 63,300s → "17h 35m"). Both views offer a client-side **CSV export** (no refetch
-    — built from the already-loaded state): the employee's month-wise series (monthly) and the team's
-    per-employee roster for the **active window** — the filename carries the month or the `from_to` range
-    (RFC-4180 escaping, UTF-8 BOM; durations as decimal hours, header-labeled).
+    feed. The **period picker** offers four modes — **Today**, **Month**, **Payroll cycle**, **Custom
+    range** — all resolving to a `[from,to]` window client-side (Month keeps `?month=`); the picker,
+    header, and CSV filename follow the active window. **Payroll cycle** is the universal **26th → 25th**
+    window (a shared pure util: the current cycle is chosen from today's day-of-month, back/forward arrows
+    step one whole cycle, spanning month/year boundaries — Dec 26 → Jan 25). **Today mode** consolidates:
+    the separate "always-live" snapshot strip is dropped (the main tiles ARE the live today view — polling +
+    the live indicator stay active), the late tile reads **"Late today"**, and the **Unapproved-absences**
+    and **Adherence** tiles are **hidden** (a past-only count and a one-day fraction would mislead); all
+    other modes show the full set. Both the **team** roll-up and the **employee** detail render the SAME
+    shared **composition** view — a **worked-vs-break donut** (recharts; the only same-unit split — counts
+    never go in the pie) + same-unit **meters** + **stat cards** for the counts (worked, break, days present,
+    late, adherence [N/A when no expected days], unapproved absences, leaves by type C·S·U). The team view
+    feeds the **team aggregate** into it (above the per-employee roster, which is unchanged); the employee
+    detail additionally has a **month-wise report** (bar + table, from the series — always monthly). ~45s
+    polling + refetch-on-focus keep the window live. Numbers use the shared duration formatter (e.g.
+    63,300s → "17h 35m"). Both views offer a client-side **CSV export** (no refetch — built from the
+    already-loaded state): the employee's month-wise series (monthly) and the team's per-employee roster for
+    the **active window** — the filename carries the month, the single day, or the `from_to` range (RFC-4180
+    escaping, UTF-8 BOM; durations as decimal hours, header-labeled).
 
 ---
 

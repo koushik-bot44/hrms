@@ -8657,6 +8657,24 @@
           }
         }
       },
+      "LeavesByType": {
+        "type": "object",
+        "properties": {
+          "casual": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unpaid": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Approved leave DAYS in the month, split by type (calendar days, clipped to the month)."
+      },
       "TeamAttendanceMemberRow": {
         "type": "object",
         "properties": {
@@ -8736,7 +8754,7 @@
           },
           "totalLateThisMonth": {
             "type": "integer",
-            "description": "Sum of the team's late logins this month.",
+            "description": "Sum of the team's late logins in the window.",
             "format": "int64"
           },
           "employeeCount": {
@@ -8748,9 +8766,59 @@
             "items": {
               "$ref": "#/components/schemas/TeamAttendanceMemberRow"
             }
+          },
+          "teamTimeComposition": {
+            "$ref": "#/components/schemas/TimeComposition"
+          },
+          "teamDaysPresent": {
+            "type": "integer",
+            "description": "Sum of member days-present in the window (member-days with ≥1 session).",
+            "format": "int64"
+          },
+          "teamLeavesByType": {
+            "$ref": "#/components/schemas/LeavesByType"
+          },
+          "teamLeaveDaysTotal": {
+            "type": "integer",
+            "description": "Sum of member approved-leave days in the window.",
+            "format": "int64"
+          },
+          "teamUnapprovedAbsences": {
+            "type": "integer",
+            "description": "Sum of member unapproved absences (past working days) in the window.",
+            "format": "int64"
+          },
+          "teamExpectedDays": {
+            "type": "integer",
+            "description": "Sum of member adherence denominators (working − approved-leave working days).",
+            "format": "int64"
+          },
+          "teamAdherencePct": {
+            "type": "integer",
+            "description": "Team adherence = Σ present-on-working ÷ Σ expectedDays as a whole percent; null when Σ expectedDays = 0 (N/A).",
+            "format": "int32"
           }
         },
         "description": "A team's attendance roll-up for a month OR custom range + a live 'today' snapshot."
+      },
+      "TimeComposition": {
+        "type": "object",
+        "properties": {
+          "workedSeconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "breakSeconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "idleSeconds": {
+            "type": "integer",
+            "description": "Optional idle seconds; null in v1 (worked + break are the real, summable split).",
+            "format": "int64"
+          }
+        },
+        "description": "The same-unit split for a donut. worked + break = gross clocked time; idle is not computed in v1."
       },
       "EmployeeMonthSummary": {
         "type": "object",
@@ -8833,43 +8901,6 @@
           }
         },
         "description": "One employee's attendance metrics for a shift-month OR custom range (computed live)."
-      },
-      "LeavesByType": {
-        "type": "object",
-        "properties": {
-          "casual": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "sick": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "unpaid": {
-            "type": "integer",
-            "format": "int64"
-          }
-        },
-        "description": "Approved leave DAYS in the month, split by type (calendar days, clipped to the month)."
-      },
-      "TimeComposition": {
-        "type": "object",
-        "properties": {
-          "workedSeconds": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "breakSeconds": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "idleSeconds": {
-            "type": "integer",
-            "description": "Optional idle seconds; null in v1 (worked + break are the real, summable split).",
-            "format": "int64"
-          }
-        },
-        "description": "The same-unit split for a donut. worked + break = gross clocked time; idle is not computed in v1."
       },
       "EmployeeMonthlySeries": {
         "type": "object",

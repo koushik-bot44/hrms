@@ -89,7 +89,26 @@ public final class ViewerAttendanceDtos {
       @Schema(description = "Employees with an OPEN session right now.") long clockedInNow,
       @Schema(description = "Employees on an approved leave that covers today (IST calendar date).")
           long onLeaveToday,
-      @Schema(description = "Sum of the team's late logins this month.") long totalLateThisMonth,
+      @Schema(description = "Sum of the team's late logins in the window.") long totalLateThisMonth,
       int employeeCount,
-      List<TeamAttendanceMemberRow> employees) {}
+      List<TeamAttendanceMemberRow> employees,
+      // --- Team COMPOSITION aggregate (§8a, additive): SUMS of the per-member computePeriod results for
+      //     the window — no new math, just totals of the same per-employee numbers. Drives the team-level
+      //     donut + meters + stat tiles (mirrors the employee detail) without a second aggregation path. ---
+      @Schema(description = "Team worked/break split for the window (summed across members) — the donut basis.")
+          TimeComposition teamTimeComposition,
+      @Schema(description = "Sum of member days-present in the window (member-days with ≥1 session).")
+          long teamDaysPresent,
+      @Schema(description = "Sum of member approved-leave days in the window, split by type.")
+          LeavesByType teamLeavesByType,
+      @Schema(description = "Sum of member approved-leave days in the window.") long teamLeaveDaysTotal,
+      @Schema(description = "Sum of member unapproved absences (past working days) in the window.")
+          long teamUnapprovedAbsences,
+      @Schema(description = "Sum of member adherence denominators (working − approved-leave working days).")
+          long teamExpectedDays,
+      @Schema(
+              description =
+                  "Team adherence = Σ present-on-working ÷ Σ expectedDays as a whole percent; null when"
+                      + " Σ expectedDays = 0 (N/A).")
+          Integer teamAdherencePct) {}
 }

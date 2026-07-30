@@ -10,8 +10,15 @@ import { downloadCsv, toCsv } from '@/lib/csv';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/loading-skeleton';
-import { PeriodPicker, defaultSelection, selectionSlug } from '@/components/accountant/period-picker';
+import {
+  PeriodPicker,
+  defaultSelection,
+  selectionSlug,
+  lateLabel,
+  windowWord,
+} from '@/components/accountant/period-picker';
 import { EmployeeAttendanceDetail } from '@/components/accountant/employee-attendance-detail';
+import { AttendanceComposition } from '@/components/accountant/attendance-composition';
 import { StatTile } from '@/components/dashboard/stat-tile';
 import { LiveIndicator } from '@/components/dashboard/live-indicator';
 import { cn } from '@/lib/utils';
@@ -51,7 +58,7 @@ function exportTeamCsv(data: TeamAttendanceSummary, selection: AttendanceSelecti
 export function TeamAttendance({ teamId }: { teamId: string }) {
   const [selection, setSelection] = React.useState<AttendanceSelection>(defaultSelection);
   const [selected, setSelected] = React.useState<TeamAttendanceMemberRow | null>(null);
-  const isRange = 'from' in selection;
+  const isToday = selection.mode === 'today';
 
   const query = useApiQuery(
     ['viewer-team-attendance', teamId, selection],
@@ -108,25 +115,31 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
         />
       ) : data ? (
         <div className={cn('space-y-4 transition-opacity', refreshing && 'opacity-70')}>
-          {/* Today's snapshot — REAL team-summary roll-ups, semantic tones. The first three tiles are
-              inherently NOW (they never range); only the "late" tile follows the selected window. */}
-          <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground">
-              Today&rsquo;s snapshot — always live (now), regardless of the selected window.
-            </p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatTile icon={Users} label="Present today" value={data.presentToday} tone="primary" size="sm" />
-              <StatTile icon={Clock} label="Clocked in now" value={data.clockedInNow} tone="success" size="sm" />
-              <StatTile icon={CalendarOff} label="On leave today" value={data.onLeaveToday} tone="primary" size="sm" />
-              <StatTile
-                icon={AlarmClock}
-                label={isRange ? 'Late in range' : 'Late this month'}
-                value={data.totalLateThisMonth}
-                tone={data.totalLateThisMonth > 0 ? 'warning' : 'neutral'}
-                size="sm"
-              />
+          {/* Team COMPOSITION — the same donut / meters / stat tiles as the employee detail, computed from
+              the team aggregate for the selected window. In Today mode this IS the live today view. */}
+          <TeamComposition data={data} isToday={isToday} selection={selection} />
+
+          {/* Today's snapshot — the live "now" roll-ups. In Today mode it is redundant with the composition
+              above (which already reflects today), so it's dropped; the composition stays live via polling. */}
+          {isToday ? null : (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                Today&rsquo;s snapshot — always live (now), regardless of the selected window.
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatTile icon={Users} label="Present today" value={data.presentToday} tone="primary" size="sm" />
+                <StatTile icon={Clock} label="Clocked in now" value={data.clockedInNow} tone="success" size="sm" />
+                <StatTile icon={CalendarOff} label="On leave today" value={data.onLeaveToday} tone="primary" size="sm" />
+                <StatTile
+                  icon={AlarmClock}
+                  label={lateLabel(selection)}
+                  value={data.totalLateThisMonth}
+                  tone={data.totalLateThisMonth > 0 ? 'warning' : 'neutral'}
+                  size="sm"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {data.employees.length === 0 ? (
             <EmptyState
@@ -144,7 +157,7 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
                       <th className="px-4 py-3 font-medium">Employee</th>
                       <th className="px-4 py-3 font-medium">Employee ID</th>
                       <th className="px-4 py-3 font-medium">Now</th>
-                      <th className="px-4 py-3 font-medium">Worked (month)</th>
+                      <th className="px-4 py-3 font-medium">Worked ({windowWord(selection)})</th>
                       <th className="px-4 py-3 font-medium">Late</th>
                       <th className="px-4 py-3 font-medium">Leave days</th>
                       <th className="px-4 py-3 font-medium">Unapproved absences</th>
@@ -196,5 +209,41 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The team-level composition (§8a) — the SAME shared donut / meters / stat tiles as the employee detail,
+ * fed the team AGGREGATE (sums of the per-member computePeriod results) for the selected window. Today mode
+ * hides the past-only Absences + one-day Adherence tiles, exactly like the employee detail.
+ */
+function TeamComposition({
+  data,
+  isToday,
+  selection,
+}: {
+  data: TeamAttendanceSummary;
+  isToday: boolean;
+  selection: AttendanceSelection;
+}) {
+  return (
+    <AttendanceComposition
+      data={{
+        workedSeconds: data.teamTimeComposition.workedSeconds,
+        breakSeconds: data.teamTimeComposition.breakSeconds,
+        daysPresent: data.teamDaysPresent,
+        lateLogins: data.totalLateThisMonth,
+        leaveDaysTotal: data.teamLeaveDaysTotal,
+        leavesByType: data.teamLeavesByType,
+        expectedDays: data.teamExpectedDays,
+        // The team omits a single working-day count (it varies per member) → adherence sub shows "of N expected".
+        workingDays: null,
+        unapprovedAbsences: data.teamUnapprovedAbsences,
+        adherencePct: data.teamAdherencePct,
+      }}
+      lateLabel={lateLabel(selection)}
+      hideAbsences={isToday}
+      hideAdherence={isToday}
+    />
   );
 }

@@ -3263,6 +3263,15 @@ export interface components {
             dateOfJoining?: string;
             approvedAt?: string;
         };
+        /** @description Approved leave DAYS in the month, split by type (calendar days, clipped to the month). */
+        LeavesByType: {
+            /** Format: int64 */
+            casual?: number;
+            /** Format: int64 */
+            sick?: number;
+            /** Format: int64 */
+            unpaid?: number;
+        };
         /** @description One row of a team's attendance roster for the month. */
         TeamAttendanceMemberRow: {
             employeeId?: string;
@@ -3318,12 +3327,51 @@ export interface components {
             onLeaveToday?: number;
             /**
              * Format: int64
-             * @description Sum of the team's late logins this month.
+             * @description Sum of the team's late logins in the window.
              */
             totalLateThisMonth?: number;
             /** Format: int32 */
             employeeCount?: number;
             employees?: components["schemas"]["TeamAttendanceMemberRow"][];
+            teamTimeComposition?: components["schemas"]["TimeComposition"];
+            /**
+             * Format: int64
+             * @description Sum of member days-present in the window (member-days with ≥1 session).
+             */
+            teamDaysPresent?: number;
+            teamLeavesByType?: components["schemas"]["LeavesByType"];
+            /**
+             * Format: int64
+             * @description Sum of member approved-leave days in the window.
+             */
+            teamLeaveDaysTotal?: number;
+            /**
+             * Format: int64
+             * @description Sum of member unapproved absences (past working days) in the window.
+             */
+            teamUnapprovedAbsences?: number;
+            /**
+             * Format: int64
+             * @description Sum of member adherence denominators (working − approved-leave working days).
+             */
+            teamExpectedDays?: number;
+            /**
+             * Format: int32
+             * @description Team adherence = Σ present-on-working ÷ Σ expectedDays as a whole percent; null when Σ expectedDays = 0 (N/A).
+             */
+            teamAdherencePct?: number;
+        };
+        /** @description The same-unit split for a donut. worked + break = gross clocked time; idle is not computed in v1. */
+        TimeComposition: {
+            /** Format: int64 */
+            workedSeconds?: number;
+            /** Format: int64 */
+            breakSeconds?: number;
+            /**
+             * Format: int64
+             * @description Optional idle seconds; null in v1 (worked + break are the real, summable split).
+             */
+            idleSeconds?: number;
         };
         /** @description One employee's attendance metrics for a shift-month OR custom range (computed live). */
         EmployeeMonthSummary: {
@@ -3389,27 +3437,6 @@ export interface components {
             timeComposition?: components["schemas"]["TimeComposition"];
             /** @description Whether the employee has an OPEN session right now (live). */
             clockedInNow?: boolean;
-        };
-        /** @description Approved leave DAYS in the month, split by type (calendar days, clipped to the month). */
-        LeavesByType: {
-            /** Format: int64 */
-            casual?: number;
-            /** Format: int64 */
-            sick?: number;
-            /** Format: int64 */
-            unpaid?: number;
-        };
-        /** @description The same-unit split for a donut. worked + break = gross clocked time; idle is not computed in v1. */
-        TimeComposition: {
-            /** Format: int64 */
-            workedSeconds?: number;
-            /** Format: int64 */
-            breakSeconds?: number;
-            /**
-             * Format: int64
-             * @description Optional idle seconds; null in v1 (worked + break are the real, summable split).
-             */
-            idleSeconds?: number;
         };
         /** @description A per-month series of the employee's metrics (oldest → newest). */
         EmployeeMonthlySeries: {

@@ -91,10 +91,14 @@ export function getMyTeam(signal?: AbortSignal): Promise<MyTeamView | null> {
 // --- Attendance analytics (§8a, read-only, live) --------------------------
 
 /**
- * The reporting window for a summary read: EITHER a shift-month OR a custom from/to range (mutually
- * exclusive server-side). The month-wise SERIES endpoint is inherently monthly and takes neither.
+ * The reporting window for a summary read, tagged with the UI mode that produced it. `month` mode calls the
+ * `?month=` endpoint; `today` / `cycle` / `custom` all resolve to a [from,to] window and call `?from=&to=`
+ * (mutually exclusive with month, server-side). The `mode` tag drives presentation only (labels, the Today
+ * consolidation) — the server sees just month or from/to. The month-wise SERIES endpoint takes neither.
  */
-export type AttendanceSelection = { month: string } | { from: string; to: string };
+export type AttendanceSelection =
+  | { mode: 'month'; month: string }
+  | { mode: 'today' | 'cycle' | 'custom'; from: string; to: string };
 
 /** `?month=…` or `?from=…&to=…` (empty when no month is given → the server defaults to the current month). */
 function selectionQuery(selection?: AttendanceSelection): string {
