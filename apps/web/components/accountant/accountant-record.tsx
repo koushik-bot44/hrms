@@ -10,10 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { RecordView } from '@/components/hr/record-view';
+import { useViewerBase } from '@/components/accountant/viewer-nav';
 
 /** Read-only employee record for the Accountant (§2): masked by default, with an audited reveal. */
 export function AccountantRecord({ employeeId }: { employeeId: string }) {
   const router = useRouter();
+  const base = useViewerBase();
   const [revealed, setRevealed] = React.useState<RevealedSensitive | null>(null);
 
   const query = useApiQuery(
@@ -51,7 +53,7 @@ export function AccountantRecord({ employeeId }: { employeeId: string }) {
 
   return (
     <div className="space-y-5">
-      <Button variant="ghost" size="sm" onClick={() => router.push('/accountant')}>
+      <Button variant="ghost" size="sm" onClick={() => router.push(base)}>
         <ArrowLeft className="size-4" />
         Back to employees
       </Button>

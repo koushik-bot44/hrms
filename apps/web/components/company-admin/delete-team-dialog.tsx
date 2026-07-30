@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { deleteTeam, teamsKey } from '@/lib/api/teams';
 import { useApiMutation } from '@/lib/api/hooks';
+import { useCompanyPath } from '@/lib/auth/use-company-path';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,6 +29,7 @@ export function DeleteTeamDialog({
 }) {
   const [open, setOpen] = React.useState(false);
   const router = useRouter();
+  const cp = useCompanyPath();
   const queryClient = useQueryClient();
 
   const mutation = useApiMutation(() => deleteTeam(teamId, companyId), {
@@ -35,7 +37,7 @@ export function DeleteTeamDialog({
     onSuccess: () => {
       setOpen(false);
       void queryClient.invalidateQueries({ queryKey: teamsKey(companyId) });
-      router.replace(companyId ? `/super-admin/companies/${companyId}` : '/company-admin');
+      router.replace(companyId ? `/super-admin/companies/${companyId}` : cp('/company-admin'));
     },
   });
 

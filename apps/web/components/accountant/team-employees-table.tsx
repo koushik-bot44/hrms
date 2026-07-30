@@ -13,17 +13,20 @@ import { Card } from '@/components/ui/card';
 import { DataTable } from '@/components/data-table';
 import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/loading-skeleton';
+import { useViewerBase } from '@/components/accountant/viewer-nav';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
 
-const COLUMNS: ColumnDef<ApprovedEmployeeRow>[] = [
+// Columns depend on the mount's base path (team `/{slug}/accountant` vs platform `/accounts`), so the
+// record links resolve under whichever mount renders this shared table.
+const columnsFor = (base: string): ColumnDef<ApprovedEmployeeRow>[] => [
   {
     accessorKey: 'fullName',
     header: 'Name',
     cell: ({ row }) => (
       <Link
-        href={`/accountant/employees/${row.original.id}`}
+        href={`${base}/employees/${row.original.id}`}
         className="font-medium text-foreground hover:text-primary hover:underline"
       >
         {row.original.fullName ?? row.original.email}
@@ -44,7 +47,7 @@ const COLUMNS: ColumnDef<ApprovedEmployeeRow>[] = [
     cell: ({ row }) => (
       <div className="text-right">
         <Link
-          href={`/accountant/employees/${row.original.id}`}
+          href={`${base}/employees/${row.original.id}`}
           className="text-sm font-medium text-primary hover:underline"
         >
           View record
@@ -60,6 +63,8 @@ const COLUMNS: ColumnDef<ApprovedEmployeeRow>[] = [
  * Scope is enforced server-side (an ACCOUNTANT can only load their own team; else 404).
  */
 export function TeamEmployeesTable({ teamId }: { teamId: string }) {
+  const base = useViewerBase();
+  const columns = React.useMemo(() => columnsFor(base), [base]);
   const [search, setSearch] = React.useState('');
   const [debounced, setDebounced] = React.useState('');
   const [page, setPage] = React.useState(0);
@@ -109,7 +114,7 @@ export function TeamEmployeesTable({ teamId }: { teamId: string }) {
         <div className={cn('transition-opacity', dim && 'opacity-60')}>
           <Card className="overflow-hidden">
             <DataTable
-              columns={COLUMNS}
+              columns={columns}
               data={data?.content ?? []}
               searchable={false}
               containerClassName=""

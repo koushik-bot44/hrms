@@ -309,6 +309,29 @@ that may EVER appear in a URL.** Team names, employee/person names, and any othe
 `/{companySlug}/hr` and `/{companySlug}/teams/{teamId}` are allowed; a team name or person name as a path
 segment is not. **Only Company has a slug** — no slug column/generator exists for teams or any other entity.
 
+**Routing map (Stage 2 — tenant-scoped URLs).** Company-scoped areas live under the tenant slug; platform
+areas stay top-level:
+- **Slugged** (`/{companySlug}/…`): `company-admin`, `hr`, `manager`, `accountant` (the **team** Accountant),
+  `workspace` (credentialed-employee portal), and `employee` (the OTP-session onboarding area).
+- **Top-level**: `/super-admin`, `/accounts` (the platform **Accounts Admin**), `/hierarchy`, `/mail`
+  (identity-scoped — used by ALL roles, never moves), `/login`, `/employee/login` (a login page cannot know a
+  company), and static/API paths. The reserved-word list guarantees no slug shadows these.
+- **The shared read-only viewer** (§2/§6) is **one set of screen components** mounted by two thin route trees:
+  `/{companySlug}/accountant` (ACCOUNTANT, team-scoped) and top-level `/accounts` (ACCOUNTS_ADMIN,
+  cross-company). Each mount guards its own role; no screen code is duplicated.
+- **The guard.** A client tenancy guard at the `[companySlug]` layout resolves the URL slug against the
+  **session's `companySlug`** (added to the session/me payload, nullable — null for platform roles): a MATCH
+  renders; a company-scoped session on ANOTHER slug is redirected to the SAME sub-path under its OWN slug
+  (deep-link-preserving); a platform role on a slugged path goes to its platform home; unauthenticated → login.
+  It **composes with** (does not replace) `RequireRole`: the `[companySlug]` guard enforces **tenancy**, each
+  area's `RequireRole` enforces **role**. Server-side tenancy (§6) is still the real gate — this is UX.
+  _Anti-enumeration:_ because the by-slug resolver returns **404 for any cross-company slug** (a real other
+  company and a non-existent slug are indistinguishable to a company-scoped client — Stage 1), a mismatch
+  **redirects** rather than 404-ing, so existence is never leaked.
+- **Old-path redirects** (transition safety): the vacated top-level `/{hr,manager,company-admin,accountant,
+  workspace,employee}[/…]` paths session-redirect to the caller's Stage-2 home so old bookmarks don't 404;
+  external deep-links (email/push/SW) migrate in Stage 3.
+
 ### Employee record (the four onboarding forms)
 - **Form1Personal** — Personal Details: `name`, `dob`, `email`, `mobile`, `designation`,
   `offeredCtc` [SENSITIVE], `currentAddress`, `permanentAddress`, `maritalStatus`, `bloodGroup`,

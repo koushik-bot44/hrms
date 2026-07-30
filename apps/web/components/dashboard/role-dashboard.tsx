@@ -21,6 +21,7 @@ import { useApiQuery } from '@/lib/api/hooks';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { StatTile, type StatTone } from '@/components/dashboard/stat-tile';
+import { useCompanyPath } from '@/lib/auth/use-company-path';
 
 /** Where each stat card drills into — the existing filtered list route (reused, not new pages). */
 const DRILL: Record<string, string> = {
@@ -86,6 +87,12 @@ export function RoleDashboard({
   const query = useApiQuery(['dashboard'], getDashboardSummary, { refetchOnWindowFocus: true });
   const wantStats = show !== 'activity';
   const wantActivity = show !== 'stats';
+  const cp = useCompanyPath();
+  // super.* stats live at the top-level /super-admin; ca./hr./manager.* are company-scoped → slugged.
+  const drillHref = (key: string): string | undefined => {
+    const path = DRILL[key];
+    return path === undefined || key.startsWith('super.') ? path : cp(path);
+  };
 
   if (query.isLoading) {
     return (
@@ -119,7 +126,7 @@ export function RoleDashboard({
       {wantStats && stats.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((s) => (
-            <StatCardView key={s.key} card={s} href={DRILL[s.key]} />
+            <StatCardView key={s.key} card={s} href={drillHref(s.key)} />
           ))}
         </div>
       ) : null}

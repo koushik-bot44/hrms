@@ -6,6 +6,7 @@ import { Users } from 'lucide-react';
 import type { EmployeeStatus } from '@/lib/contract';
 import { getEmployeeQueue } from '@/lib/api/employees';
 import { useApiQuery } from '@/lib/api/hooks';
+import { useCompanyPath } from '@/lib/auth/use-company-path';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,6 +29,7 @@ const PAGE_SIZE = 20;
 
 /** The HR's onboarding queue: their employees with name/email search + status filter, server-paginated. */
 export function EmployeeQueue() {
+  const cp = useCompanyPath();
   const [search, setSearch] = React.useState('');
   const [debounced, setDebounced] = React.useState('');
   const [status, setStatus] = React.useState<EmployeeStatus | ''>('');
@@ -138,7 +140,7 @@ export function EmployeeQueue() {
                     <StatusBadge status={e.status} />
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
-                    <Link href={`/hr/employees/${e.id}`} className="text-sm font-medium text-primary hover:underline">
+                    <Link href={cp(`/hr/employees/${e.id}`)} className="text-sm font-medium text-primary hover:underline">
                       {e.status === 'SUBMITTED' ? 'Review' : 'Open'}
                     </Link>
                   </td>

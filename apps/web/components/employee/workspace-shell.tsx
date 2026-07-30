@@ -6,29 +6,33 @@ import { CalendarDays, Clock, FileText, Inbox } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { AppShell, type NavItem } from '@/components/app-shell';
 import { WorkspaceEntryGuard } from '@/components/attendance/workspace-entry-guard';
+import { useCompanyPath } from '@/lib/auth/use-company-path';
 
 /**
  * The employee PORTAL shell (Stage 6) — mirrors the staff `AppShell` (topbar + sidebar + Mail button)
  * with its own growable nav. A credentialed EMPLOYEE reaches this; one without a mailbox is bounced to
- * the onboarding area.
+ * the onboarding area. Under `/{companySlug}/workspace` (Stage 2), so its links carry the slug; `/mail`
+ * is identity-scoped and stays top-level.
  */
-const nav: NavItem[] = [
-  { label: 'Mailbox', href: '/mail', icon: Inbox },
-  { label: 'Attendance', href: '/workspace/attendance', icon: Clock },
-  { label: 'Leave', href: '/workspace/leave', icon: CalendarDays },
-  // HR side is future — only the Accounts side is wired today (§8d).
-  { label: 'HR/Accounts Requests', href: '/workspace/requests', icon: FileText },
-];
-
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const router = useRouter();
+  const cp = useCompanyPath();
+
+  const nav: NavItem[] = [
+    { label: 'Mailbox', href: '/mail', icon: Inbox },
+    { label: 'Attendance', href: cp('/workspace/attendance'), icon: Clock },
+    { label: 'Leave', href: cp('/workspace/leave'), icon: CalendarDays },
+    // HR side is future — only the Accounts side is wired today (§8d).
+    { label: 'HR/Accounts Requests', href: cp('/workspace/requests'), icon: FileText },
+  ];
+
   // The portal is for credentialed employees; an employee without a mailbox belongs in onboarding.
   const noMailbox = session?.type === 'EMPLOYEE' && !session.mailAddress;
 
   React.useEffect(() => {
-    if (noMailbox) router.replace('/employee');
-  }, [noMailbox, router]);
+    if (noMailbox) router.replace(cp('/employee'));
+  }, [noMailbox, router, cp]);
 
   if (noMailbox) return null;
 

@@ -25,3 +25,13 @@ export function companyIdFromParam(param: string): string {
   const i = param.lastIndexOf('-');
   return i === -1 ? param : param.slice(i + 1);
 }
+
+/**
+ * Prefix a company-scoped sub-path with the tenant slug (Stage 2 routing):
+ * {@code buildCompanyPath('acme', '/hr/employees') === '/acme/hr/employees'}. The single builder for
+ * every slugged link/redirect so the slug is never string-interpolated ad hoc.
+ */
+export function buildCompanyPath(slug: string, subpath = ''): string {
+  const clean = subpath === '' || subpath.startsWith('/') ? subpath : `/${subpath}`;
+  return `/${slug}${clean}`;
+}

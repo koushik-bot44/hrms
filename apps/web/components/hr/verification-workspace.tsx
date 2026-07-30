@@ -15,6 +15,7 @@ import {
 } from '@/lib/contract';
 import { getEmployeeRecord, reviewDocument, reviewForm, revealSensitive } from '@/lib/api/review';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
+import { useCompanyPath } from '@/lib/auth/use-company-path';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -67,6 +68,7 @@ function patchRecord(rec: EmployeeRecord, v: ReviewVars): EmployeeRecord {
 export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const cp = useCompanyPath();
   const [sendingBack, setSendingBack] = React.useState<{ kind: ItemKind; id: string; label: string } | null>(null);
   const [revealed, setRevealed] = React.useState<RevealedSensitive | null>(null);
 
@@ -142,7 +144,7 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => router.push('/hr/employees')}>
+      <Button variant="ghost" size="sm" onClick={() => router.push(cp('/hr/employees'))}>
         <ArrowLeft className="size-4" />
         Back to queue
       </Button>
@@ -156,7 +158,7 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
         onSendBack={startSendBack}
         onRouted={() => {
           void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-          router.push('/hr/employees');
+          router.push(cp('/hr/employees'));
         }}
         form2EditAction={
           record.status === 'INVITED' ? (
