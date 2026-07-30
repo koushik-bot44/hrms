@@ -33,8 +33,8 @@ export const MailDomainSchema = z
   .min(1, 'Mail domain is required')
   .max(63, 'Mail domain is too long')
   .regex(
-    /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/,
-    'Use lowercase letters, digits or hyphen — no spaces or @',
+    /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/,
+    'Use lowercase letters, digits, hyphen or dot — no spaces or @',
   );
 
 /**

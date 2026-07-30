@@ -90,11 +90,12 @@ public class CompaniesService {
 
   public CompanyDetailView create(CreateCompanyRequest input, IhrmsPrincipal.User actor, String ip) {
     String code = normalizeCode(input.code());
-    // The mail domain (§8): the Super Admin may set it, else it defaults to the lowercased code.
-    String mailDomain =
-        input.mailDomain() != null && !input.mailDomain().isBlank()
-            ? mailAddresses.normalizeDomain(input.mailDomain())
-            : code.toLowerCase();
+    // The mail domain (§8) — REQUIRED, typed by the Super Admin; normalized + format-checked here.
+    String mailDomain = mailAddresses.normalizeDomain(input.mailDomain());
+    // The platform domain is reserved (the top-level roles live there); no company may claim it.
+    if (com.ihrms.mail.MailAddresses.PLATFORM_DOMAIN.equals(mailDomain)) {
+      throw conflict("The mail domain \"" + mailDomain + "\" is reserved");
+    }
     Company company = new Company();
     company.setName(input.name().trim());
     company.setCode(code);

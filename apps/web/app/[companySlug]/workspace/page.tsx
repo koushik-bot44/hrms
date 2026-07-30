@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowUpRight, CalendarDays, Clock, FileText, Inbox } from 'lucide-react';
+import { ArrowUpRight, CalendarOff, Clock, FileText, Inbox } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { useCompanyPath } from '@/lib/auth/use-company-path';
@@ -57,7 +57,7 @@ export default function WorkspacePage() {
         />
         <SectionCard
           href={cp('/workspace/leave')}
-          icon={CalendarDays}
+          icon={CalendarOff}
           title="Leave"
           description="Request time off and track its status."
         />

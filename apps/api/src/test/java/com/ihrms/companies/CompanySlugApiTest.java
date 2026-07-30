@@ -116,7 +116,10 @@ class CompanySlugApiTest {
 
   private JsonNode create(String name, String code) throws Exception {
     MvcResult res =
-        mvc.perform(asSuper(post("/companies"), Map.of("name", name, "code", code)))
+        mvc.perform(
+                asSuper(
+                    post("/companies"),
+                    Map.of("name", name, "code", code, "mailDomain", code.toLowerCase())))
             .andExpect(status().isCreated())
             .andReturn();
     return json.readTree(res.getResponse().getContentAsString());

@@ -53,7 +53,10 @@ class CompaniesApiTest {
   @Test
   void createsListsAndGetsCompany() throws Exception {
     MvcResult created =
-        mvc.perform(asSuper(post("/companies"), Map.of("name", "Acme Inc", "code", "acme")))
+        mvc.perform(
+                asSuper(
+                    post("/companies"),
+                    Map.of("name", "Acme Inc", "code", "acme", "mailDomain", "acme")))
             .andExpect(status().isCreated())
             .andReturn();
     JsonNode detail = json.readTree(created.getResponse().getContentAsString());
@@ -90,10 +93,14 @@ class CompaniesApiTest {
 
   @Test
   void duplicateCodeIsConflict() throws Exception {
-    mvc.perform(asSuper(post("/companies"), Map.of("name", "Acme", "code", "ACME")))
+    mvc.perform(
+            asSuper(post("/companies"), Map.of("name", "Acme", "code", "ACME", "mailDomain", "acmeone")))
         .andExpect(status().isCreated());
     MvcResult dup =
-        mvc.perform(asSuper(post("/companies"), Map.of("name", "Acme Two", "code", "acme")))
+        mvc.perform(
+                asSuper(
+                    post("/companies"),
+                    Map.of("name", "Acme Two", "code", "acme", "mailDomain", "acmetwo")))
             .andExpect(status().isConflict())
             .andReturn();
     assertThat(json.readTree(dup.getResponse().getContentAsString()).get("statusCode").asInt())
@@ -166,11 +173,74 @@ class CompaniesApiTest {
         .andExpect(status().isForbidden());
   }
 
+  @Test
+  void createsWithCustomMailDomain() throws Exception {
+    MvcResult created =
+        mvc.perform(
+                asSuper(
+                    post("/companies"),
+                    Map.of("name", "Anvi Corp", "code", "ANVI", "mailDomain", "anvicorp.com")))
+            .andExpect(status().isCreated())
+            .andReturn();
+    assertThat(json.readTree(created.getResponse().getContentAsString()).get("mailDomain").asText())
+        .isEqualTo("anvicorp.com");
+  }
+
+  @Test
+  void duplicateMailDomainIsConflictCaseInsensitive() throws Exception {
+    mvc.perform(
+            asSuper(post("/companies"), Map.of("name", "One", "code", "ONE", "mailDomain", "shared")))
+        .andExpect(status().isCreated());
+    // Different code, SAME domain in a different CASE -> normalized + rejected as a conflict.
+    mvc.perform(
+            asSuper(post("/companies"), Map.of("name", "Two", "code", "TWO", "mailDomain", "SHARED")))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void reservedMailDomainRejected() throws Exception {
+    mvc.perform(
+            asSuper(post("/companies"), Map.of("name", "Plat", "code", "PLAT", "mailDomain", "ihrms")))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void badMailDomainFormatRejected() throws Exception {
+    for (String bad : java.util.List.of("Bad Domain", "-acme", "acme-", "ac..me", "acme.", "a@b")) {
+      mvc.perform(asSuper(post("/companies"), Map.of("name", "X", "code", "XCO", "mailDomain", bad)))
+          .andExpect(status().isBadRequest());
+    }
+  }
+
+  @Test
+  void renameLeavesMailDomainUntouched() throws Exception {
+    MvcResult created =
+        mvc.perform(
+                asSuper(
+                    post("/companies"),
+                    Map.of("name", "Acme", "code", "ACME", "mailDomain", "acme")))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String id = json.readTree(created.getResponse().getContentAsString()).get("id").asText();
+    mvc.perform(asSuper(patch("/companies/" + id), Map.of("name", "Renamed Corp")))
+        .andExpect(status().isOk());
+    MvcResult after =
+        mvc.perform(get("/companies/" + id).header("Authorization", "Bearer " + superToken))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode d = json.readTree(after.getResponse().getContentAsString());
+    assertThat(d.get("name").asText()).isEqualTo("Renamed Corp");
+    assertThat(d.get("mailDomain").asText()).isEqualTo("acme"); // IMMUTABLE
+  }
+
   // --- helpers --------------------------------------------------------------
 
   private String createCompany(String name, String code) throws Exception {
     MvcResult res =
-        mvc.perform(asSuper(post("/companies"), Map.of("name", name, "code", code)))
+        mvc.perform(
+                asSuper(
+                    post("/companies"),
+                    Map.of("name", name, "code", code, "mailDomain", code.toLowerCase())))
             .andExpect(status().isCreated())
             .andReturn();
     return json.readTree(res.getResponse().getContentAsString()).get("id").asText();

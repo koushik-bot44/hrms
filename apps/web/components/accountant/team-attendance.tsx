@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { AlarmClock, CalendarClock, Clock, Download, Plane, Users } from 'lucide-react';
+import { AlarmClock, CalendarClock, CalendarOff, Clock, Download, Users } from 'lucide-react';
 import type { TeamAttendanceMemberRow, TeamAttendanceSummary } from '@/lib/contract';
 import { getTeamAttendanceSummary } from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
@@ -111,7 +111,7 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTile icon={Users} label="Present today" value={data.presentToday} tone="primary" size="sm" />
             <StatTile icon={Clock} label="Clocked in now" value={data.clockedInNow} tone="success" size="sm" />
-            <StatTile icon={Plane} label="On leave today" value={data.onLeaveToday} tone="primary" size="sm" />
+            <StatTile icon={CalendarOff} label="On leave today" value={data.onLeaveToday} tone="primary" size="sm" />
             <StatTile
               icon={AlarmClock}
               label="Late this month"

@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, Plus } from 'lucide-react';
+import { CalendarOff, Plus } from 'lucide-react';
 import { SubmitLeaveSchema, type SubmitLeaveInput, LeaveType } from '@/lib/contract';
 import { cancelLeave, getMyLeave, leaveKeys, submitLeave } from '@/lib/api/leave';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
@@ -139,7 +139,7 @@ function MyLeaveHistory() {
           </div>
         ) : !data || data.content.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
-            <CalendarDays className="size-6" />
+            <CalendarOff className="size-6" />
             <p className="text-sm">No leave requests yet.</p>
           </div>
         ) : (

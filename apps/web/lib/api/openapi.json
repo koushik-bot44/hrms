@@ -6846,6 +6846,7 @@
       "CreateCompanyRequest": {
         "required": [
           "code",
+          "mailDomain",
           "name"
         ],
         "type": "object",
@@ -6861,6 +6862,7 @@
           "mailDomain": {
             "maxLength": 63,
             "minLength": 0,
+            "pattern": "[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*",
             "type": "string"
           }
         }

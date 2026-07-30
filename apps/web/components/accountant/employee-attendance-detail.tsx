@@ -12,7 +12,7 @@ import {
   Coffee,
   Download,
   Gauge,
-  Plane,
+  CalendarOff,
 } from 'lucide-react';
 import type { EmployeeMonthSummary } from '@/lib/contract';
 import { getEmployeeAttendanceMonthly, getEmployeeAttendanceSummary } from '@/lib/api/accountant';
@@ -232,7 +232,7 @@ function SummaryBody({ data }: { data: EmployeeMonthSummary }) {
           title={data.workingDaysDefinition}
         />
         <StatTile
-          icon={Plane}
+          icon={CalendarOff}
           label="Leaves taken"
           value={String(data.leaveDaysTotal)}
           tone="neutral"

@@ -2597,7 +2597,7 @@ export interface components {
         CreateCompanyRequest: {
             name: string;
             code: string;
-            mailDomain?: string;
+            mailDomain: string;
         };
         CompanyAdminView: {
             id?: string;

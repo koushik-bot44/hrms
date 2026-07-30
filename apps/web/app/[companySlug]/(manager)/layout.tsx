@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Bell, CalendarDays, ClipboardCheck, Clock } from 'lucide-react';
+import { Bell, CalendarOff, ClipboardCheck, Clock } from 'lucide-react';
 import { UserRole } from '@/lib/contract';
 import { AppShell, type NavItem } from '@/components/app-shell';
 import { RequireRole } from '@/components/require-role';
@@ -13,7 +13,7 @@ export default function ManagerLayout({ children }: { children: ReactNode }) {
   const nav: NavItem[] = [
     { label: 'Approvals', href: cp('/manager'), icon: ClipboardCheck },
     { label: 'Attendance', href: cp('/manager/attendance'), icon: Clock },
-    { label: 'Leave', href: cp('/manager/leave'), icon: CalendarDays },
+    { label: 'Leave', href: cp('/manager/leave'), icon: CalendarOff },
     { label: 'Notifications', href: cp('/manager/notifications'), icon: Bell },
   ];
   return (

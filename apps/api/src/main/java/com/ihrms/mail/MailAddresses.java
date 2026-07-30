@@ -18,7 +18,16 @@ public class MailAddresses {
   public static final String PLATFORM_DOMAIN = "ihrms";
 
   private static final Pattern LOCAL_PART = Pattern.compile("[a-z0-9]([a-z0-9._-]*[a-z0-9])?");
-  private static final Pattern DOMAIN = Pattern.compile("[a-z0-9]([a-z0-9-]*[a-z0-9])?");
+
+  /**
+   * A mail domain: one or more dot-separated labels, each lowercase alphanumeric with internal hyphens,
+   * no leading/trailing '-' or '.' (e.g. {@code acme}, {@code acme-corp}, {@code yourdomain.com}). Shared
+   * with the create-company request validation (the DTO's {@code @Pattern}).
+   */
+  public static final String DOMAIN_REGEX =
+      "[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*";
+
+  private static final Pattern DOMAIN = Pattern.compile(DOMAIN_REGEX);
 
   /** A resolved mailbox address: the full {@code email} plus its {@code localPart}. */
   public record Address(String email, String localPart) {}
@@ -47,7 +56,7 @@ public class MailAddresses {
   public String normalizeDomain(String domain) {
     String d = domain == null ? "" : domain.trim().toLowerCase();
     if (!DOMAIN.matcher(d).matches()) {
-      throw badRequest("Mail domain must be lowercase letters, digits or hyphen — no spaces or @");
+      throw badRequest("Mail domain must be lowercase letters, digits, hyphen or dot — no spaces or @");
     }
     return d;
   }

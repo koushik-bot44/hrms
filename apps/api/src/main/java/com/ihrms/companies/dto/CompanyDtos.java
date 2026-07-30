@@ -15,8 +15,14 @@ public final class CompanyDtos {
           String name,
       // Upper-cased + COMPANY_CODE_REGEX-validated in the service.
       @NotBlank(message = "Code is required") String code,
-      // Internal-mail domain (§8); optional — defaults to the lowercased code when omitted.
-      @Size(max = 63, message = "Mail domain is too long") String mailDomain) {}
+      // Internal-mail domain (§8) — REQUIRED, typed by the Super Admin; validated + normalized in the
+      // service (unique across companies, reserved words rejected) and IMMUTABLE after creation.
+      @NotBlank(message = "A mail domain is required")
+          @Size(max = 63, message = "Mail domain is too long")
+          @Pattern(
+              regexp = com.ihrms.mail.MailAddresses.DOMAIN_REGEX,
+              message = "Use lowercase letters, digits, hyphen or dot — no spaces or @")
+          String mailDomain) {}
 
   /** At least one field required (enforced in the service). */
   public record UpdateCompanyRequest(

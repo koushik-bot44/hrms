@@ -99,7 +99,7 @@ public class DashboardService {
   private DashboardSummary accountsAdminSummary() {
     List<StatCard> stats =
         List.of(
-            new StatCard("accountsAdmin.approvedEmployees", "Approved employees",
+            new StatCard("accountsAdmin.approvedEmployees", "Total inhouse employees",
                 employees.countByStatus(EmployeeStatus.APPROVED)),
             new StatCard("accountsAdmin.companies", "Companies", companies.countByStatusNot("DELETED")));
     // Activity is the recently-approved employees across every company (flagged with their company).
@@ -129,7 +129,7 @@ public class DashboardService {
                 .filter(e -> e.getStatus() == EmployeeStatus.APPROVED)
                 .toList();
     List<StatCard> stats =
-        List.of(new StatCard("accountant.approvedEmployees", "Approved employees", approved));
+        List.of(new StatCard("accountant.approvedEmployees", "Total inhouse employees", approved));
     return new DashboardSummary("ACCOUNTANT", stats, activity(recent, false), null);
   }
 

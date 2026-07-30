@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Bell,
-  CalendarDays,
+  CalendarOff,
   CheckCheck,
   ClipboardCheck,
   FileCheck2,
@@ -29,7 +29,7 @@ const ICONS: Record<string, LucideIcon> = {
   APPROVAL_REQUESTED: ClipboardCheck,
   EMPLOYEE_APPROVED: ThumbsUp,
   EMPLOYEE_REJECTED: ThumbsDown,
-  LEAVE_REQUESTED: CalendarDays,
+  LEAVE_REQUESTED: CalendarOff,
 };
 
 function message(n: NotificationItem): string {

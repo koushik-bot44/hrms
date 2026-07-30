@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { CalendarDays, Check, X } from 'lucide-react';
+import { CalendarOff, Check, X } from 'lucide-react';
 import type { TeamLeaveRow } from '@/lib/contract';
 import { LeaveStatus } from '@/lib/contract';
 import { approveLeave, getTeamLeave, leaveKeys, rejectLeave } from '@/lib/api/leave';
@@ -181,7 +181,7 @@ export function TeamLeave() {
         <TableSkeleton rows={5} cols={6} />
       ) : query.isError ? (
         <EmptyState
-          icon={CalendarDays}
+          icon={CalendarOff}
           title="Couldn't load leave requests"
           description={query.error?.message ?? 'Please try again.'}
         />
@@ -194,7 +194,7 @@ export function TeamLeave() {
             toolbar={toolbar}
             emptyState={
               <EmptyState
-                icon={CalendarDays}
+                icon={CalendarOff}
                 title="No leave requests"
                 description="Requests from your team will appear here."
               />

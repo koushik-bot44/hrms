@@ -532,8 +532,14 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
   email. Routing/authorization is by the account's **role + companyId**, never by parsing the address.
   - The **platform domain `ihrms`** carries the two top-level roles: `SUPER_ADMIN` and `ACCOUNTS_ADMIN`
     (e.g. `superadmin@ihrms`, `accounts@ihrms`).
-  - Each **Company has a mail domain** (e.g. `anvicorp`), set by the Super Admin at company creation
-    (prefilled from the company's code, editable, **unique across companies**). Its staff
+  - Each **Company has a mail domain** (e.g. `anvicorp`, `yourdomain.com`) — **REQUIRED and typed by the
+    Super Admin at company creation** (the create-company form prefills it from the company's code but it
+    is editable). It is validated as a **lowercase domain** — one or more dot-separated labels, each
+    alphanumeric with internal hyphens, no leading/trailing `-`/`.` (dots allowed) — **globally unique
+    across ALL companies, case-insensitive** (a collision is a 409; addresses/the send graph would
+    otherwise clash), and it is **IMMUTABLE after creation** (`updatable=false`, no edit endpoint —
+    addresses are login identities). The **platform domain `ihrms` is RESERVED** and can never be
+    claimed by a company. A **company rename never touches the mail domain**. Its staff
     (`COMPANY_ADMIN` / `HR` / `MANAGER` / `ACCOUNTANT`) get `localpart@companyDomain`.
 - **One mailbox per staff `User`, and the mailbox address IS the login email — a single identity, no
   second login.** When a user is provisioned the assigner types the **local part**; the system forms

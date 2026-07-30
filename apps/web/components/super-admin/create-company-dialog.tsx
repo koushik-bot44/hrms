@@ -173,8 +173,9 @@ export function CreateCompanyDialog() {
               <p className="text-xs text-destructive">{errors.mailDomain.message}</p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Staff mailboxes are <span className="font-mono">name@{watch('mailDomain') || 'domain'}</span>{' '}
-                (internal mail, §8). Unique across companies.
+                Used for employee/staff mailbox addresses, e.g.{' '}
+                <span className="font-mono">name@{watch('mailDomain') || 'yourdomain'}</span> — unique
+                across companies, and cannot be changed later.
               </p>
             )}
           </div>

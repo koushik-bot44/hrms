@@ -44,7 +44,8 @@ public class Company {
   private String slug;
 
   /** The company's internal-mail domain (e.g. {@code anvicorp}); unique across companies (§8). */
-  @Column(name = "mailDomain", nullable = false)
+  /** The company's internal-mail domain (§8); typed at creation, then IMMUTABLE ({@code updatable=false}). */
+  @Column(name = "mailDomain", nullable = false, updatable = false)
   private String mailDomain;
 
   /** {@code ACTIVE} | {@code SUSPENDED} | {@code DELETED} (archived; free text, not a domain enum). */
