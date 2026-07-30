@@ -69,6 +69,8 @@ export const SessionSchema = z.discriminatedUnion('type', [
     role: z.nativeEnum(UserRole),
     companyId: z.string().nullable(),
     teamId: z.string().nullable(),
+    // The company's URL slug (Stage 2 routing); null for platform roles (SUPER_ADMIN/ACCOUNTS_ADMIN/HIERARCHY).
+    companySlug: z.string().nullable(),
   }),
   z.object({
     type: z.literal('EMPLOYEE'),
@@ -84,6 +86,8 @@ export const SessionSchema = z.discriminatedUnion('type', [
     // Which sign-in door was used (Stage 6): PASSWORD -> employee portal, OTP -> onboarding. Carried in
     // the refresh token so a page refresh keeps the same landing. Null (legacy) is treated as onboarding.
     authMethod: z.enum(['PASSWORD', 'OTP']).nullish(),
+    // The company's URL slug (Stage 2 routing) — an employee is always tied to a company.
+    companySlug: z.string().nullable(),
   }),
 ]);
 export type Session = z.infer<typeof SessionSchema>;

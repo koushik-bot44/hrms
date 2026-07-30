@@ -16,7 +16,9 @@ public sealed interface SessionView permits SessionView.UserSession, SessionView
       String name,
       UserRole role,
       String companyId,
-      String teamId)
+      String teamId,
+      // The company's URL slug (Stage 2 routing); null for platform roles (companyId null).
+      String companySlug)
       implements SessionView {}
 
   record EmployeeSession(
@@ -30,6 +32,8 @@ public sealed interface SessionView permits SessionView.UserSession, SessionView
       String mailAddress,
       // Which sign-in door was used (Stage 6): PASSWORD -> portal, OTP -> onboarding. null when unknown
       // (e.g. /auth/me, which rebuilds from the access token, which does not carry it).
-      String authMethod)
+      String authMethod,
+      // The company's URL slug (Stage 2 routing) — an employee is always tied to a company.
+      String companySlug)
       implements SessionView {}
 }

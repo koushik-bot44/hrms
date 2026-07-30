@@ -140,6 +140,8 @@ class CompaniesApiTest {
     JsonNode session = json.readTree(login.getResponse().getContentAsString()).get("session");
     assertThat(session.get("role").asText()).isEqualTo("COMPANY_ADMIN");
     assertThat(session.get("companyId").asText()).isEqualTo(id);
+    // Stage 2: the session carries the company's URL slug (code ACME -> name "Acme" -> slug "acme").
+    assertThat(session.get("companySlug").asText()).isEqualTo("acme");
 
     // hasAdmin now true.
     MvcResult detail =

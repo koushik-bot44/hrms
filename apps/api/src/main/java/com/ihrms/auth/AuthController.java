@@ -103,7 +103,7 @@ public class AuthController {
 
   @GetMapping("/me")
   public SessionView me(@AuthenticationPrincipal IhrmsPrincipal principal) {
-    return Principals.toSession(principal);
+    return auth.sessionFor(principal);
   }
 
   /** Set the refresh cookie and the audit actor (no SecurityContext on @Public auth routes). */

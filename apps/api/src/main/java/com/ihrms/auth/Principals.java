@@ -32,16 +32,25 @@ public final class Principals {
         employee.getMailAddress());
   }
 
-  /** The session with an unknown login method (e.g. {@code /auth/me}). */
+  /** The session with an unknown login method + unresolved slug (e.g. tests). */
   public static SessionView toSession(IhrmsPrincipal principal) {
-    return toSession(principal, null);
+    return toSession(principal, null, null);
   }
 
-  /** The session, tagging the EMPLOYEE variant with which door was used (Stage 6 landing routing). */
+  /** The session tagging the door used, with an unresolved slug. */
   public static SessionView toSession(IhrmsPrincipal principal, String authMethod) {
+    return toSession(principal, authMethod, null);
+  }
+
+  /**
+   * The public session — tags the EMPLOYEE variant with which door was used (Stage 6 landing routing)
+   * and carries the company URL slug (Stage 2 routing); {@code companySlug} is null for platform roles.
+   */
+  public static SessionView toSession(
+      IhrmsPrincipal principal, String authMethod, String companySlug) {
     if (principal instanceof IhrmsPrincipal.User u) {
       return new SessionView.UserSession(
-          "USER", u.userId(), u.email(), u.name(), u.role(), u.companyId(), u.teamId());
+          "USER", u.userId(), u.email(), u.name(), u.role(), u.companyId(), u.teamId(), companySlug);
     }
     IhrmsPrincipal.Employee e = (IhrmsPrincipal.Employee) principal;
     return new SessionView.EmployeeSession(
@@ -52,7 +61,8 @@ public final class Principals {
         e.companyId(),
         e.name(),
         e.mailAddress(),
-        authMethod);
+        authMethod,
+        companySlug);
   }
 
   /** A cryptographically-random 6-digit, zero-padded OTP. */

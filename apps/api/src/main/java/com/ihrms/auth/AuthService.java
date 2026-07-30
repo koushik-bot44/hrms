@@ -9,9 +9,12 @@ import com.ihrms.auth.dto.AuthDtos.OtpRequest;
 import com.ihrms.auth.dto.AuthDtos.OtpRequestResult;
 import com.ihrms.auth.dto.AuthDtos.OtpVerifyRequest;
 import com.ihrms.auth.dto.AuthDtos.StaffLoginRequest;
+import com.ihrms.auth.dto.SessionView;
 import com.ihrms.config.AppProperties;
+import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.User;
+import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.UserRepository;
 import java.time.Instant;
@@ -40,6 +43,7 @@ public class AuthService {
 
   private final UserRepository users;
   private final EmployeeRepository employees;
+  private final CompanyRepository companies;
   private final PasswordEncoder encoder;
   private final TokenService tokens;
   private final MailService mail;
@@ -51,6 +55,7 @@ public class AuthService {
   public AuthService(
       UserRepository users,
       EmployeeRepository employees,
+      CompanyRepository companies,
       PasswordEncoder encoder,
       TokenService tokens,
       MailService mail,
@@ -60,6 +65,7 @@ public class AuthService {
       AuditService audit) {
     this.users = users;
     this.employees = employees;
+    this.companies = companies;
     this.encoder = encoder;
     this.tokens = tokens;
     this.mail = mail;
@@ -215,7 +221,24 @@ public class AuthService {
     String access = tokens.issueAccess(principal);
     String refresh = tokens.issueRefresh(principal, authMethod);
     return new IssuedSession(
-        new AuthResult(access, Principals.toSession(principal, authMethod)), refresh);
+        new AuthResult(access, Principals.toSession(principal, authMethod, companySlug(principal))),
+        refresh);
+  }
+
+  /** Build the public session for a principal (used by {@code /auth/me}), resolving its company slug. */
+  public SessionView sessionFor(IhrmsPrincipal principal) {
+    return Principals.toSession(principal, null, companySlug(principal));
+  }
+
+  /** The signed-in company's URL slug (Stage 2 routing) — null for platform principals (no company). */
+  private String companySlug(IhrmsPrincipal principal) {
+    String companyId =
+        principal instanceof IhrmsPrincipal.User u
+            ? u.companyId()
+            : ((IhrmsPrincipal.Employee) principal).companyId();
+    return companyId == null
+        ? null
+        : companies.findById(companyId).map(Company::getSlug).orElse(null);
   }
 
   /** Login methods (carried in the session + refresh token). */
