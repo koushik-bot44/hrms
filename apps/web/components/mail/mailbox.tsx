@@ -46,6 +46,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/components/auth-provider';
+import { BrandWordmark } from '@/components/brand-wordmark';
 import { homePathForSession } from '@/lib/auth/routes';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import type { ApiError } from '@/lib/api/client';
@@ -256,7 +257,7 @@ export function Mailbox() {
             <Mail className="size-4" />
           </div>
           <div className="min-w-0 leading-tight">
-            <div className="text-sm font-semibold tracking-tight">hrorg.in Mail</div>
+            <BrandWordmark suffix="Mail" className="text-sm font-semibold tracking-tight" />
             {myAddress ? (
               <div className="truncate text-[11px] text-muted-foreground" title={`${myName} <${myAddress}>`}>
                 {myAddress}

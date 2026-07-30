@@ -42,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MailButton } from '@/components/mail/mail-button';
+import { BrandWordmark } from '@/components/brand-wordmark';
 import { SidebarWaves } from '@/components/sidebar-waves';
 
 export interface NavItem {
@@ -113,8 +114,8 @@ function Brand({ roleLabel, collapsed = false }: { roleLabel: string; collapsed?
         <ShieldCheck className="size-4" />
       </div>
       {collapsed ? null : (
-        <div className="leading-tight">
-          <div className="text-sm font-semibold tracking-tight text-sidebar-foreground">hrorg.in</div>
+        <div className="min-w-0 leading-tight">
+          <BrandWordmark className="text-sm font-semibold tracking-tight text-sidebar-foreground" />
           <div className="text-[11px] text-sidebar-muted">{roleLabel}</div>
         </div>
       )}
@@ -385,7 +386,7 @@ export function AppShell({
                 </div>
               </DialogContent>
             </Dialog>
-            <span className="text-sm font-semibold tracking-tight md:hidden">hrorg.in</span>
+            <BrandWordmark className="text-sm font-semibold tracking-tight md:hidden" />
             <WelcomeCluster roleLabel={roleLabel} />
           </div>
           <div className="flex items-center gap-3">
