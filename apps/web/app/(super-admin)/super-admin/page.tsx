@@ -74,7 +74,7 @@ function CompaniesView() {
         header: 'Name',
         cell: ({ row }) => (
           <Link
-            href={`/super-admin/companies/${companyParam(row.original.name, row.original.id)}`}
+            href={`/super-admin/companies/${companyParam(row.original.slug, row.original.id)}`}
             className="font-medium text-foreground hover:text-primary hover:underline"
           >
             {row.original.name}
@@ -119,7 +119,7 @@ function CompaniesView() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
-                  <Link href={`/super-admin/companies/${companyParam(row.original.name, row.original.id)}`}>View details</Link>
+                  <Link href={`/super-admin/companies/${companyParam(row.original.slug, row.original.id)}`}>View details</Link>
                 </DropdownMenuItem>
                 {view === 'active' ? (
                   <DropdownMenuItem

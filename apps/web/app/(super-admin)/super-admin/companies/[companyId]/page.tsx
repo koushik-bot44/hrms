@@ -106,9 +106,9 @@ export default function CompanyDetailPage({ params }: { params: { companyId: str
         </CardContent>
       </Card>
 
-      <CompanyTeamsSection companyId={data.id} companyName={data.name} />
+      <CompanyTeamsSection companyId={data.id} companySlug={data.slug} />
 
-      <CompanyEmployeesSection companyId={data.id} companyName={data.name} />
+      <CompanyEmployeesSection companyId={data.id} companySlug={data.slug} />
     </div>
   );
 }

@@ -29,7 +29,7 @@ const SELECT_CLASS =
 const PAGE_SIZE = 20;
 
 /** The Super Admin's view of a company's employees (all teams) — open a record to review or edit Form 2. */
-export function CompanyEmployeesSection({ companyId, companyName }: { companyId: string; companyName: string }) {
+export function CompanyEmployeesSection({ companyId, companySlug }: { companyId: string; companySlug: string }) {
   const [search, setSearch] = React.useState('');
   const [debounced, setDebounced] = React.useState('');
   const [status, setStatus] = React.useState<EmployeeStatus | ''>('');
@@ -136,7 +136,7 @@ export function CompanyEmployeesSection({ companyId, companyName }: { companyId:
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <Link
-                        href={`/super-admin/companies/${companyParam(companyName, companyId)}/employees/${e.id}`}
+                        href={`/super-admin/companies/${companyParam(companySlug, companyId)}/employees/${e.id}`}
                         className="text-sm font-medium text-primary hover:underline"
                       >
                         Open

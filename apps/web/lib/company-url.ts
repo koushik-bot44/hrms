@@ -15,9 +15,13 @@ export function slugifyCompanyName(name: string): string {
   return slug || 'company';
 }
 
-/** The company URL segment: `{name-slug}-{id}` (name visible, id resolvable). */
-export function companyParam(name: string, id: string): string {
-  return `${slugifyCompanyName(name)}-${id}`;
+/**
+ * The super-admin company URL segment: `{slug}-{id}` — the PERMANENT server slug (Stage 1/2), stable
+ * across renames, followed by the id which always resolves it ({@link companyIdFromParam}). Old links
+ * (client-slug-`{id}` from before, or a bare `{id}`) keep resolving by the trailing id.
+ */
+export function companyParam(slug: string, id: string): string {
+  return `${slug}-${id}`;
 }
 
 /** Recover the real company id from a `{slug}-{id}` (or bare `{id}`) URL segment. */
