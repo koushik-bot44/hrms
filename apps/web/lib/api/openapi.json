@@ -3367,6 +3367,26 @@
         }
       }
     },
+    "/manager/my-team": {
+      "get": {
+        "tags": [
+          "manager-controller"
+        ],
+        "operationId": "myTeam",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyTeamView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/manager/approvals": {
       "get": {
         "tags": [
@@ -4517,7 +4537,7 @@
         "tags": [
           "viewer-attendance-controller"
         ],
-        "summary": "A team's month roll-up + live today snapshot (own-team-only for the Accountant).",
+        "summary": "A team's roll-up + live today snapshot for a shift-month (default = current) or a custom from/to range (own-team-only for the Accountant and the Manager).",
         "operationId": "teamSummary_1",
         "parameters": [
           {
@@ -4530,6 +4550,22 @@
           },
           {
             "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
             "in": "query",
             "required": false,
             "schema": {
@@ -4557,7 +4593,7 @@
           "accountant-controller"
         ],
         "summary": "The ACCOUNTANT's own team (roster header); null if none assigned.",
-        "operationId": "myTeam",
+        "operationId": "myTeam_1",
         "responses": {
           "200": {
             "description": "OK",
@@ -4653,7 +4689,7 @@
         "tags": [
           "viewer-attendance-controller"
         ],
-        "summary": "One employee's live attendance metrics for a shift-month (default = current).",
+        "summary": "One employee's live attendance metrics for a shift-month (default = current) or a custom from/to range.",
         "operationId": "employeeSummary",
         "parameters": [
           {
@@ -4666,6 +4702,22 @@
           },
           {
             "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
             "in": "query",
             "required": false,
             "schema": {
@@ -7480,6 +7532,30 @@
           }
         }
       },
+      "MyTeamView": {
+        "type": "object",
+        "properties": {
+          "teamId": {
+            "type": "string"
+          },
+          "teamName": {
+            "type": "string"
+          },
+          "companyId": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "hrName": {
+            "type": "string"
+          },
+          "managerName": {
+            "type": "string"
+          }
+        },
+        "description": "The ACCOUNTANT's own team — the roster header (null if none assigned)."
+      },
       "LabelRef": {
         "type": "object",
         "properties": {
@@ -8632,7 +8708,16 @@
             "type": "string"
           },
           "month": {
-            "type": "string"
+            "type": "string",
+            "description": "The shift-month, YYYY-MM; null for a custom from/to range — use periodStart/periodEnd."
+          },
+          "periodStart": {
+            "type": "string",
+            "description": "First day of the reported window, YYYY-MM-DD (IST)."
+          },
+          "periodEnd": {
+            "type": "string",
+            "description": "Last day of the reported window, inclusive, YYYY-MM-DD (IST)."
           },
           "presentToday": {
             "type": "integer",
@@ -8665,38 +8750,22 @@
             }
           }
         },
-        "description": "A team's attendance roll-up for the month + a live 'today' snapshot."
-      },
-      "MyTeamView": {
-        "type": "object",
-        "properties": {
-          "teamId": {
-            "type": "string"
-          },
-          "teamName": {
-            "type": "string"
-          },
-          "companyId": {
-            "type": "string"
-          },
-          "companyName": {
-            "type": "string"
-          },
-          "hrName": {
-            "type": "string"
-          },
-          "managerName": {
-            "type": "string"
-          }
-        },
-        "description": "The ACCOUNTANT's own team — the roster header (null if none assigned)."
+        "description": "A team's attendance roll-up for a month OR custom range + a live 'today' snapshot."
       },
       "EmployeeMonthSummary": {
         "type": "object",
         "properties": {
           "month": {
             "type": "string",
-            "description": "The shift-month, YYYY-MM (Asia/Kolkata)."
+            "description": "The shift-month, YYYY-MM (Asia/Kolkata); null for a custom from/to range — use periodStart/periodEnd for the authoritative window."
+          },
+          "periodStart": {
+            "type": "string",
+            "description": "First day of the reported window, YYYY-MM-DD (IST)."
+          },
+          "periodEnd": {
+            "type": "string",
+            "description": "Last day of the reported window, inclusive, YYYY-MM-DD (IST)."
           },
           "workedSeconds": {
             "type": "integer",
@@ -8763,7 +8832,7 @@
             "description": "Whether the employee has an OPEN session right now (live)."
           }
         },
-        "description": "One employee's attendance metrics for a shift-month (all computed live)."
+        "description": "One employee's attendance metrics for a shift-month OR custom range (computed live)."
       },
       "LeavesByType": {
         "type": "object",

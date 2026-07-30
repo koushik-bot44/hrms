@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 import { PageHeader } from '@/components/page-header';
-import { TeamAttendance } from '@/components/manager/team-attendance';
-import { AttendanceActivityFeed } from '@/components/manager/attendance-activity-feed';
+import { ManagerAttendanceTabs } from '@/components/manager/attendance-tabs';
 
 export const metadata: Metadata = { title: 'Attendance' };
 
-/** Manager attendance (§8a): team roster + drill-down, alongside the pull-based activity feed. */
+/**
+ * Manager attendance (§8a): the existing live roster + activity feed, PLUS the shared Work Log analytics
+ * for the manager's own team (tiles + donut + monthly series + CSV + month/custom-range) — as tabs.
+ */
 export default function ManagerAttendancePage() {
   return (
     <div className="space-y-6">
@@ -13,14 +15,7 @@ export default function ManagerAttendancePage() {
         title="Attendance"
         description="Your team's log-ins and working hours. Times are in India Standard Time (IST)."
       />
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <TeamAttendance />
-        </div>
-        <div className="lg:col-span-1">
-          <AttendanceActivityFeed />
-        </div>
-      </div>
+      <ManagerAttendanceTabs />
     </div>
   );
 }

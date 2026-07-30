@@ -30,9 +30,13 @@ public final class AttendanceCalendar {
 
   /** All Mon–Fri dates in the month, in order. */
   public static List<LocalDate> workingDays(YearMonth ym) {
+    return workingDays(ym.atDay(1), ym.atEndOfMonth());
+  }
+
+  /** All Mon–Fri dates in {@code [from, to]} inclusive, in order (the range basis for a custom report). */
+  public static List<LocalDate> workingDays(LocalDate from, LocalDate to) {
     List<LocalDate> out = new ArrayList<>();
-    LocalDate end = ym.atEndOfMonth();
-    for (LocalDate d = ym.atDay(1); !d.isAfter(end); d = d.plusDays(1)) {
+    for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
       if (isWorkingDay(d)) {
         out.add(d);
       }

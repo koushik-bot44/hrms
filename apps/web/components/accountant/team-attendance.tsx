@@ -3,14 +3,14 @@
 import * as React from 'react';
 import { AlarmClock, CalendarClock, CalendarOff, Clock, Download, Users } from 'lucide-react';
 import type { TeamAttendanceMemberRow, TeamAttendanceSummary } from '@/lib/contract';
-import { getTeamAttendanceSummary } from '@/lib/api/accountant';
+import { getTeamAttendanceSummary, type AttendanceSelection } from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
-import { formatDuration, istMonthIso } from '@/lib/date';
+import { formatDuration } from '@/lib/date';
 import { downloadCsv, toCsv } from '@/lib/csv';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/loading-skeleton';
-import { MonthPicker } from '@/components/accountant/month-picker';
+import { PeriodPicker, defaultSelection, selectionSlug } from '@/components/accountant/period-picker';
 import { EmployeeAttendanceDetail } from '@/components/accountant/employee-attendance-detail';
 import { StatTile } from '@/components/dashboard/stat-tile';
 import { LiveIndicator } from '@/components/dashboard/live-indicator';
@@ -20,8 +20,8 @@ const REFRESH_MS = 45_000;
 const hm = (s: number) => formatDuration(s);
 const hours = (s: number) => Math.round((s / 3600) * 100) / 100;
 
-/** Export the loaded per-employee roster for the selected month as CSV (no refetch). */
-function exportTeamCsv(data: TeamAttendanceSummary): void {
+/** Export the loaded per-employee roster for the active window (month or range) as CSV (no refetch). */
+function exportTeamCsv(data: TeamAttendanceSummary, selection: AttendanceSelection): void {
   const headers = [
     'Employee name',
     'Employee ID',
@@ -40,7 +40,7 @@ function exportTeamCsv(data: TeamAttendanceSummary): void {
     e.leaveDaysTotal,
     e.unapprovedAbsences,
   ]);
-  downloadCsv(`attendance_team_${data.teamId}_${data.month}.csv`, toCsv(headers, rows));
+  downloadCsv(`attendance_team_${data.teamId}_${selectionSlug(selection)}.csv`, toCsv(headers, rows));
 }
 
 /**
@@ -49,12 +49,13 @@ function exportTeamCsv(data: TeamAttendanceSummary): void {
  * own-team-only). Live-on-load + ~45s polling + refetch-on-focus keep today's snapshot current.
  */
 export function TeamAttendance({ teamId }: { teamId: string }) {
-  const [month, setMonth] = React.useState(istMonthIso());
+  const [selection, setSelection] = React.useState<AttendanceSelection>(defaultSelection);
   const [selected, setSelected] = React.useState<TeamAttendanceMemberRow | null>(null);
+  const isRange = 'from' in selection;
 
   const query = useApiQuery(
-    ['viewer-team-attendance', teamId, month],
-    (signal) => getTeamAttendanceSummary(teamId, month, signal),
+    ['viewer-team-attendance', teamId, selection],
+    (signal) => getTeamAttendanceSummary(teamId, selection, signal),
     {
       refetchOnMount: true,
       refetchOnWindowFocus: true,
@@ -68,8 +69,8 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
       <EmployeeAttendanceDetail
         employeeId={selected.employeeId}
         employeeName={selected.fullName}
-        month={month}
-        onMonthChange={setMonth}
+        selection={selection}
+        onSelectionChange={setSelection}
         onBack={() => setSelected(null)}
       />
     );
@@ -82,18 +83,18 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <LiveIndicator label={refreshing ? 'Refreshing…' : 'Live — updates automatically'} />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="outline"
             size="sm"
             disabled={!data || data.employees.length === 0}
-            onClick={() => data && exportTeamCsv(data)}
+            onClick={() => data && exportTeamCsv(data, selection)}
           >
             <Download className="size-4" />
             Export CSV
           </Button>
-          <MonthPicker value={month} onChange={setMonth} />
+          <PeriodPicker value={selection} onChange={setSelection} />
         </div>
       </div>
 
@@ -107,18 +108,24 @@ export function TeamAttendance({ teamId }: { teamId: string }) {
         />
       ) : data ? (
         <div className={cn('space-y-4 transition-opacity', refreshing && 'opacity-70')}>
-          {/* Today's snapshot — REAL team-summary roll-ups, semantic tones. */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile icon={Users} label="Present today" value={data.presentToday} tone="primary" size="sm" />
-            <StatTile icon={Clock} label="Clocked in now" value={data.clockedInNow} tone="success" size="sm" />
-            <StatTile icon={CalendarOff} label="On leave today" value={data.onLeaveToday} tone="primary" size="sm" />
-            <StatTile
-              icon={AlarmClock}
-              label="Late this month"
-              value={data.totalLateThisMonth}
-              tone={data.totalLateThisMonth > 0 ? 'warning' : 'neutral'}
-              size="sm"
-            />
+          {/* Today's snapshot — REAL team-summary roll-ups, semantic tones. The first three tiles are
+              inherently NOW (they never range); only the "late" tile follows the selected window. */}
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">
+              Today&rsquo;s snapshot — always live (now), regardless of the selected window.
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatTile icon={Users} label="Present today" value={data.presentToday} tone="primary" size="sm" />
+              <StatTile icon={Clock} label="Clocked in now" value={data.clockedInNow} tone="success" size="sm" />
+              <StatTile icon={CalendarOff} label="On leave today" value={data.onLeaveToday} tone="primary" size="sm" />
+              <StatTile
+                icon={AlarmClock}
+                label={isRange ? 'Late in range' : 'Late this month'}
+                value={data.totalLateThisMonth}
+                tone={data.totalLateThisMonth > 0 ? 'warning' : 'neutral'}
+                size="sm"
+              />
+            </div>
           </div>
 
           {data.employees.length === 0 ? (

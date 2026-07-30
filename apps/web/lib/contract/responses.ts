@@ -450,17 +450,30 @@ type DeepRequired<T> = T extends (infer U)[]
 
 export type LeavesByType = DeepRequired<Schemas['LeavesByType']>;
 export type TimeComposition = DeepRequired<Schemas['TimeComposition']>;
-// adherencePct is genuinely nullable at runtime (N/A when expectedDays = 0); DeepRequired would strip
-// the null, so override it here — and re-nest the corrected month type inside the monthly series.
-export type EmployeeMonthSummary = Omit<DeepRequired<Schemas['EmployeeMonthSummary']>, 'adherencePct'> & {
+// adherencePct is genuinely nullable at runtime (N/A when expectedDays = 0) and `month` is null for a
+// custom from/to range (no single month); DeepRequired strips both nulls, so override them here — and
+// re-nest the corrected summary inside the monthly series. periodStart/periodEnd always carry the window.
+export type EmployeeMonthSummary = Omit<
+  DeepRequired<Schemas['EmployeeMonthSummary']>,
+  'adherencePct' | 'month'
+> & {
   adherencePct: number | null;
+  month: string | null;
+  periodStart: string;
+  periodEnd: string;
 };
 export type EmployeeMonthlySeries = Omit<DeepRequired<Schemas['EmployeeMonthlySeries']>, 'months'> & {
   months: EmployeeMonthSummary[];
 };
 export type TeamAttendanceMemberRow = DeepRequired<Schemas['TeamAttendanceMemberRow']>;
-export type TeamAttendanceSummary = Omit<DeepRequired<Schemas['TeamAttendanceSummary']>, 'employees'> & {
+export type TeamAttendanceSummary = Omit<
+  DeepRequired<Schemas['TeamAttendanceSummary']>,
+  'employees' | 'month'
+> & {
   employees: TeamAttendanceMemberRow[];
+  month: string | null;
+  periodStart: string;
+  periodEnd: string;
 };
 
 // --- Hierarchy platform overview (§2) — cross-company aggregates, server-populated ----

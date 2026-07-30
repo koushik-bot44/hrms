@@ -68,20 +68,23 @@ public class ViewerAttendanceService {
 
   // --- One employee ---------------------------------------------------------
 
-  /** One employee's metrics for a shift-month (default = current). Authorized as a viewer read (§2). */
+  /**
+   * One employee's metrics for a shift-month (default = current) OR a custom from/to range. Authorized as a
+   * viewer read (§2/§8a): ACCOUNTS_ADMIN any, ACCOUNTANT/MANAGER only their own team's employee (else 404).
+   */
   @Transactional(readOnly = true)
   public EmployeeMonthSummary employeeSummary(
-      IhrmsPrincipal.User actor, String employeeId, String monthParam) {
+      IhrmsPrincipal.User actor, String employeeId, String monthParam, String fromParam, String toParam) {
     Employee employee = accountant.assertViewableEmployee(actor, employeeId);
-    YearMonth ym = parseMonth(monthParam);
-    List<AttendanceSession> monthSessions =
-        sessions.findByEmployeeIdAndShiftDateBetween(employee.getId(), ym.atDay(1), ym.atEndOfMonth());
+    Period period = resolvePeriod(monthParam, fromParam, toParam);
+    List<AttendanceSession> periodSessions =
+        sessions.findByEmployeeIdAndShiftDateBetween(employee.getId(), period.start(), period.end());
     List<LeaveRequest> approved =
         leaves.findByEmployeeIdAndStatus(employee.getId(), LeaveStatus.APPROVED);
-    return computeMonth(
-        ym,
-        monthSessions,
-        breaksBySession(monthSessions),
+    return computePeriod(
+        period,
+        periodSessions,
+        breaksBySession(periodSessions),
         approved,
         LocalDate.now(ShiftConfig.ZONE),
         clockedInNow(employee.getId()));
@@ -120,14 +123,18 @@ public class ViewerAttendanceService {
 
   // --- Team roll-up ---------------------------------------------------------
 
-  /** A team's month roll-up + a live "today" snapshot. Batched (no N+1). Own-team-only for the Accountant. */
+  /**
+   * A team's roll-up for a shift-month (default = current) OR a custom from/to range + a live "today"
+   * snapshot. Batched (no N+1). Own-team-only for the Accountant AND the Manager (§8a). The today-snapshot
+   * tiles (present today / clocked-in now / on leave today) are inherently NOW and never range.
+   */
   @Transactional(readOnly = true)
   public TeamAttendanceSummary teamSummary(
-      IhrmsPrincipal.User actor, String teamId, String monthParam) {
+      IhrmsPrincipal.User actor, String teamId, String monthParam, String fromParam, String toParam) {
     Team team = accountant.assertViewableTeam(actor, teamId);
-    YearMonth ym = parseMonth(monthParam);
-    LocalDate monthStart = ym.atDay(1);
-    LocalDate monthEnd = ym.atEndOfMonth();
+    Period period = resolvePeriod(monthParam, fromParam, toParam);
+    LocalDate periodStart = period.start();
+    LocalDate periodEnd = period.end();
 
     List<Employee> members =
         team.getHrUserId() == null
@@ -140,16 +147,27 @@ public class ViewerAttendanceService {
     List<String> ids = members.stream().map(Employee::getId).toList();
     if (ids.isEmpty()) {
       return new TeamAttendanceSummary(
-          team.getId(), team.getName(), team.getCompanyId(), ym.toString(), 0, 0, 0, 0, 0, List.of());
+          team.getId(),
+          team.getName(),
+          team.getCompanyId(),
+          period.monthLabel(),
+          periodStart.toString(),
+          periodEnd.toString(),
+          0,
+          0,
+          0,
+          0,
+          0,
+          List.of());
     }
 
     // 4 batched reads for the whole team.
-    List<AttendanceSession> monthSessions =
+    List<AttendanceSession> periodSessions =
         sessions.findByCompanyIdAndEmployeeIdInAndShiftDateBetween(
-            team.getCompanyId(), ids, monthStart, monthEnd);
-    Map<String, List<AttendanceBreak>> breaksById = breaksBySession(monthSessions);
+            team.getCompanyId(), ids, periodStart, periodEnd);
+    Map<String, List<AttendanceBreak>> breaksById = breaksBySession(periodSessions);
     Map<String, List<AttendanceSession>> sessionsByEmp =
-        monthSessions.stream().collect(Collectors.groupingBy(AttendanceSession::getEmployeeId));
+        periodSessions.stream().collect(Collectors.groupingBy(AttendanceSession::getEmployeeId));
     Set<String> openNow =
         sessions.findByEmployeeIdInAndClockOutAtIsNull(ids).stream()
             .map(AttendanceSession::getEmployeeId)
@@ -158,6 +176,9 @@ public class ViewerAttendanceService {
         leaves.findByEmployeeIdInAndStatus(ids, LeaveStatus.APPROVED).stream()
             .collect(Collectors.groupingBy(LeaveRequest::getEmployeeId));
 
+    // Mon–Fri working days of the reported window — computed once, reused for every member's absences.
+    List<LocalDate> workingDays = AttendanceCalendar.workingDays(periodStart, periodEnd);
+    // Snapshot pivots are always NOW (never the selected window): today's shift-day + IST calendar date.
     LocalDate todayShift = ShiftConfig.shiftDateOf(Instant.now());
     LocalDate todayCal = LocalDate.now(ShiftConfig.ZONE);
 
@@ -175,15 +196,15 @@ public class ViewerAttendanceService {
                   List<LeaveRequest> empLeaves = leavesByEmp.getOrDefault(e.getId(), List.of());
                   long leaveDays =
                       empLeaves.stream()
-                          .mapToLong(lr -> leaveDaysInMonth(lr, monthStart, monthEnd))
+                          .mapToLong(lr -> leaveDaysInRange(lr, periodStart, periodEnd))
                           .sum();
                   Set<LocalDate> present =
                       ss.stream().map(AttendanceSession::getShiftDate).collect(Collectors.toSet());
                   long absences =
                       countAbsences(
-                          AttendanceCalendar.workingDays(ym),
+                          workingDays,
                           present,
-                          leaveWorkingDays(ym, empLeaves, monthStart, monthEnd),
+                          leaveWorkingDays(workingDays, empLeaves, periodStart, periodEnd),
                           todayCal);
                   return new TeamAttendanceMemberRow(
                       e.getId(),
@@ -218,7 +239,9 @@ public class ViewerAttendanceService {
         team.getId(),
         team.getName(),
         team.getCompanyId(),
-        ym.toString(),
+        period.monthLabel(),
+        periodStart.toString(),
+        periodEnd.toString(),
         presentToday,
         openNow.size(),
         onLeaveToday,
@@ -229,6 +252,7 @@ public class ViewerAttendanceService {
 
   // --- Core computation (ONE place) -----------------------------------------
 
+  /** The month path (also the series): a shift-month is just the period [firstDay, lastDay] + its label. */
   private EmployeeMonthSummary computeMonth(
       YearMonth ym,
       List<AttendanceSession> monthSessions,
@@ -236,23 +260,46 @@ public class ViewerAttendanceService {
       List<LeaveRequest> approvedLeaves,
       LocalDate today,
       boolean clockedInNow) {
-    LocalDate monthStart = ym.atDay(1);
-    LocalDate monthEnd = ym.atEndOfMonth();
+    return computePeriod(
+        new Period(ym.atDay(1), ym.atEndOfMonth(), ym.toString()),
+        monthSessions,
+        breaksById,
+        approvedLeaves,
+        today,
+        clockedInNow);
+  }
+
+  /**
+   * The ONE aggregation, over an arbitrary window {@code [period.start, period.end]} inclusive. A month and
+   * a custom range share the exact same rules — sessions by shift-date in range, worked/break/present/late
+   * over the range, approved-leave clipped to the range (calendar days for the totals; Mon–Fri days for
+   * adherence + absence), unapproved absences past-only. The label is the YYYY-MM for a month, null for a
+   * custom range; periodStart/periodEnd always carry the authoritative window.
+   */
+  private EmployeeMonthSummary computePeriod(
+      Period period,
+      List<AttendanceSession> periodSessions,
+      Map<String, List<AttendanceBreak>> breaksById,
+      List<LeaveRequest> approvedLeaves,
+      LocalDate today,
+      boolean clockedInNow) {
+    LocalDate start = period.start();
+    LocalDate end = period.end();
 
     long worked =
-        monthSessions.stream()
+        periodSessions.stream()
             .filter(s -> !s.isOpen())
             .mapToLong(s -> AttendanceMath.workedSeconds(s, breaksById))
             .sum();
     long breakSeconds =
-        monthSessions.stream()
+        periodSessions.stream()
             .filter(s -> !s.isOpen())
             .mapToLong(s -> AttendanceMath.breakSeconds(s, breaksById))
             .sum();
     Set<LocalDate> present =
-        monthSessions.stream().map(AttendanceSession::getShiftDate).collect(Collectors.toSet());
+        periodSessions.stream().map(AttendanceSession::getShiftDate).collect(Collectors.toSet());
     long daysPresent = present.size(); // headline: distinct shift-days with a session (unchanged)
-    long lateLogins = monthSessions.stream().filter(AttendanceSession::isLate).count();
+    long lateLogins = periodSessions.stream().filter(AttendanceSession::isLate).count();
 
     // leaveDaysTotal / leavesByType are ALL calendar days (unchanged); only adherence uses working days.
     long casual = 0;
@@ -261,7 +308,7 @@ public class ViewerAttendanceService {
     long leaveDaysTotal = 0;
     long leaveRequests = 0;
     for (LeaveRequest lr : approvedLeaves) {
-      long days = leaveDaysInMonth(lr, monthStart, monthEnd);
+      long days = leaveDaysInRange(lr, start, end);
       if (days <= 0) {
         continue;
       }
@@ -277,8 +324,8 @@ public class ViewerAttendanceService {
     }
 
     // Adherence + absence: everything on the Mon–Fri working-day basis (see AttendanceCalendar).
-    List<LocalDate> workingDays = AttendanceCalendar.workingDays(ym);
-    Set<LocalDate> leaveWorking = leaveWorkingDays(ym, approvedLeaves, monthStart, monthEnd);
+    List<LocalDate> workingDays = AttendanceCalendar.workingDays(start, end);
+    Set<LocalDate> leaveWorking = leaveWorkingDays(workingDays, approvedLeaves, start, end);
     long presentWorking = workingDays.stream().filter(present::contains).count(); // numerator (Mon–Fri)
     long expectedDays = workingDays.size() - leaveWorking.size(); // denominator (working − leave)
     Integer adherencePct =
@@ -286,7 +333,9 @@ public class ViewerAttendanceService {
     long unapprovedAbsences = countAbsences(workingDays, present, leaveWorking, today);
 
     return new EmployeeMonthSummary(
-        ym.toString(),
+        period.monthLabel(),
+        start.toString(),
+        end.toString(),
         worked,
         breakSeconds,
         daysPresent,
@@ -303,14 +352,14 @@ public class ViewerAttendanceService {
         clockedInNow);
   }
 
-  /** Distinct Mon–Fri dates covered by any approved leave, clipped to the month (adherence basis). */
+  /** Distinct Mon–Fri dates covered by any approved leave, clipped to the window (adherence basis). */
   private static Set<LocalDate> leaveWorkingDays(
-      YearMonth ym, List<LeaveRequest> approvedLeaves, LocalDate monthStart, LocalDate monthEnd) {
-    Set<LocalDate> working = new HashSet<>(AttendanceCalendar.workingDays(ym));
+      List<LocalDate> workingDays, List<LeaveRequest> approvedLeaves, LocalDate periodStart, LocalDate periodEnd) {
+    Set<LocalDate> working = new HashSet<>(workingDays);
     Set<LocalDate> out = new HashSet<>();
     for (LeaveRequest lr : approvedLeaves) {
-      LocalDate start = lr.getStartDate().isBefore(monthStart) ? monthStart : lr.getStartDate();
-      LocalDate end = lr.getEndDate().isAfter(monthEnd) ? monthEnd : lr.getEndDate();
+      LocalDate start = lr.getStartDate().isBefore(periodStart) ? periodStart : lr.getStartDate();
+      LocalDate end = lr.getEndDate().isAfter(periodEnd) ? periodEnd : lr.getEndDate();
       for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
         if (working.contains(d)) {
           out.add(d);
@@ -333,10 +382,10 @@ public class ViewerAttendanceService {
         .count();
   }
 
-  /** Approved leave days that fall inside the month: range clipped to [start,end], inclusive calendar days (v1). */
-  private static long leaveDaysInMonth(LeaveRequest lr, LocalDate monthStart, LocalDate monthEnd) {
-    LocalDate start = lr.getStartDate().isBefore(monthStart) ? monthStart : lr.getStartDate();
-    LocalDate end = lr.getEndDate().isAfter(monthEnd) ? monthEnd : lr.getEndDate();
+  /** Approved leave days inside the window: clipped to [periodStart, periodEnd], inclusive calendar days (v1). */
+  private static long leaveDaysInRange(LeaveRequest lr, LocalDate periodStart, LocalDate periodEnd) {
+    LocalDate start = lr.getStartDate().isBefore(periodStart) ? periodStart : lr.getStartDate();
+    LocalDate end = lr.getEndDate().isAfter(periodEnd) ? periodEnd : lr.getEndDate();
     if (end.isBefore(start)) {
       return 0;
     }
@@ -369,6 +418,51 @@ public class ViewerAttendanceService {
       return YearMonth.parse(month.trim());
     } catch (DateTimeParseException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "month must be YYYY-MM");
+    }
+  }
+
+  /** A resolved reporting window [start, end] inclusive; {@code monthLabel} is the YYYY-MM (null for a range). */
+  private record Period(LocalDate start, LocalDate end, String monthLabel) {}
+
+  /**
+   * Resolve the reporting window: EITHER {@code month=YYYY-MM} (default = current shift-month) OR a custom
+   * {@code from/to} range — mutually exclusive. Range rules: both present + parseable YYYY-MM-DD, from &lt;=
+   * to, and a span of at most 366 days (inclusive); any violation -> 400. The monthly SERIES never uses this
+   * (it is inherently monthly).
+   */
+  private static Period resolvePeriod(String month, String from, String to) {
+    boolean hasMonth = month != null && !month.isBlank();
+    boolean hasFrom = from != null && !from.isBlank();
+    boolean hasTo = to != null && !to.isBlank();
+    if (hasMonth && (hasFrom || hasTo)) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "month and from/to are mutually exclusive");
+    }
+    if (hasFrom || hasTo) {
+      if (!(hasFrom && hasTo)) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "both from and to are required for a custom range");
+      }
+      LocalDate f = parseDate(from, "from");
+      LocalDate t = parseDate(to, "to");
+      if (t.isBefore(f)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be on or before to");
+      }
+      if (ChronoUnit.DAYS.between(f, t) > 365) { // 366 inclusive days == a diff of 365
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "the range must not exceed 366 days");
+      }
+      return new Period(f, t, null);
+    }
+    YearMonth ym = parseMonth(month);
+    return new Period(ym.atDay(1), ym.atEndOfMonth(), ym.toString());
+  }
+
+  /** {@code YYYY-MM-DD} (IST-agnostic calendar date). Invalid -> 400 naming the offending field. */
+  private static LocalDate parseDate(String value, String field) {
+    try {
+      return LocalDate.parse(value.trim());
+    } catch (DateTimeParseException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be YYYY-MM-DD");
     }
   }
 }

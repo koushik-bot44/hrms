@@ -40,7 +40,7 @@ Super Admin
 | **Hierarchy** | Entire platform — **read-only, aggregates-only** | A top-level, cross-platform **overview** role (`companyId = null`, like Super Admin/Accounts Admin but never writes). Sees only **platform-wide aggregates / counts / summaries** — **never** individual employee records or PII, **never** attendance or leave, **no** writes anywhere. It never appears in any onboarding / verification / approval / provisioning / company-management flow. **Exactly one** may exist; provisioned by Super Admin; signs in with staff **email + password**. _(Aggregate read endpoints are added later; this stage establishes the role, login, provisioning and a placeholder overview.)_ |
 | **Company Admin** | One company | Create teams and assign the team's HR, Manager and Accountant (one each); **assign/reset the mailbox credentials of any APPROVED employee in the company** (§6, alongside the onboarding HR); view **own company's** audit logs. |
 | **HR** | Own team / own onboarded employees | Onboard by **filling Form 2** (which creates the record + sends the invite); **edit Form 2 while the employee is `INVITED`** (locked once they start, 409; a personal-email change re-invites); look up an employee by ID and see all their forms/documents; verify **Forms 1/3/4 + documents** (Form 2 is not verified); route the approval request to the team's Manager. |
-| **Manager** | Own team | Workspace inbox/notifications (who was onboarded, who was verified, pending approvals); **approve** verified employees. Approval is the **final step** _[parked: post-approval actions]_. |
+| **Manager** | Own team | Workspace inbox/notifications (who was onboarded, who was verified, pending approvals); **approve** verified employees (approval is the **final step** _[parked: post-approval actions]_); **read-only attendance analytics for their own team** (§8a — the same live per-employee / per-team metrics the Accountant sees, own team only). |
 | **Accountant** | Own team — **read-only** | A **team-scoped** viewer (a staff `User` with a `teamId`, like HR/Manager, but never writes). Sees the **approved** employees of **its own team** (those onboarded by that team's HR) and their **full records** — masked by default with the same **audited reveal** as HR — plus an **approval-only** audit trail for **its team**. **No writes — GET-only.** Cannot see other teams' or other companies' employees. |
 | **Employee** | Own record only | Authenticate with **full name + personal email/OTP**; fill **Forms 1, 3, 4** and upload documents under their own record (Form 2 is HR/SA-authored — the employee never sees it). |
 
@@ -67,7 +67,10 @@ lands **directly on their own team's roster** — no company/team pickers — an
 `GET /accountant/companies`, `GET /accountant/companies/{companyId}/teams`,
 `GET /accountant/teams/{teamId}/employees` (own-team-only for the Accountant), and `GET /accountant/my-team`.
 The same scoping backs the **live attendance analytics** (§8a) — per-employee and per-team metrics under
-`/accountant/**`, read-only and computed on each call.
+`/accountant/**`, read-only and computed on each call; those analytics endpoints are additionally open to
+the **Manager for their own team** (own-team-only, resolved via the same `managerUser` mapping; no other
+`/accountant/**` path is widened), and each summary read accepts an optional **custom from/to range**
+alongside the month selector.
 
 **Super Admin cross-company operations.** Team management and onboarding are normally the Company
 Admin's and HR's jobs; the **Super Admin can do both in any company** by selecting the target company
@@ -834,13 +837,20 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
 - **Audit:** every punch is audited `ATTENDANCE_CLOCK_IN` / `ATTENDANCE_CLOCK_OUT`, and every break
   `ATTENDANCE_BREAK_START` / `ATTENDANCE_BREAK_END`, with `companyId` set.
   `attendance_sessions` carries a denormalized `company_id` so every query filters by tenant.
-- **Viewer attendance analytics (§2, read-only, computed LIVE on each call).** The two viewer roles get
+- **Viewer attendance analytics (§2/§8a, read-only, computed LIVE on each call).** Three viewer roles get
   live-aggregated attendance metrics under `/accountant/**` — scoped exactly like their employee browsing:
-  **ACCOUNTS_ADMIN** any team/employee (via company→team drilldown), **ACCOUNTANT** their own team only
-  (a foreign team/employee → `404`, no widening). GET-only. Everything is derived from the SAME
-  `sessions − breaks` computation used by the employee/manager views (extracted to one `AttendanceMath`
-  so worked time is never forked). Definitions (all per **shift-month** = sessions whose persisted
-  `shiftDate` falls in that IST calendar month — never the raw clock-in day):
+  **ACCOUNTS_ADMIN** any team/employee (via company→team drilldown), **ACCOUNTANT** their own team only,
+  and the **MANAGER** their own team only — the analytics endpoints are widened to the Manager for THEIR
+  team (resolved via the same `managerUser` mapping the manager roster uses; a foreign team/employee →
+  `404`, and no OTHER `/accountant/**` path is widened). The widening is applied across BOTH layers
+  together — the `SecurityConfig` role gate (three per-path matchers for the summary / monthly / team-summary
+  endpoints, ordered **before** the general `/accountant/**` gate) AND the service scope check
+  (`assertViewableTeam` / `assertViewableEmployee` → own-team via `managerUser`). GET-only. Everything is
+  derived from the SAME `sessions − breaks` computation used by the employee/manager views (extracted to one
+  `AttendanceMath` so worked time is never forked). Metrics are reported over a **window** — either a
+  **shift-month** (default = current; sessions whose persisted `shiftDate` falls in that IST calendar month,
+  never the raw clock-in day) OR a **custom from/to range** (see the endpoints below). Definitions (per the
+  reported window):
   - **workedSeconds** = Σ completed sessions' duration **minus their breaks** (an open session → 0);
     **breakSeconds** = Σ completed breaks. **daysPresent** = distinct `shiftDate`s with ≥1 session.
     **lateLogins** = count of `is_late = true` (persisted, not recomputed).
@@ -860,22 +870,34 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
     each team-roster row.
   - **timeComposition** = `{workedSeconds, breakSeconds}` (both real; sum to gross clocked time; **idle
     omitted in v1** — no count metric is mixed into the split). **clockedInNow** = an OPEN session exists now.
-  - Endpoints: `GET /accountant/employees/{id}/attendance/summary?month=YYYY-MM` (one month; default =
-    current), `…/attendance/monthly?months=N` (a per-month series; default 6), and
-    `GET /accountant/teams/{teamId}/attendance/summary?month=YYYY-MM` — a team roll-up + a live **today**
-    snapshot (presentToday, clockedInNow, onLeaveToday, totalLateThisMonth) + a per-employee row; the team
-    read is **batched** (~4 queries, no N+1). Every query is `companyId`/team scoped.
-  - **Web (read-only dashboard).** The viewer team view carries an **Employees | Attendance** tab beside the
-    existing roster (ACCOUNTS_ADMIN via company→team, ACCOUNTANT own team). Attendance shows the roll-up
-    tiles + a per-employee roster with a **live clocked-in dot**, month selector, and ~45s polling +
-    refetch-on-focus; a row opens the employee detail — a **worked-vs-break donut** (recharts; the only
-    same-unit split — counts never go in the pie), separate **stat cards** for the counts (worked, break,
-    days present, late, adherence + its label [N/A when there are no expected days], **unapproved
-    absences**, leaves by type), and a **month-wise report** (bar + table with an Absent column, from the
-    series). Numbers use the shared duration formatter (e.g. 63,300s → "17h 35m"). Both views
-    offer a client-side **CSV export** (no refetch — built from the already-loaded state): the employee's
-    month-wise series and the team's per-employee roster for the selected month (RFC-4180 escaping, UTF-8
-    BOM; durations as decimal hours, header-labeled).
+  - Endpoints: `GET /accountant/employees/{id}/attendance/summary` and
+    `GET /accountant/teams/{teamId}/attendance/summary` each accept EITHER `?month=YYYY-MM` (default =
+    current) OR a **custom range** `?from=YYYY-MM-DD&to=YYYY-MM-DD` — mutually exclusive (both → `400`).
+    Range rules: both bounds present + valid dates, `from ≤ to`, span **≤ 366 days** (else `400`); the SAME
+    metric rules apply, range-clipped (sessions by `shiftDate` in `[from,to]`; leave clipped to the range;
+    working days = Mon–Fri within `[from,to]`; absences past-only). The response echoes the window in
+    `periodStart` / `periodEnd` (always) and `month` (the `YYYY-MM` for a month, **null** for a range). The
+    per-month **series** `…/attendance/monthly?months=N` (default 6) is **inherently monthly** — it takes
+    neither `from/to` nor `month`. The team roll-up adds a live **today** snapshot (presentToday,
+    clockedInNow, onLeaveToday, totalLateThisMonth) + a per-employee row; the team read is **batched** (~4
+    queries, no N+1). The today-snapshot tiles are **always NOW** — a selected range never moves them. Every
+    query is `companyId`/team scoped.
+  - **Web (read-only dashboard).** ONE shared implementation of the dashboard, mounted by all three roles
+    with **no screen duplication**: the viewer team view carries an **Employees | Work Log** tab
+    (ACCOUNTS_ADMIN via company→team, ACCOUNTANT own team), and the **Manager** area gains a **Live roster |
+    Work Log** tab that mounts the SAME Work-Log components for the manager's own team (teamId resolved via
+    `GET /manager/my-team`) — **alongside**, not replacing, the manager's existing live roster + activity
+    feed. Work Log shows the roll-up tiles + a per-employee roster with a **live clocked-in dot**, a **period
+    picker** (Month _or_ Custom range → two date pickers), and ~45s polling + refetch-on-focus; a row opens
+    the employee detail — a **worked-vs-break donut** (recharts; the only same-unit split — counts never go
+    in the pie), separate **stat cards** for the counts (worked, break, days present, late, adherence + its
+    label [N/A when there are no expected days], **unapproved absences**, leaves by type), and a **month-wise
+    report** (bar + table with an Absent column, from the series — always monthly). The today-snapshot tiles
+    carry a note that they stay **live (now)** regardless of the selected window. Numbers use the shared
+    duration formatter (e.g. 63,300s → "17h 35m"). Both views offer a client-side **CSV export** (no refetch
+    — built from the already-loaded state): the employee's month-wise series (monthly) and the team's
+    per-employee roster for the **active window** — the filename carries the month or the `from_to` range
+    (RFC-4180 escaping, UTF-8 BOM; durations as decimal hours, header-labeled).
 
 ---
 

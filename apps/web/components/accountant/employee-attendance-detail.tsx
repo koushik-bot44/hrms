@@ -15,7 +15,11 @@ import {
   CalendarOff,
 } from 'lucide-react';
 import type { EmployeeMonthSummary } from '@/lib/contract';
-import { getEmployeeAttendanceMonthly, getEmployeeAttendanceSummary } from '@/lib/api/accountant';
+import {
+  getEmployeeAttendanceMonthly,
+  getEmployeeAttendanceSummary,
+  type AttendanceSelection,
+} from '@/lib/api/accountant';
 import { useApiQuery } from '@/lib/api/hooks';
 import { formatDuration, monthLabel } from '@/lib/date';
 import { downloadCsv, toCsv } from '@/lib/csv';
@@ -24,7 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
-import { MonthPicker } from '@/components/accountant/month-picker';
+import { PeriodPicker, selectionLabel } from '@/components/accountant/period-picker';
 import { StatTile, MeterRow } from '@/components/dashboard/stat-tile';
 import { Donut } from '@/components/dashboard/donut';
 import { LiveIndicator } from '@/components/dashboard/live-indicator';
@@ -51,19 +55,20 @@ const hours = (seconds: number) => Math.round((seconds / 3600) * 100) / 100;
 export function EmployeeAttendanceDetail({
   employeeId,
   employeeName,
-  month,
-  onMonthChange,
+  selection,
+  onSelectionChange,
   onBack,
 }: {
   employeeId: string;
   employeeName?: string | null;
-  month: string;
-  onMonthChange: (m: string) => void;
+  selection: AttendanceSelection;
+  onSelectionChange: (selection: AttendanceSelection) => void;
   onBack?: () => void;
 }) {
+  const activeMonth = 'from' in selection ? null : selection.month;
   const summary = useApiQuery(
-    ['viewer-emp-attendance', employeeId, month],
-    (signal) => getEmployeeAttendanceSummary(employeeId, month, signal),
+    ['viewer-emp-attendance', employeeId, selection],
+    (signal) => getEmployeeAttendanceSummary(employeeId, selection, signal),
     { refetchOnWindowFocus: true, refetchInterval: REFRESH_MS, placeholderData: (p) => p },
   );
   const series = useApiQuery(
@@ -91,7 +96,7 @@ export function EmployeeAttendanceDetail({
           <div>
             <h3 className="text-sm font-semibold">{employeeName ?? 'Employee'}</h3>
             <p className="text-xs text-muted-foreground">
-              Attendance · {monthLabel(month)}
+              Attendance · {selectionLabel(selection, monthLabel)}
               {summary.data ? (
                 <>
                   {' · '}
@@ -109,9 +114,9 @@ export function EmployeeAttendanceDetail({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <LiveIndicator className="hidden sm:inline-flex" />
-          <MonthPicker value={month} onChange={onMonthChange} />
+          <PeriodPicker value={selection} onChange={onSelectionChange} />
         </div>
       </div>
 
@@ -131,8 +136,8 @@ export function EmployeeAttendanceDetail({
         employeeId={employeeId}
         months={series.data?.months ?? []}
         loading={series.isLoading}
-        activeMonth={month}
-        onPickMonth={onMonthChange}
+        activeMonth={activeMonth}
+        onPickMonth={(m) => onSelectionChange({ month: m })}
       />
     </div>
   );
@@ -145,8 +150,8 @@ function SummaryBody({ data }: { data: EmployeeMonthSummary }) {
     return (
       <EmptyState
         icon={CalendarClock}
-        title="No attendance this month"
-        description="This employee has no sessions or leave recorded for the selected month."
+        title="No attendance in this window"
+        description="This employee has no sessions or leave recorded for the selected month or range."
       />
     );
   }
@@ -291,12 +296,13 @@ function MonthlyReport({
   employeeId: string;
   months: EmployeeMonthSummary[];
   loading: boolean;
-  activeMonth: string;
+  activeMonth: string | null;
   onPickMonth: (m: string) => void;
 }) {
+  // The series is inherently monthly, so every item's `month` is a real YYYY-MM (never the range null).
   const chart = months.map((m) => ({
-    month: monthLabel(m.month).replace(/ \d{4}$/, ''),
-    key: m.month,
+    month: monthLabel(m.month ?? '').replace(/ \d{4}$/, ''),
+    key: m.month ?? '',
     workedHours: Math.round((m.workedSeconds / 3600) * 10) / 10,
   }));
   return (
@@ -362,14 +368,14 @@ function MonthlyReport({
                 <tbody>
                   {[...months].reverse().map((m) => (
                     <tr
-                      key={m.month}
-                      onClick={() => onPickMonth(m.month)}
+                      key={m.month ?? ''}
+                      onClick={() => m.month && onPickMonth(m.month)}
                       className={cn(
                         'cursor-pointer border-t hover:bg-accent/40',
                         m.month === activeMonth && 'bg-primary/5',
                       )}
                     >
-                      <td className="px-4 py-3 font-medium">{monthLabel(m.month)}</td>
+                      <td className="px-4 py-3 font-medium">{monthLabel(m.month ?? '')}</td>
                       <td className="px-4 py-3 tabular-nums">{hm(m.workedSeconds)}</td>
                       <td className="px-4 py-3 tabular-nums">{m.daysPresent}</td>
                       <td className="px-4 py-3 tabular-nums">{m.lateLogins}</td>

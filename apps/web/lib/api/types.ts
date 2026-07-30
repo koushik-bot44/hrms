@@ -1319,6 +1319,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/manager/my-team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["myTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/manager/approvals": {
         parameters: {
             query?: never;
@@ -1855,7 +1871,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A team's month roll-up + live today snapshot (own-team-only for the Accountant). */
+        /** A team's roll-up + live today snapshot for a shift-month (default = current) or a custom from/to range (own-team-only for the Accountant and the Manager). */
         get: operations["teamSummary_1"];
         put?: never;
         post?: never;
@@ -1873,7 +1889,7 @@ export interface paths {
             cookie?: never;
         };
         /** The ACCOUNTANT's own team (roster header); null if none assigned. */
-        get: operations["myTeam"];
+        get: operations["myTeam_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1921,7 +1937,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One employee's live attendance metrics for a shift-month (default = current). */
+        /** One employee's live attendance metrics for a shift-month (default = current) or a custom from/to range. */
         get: operations["employeeSummary"];
         put?: never;
         post?: never;
@@ -2801,6 +2817,15 @@ export interface components {
             exists?: boolean;
             accountant?: components["schemas"]["AccountantView"];
         };
+        /** @description The ACCOUNTANT's own team — the roster header (null if none assigned). */
+        MyTeamView: {
+            teamId?: string;
+            teamName?: string;
+            companyId?: string;
+            companyName?: string;
+            hrName?: string;
+            managerName?: string;
+        };
         LabelRef: {
             id?: string;
             name?: string;
@@ -3265,12 +3290,17 @@ export interface components {
              */
             unapprovedAbsences?: number;
         };
-        /** @description A team's attendance roll-up for the month + a live 'today' snapshot. */
+        /** @description A team's attendance roll-up for a month OR custom range + a live 'today' snapshot. */
         TeamAttendanceSummary: {
             teamId?: string;
             teamName?: string;
             companyId?: string;
+            /** @description The shift-month, YYYY-MM; null for a custom from/to range — use periodStart/periodEnd. */
             month?: string;
+            /** @description First day of the reported window, YYYY-MM-DD (IST). */
+            periodStart?: string;
+            /** @description Last day of the reported window, inclusive, YYYY-MM-DD (IST). */
+            periodEnd?: string;
             /**
              * Format: int64
              * @description Employees with at least one session on today's shift-day.
@@ -3295,19 +3325,14 @@ export interface components {
             employeeCount?: number;
             employees?: components["schemas"]["TeamAttendanceMemberRow"][];
         };
-        /** @description The ACCOUNTANT's own team — the roster header (null if none assigned). */
-        MyTeamView: {
-            teamId?: string;
-            teamName?: string;
-            companyId?: string;
-            companyName?: string;
-            hrName?: string;
-            managerName?: string;
-        };
-        /** @description One employee's attendance metrics for a shift-month (all computed live). */
+        /** @description One employee's attendance metrics for a shift-month OR custom range (computed live). */
         EmployeeMonthSummary: {
-            /** @description The shift-month, YYYY-MM (Asia/Kolkata). */
+            /** @description The shift-month, YYYY-MM (Asia/Kolkata); null for a custom from/to range — use periodStart/periodEnd for the authoritative window. */
             month?: string;
+            /** @description First day of the reported window, YYYY-MM-DD (IST). */
+            periodStart?: string;
+            /** @description Last day of the reported window, inclusive, YYYY-MM-DD (IST). */
+            periodEnd?: string;
             /**
              * Format: int64
              * @description Worked seconds = completed sessions' duration MINUS their breaks (open = 0).
@@ -5893,6 +5918,26 @@ export interface operations {
             };
         };
     };
+    myTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MyTeamView"];
+                };
+            };
+        };
+    };
     approvals: {
         parameters: {
             query?: never;
@@ -6654,6 +6699,8 @@ export interface operations {
         parameters: {
             query?: {
                 month?: string;
+                from?: string;
+                to?: string;
             };
             header?: never;
             path: {
@@ -6674,7 +6721,7 @@ export interface operations {
             };
         };
     };
-    myTeam: {
+    myTeam_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -6744,6 +6791,8 @@ export interface operations {
         parameters: {
             query?: {
                 month?: string;
+                from?: string;
+                to?: string;
             };
             header?: never;
             path: {

@@ -90,28 +90,41 @@ export function getMyTeam(signal?: AbortSignal): Promise<MyTeamView | null> {
 
 // --- Attendance analytics (§8a, read-only, live) --------------------------
 
-/** A team's month roll-up + live today snapshot + per-employee rows. Default month = current (IST). */
+/**
+ * The reporting window for a summary read: EITHER a shift-month OR a custom from/to range (mutually
+ * exclusive server-side). The month-wise SERIES endpoint is inherently monthly and takes neither.
+ */
+export type AttendanceSelection = { month: string } | { from: string; to: string };
+
+/** `?month=…` or `?from=…&to=…` (empty when no month is given → the server defaults to the current month). */
+function selectionQuery(selection?: AttendanceSelection): string {
+  if (!selection) return '';
+  if ('from' in selection) {
+    return `?from=${encodeURIComponent(selection.from)}&to=${encodeURIComponent(selection.to)}`;
+  }
+  return selection.month ? `?month=${encodeURIComponent(selection.month)}` : '';
+}
+
+/** A team's roll-up + live today snapshot + per-employee rows, for a month or a custom range. */
 export function getTeamAttendanceSummary(
   teamId: string,
-  month?: string,
+  selection?: AttendanceSelection,
   signal?: AbortSignal,
 ): Promise<TeamAttendanceSummary> {
-  const q = month ? `?month=${encodeURIComponent(month)}` : '';
   return apiFetch<TeamAttendanceSummary>(
-    `/accountant/teams/${encodeURIComponent(teamId)}/attendance/summary${q}`,
+    `/accountant/teams/${encodeURIComponent(teamId)}/attendance/summary${selectionQuery(selection)}`,
     { signal },
   );
 }
 
-/** One employee's month metrics + time-composition + clocked-in-now. Default month = current (IST). */
+/** One employee's metrics + time-composition + clocked-in-now, for a month or a custom range. */
 export function getEmployeeAttendanceSummary(
   employeeId: string,
-  month?: string,
+  selection?: AttendanceSelection,
   signal?: AbortSignal,
 ): Promise<EmployeeMonthSummary> {
-  const q = month ? `?month=${encodeURIComponent(month)}` : '';
   return apiFetch<EmployeeMonthSummary>(
-    `/accountant/employees/${encodeURIComponent(employeeId)}/attendance/summary${q}`,
+    `/accountant/employees/${encodeURIComponent(employeeId)}/attendance/summary${selectionQuery(selection)}`,
     { signal },
   );
 }

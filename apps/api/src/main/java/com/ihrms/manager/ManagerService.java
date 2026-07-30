@@ -1,5 +1,6 @@
 package com.ihrms.manager;
 
+import com.ihrms.accountant.dto.AccountantDtos.MyTeamView;
 import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
 import com.ihrms.auth.IhrmsPrincipal;
@@ -11,10 +12,12 @@ import com.ihrms.domain.model.ApprovalRequest;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Notification;
+import com.ihrms.domain.model.Team;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.NotificationRepository;
+import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.EmployeeCodeService;
 import com.ihrms.domain.support.EmployeeCodes;
@@ -49,6 +52,7 @@ public class ManagerService {
   private final EmployeeRepository employees;
   private final UserRepository users;
   private final CompanyRepository companies;
+  private final TeamRepository teams;
   private static final Logger log = LoggerFactory.getLogger(ManagerService.class);
 
   private final EmployeeCodeService codes;
@@ -63,6 +67,7 @@ public class ManagerService {
       EmployeeRepository employees,
       UserRepository users,
       CompanyRepository companies,
+      TeamRepository teams,
       EmployeeCodeService codes,
       PdfService pdf,
       EmployeeRecordAssembler assembler,
@@ -73,11 +78,43 @@ public class ManagerService {
     this.employees = employees;
     this.users = users;
     this.companies = companies;
+    this.teams = teams;
     this.codes = codes;
     this.pdf = pdf;
     this.assembler = assembler;
     this.mail = mail;
     this.audit = audit;
+  }
+
+  // --- Team descriptor ------------------------------------------------------
+
+  /**
+   * The Manager's own team descriptor (§8a), used by the attendance analytics tab to resolve the {@code
+   * teamId} it hands to the SHARED viewer components. Mirrors the Accountant's {@code /accountant/my-team}
+   * (same {@link MyTeamView}, resolved via the {@code managerUser} mapping). {@code null} if unassigned.
+   */
+  @Transactional(readOnly = true)
+  public MyTeamView myTeam(IhrmsPrincipal.User manager) {
+    Team t =
+        teams.findByManagerUserId(manager.userId()).stream()
+            .filter(team -> manager.companyId() == null || manager.companyId().equals(team.getCompanyId()))
+            .findFirst()
+            .orElse(null);
+    if (t == null) {
+      return null;
+    }
+    String companyName = companies.findById(t.getCompanyId()).map(Company::getName).orElse(null);
+    return new MyTeamView(
+        t.getId(),
+        t.getName(),
+        t.getCompanyId(),
+        companyName,
+        t.getHrUserId() == null ? null : userName(t.getHrUserId()),
+        t.getManagerUserId() == null ? null : userName(t.getManagerUserId()));
+  }
+
+  private String userName(String userId) {
+    return users.findById(userId).map(u -> u.getName()).orElse(null);
   }
 
   // --- Notifications --------------------------------------------------------

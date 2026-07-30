@@ -1,5 +1,6 @@
 package com.ihrms.manager;
 
+import com.ihrms.accountant.dto.AccountantDtos.MyTeamView;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.manager.dto.ManagerDtos.ApprovalView;
 import com.ihrms.manager.dto.ManagerDtos.NotificationFeed;
@@ -30,6 +31,13 @@ public class ManagerController {
 
   public ManagerController(ManagerService manager) {
     this.manager = manager;
+  }
+
+  /** The Manager's own team descriptor — the {@code teamId} the attendance-analytics tab passes to the
+   * shared viewer components (§8a). {@code null} when the Manager is not assigned to any team. */
+  @GetMapping("/my-team")
+  public MyTeamView myTeam(@AuthenticationPrincipal IhrmsPrincipal.User actor) {
+    return manager.myTeam(actor);
   }
 
   @GetMapping("/notifications")

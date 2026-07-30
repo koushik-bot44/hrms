@@ -1,11 +1,22 @@
 import type {
   Approval,
   EmployeeRecord,
+  MyTeamView,
   NotificationFeed,
   NotificationItem,
   RejectApprovalInput,
 } from '@/lib/contract';
 import { apiFetch } from './client';
+
+// --- Team descriptor ------------------------------------------------------
+
+/**
+ * The Manager's own team descriptor (§8a) — resolves the {@code teamId} the attendance-analytics tab hands
+ * to the SHARED viewer components. Mirrors the Accountant's `/accountant/my-team`; null if unassigned.
+ */
+export function getMyManagerTeam(signal?: AbortSignal): Promise<MyTeamView | null> {
+  return apiFetch<MyTeamView | null>('/manager/my-team', { signal });
+}
 
 // --- Notifications --------------------------------------------------------
 

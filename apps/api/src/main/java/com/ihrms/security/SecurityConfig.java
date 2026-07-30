@@ -93,6 +93,17 @@ public class SecurityConfig {
                     .hasRole("MANAGER")
                     .requestMatchers("/audit/**")
                     .hasAnyRole("SUPER_ADMIN", "COMPANY_ADMIN")
+                    // Viewer ATTENDANCE analytics (§8a) are additionally open to the MANAGER for THEIR
+                    // OWN team — the service scopes the team/employee to the manager's team (foreign ->
+                    // 404). These 3 read-only endpoints are the ONLY /accountant/** paths a MANAGER may
+                    // reach; they MUST precede the general gate below (first match wins). The rest of the
+                    // viewer area (requests inbox, records, audit, provisioning) is NOT widened.
+                    .requestMatchers(HttpMethod.GET, "/accountant/employees/*/attendance/summary")
+                    .hasAnyRole("ACCOUNTS_ADMIN", "ACCOUNTANT", "MANAGER")
+                    .requestMatchers(HttpMethod.GET, "/accountant/employees/*/attendance/monthly")
+                    .hasAnyRole("ACCOUNTS_ADMIN", "ACCOUNTANT", "MANAGER")
+                    .requestMatchers(HttpMethod.GET, "/accountant/teams/*/attendance/summary")
+                    .hasAnyRole("ACCOUNTS_ADMIN", "ACCOUNTANT", "MANAGER")
                     // The read-only viewer area serves BOTH the cross-company Accounts Admin and the
                     // team-scoped Accountant (the service scopes by role). Provisioning is SUPER_ADMIN-only.
                     .requestMatchers("/accountant/**")

@@ -33,6 +33,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -70,7 +71,8 @@ class ViewerAttendanceApiTest {
   private Team teamA;
   private String adminToken; // ACCOUNTS_ADMIN
   private String accountantToken; // ACCOUNTANT of team A
-  private Employee empB; // approved, company B / team B — foreign to team A's accountant
+  private String managerToken; // MANAGER of team A (§8a widening)
+  private Employee empB; // approved, company B / team B — foreign to team A's accountant + manager
   private Team teamB;
 
   @BeforeEach
@@ -82,8 +84,11 @@ class ViewerAttendanceApiTest {
     String companyB = company("BBB");
     User hrA = user(companyA, UserRole.HR, "hra@a.test");
     User accA = user(companyA, UserRole.ACCOUNTANT, "acca@a.test");
+    User mgrA = user(companyA, UserRole.MANAGER, "mgra@a.test");
     empA = approved(companyA, hrA.getId(), "AAA-EMP-000001", "Anita Approved");
     teamA = team(companyA, hrA.getId(), accA.getId());
+    teamA.setManagerUserId(mgrA.getId()); // the manager of team A (same managerUser mapping as the roster)
+    teamA = teams.save(teamA);
 
     User hrB = user(companyB, UserRole.HR, "hrb@b.test");
     empB = approved(companyB, hrB.getId(), "BBB-EMP-000001", "Bob Approved");
@@ -91,6 +96,7 @@ class ViewerAttendanceApiTest {
 
     adminToken = token(user(null, UserRole.ACCOUNTS_ADMIN, "casey@books.test"), null);
     accountantToken = token(accA, teamA.getId());
+    managerToken = token(mgrA, teamA.getId());
 
     seedJanuaryForEmpA();
   }
@@ -259,7 +265,146 @@ class ViewerAttendanceApiTest {
         .andExpect(status().isOk());
   }
 
+  // --- Feature 1: MANAGER own-team analytics (§8a widening) -----------------
+
+  @Test
+  void scoping_managerOwnTeamOnly_foreign404_nonAttendanceStays403() throws Exception {
+    // MANAGER: own team + own employee (summary + monthly) -> 200, and it's really THEIR team's data.
+    JsonNode t = getJson("/accountant/teams/" + teamA.getId() + "/attendance/summary?month=2026-01", managerToken);
+    assertThat(t.get("employeeCount").asInt()).isEqualTo(1);
+    assertThat(t.get("employees").get(0).get("employeeCode").asText()).isEqualTo("AAA-EMP-000001");
+    assertThat(t.get("totalLateThisMonth").asLong()).isEqualTo(1L);
+    mvc.perform(get("/accountant/employees/" + empA.getId() + "/attendance/summary")
+            .header("Authorization", "Bearer " + managerToken))
+        .andExpect(status().isOk());
+    mvc.perform(get("/accountant/employees/" + empA.getId() + "/attendance/monthly")
+            .header("Authorization", "Bearer " + managerToken))
+        .andExpect(status().isOk());
+    // MANAGER: foreign team + foreign employee -> 404 (exactly the accountant rule; never widened).
+    mvc.perform(get("/accountant/teams/" + teamB.getId() + "/attendance/summary")
+            .header("Authorization", "Bearer " + managerToken))
+        .andExpect(status().isNotFound());
+    mvc.perform(get("/accountant/employees/" + empB.getId() + "/attendance/summary")
+            .header("Authorization", "Bearer " + managerToken))
+        .andExpect(status().isNotFound());
+    // MANAGER stays OUT of the rest of the viewer area: only the 3 attendance endpoints are widened.
+    mvc.perform(get("/accountant/companies").header("Authorization", "Bearer " + managerToken))
+        .andExpect(status().isForbidden());
+    mvc.perform(get("/accountant/employees/" + empA.getId()) // the (record) read
+            .header("Authorization", "Bearer " + managerToken))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void managerMyTeam_resolvesOwnTeamDescriptorForTheUiMount() throws Exception {
+    JsonNode t = getJson("/manager/my-team", managerToken);
+    assertThat(t.get("teamId").asText()).isEqualTo(teamA.getId());
+    assertThat(t.get("companyId").asText()).isEqualTo(companyA);
+  }
+
+  // --- Feature 2: custom date range (all three viewer roles) ----------------
+
+  @Test
+  void range_equalToAMonth_reproducesTheMonthExactly() throws Exception {
+    String base = "/accountant/employees/" + empA.getId() + "/attendance/summary";
+    JsonNode m = getJson(base + "?month=2026-01", adminToken);
+    JsonNode r = getJson(base + "?from=2026-01-01&to=2026-01-31", adminToken);
+    // Every computed metric is identical: a full-month range IS the month.
+    for (String f :
+        List.of(
+            "workedSeconds", "breakSeconds", "daysPresent", "lateLogins", "leaveDaysTotal",
+            "leaveRequests", "workingDays", "expectedDays", "unapprovedAbsences", "adherencePct")) {
+      assertThat(r.get(f)).as(f).isEqualTo(m.get(f));
+    }
+    assertThat(r.get("leavesByType")).isEqualTo(m.get("leavesByType"));
+    assertThat(r.get("timeComposition")).isEqualTo(m.get("timeComposition"));
+    // Month mode carries the YYYY-MM label + the month bounds; range mode has a null label + echoed window.
+    assertThat(m.get("month").asText()).isEqualTo("2026-01");
+    assertThat(m.get("periodStart").asText()).isEqualTo("2026-01-01");
+    assertThat(m.get("periodEnd").asText()).isEqualTo("2026-01-31");
+    assertThat(r.get("month").isNull()).isTrue();
+    assertThat(r.get("periodStart").asText()).isEqualTo("2026-01-01");
+    assertThat(r.get("periodEnd").asText()).isEqualTo("2026-01-31");
+
+    // Same equality at the TEAM endpoint (the row worked matches the month roll-up).
+    String teamBase = "/accountant/teams/" + teamA.getId() + "/attendance/summary";
+    JsonNode tm = getJson(teamBase + "?month=2026-01", adminToken);
+    JsonNode tr = getJson(teamBase + "?from=2026-01-01&to=2026-01-31", adminToken);
+    assertThat(tr.get("employees").get(0).get("workedSeconds"))
+        .isEqualTo(tm.get("employees").get(0).get("workedSeconds"));
+    assertThat(tr.get("employees").get(0).get("unapprovedAbsences"))
+        .isEqualTo(tm.get("employees").get(0).get("unapprovedAbsences"));
+    assertThat(tr.get("month").isNull()).isTrue();
+    assertThat(tr.get("periodStart").asText()).isEqualTo("2026-01-01");
+  }
+
+  @Test
+  void range_clipsLeaveAndSessionsAtTheBoundary() throws Exception {
+    // Window Jan 22–31: the CASUAL Jan 20–24 leave clips to Jan 22–24 (3 days); only the Jan-31 shift-day
+    // session falls in range (worked 9000s, one day present); Jan 10/12/15 sessions are outside it.
+    JsonNode r =
+        getJson(
+            "/accountant/employees/" + empA.getId() + "/attendance/summary?from=2026-01-22&to=2026-01-31",
+            adminToken);
+    assertThat(r.get("leavesByType").get("casual").asLong()).isEqualTo(3L);
+    assertThat(r.get("leaveDaysTotal").asLong()).isEqualTo(3L);
+    assertThat(r.get("workedSeconds").asLong()).isEqualTo(9000L);
+    assertThat(r.get("daysPresent").asLong()).isEqualTo(1L);
+  }
+
+  @Test
+  void range_workingDaysAreMonToFriWithinAnArbitraryRange() throws Exception {
+    // Jan 5 (Mon) → Jan 16 (Fri) 2026 spans two full Mon–Fri weeks = 10 working days.
+    JsonNode r =
+        getJson(
+            "/accountant/employees/" + empA.getId() + "/attendance/summary?from=2026-01-05&to=2026-01-16",
+            adminToken);
+    assertThat(r.get("workingDays").asInt()).isEqualTo(10);
+  }
+
+  @Test
+  void range_absencesArePastWorkingDaysOnly_insideTheRange() throws Exception {
+    // A fresh employee, current shift-month; a range from the 1st to today counts only PAST Mon–Fri days
+    // (today + future never count), matching the month rule but clipped to the range.
+    Employee e = approved(companyA, empA.getOnboardingHrId(), "AAA-EMP-000045", "Rhea Range");
+    LocalDate today = LocalDate.now(ShiftConfig.ZONE);
+    LocalDate first = today.withDayOfMonth(1);
+    long pastWorking =
+        AttendanceCalendar.workingDays(first, today).stream().filter(d -> d.isBefore(today)).count();
+    JsonNode r =
+        getJson(
+            "/accountant/employees/" + e.getId() + "/attendance/summary?from=" + first + "&to=" + today,
+            adminToken);
+    assertThat(r.get("unapprovedAbsences").asLong()).isEqualTo(pastWorking);
+  }
+
+  @Test
+  void range_validation_returns400sForBadInput() throws Exception {
+    String base = "/accountant/employees/" + empA.getId() + "/attendance/summary";
+    bad(base + "?from=2026-01-31&to=2026-01-01"); // reversed
+    bad(base + "?from=2025-01-01&to=2026-06-01"); // span > 366 days
+    bad(base + "?month=2026-01&from=2026-01-01&to=2026-01-31"); // month + range together
+    bad(base + "?from=2026-01-01"); // only one bound
+    bad(base + "?to=2026-01-31"); // only one bound
+    bad(base + "?from=2026-01&to=2026-01-31"); // malformed date (YYYY-MM, not YYYY-MM-DD)
+  }
+
+  @Test
+  void range_worksForAllThreeViewerRolesWithinScope() throws Exception {
+    String q = "?from=2026-01-01&to=2026-01-31";
+    for (String tok : List.of(adminToken, accountantToken, managerToken)) {
+      mvc.perform(get("/accountant/teams/" + teamA.getId() + "/attendance/summary" + q)
+              .header("Authorization", "Bearer " + tok))
+          .andExpect(status().isOk());
+    }
+  }
+
   // --- helpers --------------------------------------------------------------
+
+  private void bad(String path) throws Exception {
+    mvc.perform(get(path).header("Authorization", "Bearer " + adminToken))
+        .andExpect(status().isBadRequest());
+  }
 
   private JsonNode getJson(String path, String token) throws Exception {
     return json.readTree(

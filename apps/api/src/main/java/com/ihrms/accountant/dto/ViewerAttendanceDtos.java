@@ -24,9 +24,15 @@ public final class ViewerAttendanceDtos {
       @Schema(description = "Optional idle seconds; null in v1 (worked + break are the real, summable split).")
           Long idleSeconds) {}
 
-  @Schema(description = "One employee's attendance metrics for a shift-month (all computed live).")
+  @Schema(description = "One employee's attendance metrics for a shift-month OR custom range (computed live).")
   public record EmployeeMonthSummary(
-      @Schema(description = "The shift-month, YYYY-MM (Asia/Kolkata).") String month,
+      @Schema(
+              description =
+                  "The shift-month, YYYY-MM (Asia/Kolkata); null for a custom from/to range — use"
+                      + " periodStart/periodEnd for the authoritative window.")
+          String month,
+      @Schema(description = "First day of the reported window, YYYY-MM-DD (IST).") String periodStart,
+      @Schema(description = "Last day of the reported window, inclusive, YYYY-MM-DD (IST).") String periodEnd,
       @Schema(description = "Worked seconds = completed sessions' duration MINUS their breaks (open = 0).")
           long workedSeconds,
       @Schema(description = "Break seconds = completed breaks in the month.") long breakSeconds,
@@ -68,12 +74,17 @@ public final class ViewerAttendanceDtos {
       @Schema(description = "Past working days with no session and no approved leave, this month.")
           long unapprovedAbsences) {}
 
-  @Schema(description = "A team's attendance roll-up for the month + a live 'today' snapshot.")
+  @Schema(description = "A team's attendance roll-up for a month OR custom range + a live 'today' snapshot.")
   public record TeamAttendanceSummary(
       String teamId,
       String teamName,
       String companyId,
-      String month,
+      @Schema(
+              description =
+                  "The shift-month, YYYY-MM; null for a custom from/to range — use periodStart/periodEnd.")
+          String month,
+      @Schema(description = "First day of the reported window, YYYY-MM-DD (IST).") String periodStart,
+      @Schema(description = "Last day of the reported window, inclusive, YYYY-MM-DD (IST).") String periodEnd,
       @Schema(description = "Employees with at least one session on today's shift-day.") long presentToday,
       @Schema(description = "Employees with an OPEN session right now.") long clockedInNow,
       @Schema(description = "Employees on an approved leave that covers today (IST calendar date).")

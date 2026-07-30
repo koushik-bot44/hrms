@@ -322,16 +322,16 @@ public class AccountantService {
   }
 
   /**
-   * Authorize a team read for a viewer (§2), reused by the roster + the attendance analytics:
-   * ACCOUNTS_ADMIN may view any team; an ACCOUNTANT may view ONLY a team they are the accountant of
-   * (else 404 — never reveal existence, never widen scope).
+   * Authorize a team read for a viewer (§2/§8a), reused by the roster + the attendance analytics:
+   * ACCOUNTS_ADMIN may view any team; an ACCOUNTANT may view ONLY a team they are the accountant of, and a
+   * MANAGER ONLY a team they are the manager of (else 404 — never reveal existence, never widen scope).
    */
   public Team assertViewableTeam(IhrmsPrincipal.User actor, String teamId) {
     Team team =
         teams
             .findById(teamId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
-    if (actor.role() == UserRole.ACCOUNTANT && !ownsTeam(actor, teamId)) {
+    if (actor.role() != UserRole.ACCOUNTS_ADMIN && !ownsTeam(actor, teamId)) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found");
     }
     return team;
@@ -343,8 +343,19 @@ public class AccountantService {
   }
 
   private boolean ownsTeam(IhrmsPrincipal.User actor, String teamId) {
-    return teams.findByAccountantUserId(actor.userId()).stream()
-        .anyMatch(t -> t.getId().equals(teamId));
+    return ownedTeams(actor).stream().anyMatch(t -> t.getId().equals(teamId));
+  }
+
+  /**
+   * The teams a non-admin viewer "owns" by their role: the ACCOUNTANT's accountant-teams / the MANAGER's
+   * manager-teams (the same {@code managerUser} mapping the manager roster uses). The scope for both the
+   * team gate and the employee gate ({@link #hrScope}) flows through here so the two layers stay in sync.
+   */
+  private List<Team> ownedTeams(IhrmsPrincipal.User actor) {
+    return switch (actor.role()) {
+      case MANAGER -> teams.findByManagerUserId(actor.userId());
+      default -> teams.findByAccountantUserId(actor.userId());
+    };
   }
 
   private String userName(String userId) {
@@ -401,12 +412,15 @@ public class AccountantService {
 
   // --- internals ------------------------------------------------------------
 
-  /** {@code null} = cross-company (ACCOUNTS_ADMIN); otherwise the accountant's team HR ids (team scope). */
+  /**
+   * {@code null} = cross-company (ACCOUNTS_ADMIN); otherwise the viewer's team HR ids (team scope) — the
+   * ACCOUNTANT's or the MANAGER's teams, per {@link #ownedTeams}. Foreign employees fall out of this set.
+   */
   private List<String> hrScope(IhrmsPrincipal.User actor) {
     if (actor.role() == UserRole.ACCOUNTS_ADMIN) {
       return null;
     }
-    return teams.findByAccountantUserId(actor.userId()).stream()
+    return ownedTeams(actor).stream()
         .map(Team::getHrUserId)
         .filter(Objects::nonNull)
         .distinct()
