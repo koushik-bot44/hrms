@@ -4,7 +4,6 @@ import type {
   MyTeamView,
   NotificationFeed,
   NotificationItem,
-  RejectApprovalInput,
 } from '@/lib/contract';
 import { apiFetch } from './client';
 
@@ -34,31 +33,17 @@ export function markAllNotificationsRead(): Promise<NotificationFeed> {
   return apiFetch<NotificationFeed>('/manager/notifications/read-all', { method: 'POST' });
 }
 
-// --- Approvals ------------------------------------------------------------
+// --- Team onboarding (read-only) ------------------------------------------
 
-export function getApprovals(signal?: AbortSignal): Promise<Approval[]> {
-  return apiFetch<Approval[]>('/manager/approvals', { signal });
-}
-
-/** Past decisions (approved + rejected), most recently decided first. */
+/**
+ * The Manager's READ-ONLY team-onboarding history — the employees decided onto their team (approved, plus
+ * any legacy manager-era rejects), most recently decided first. Approval authority now sits with HR (§3.3).
+ */
 export function getApprovalHistory(signal?: AbortSignal): Promise<Approval[]> {
   return apiFetch<Approval[]>('/manager/approvals/history', { signal });
 }
 
-/** The employee record (sections + documents with view URLs) behind one of the manager's approvals. */
+/** The employee record (forms + documents with view URLs) behind one of the team's onboarding decisions. */
 export function getApprovalRecord(id: string, signal?: AbortSignal): Promise<EmployeeRecord> {
   return apiFetch<EmployeeRecord>(`/manager/approvals/${encodeURIComponent(id)}/record`, { signal });
-}
-
-export function approveApproval(id: string): Promise<Approval> {
-  return apiFetch<Approval>(`/manager/approvals/${encodeURIComponent(id)}/approve`, {
-    method: 'POST',
-  });
-}
-
-export function rejectApproval(id: string, body: RejectApprovalInput): Promise<Approval> {
-  return apiFetch<Approval>(`/manager/approvals/${encodeURIComponent(id)}/reject`, {
-    method: 'POST',
-    body,
-  });
 }

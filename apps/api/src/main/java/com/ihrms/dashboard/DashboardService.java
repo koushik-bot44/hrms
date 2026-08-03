@@ -141,7 +141,9 @@ public class DashboardService {
             new StatCard("super.companiesActive", "Active companies", companies.countByStatusNot("DELETED")),
             new StatCard("super.companiesArchived", "Archived companies", companies.countByStatus("DELETED")),
             new StatCard("super.employeesTotal", "Employees", employees.count()),
-            new StatCard("super.pendingApprovals", "Pending approvals", approvals.countByStatus(ApprovalStatus.PENDING)));
+            // Approval authority now sits with HR; "pending approval" = employees verified + awaiting an HR
+            // decision (HR_VERIFIED), platform-wide (no manager approval-requests are pending anymore).
+            new StatCard("super.pendingApprovals", "Pending approval", employees.countByStatus(EmployeeStatus.HR_VERIFIED)));
     return new DashboardSummary(
         "SUPER_ADMIN", stats, activity(employees.findTop10ByOrderByUpdatedAtDesc(), true), null);
   }
@@ -180,6 +182,8 @@ public class DashboardService {
                 employees.countByOnboardingHrIdAndStatus(hrId, EmployeeStatus.SUBMITTED)),
             new StatCard("hr.inRevision", "In revision",
                 employees.countByOnboardingHrIdAndStatus(hrId, EmployeeStatus.REVISION_REQUESTED)),
+            new StatCard("hr.pendingApproval", "Pending approval",
+                employees.countByOnboardingHrIdAndStatus(hrId, EmployeeStatus.HR_VERIFIED)),
             new StatCard("hr.approved", "Approved",
                 employees.countByOnboardingHrIdAndStatus(hrId, EmployeeStatus.APPROVED)),
             new StatCard("hr.rejected", "Rejected",
@@ -206,14 +210,12 @@ public class DashboardService {
     List<Employee> recent =
         hrIds.isEmpty() ? List.of() : employees.findTop10ByOnboardingHrIdInOrderByUpdatedAtDesc(hrIds);
 
+    // Approval authority now sits with HR (§3.3); the Manager has no pending-approval inbox. The "Approved"
+    // card counts the employees approved onto this Manager's team (the read-only Team-onboarding history).
     List<StatCard> stats =
         List.of(
-            new StatCard("manager.pendingApprovals", "Pending approvals",
-                approvals.countByManagerUserIdAndStatus(managerId, ApprovalStatus.PENDING)),
-            new StatCard("manager.approved", "Approved",
+            new StatCard("manager.approved", "Approved onto team",
                 approvals.countByManagerUserIdAndStatus(managerId, ApprovalStatus.APPROVED)),
-            new StatCard("manager.rejected", "Rejected",
-                approvals.countByManagerUserIdAndStatus(managerId, ApprovalStatus.REJECTED)),
             new StatCard("manager.onboardingQueue", "Onboarding queue", onboardingQueue),
             new StatCard("manager.unreadNotifications", "Unread notifications",
                 notifications.countByRecipientUserIdAndReadFalse(managerId)));
@@ -257,7 +259,7 @@ public class DashboardService {
       case REVISION_REQUESTED -> "HR asked for changes — update the flagged items and re-submit.";
       case REJECTED -> "Your submission needs changes — update your forms and re-submit.";
       case SUBMITTED -> "Submitted — awaiting HR verification.";
-      case HR_VERIFIED -> "Verified — awaiting your Manager's approval.";
+      case HR_VERIFIED -> "Verified — awaiting approval.";
       case APPROVED ->
           e.getEmployeeCode() == null
               ? "Approved — welcome aboard!"
@@ -304,7 +306,7 @@ public class DashboardService {
       case IN_PROGRESS -> "Onboarding in progress";
       case SUBMITTED -> "Submitted for verification";
       case REVISION_REQUESTED -> "Revision requested";
-      case HR_VERIFIED -> "Verified — routed for approval";
+      case HR_VERIFIED -> "Verified — awaiting approval";
       case APPROVED -> "Approved";
       case REJECTED -> "Rejected";
     };

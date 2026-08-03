@@ -1,22 +1,20 @@
-package com.ihrms.manager;
+package com.ihrms.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ihrms.auth.IhrmsPrincipal;
-import com.ihrms.domain.enums.ApprovalStatus;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.UserRole;
-import com.ihrms.domain.model.ApprovalRequest;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
-import com.ihrms.domain.repository.ApprovalRequestRepository;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.GeneratedDocumentRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
+import com.ihrms.review.dto.ReviewDtos.ApproveRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -26,28 +24,26 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * Reproduces the LIVE manager-approval path with REAL DB-backed storage (STORAGE_DRIVER=db) — the
- * path {@link ManagerApiTest} skips because it mocks the storage service. Approving an employee with
- * no completed forms/signature still generates + stores the five PDFs (into {@code document_blobs})
- * and must succeed.
+ * Reproduces the LIVE HR-approval path with REAL DB-backed storage (STORAGE_DRIVER=db) — the path
+ * {@link ReviewApiTest} skips because it mocks the storage service. Approving a verified employee with no
+ * completed forms/signature still mints the ID and generates + stores the five PDFs (into {@code
+ * document_blobs}), and must succeed.
  */
 @SpringBootTest
 @TestPropertySource(properties = "app.storage.driver=db")
 @EnabledIfEnvironmentVariable(named = "IHRMS_TEST_DB", matches = ".+")
-class ManagerApproveDbStorageTest {
+class HrApproveDbStorageTest {
 
-  @Autowired ManagerService managerService;
+  @Autowired ReviewService reviewService;
   @Autowired CompanyRepository companies;
   @Autowired UserRepository users;
   @Autowired TeamRepository teams;
   @Autowired EmployeeRepository employees;
-  @Autowired ApprovalRequestRepository approvals;
   @Autowired GeneratedDocumentRepository generated;
   @Autowired JdbcTemplate jdbc;
 
   private String companyId;
-  private User manager;
-  private ApprovalRequest approval;
+  private User hr;
   private Employee employee;
 
   @BeforeEach
@@ -61,12 +57,12 @@ class ManagerApproveDbStorageTest {
     c.setCode("TESTCO");
     companyId = companies.save(c).getId();
 
-    User hr = user(UserRole.HR, "hr@testco.app");
-    manager = user(UserRole.MANAGER, "manager@testco.app");
+    hr = user(UserRole.HR, "hr@testco.app");
+    User manager = user(UserRole.MANAGER, "manager@testco.app");
     Team t = new Team();
     t.setCompanyId(companyId);
     t.setName("Engineering");
-    t.setHrUserId(hr.getId());
+    t.setHrUserId(hr.getId()); // approve resolves the employee's team via this HR
     t.setManagerUserId(manager.getId());
     teams.save(t);
 
@@ -75,36 +71,26 @@ class ManagerApproveDbStorageTest {
     employee.setEmail("spam@gmail.com");
     employee.setCompanyId(companyId);
     employee.setOnboardingHrId(hr.getId());
-    employee.setStatus(EmployeeStatus.HR_VERIFIED);
+    employee.setStatus(EmployeeStatus.HR_VERIFIED); // verified + awaiting the HR decision
     employees.save(employee);
-
-    approval = new ApprovalRequest();
-    approval.setEmployeeId(employee.getId());
-    approval.setHrUserId(hr.getId());
-    approval.setManagerUserId(manager.getId());
-    approval.setTeamId(t.getId());
-    approval.setStatus(ApprovalStatus.PENDING);
-    approvals.save(approval);
   }
 
   @Test
-  void approveWithRealDbStorageMintsIdAndStoresThePdfs() {
+  void hrApproveWithRealDbStorageMintsIdAndStoresThePdfs() {
     IhrmsPrincipal.User principal =
-        new IhrmsPrincipal.User(
-            manager.getId(), manager.getEmail(), manager.getName(), UserRole.MANAGER, companyId, null);
+        new IhrmsPrincipal.User(hr.getId(), hr.getEmail(), hr.getName(), UserRole.HR, companyId, null);
 
     // Mirror the controller: approve commits, then PDFs regenerate post-commit (best-effort).
-    var result = managerService.approve(principal, approval.getId());
-    managerService.regeneratePdfsForApproval(principal, approval.getId());
+    var result = reviewService.approve(principal, employee.getId(), new ApproveRequest(null), "127.0.0.1");
+    reviewService.regeneratePdfsQuietly(employee.getId());
 
-    assertThat(result.status()).isEqualTo(ApprovalStatus.APPROVED);
+    assertThat(result.status()).isEqualTo(EmployeeStatus.APPROVED);
     assertThat(result.employeeCode()).isEqualTo("TESTCO-EMP-000001");
     assertThat(employees.findById(employee.getId()).orElseThrow().getStatus())
         .isEqualTo(EmployeeStatus.APPROVED);
     // Five PDFs generated (one per form + merged) and their bytes stored in document_blobs.
     assertThat(generated.findByEmployeeId(employee.getId())).hasSize(5);
-    Integer blobs =
-        jdbc.queryForObject("SELECT COUNT(*) FROM \"document_blobs\"", Integer.class);
+    Integer blobs = jdbc.queryForObject("SELECT COUNT(*) FROM \"document_blobs\"", Integer.class);
     assertThat(blobs).isEqualTo(5);
   }
 

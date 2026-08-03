@@ -35,9 +35,16 @@ import com.ihrms.domain.repository.Form2InfoRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
+import com.ihrms.domain.support.EmployeeCodes;
+import com.ihrms.review.dto.ReviewDtos.ApproveRequest;
 import com.ihrms.storage.StorageService;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -51,10 +58,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * HR verification & routing (contract §3.3/§3.4) over the four-form model, storage MOCKED so it runs
+ * HR verification & approval (contract §3.3/§3.4) over the four-form model, storage MOCKED so it runs
  * in {@code ./mvnw package} with only a DB: the verification entry keys off the INTERNAL id; own-scope
- * (cross-HR/cross-company denied); verify each form + document; sensitive values are masked and the
- * reveal is audited; routing creates the ApprovalRequest + Manager Notification and sets HR_VERIFIED.
+ * (cross-HR/cross-company denied); verify each form + document (all verified auto-transitions to
+ * HR_VERIFIED); sensitive values are masked and the reveal is audited; HR then APPROVES onto a team
+ * (minting the code + notifying the team's manager) or terminally REJECTS.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -74,6 +82,7 @@ class ReviewApiTest {
   @Autowired ApprovalRequestRepository approvals;
   @Autowired NotificationRepository notifications;
   @Autowired AuditLogRepository auditLogs;
+  @Autowired ReviewService reviewService;
   @Autowired JdbcTemplate jdbc;
 
   @MockBean StorageService storage;
@@ -82,6 +91,7 @@ class ReviewApiTest {
   private User hr1;
   private User manager1;
   private String hr1Token;
+  private String teamId; // hr1 + manager1's team
   private Employee emp; // onboarded by hr1, SUBMITTED, NO code, form1 + form2 + 1 PAN doc
 
   @BeforeEach
@@ -93,7 +103,7 @@ class ReviewApiTest {
     companyA = company("AAA");
     hr1 = user(companyA, UserRole.HR, "hr1@acme.test");
     manager1 = user(companyA, UserRole.MANAGER, "mgr1@acme.test");
-    team(companyA, hr1.getId(), manager1.getId());
+    teamId = team(companyA, hr1.getId(), manager1.getId());
     hr1Token = tokenFor(hr1);
     emp = submittedEmployee(hr1.getId());
     when(storage.presignedGetUrl(any(), anyInt())).thenReturn("http://storage.local/get?sig=test");
@@ -162,63 +172,112 @@ class ReviewApiTest {
   }
 
   @Test
-  void verifyingEveryItemCompletesReviewThenRoutesToManager() throws Exception {
+  void verifyingEveryItemAutoVerifiesThenHrApprovesOntoTeam() throws Exception {
     String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
 
-    // Routing is rejected until everything is verified.
-    mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
-            .header("Authorization", "Bearer " + hr1Token))
-        .andExpect(status().isBadRequest());
+    // Approval is rejected (409) until the record is verified (status SUBMITTED, not HR_VERIFIED).
+    approve(null).andExpect(status().isConflict());
 
-    // Form 2 is HR-authored (§3.2) and NOT part of the gate — verifying Form 1 + the document completes
-    // the review and routing succeeds without any Form-2 action.
+    // Form 2 is HR-authored (§3.2) and NOT part of the gate — verifying Form 1 + the document completes the
+    // review and AUTO-transitions the employee to HR_VERIFIED (no separate route/verify action).
     reviewForm("FORM1", "VERIFIED", null);
     MvcResult afterDoc = reviewDoc(docId, "VERIFIED", null);
-    assertThat(json.readTree(afterDoc.getResponse().getContentAsString()).get("reviewComplete").asBoolean())
-        .isTrue();
+    JsonNode afterDocBody = json.readTree(afterDoc.getResponse().getContentAsString());
+    assertThat(afterDocBody.get("reviewComplete").asBoolean()).isTrue();
+    assertThat(afterDocBody.get("status").asText()).isEqualTo("HR_VERIFIED"); // auto-transition
+    assertThat(employees.findById(emp.getId()).orElseThrow().getStatus())
+        .isEqualTo(EmployeeStatus.HR_VERIFIED);
     assertThat(auditLogs.findByAction("FORM_REVIEWED")).hasSize(1);
     assertThat(auditLogs.findByAction("DOCUMENT_REVIEWED")).hasSize(1);
 
-    MvcResult routed =
-        mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
-                .header("Authorization", "Bearer " + hr1Token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("note", "Looks good"))))
-            .andExpect(status().isCreated())
-            .andReturn();
-    JsonNode result = json.readTree(routed.getResponse().getContentAsString());
-    assertThat(result.get("status").asText()).isEqualTo("HR_VERIFIED");
+    // HR APPROVES (no team choice): the server resolves the HR's own team, mints the ID, notifies that
+    // team's manager, records the decision.
+    MvcResult approved = approve("Looks good").andExpect(status().isOk()).andReturn();
+    JsonNode result = json.readTree(approved.getResponse().getContentAsString());
+    assertThat(result.get("status").asText()).isEqualTo("APPROVED");
+    assertThat(result.get("employeeCode").asText()).isEqualTo("AAA-EMP-000001"); // minted (§5)
+    assertThat(result.get("teamId").asText()).isEqualTo(teamId); // resolved server-side = the HR's team
     assertThat(result.get("managerName").asText()).isEqualTo("mgr1@acme.test");
 
+    Employee saved = employees.findById(emp.getId()).orElseThrow();
+    assertThat(saved.getStatus()).isEqualTo(EmployeeStatus.APPROVED);
+    assertThat(saved.getEmployeeCode()).isEqualTo("AAA-EMP-000001");
+
+    // Decision record: an ApprovalRequest created + decided now (keeps the hierarchy metrics + Manager history).
     assertThat(approvals.findByEmployeeId(emp.getId()))
         .singleElement()
         .satisfies(a -> {
+          assertThat(a.getStatus().name()).isEqualTo("APPROVED");
           assertThat(a.getManagerUserId()).isEqualTo(manager1.getId());
           assertThat(a.getHrUserId()).isEqualTo(hr1.getId());
+          assertThat(a.getTeamId()).isEqualTo(teamId);
           assertThat(a.getNote()).isEqualTo("Looks good");
+          assertThat(a.getDecidedAt()).isNotNull();
         });
+    // The team's MANAGER (not HR) gets the durable bell that the employee joined their team.
     assertThat(notifications.findByRecipientUserId(manager1.getId()))
         .singleElement()
-        .satisfies(n -> assertThat(n.getType().name()).isEqualTo("APPROVAL_REQUESTED"));
-    assertThat(employees.findById(emp.getId()).orElseThrow().getStatus())
-        .isEqualTo(EmployeeStatus.HR_VERIFIED);
-    assertThat(auditLogs.findByAction("APPROVAL_ROUTED"))
+        .satisfies(n -> assertThat(n.getType().name()).isEqualTo("EMPLOYEE_APPROVED"));
+    assertThat(notifications.findByRecipientUserId(hr1.getId())).isEmpty(); // HR gets no "decided" notice
+    assertThat(auditLogs.findByAction("HR_APPROVED"))
         .singleElement()
         .satisfies(r -> assertThat(r.getCompanyId()).isEqualTo(companyA));
 
-    // Locked after routing: review + re-route are rejected.
+    // Locked after approval: review + re-approve are rejected (409).
     mvc.perform(patch("/employees/" + emp.getId() + "/forms/FORM1")
             .header("Authorization", "Bearer " + hr1Token)
             .contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(Map.of("decision", "VERIFIED"))))
         .andExpect(status().isConflict());
-    mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
-            .header("Authorization", "Bearer " + hr1Token))
-        .andExpect(status().isConflict());
+    approve(null).andExpect(status().isConflict());
   }
 
   @Test
-  void rejectingADocumentRecordsTheReasonAndBlocksRouting() throws Exception {
+  void hrRejectsAVerifiedApplicationTerminallyWithNoManagerNotification() throws Exception {
+    verifyEverything();
+    assertThat(employees.findById(emp.getId()).orElseThrow().getStatus())
+        .isEqualTo(EmployeeStatus.HR_VERIFIED);
+
+    mvc.perform(post("/employees/" + emp.getId() + "/reject")
+            .header("Authorization", "Bearer " + hr1Token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("note", "Background check failed"))))
+        .andExpect(status().isOk());
+
+    assertThat(employees.findById(emp.getId()).orElseThrow().getStatus())
+        .isEqualTo(EmployeeStatus.REJECTED); // terminal
+    assertThat(employees.findById(emp.getId()).orElseThrow().getEmployeeCode()).isNull(); // no code on reject
+    assertThat(approvals.findByEmployeeId(emp.getId())).isEmpty(); // no decision row (joined no team)
+    assertThat(notifications.findByRecipientUserId(manager1.getId())).isEmpty(); // manager never notified
+    assertThat(auditLogs.findByAction("HR_REJECTED"))
+        .singleElement()
+        .satisfies(r -> assertThat(r.getMetadata()).containsEntry("note", "Background check failed"));
+  }
+
+  @Test
+  void approveScopeAndTheRetiredEndpointsAreGone() throws Exception {
+    verifyEverything();
+
+    // A MANAGER may not call the new HR approve/reject endpoints (403). No teamId is taken — the team is
+    // resolved server-side, so there is no cross-company team input to validate.
+    String managerToken =
+        tokens.issueAccess(
+            new IhrmsPrincipal.User(
+                manager1.getId(), manager1.getEmail(), manager1.getName(), UserRole.MANAGER, companyA, null));
+    mvc.perform(post("/employees/" + emp.getId() + "/approve")
+            .header("Authorization", "Bearer " + managerToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of())))
+        .andExpect(status().isForbidden());
+
+    // The retired routing + manager-decision endpoints are GONE (404).
+    mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
+            .header("Authorization", "Bearer " + hr1Token))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void rejectingADocumentRecordsTheReasonAndBlocksApproval() throws Exception {
     String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
     reviewForm("FORM1", "VERIFIED", null);
     MvcResult rejected = reviewDoc(docId, "REJECTED", "Scan is blurry");
@@ -229,9 +288,8 @@ class ReviewApiTest {
         .singleElement()
         .satisfies(r -> assertThat(r.getMetadata()).containsEntry("reason", "Scan is blurry"));
 
-    mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
-            .header("Authorization", "Bearer " + hr1Token))
-        .andExpect(status().isBadRequest());
+    // Not fully verified -> status is not HR_VERIFIED -> approval is rejected (409).
+    approve(null).andExpect(status().isConflict());
   }
 
   @Test
@@ -259,7 +317,7 @@ class ReviewApiTest {
   }
 
   @Test
-  void sendingAnItemBackForRevisionFlagsItAndTheEmployeeAndBlocksRouting() throws Exception {
+  void sendingAnItemBackForRevisionFlagsItAndTheEmployeeAndBlocksApproval() throws Exception {
     String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
     reviewForm("FORM1", "VERIFIED", null);
 
@@ -277,18 +335,16 @@ class ReviewApiTest {
     assertThat(employees.findById(emp.getId()).orElseThrow().getStatus())
         .isEqualTo(EmployeeStatus.REVISION_REQUESTED);
 
-    // A flagged item blocks routing to the Manager.
-    mvc.perform(post("/employees/" + emp.getId() + "/route-to-manager")
-            .header("Authorization", "Bearer " + hr1Token))
-        .andExpect(status().isBadRequest());
+    // A flagged item blocks the approval decision (409 — not HR_VERIFIED).
+    approve(null).andExpect(status().isConflict());
 
-    // Verify ⇄ Send-back is re-decidable: re-verifying clears the note and derives the employee
-    // back to SUBMITTED, which re-completes the review.
+    // Verify ⇄ Send-back is re-decidable: re-verifying clears the note and AUTO-transitions the employee to
+    // HR_VERIFIED (every item verified), which re-opens the approve/reject decision.
     MvcResult reVerified = reviewDoc(docId, "VERIFIED", null);
     assertThat(documents.findById(docId).orElseThrow().getRevisionNote()).isNull();
     assertThat(documents.findById(docId).orElseThrow().getRevisionRequestedAt()).isNull();
     assertThat(employees.findById(emp.getId()).orElseThrow().getStatus())
-        .isEqualTo(EmployeeStatus.SUBMITTED);
+        .isEqualTo(EmployeeStatus.HR_VERIFIED);
     assertThat(json.readTree(reVerified.getResponse().getContentAsString()).get("reviewComplete").asBoolean())
         .isTrue();
   }
@@ -317,7 +373,50 @@ class ReviewApiTest {
         .isEqualTo(SectionStatus.SUBMITTED); // unchanged
   }
 
+  @Test
+  void parallelHrApprovalsAllocateDistinctWellFormedCodes() {
+    IhrmsPrincipal.User hr =
+        new IhrmsPrincipal.User(hr1.getId(), hr1.getEmail(), hr1.getName(), UserRole.HR, companyA, null);
+    int n = 12;
+    List<String> ids = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      Employee e = new Employee();
+      e.setFullName("Emp " + i);
+      e.setEmail("emp" + i + "@p.test");
+      e.setCompanyId(companyA);
+      e.setOnboardingHrId(hr1.getId());
+      e.setStatus(EmployeeStatus.HR_VERIFIED);
+      employees.save(e);
+      ids.add(e.getId());
+    }
+
+    // Approve all in parallel within the same company -> the atomic §5 sequence must not collide.
+    Set<String> codes =
+        ids.parallelStream()
+            .map(id -> reviewService.approve(hr, id, new ApproveRequest(null), "127.0.0.1").employeeCode())
+            .collect(Collectors.toCollection(ConcurrentHashMap::newKeySet));
+
+    assertThat(codes).hasSize(n); // no duplicate codes under concurrency
+    assertThat(codes).allMatch(c -> EmployeeCodes.EMPLOYEE_CODE.matcher(c).matches());
+  }
+
   // --- helpers --------------------------------------------------------------
+
+  /** POST the HR approve action (optional note; the team is resolved server-side) — un-asserted. */
+  private org.springframework.test.web.servlet.ResultActions approve(String note) throws Exception {
+    var payload = note == null ? Map.of() : Map.of("note", note);
+    return mvc.perform(post("/employees/" + emp.getId() + "/approve")
+        .header("Authorization", "Bearer " + hr1Token)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsString(payload)));
+  }
+
+  /** Verify Form 1 + the single document so the employee auto-transitions to HR_VERIFIED. */
+  private void verifyEverything() throws Exception {
+    String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
+    reviewForm("FORM1", "VERIFIED", null);
+    reviewDoc(docId, "VERIFIED", null);
+  }
 
   private void reviewForm(String form, String decision, String reason) throws Exception {
     var body = reason == null ? Map.of("decision", decision) : Map.of("decision", decision, "reason", reason);
@@ -354,13 +453,13 @@ class ReviewApiTest {
     return users.save(u);
   }
 
-  private void team(String companyId, String hrUserId, String managerUserId) {
+  private String team(String companyId, String hrUserId, String managerUserId) {
     Team t = new Team();
     t.setCompanyId(companyId);
     t.setName("Engineering");
     t.setHrUserId(hrUserId);
     t.setManagerUserId(managerUserId);
-    teams.save(t);
+    return teams.save(t).getId();
   }
 
   private Employee submittedEmployee(String hrId) {

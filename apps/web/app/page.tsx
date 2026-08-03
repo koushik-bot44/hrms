@@ -13,7 +13,7 @@ const FEATURES = [
   {
     icon: ClipboardCheck,
     title: 'Verify & approve',
-    body: 'HR verifies identity and background documents; the team’s Manager gives the final approval.',
+    body: 'HR verifies identity and background documents, then approves and assigns the employee to a team.',
   },
   {
     icon: ScrollText,

@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 /**
- * HR verification & routing REQUEST contracts (ARCHITECTURE.md §3.3/§3.4). Response shapes
- * (EmployeeRecord, RecordSection, RecordDocument, RouteToManagerResult) are derived from the Java
- * OpenAPI schema in `../responses.ts`.
+ * HR verification & approval REQUEST contracts (ARCHITECTURE.md §3.3/§3.4). Response shapes
+ * (EmployeeRecord, RecordSection, RecordDocument, DecisionResult) are derived from the Java OpenAPI schema
+ * in `../responses.ts`.
  */
 
 /** The lookup-by-ID form in the HR verification workspace. */
@@ -34,8 +34,21 @@ export const SendBackSchema = z.object({
 });
 export type SendBackInput = z.infer<typeof SendBackSchema>;
 
-/** The route-to-Manager confirm dialog (optional note). */
-export const RouteToManagerSchema = z.object({
+/**
+ * The HR APPROVE dialog (§3.3): only an optional note. The team is NOT chosen — the server approves the
+ * employee onto their onboarding-HR's team (the system's scoping rule).
+ */
+export const ApproveSchema = z.object({
   note: z.string().trim().max(500, 'Keep it under 500 characters').optional(),
 });
-export type RouteToManagerInput = z.infer<typeof RouteToManagerSchema>;
+export type ApproveInput = z.infer<typeof ApproveSchema>;
+
+/** The HR REJECT dialog (§3.3): a terminal rejection — the note is REQUIRED and recorded in the audit. */
+export const RejectSchema = z.object({
+  note: z
+    .string()
+    .trim()
+    .min(1, 'Add a note describing why the application is rejected')
+    .max(500, 'Keep it under 500 characters'),
+});
+export type RejectInput = z.infer<typeof RejectSchema>;

@@ -34,8 +34,9 @@ type ReviewVars = { kind: ItemKind; id: string; decision: ReviewDecision; reason
 const recordKey = (id: string) => ['hr-record', id] as const;
 
 /**
- * Apply a decision locally so the badges + routing gate + derived employee status react optimistically.
- * The employee is REVISION_REQUESTED while any item is sent back, else SUBMITTED (matches the server).
+ * Apply a decision locally so the badges + approve/reject gate + derived employee status react
+ * optimistically, mirroring the server recompute: REVISION_REQUESTED while any item is sent back, else
+ * HR_VERIFIED once every item is verified (opens the approve/reject decision), else SUBMITTED.
  */
 function patchRecord(rec: EmployeeRecord, v: ReviewVars): EmployeeRecord {
   // Empty string clears it (the field is non-null in the record type; '' reads as "no note").
@@ -52,19 +53,25 @@ function patchRecord(rec: EmployeeRecord, v: ReviewVars): EmployeeRecord {
     form1?.status === 'REVISION_REQUESTED' ||
     form3.some((e) => e.status === 'REVISION_REQUESTED') ||
     documents.some((d) => d.status === 'REVISION_REQUESTED');
-  const underReview = rec.status === 'SUBMITTED' || rec.status === 'REVISION_REQUESTED';
-  const status = underReview ? (anyRevision ? 'REVISION_REQUESTED' : 'SUBMITTED') : rec.status;
-  const reviewComplete =
-    status === 'SUBMITTED' &&
+  const allVerified =
     !!form1 &&
     form1.status === 'VERIFIED' &&
     form3.every((e) => e.status === 'VERIFIED') &&
     documents.length > 0 &&
     documents.every((d) => d.status === 'VERIFIED');
-  return { ...rec, status, form1, form3, documents, reviewComplete };
+  const underReview =
+    rec.status === 'SUBMITTED' || rec.status === 'REVISION_REQUESTED' || rec.status === 'HR_VERIFIED';
+  const status = underReview
+    ? anyRevision
+      ? 'REVISION_REQUESTED'
+      : allVerified
+        ? 'HR_VERIFIED'
+        : 'SUBMITTED'
+    : rec.status;
+  return { ...rec, status, form1, form3, documents, reviewComplete: allVerified };
 }
 
-/** Verify / send items back by INTERNAL id, then route to the Manager once all are verified (§3.3). */
+/** Verify / send items back by INTERNAL id, then approve or reject once all are verified (§3.3). */
 export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -111,8 +118,13 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
   });
 
   const record = recordQuery.data;
-  // HR can act while the employee is under review — before routing (SUBMITTED or a revision in flight).
-  const editable = record?.status === 'SUBMITTED' || record?.status === 'REVISION_REQUESTED';
+  // HR can act while the employee is under review — verifying items (SUBMITTED / a revision in flight) AND
+  // from the verified state (HR_VERIFIED), where the Approve / Reject decision lives (and items can still
+  // be sent back). Locked once APPROVED / REJECTED.
+  const editable =
+    record?.status === 'SUBMITTED' ||
+    record?.status === 'REVISION_REQUESTED' ||
+    record?.status === 'HR_VERIFIED';
 
   if (recordQuery.isLoading) return <RecordSkeleton />;
   if (recordQuery.isError || !record) {
@@ -156,7 +168,7 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
         onReveal={() => revealMutation.mutate()}
         onVerify={verify}
         onSendBack={startSendBack}
-        onRouted={() => {
+        onDecided={() => {
           void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
           router.push(cp('/hr/employees'));
         }}

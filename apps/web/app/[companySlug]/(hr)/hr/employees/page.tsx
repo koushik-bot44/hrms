@@ -10,7 +10,7 @@ export default function HrEmployeesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Employees"
-        description="Your onboarding queue — open a submitted employee to verify and route them to the Manager."
+        description="Your onboarding queue — open a submitted employee to verify, then approve or reject."
         actions={<OnboardEmployeeDialog />}
       />
       <EmployeeQueue />

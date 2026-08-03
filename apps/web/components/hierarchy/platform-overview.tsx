@@ -132,7 +132,7 @@ function OverviewBody({ data }: { data: Overview }) {
           size="sm"
           label="Avg. time to approval"
           value={ops.averageTimeToApprovalDays == null ? '—' : `${ops.averageTimeToApprovalDays} days`}
-          sub="Onboard → Manager approval"
+          sub="Onboard → approval"
         />
         <StuckCard ops={ops} />
       </div>

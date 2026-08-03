@@ -5,9 +5,7 @@ import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.manager.dto.ManagerDtos.ApprovalView;
 import com.ihrms.manager.dto.ManagerDtos.NotificationFeed;
 import com.ihrms.manager.dto.ManagerDtos.NotificationView;
-import com.ihrms.manager.dto.ManagerDtos.RejectApprovalRequest;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
-import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -56,11 +54,11 @@ public class ManagerController {
     return manager.markAllRead(actor);
   }
 
-  @GetMapping("/approvals")
-  public List<ApprovalView> approvals(@AuthenticationPrincipal IhrmsPrincipal.User actor) {
-    return manager.pendingApprovals(actor);
-  }
-
+  /**
+   * The Manager's READ-ONLY team-onboarding history (§3.3) — the employees decided onto their team
+   * (approved, and any legacy manager-era rejects), most recent first. Approval authority now sits with HR;
+   * the Manager has no approve/reject/pending-inbox action.
+   */
   @GetMapping("/approvals/history")
   public List<ApprovalView> approvalHistory(@AuthenticationPrincipal IhrmsPrincipal.User actor) {
     return manager.approvalHistory(actor);
@@ -70,23 +68,5 @@ public class ManagerController {
   public EmployeeRecordView approvalRecord(
       @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
     return manager.recordForApproval(actor, id);
-  }
-
-  @PostMapping("/approvals/{id}/approve")
-  public ApprovalView approve(
-      @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
-    ApprovalView view = manager.approve(actor, id);
-    // Post-commit + best-effort: (re)generate the PDFs with the minted ID; a failure here must not
-    // undo the approval that already committed above.
-    manager.regeneratePdfsForApproval(actor, id);
-    return view;
-  }
-
-  @PostMapping("/approvals/{id}/reject")
-  public ApprovalView reject(
-      @PathVariable String id,
-      @Valid @RequestBody RejectApprovalRequest body,
-      @AuthenticationPrincipal IhrmsPrincipal.User actor) {
-    return manager.reject(actor, id, body);
   }
 }

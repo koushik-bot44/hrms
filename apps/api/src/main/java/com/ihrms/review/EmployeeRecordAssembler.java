@@ -123,15 +123,19 @@ public class EmployeeRecordAssembler {
     return reviewComplete(employee, f1, f2, f3, docs);
   }
 
+  /**
+   * Whether every reviewable item is VERIFIED — status-AGNOSTIC (Form 2 is HR/SA-authored, §3.2, so it is
+   * never part of the gate — only Forms 1, 3 and the documents are). This is the "all verified" signal that
+   * drives the SUBMITTED → HR_VERIFIED auto-transition (see ReviewService.recomputeReviewStatus) and gates
+   * the HR approve/reject action.
+   */
   private boolean reviewComplete(
       Employee employee,
       Form1Personal f1,
       Form2Info f2,
       List<Form3PrevEmployment> f3,
       List<Document> docs) {
-    // Form 2 is HR/SA-authored (§3.2) and NOT part of the gate — only Forms 1, 3 and the documents are.
-    return employee.getStatus() == EmployeeStatus.SUBMITTED
-        && f1 != null
+    return f1 != null
         && f1.getStatus() == SectionStatus.VERIFIED
         && f3.stream().allMatch(r -> r.getStatus() == SectionStatus.VERIFIED)
         && !docs.isEmpty()

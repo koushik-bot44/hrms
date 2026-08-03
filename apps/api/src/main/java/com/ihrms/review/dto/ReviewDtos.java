@@ -37,9 +37,18 @@ public final class ReviewDtos {
           String decision,
       @Size(max = 500, message = "Reason is too long") String reason) {}
 
-  /** Route the reviewed record to the team's Manager for approval. */
-  public record RouteToManagerRequest(
-      @Size(max = 500, message = "Note is too long") String note) {}
+  /**
+   * HR APPROVES a verified employee (§3.3). The team is NOT a choice — it is resolved server-side as the
+   * employee's onboarding-HR's team (the system's existing scoping rule); only an optional {@code note} is
+   * taken. Valid only while the employee is HR_VERIFIED.
+   */
+  public record ApproveRequest(@Size(max = 500, message = "Note is too long") String note) {}
+
+  /** HR terminally REJECTS the application (§3.3). A {@code note} is required — it is recorded in the audit. */
+  public record RejectRequest(
+      @NotBlank(message = "Add a note describing why the application is rejected")
+          @Size(max = 500, message = "Note is too long")
+          String note) {}
 
   /** {@code viewUrl} is a short-lived presigned GET — the raw storage key is never exposed (§6). */
   public record RecordDocument(
@@ -94,8 +103,17 @@ public final class ReviewDtos {
   /** The plaintext sensitive values returned by the explicit, audited reveal action (§6). */
   public record RevealedSensitive(Form1View form1, Form2View form2, List<Form3EntryView> form3) {}
 
-  public record RouteToManagerResult(
-      String employeeCode, EmployeeStatus status, String approvalRequestId, String managerName) {}
+  /**
+   * The outcome of an HR approve/reject (§3.3). On approve: the freshly-minted {@code employeeCode} (§5),
+   * the joined team, and the notified manager (null when the team has no manager). On reject: status
+   * REJECTED with the team/manager fields null.
+   */
+  public record DecisionResult(
+      String employeeCode,
+      EmployeeStatus status,
+      String teamId,
+      String teamName,
+      String managerName) {}
 
   /**
    * HR assigns an APPROVED employee internal credentials (§8, Stage 5). {@code localPart} forms

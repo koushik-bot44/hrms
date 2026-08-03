@@ -36,9 +36,19 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class AuditQueryService {
 
-  /** The approval-lifecycle audit actions the Accountant may read across companies (§7). */
+  /**
+   * The approval-lifecycle audit actions the Accountant may read across companies (§7). Includes the current
+   * HR-decision events ({@code HR_APPROVED}/{@code HR_REJECTED}) AND the legacy manager-era events
+   * ({@code APPROVAL_ROUTED}/{@code APPROVAL_APPROVED}/{@code APPROVAL_REJECTED}) — the audit is append-only,
+   * so the historical trail stays readable.
+   */
   private static final Set<String> APPROVAL_ACTIONS =
-      Set.of("APPROVAL_ROUTED", "APPROVAL_APPROVED", "APPROVAL_REJECTED");
+      Set.of(
+          "HR_APPROVED",
+          "HR_REJECTED",
+          "APPROVAL_ROUTED",
+          "APPROVAL_APPROVED",
+          "APPROVAL_REJECTED");
 
   private final AuditLogRepository auditLogs;
   private final UserRepository users;

@@ -4,12 +4,14 @@ import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
 import com.ihrms.auth.AuthorizationService;
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.auth.MailService;
 import com.ihrms.domain.enums.ApprovalStatus;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.NotificationType;
 import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.model.ApprovalRequest;
+import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Form1Personal;
@@ -18,6 +20,7 @@ import com.ihrms.domain.model.Notification;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
+import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.Form1PersonalRepository;
@@ -25,15 +28,23 @@ import com.ihrms.domain.repository.Form3PrevEmploymentRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
+import com.ihrms.domain.support.EmployeeCodeService;
+import com.ihrms.domain.support.EmployeeCodes;
+import com.ihrms.onboarding.PdfService;
+import com.ihrms.push.PushService;
+import com.ihrms.push.PushService.PrincipalRef;
+import com.ihrms.review.dto.ReviewDtos.ApproveRequest;
+import com.ihrms.review.dto.ReviewDtos.DecisionResult;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
+import com.ihrms.review.dto.ReviewDtos.RejectRequest;
 import com.ihrms.review.dto.ReviewDtos.RevealedSensitive;
 import com.ihrms.review.dto.ReviewDtos.ReviewRequest;
-import com.ihrms.review.dto.ReviewDtos.RouteToManagerRequest;
-import com.ihrms.review.dto.ReviewDtos.RouteToManagerResult;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +60,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ReviewService {
 
+  private static final Logger log = LoggerFactory.getLogger(ReviewService.class);
+
   private final EmployeeRepository employees;
   private final Form1PersonalRepository form1s;
   private final Form3PrevEmploymentRepository form3s;
@@ -57,6 +70,11 @@ public class ReviewService {
   private final NotificationRepository notifications;
   private final TeamRepository teams;
   private final UserRepository users;
+  private final CompanyRepository companies;
+  private final EmployeeCodeService codes;
+  private final MailService mail;
+  private final PdfService pdf;
+  private final PushService push;
   private final AuthorizationService authz;
   private final AuditService audit;
   private final EmployeeRecordAssembler assembler;
@@ -70,6 +88,11 @@ public class ReviewService {
       NotificationRepository notifications,
       TeamRepository teams,
       UserRepository users,
+      CompanyRepository companies,
+      EmployeeCodeService codes,
+      MailService mail,
+      PdfService pdf,
+      PushService push,
       AuthorizationService authz,
       AuditService audit,
       EmployeeRecordAssembler assembler) {
@@ -81,6 +104,11 @@ public class ReviewService {
     this.notifications = notifications;
     this.teams = teams;
     this.users = users;
+    this.companies = companies;
+    this.codes = codes;
+    this.mail = mail;
+    this.pdf = pdf;
+    this.push = push;
     this.authz = authz;
     this.audit = audit;
     this.assembler = assembler;
@@ -193,59 +221,160 @@ public class ReviewService {
     return assembler.build(employee);
   }
 
-  /** §3.3 step 2: route the completed review to the Manager on the HR's team. */
+  /**
+   * HR APPROVES a verified employee (§3.3 — HR now holds the approval authority). Valid only while the
+   * employee is {@code HR_VERIFIED} (409 otherwise). The team is NOT a choice — it is resolved server-side
+   * as the employee's onboarding-HR's team (the same {@code findByCompanyIdAndHrUserId} resolution the leave
+   * + document-request flows use), so the ApprovalRequest row and the manager notification can never name a
+   * team the employee isn't in. MINTS the unique employee code (§5) exactly as the manager path did; records
+   * the decision as an ApprovalRequest (created + decided now) so the hierarchy metrics + the Manager's
+   * read-only onboarding history keep working; welcomes the employee by mail; and — when the team has a
+   * manager — writes them a durable notification. The OS push + PDF regeneration run post-commit.
+   */
   @Transactional
-  public RouteToManagerResult routeToManager(
-      IhrmsPrincipal.User actor, String employeeId, RouteToManagerRequest req, String ip) {
+  public DecisionResult approve(
+      IhrmsPrincipal.User actor, String employeeId, ApproveRequest req, String ip) {
     Employee employee = loadOwnById(actor, employeeId);
-    assertReviewable(employee);
+    requireVerified(employee);
 
-    if (!assembler.reviewComplete(employee)) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "Verify every form and document before routing for approval");
+    Team team = resolveTeam(employee);
+
+    if (employee.getEmployeeCode() == null) {
+      employee.setEmployeeCode(allocateCode(employee)); // §5 — the moment the employee ID is born
     }
-
-    Team team =
-        teams
-            .findByCompanyIdAndHrUserId(actor.companyId(), actor.userId())
-            .orElseThrow(() -> badRequest("You are not assigned to a team"));
-    String managerUserId = team.getManagerUserId();
-    if (managerUserId == null) {
-      throw badRequest("Your team has no manager assigned yet");
-    }
-
-    ApprovalRequest approval = new ApprovalRequest();
-    approval.setEmployeeId(employee.getId());
-    approval.setHrUserId(actor.userId());
-    approval.setManagerUserId(managerUserId);
-    approval.setTeamId(team.getId());
-    approval.setStatus(ApprovalStatus.PENDING);
-    approval.setNote(req == null ? null : req.note());
-    approvals.save(approval);
-
-    Notification notification = new Notification();
-    notification.setRecipientUserId(managerUserId);
-    notification.setType(NotificationType.APPROVAL_REQUESTED);
-    notification.setEmployeeId(employee.getId());
-    notifications.save(notification);
-
-    employee.setStatus(EmployeeStatus.HR_VERIFIED);
+    employee.setStatus(EmployeeStatus.APPROVED);
     employees.save(employee);
+
+    // Decision record (created + decided now): keeps avgTimeToApproval (decidedAt − employee.createdAt),
+    // approvedPerIstMonth and the Manager's read-only history working unchanged. managerUserId may be null
+    // (a team without a manager); the row is still the "approved onto team X" record.
+    ApprovalRequest decision = new ApprovalRequest();
+    decision.setEmployeeId(employee.getId());
+    decision.setHrUserId(actor.userId());
+    decision.setManagerUserId(team.getManagerUserId());
+    decision.setTeamId(team.getId());
+    decision.setStatus(ApprovalStatus.APPROVED);
+    decision.setNote(req.note());
+    decision.setDecidedAt(Instant.now());
+    approvals.save(decision);
+
+    // The team's manager (if any) gets a durable bell entry that the employee joined their team; push follows.
+    if (team.getManagerUserId() != null) {
+      Notification n = new Notification();
+      n.setRecipientUserId(team.getManagerUserId());
+      n.setType(NotificationType.EMPLOYEE_APPROVED);
+      n.setEmployeeId(employee.getId());
+      notifications.save(n);
+    }
+
+    mail.sendEmployeeWelcome(employee.getEmail(), employee.getFullName(), employee.getEmployeeCode());
 
     audit.record(
         AuditActor.from(actor),
-        "APPROVAL_ROUTED",
+        "HR_APPROVED",
         "Employee",
         employee.getId(),
         Map.<String, Object>of(
-            "approvalRequestId", approval.getId(),
-            "managerUserId", managerUserId,
-            "teamId", team.getId()),
+            "employeeCode", employee.getEmployeeCode(),
+            "teamId", team.getId(),
+            "approvalRequestId", decision.getId()),
         ip);
 
-    String managerName = users.findById(managerUserId).map(User::getName).orElse(null);
-    return new RouteToManagerResult(
-        employee.getEmployeeCode(), employee.getStatus(), approval.getId(), managerName);
+    String managerName =
+        team.getManagerUserId() == null
+            ? null
+            : users.findById(team.getManagerUserId()).map(User::getName).orElse(null);
+    return new DecisionResult(
+        employee.getEmployeeCode(), employee.getStatus(), team.getId(), team.getName(), managerName);
+  }
+
+  /** HR terminally REJECTS a verified application (§3.3). Valid only while HR_VERIFIED (409 otherwise). */
+  @Transactional
+  public DecisionResult reject(
+      IhrmsPrincipal.User actor, String employeeId, RejectRequest req, String ip) {
+    Employee employee = loadOwnById(actor, employeeId);
+    requireVerified(employee);
+
+    employee.setStatus(EmployeeStatus.REJECTED);
+    employees.save(employee);
+
+    // Terminal reject: the employee joined no team, so no ApprovalRequest / manager notification is written —
+    // the decision is captured by the append-only audit event + the employee's REJECTED status.
+    audit.record(
+        AuditActor.from(actor),
+        "HR_REJECTED",
+        "Employee",
+        employee.getId(),
+        Map.<String, Object>of("note", req.note()),
+        ip);
+    return new DecisionResult(employee.getEmployeeCode(), employee.getStatus(), null, null, null);
+  }
+
+  /**
+   * Best-effort OS push to the team's manager AFTER the approve transaction has committed (controller-called,
+   * mirroring the leave/mail post-commit pattern) — a failure here never affects the committed approval.
+   */
+  public void pushApprovalToManager(String employeeId) {
+    try {
+      Employee employee = employees.findById(employeeId).orElse(null);
+      if (employee == null) {
+        return;
+      }
+      Team team =
+          teams.findByCompanyIdAndHrUserId(employee.getCompanyId(), employee.getOnboardingHrId()).orElse(null);
+      if (team == null || team.getManagerUserId() == null) {
+        return;
+      }
+      String who = employee.getFullName() != null ? employee.getFullName() : "An employee";
+      push.sendToPrincipal(
+          PrincipalRef.forUser(team.getManagerUserId(), team.getCompanyId()),
+          "New team member approved",
+          who + " was approved onto " + team.getName() + ".",
+          "/manager");
+    } catch (RuntimeException e) {
+      log.warn("Post-approval manager push skipped (best-effort): {}", e.getMessage());
+    }
+  }
+
+  /**
+   * The employee's team = their onboarding-HR's team (the system's scoping rule; the same resolution the
+   * leave + document-request flows use). An employee's onboarding HR is always assigned to a team, but guard
+   * defensively. Team is NOT chosen at approval — see §3.3/§5.
+   */
+  private Team resolveTeam(Employee employee) {
+    return teams
+        .findByCompanyIdAndHrUserId(employee.getCompanyId(), employee.getOnboardingHrId())
+        .orElseThrow(() -> badRequest("The onboarding HR is not assigned to a team"));
+  }
+
+  /** Regenerate the employee's PDFs post-commit so the freshly-minted ID is stamped on them (best-effort). */
+  public void regeneratePdfsQuietly(String employeeId) {
+    try {
+      employees.findById(employeeId).ifPresent(pdf::generateForEmployee);
+    } catch (Exception e) {
+      log.error("Post-approval PDF generation failed for employee {} (non-fatal)", employeeId, e);
+    }
+  }
+
+  /** Allocate the next unique employee code for the employee's company (atomic, collision-safe, §5). */
+  private String allocateCode(Employee employee) {
+    Company company =
+        companies.findById(employee.getCompanyId()).orElseThrow(() -> notFound("Company not found"));
+    int sequence = codes.allocateSequence(employee.getCompanyId());
+    if (sequence > EmployeeCodes.SEQ_MAX) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Employee ID sequence exhausted for this company");
+    }
+    return EmployeeCodes.format(company.getCode(), sequence);
+  }
+
+  /** The approve/reject decision is made from the verified/awaiting-HR-decision state (HR_VERIFIED). */
+  private void requireVerified(Employee employee) {
+    if (employee.getStatus() != EmployeeStatus.HR_VERIFIED) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "Employee is not awaiting an approval decision (status " + employee.getStatus() + ")");
+    }
   }
 
   // --- internals ------------------------------------------------------------
@@ -274,10 +403,16 @@ public class ReviewService {
     return employee;
   }
 
-  /** Review actions are allowed while the employee is under HR review — before routing/approval. */
+  /**
+   * Review actions are allowed while the employee is under HR review — SUBMITTED, in revision, OR already
+   * verified (HR may still send an item back from the verified state, which re-opens it for revision).
+   * Not once APPROVED/REJECTED.
+   */
   private void assertReviewable(Employee employee) {
     EmployeeStatus s = employee.getStatus();
-    if (s != EmployeeStatus.SUBMITTED && s != EmployeeStatus.REVISION_REQUESTED) {
+    if (s != EmployeeStatus.SUBMITTED
+        && s != EmployeeStatus.REVISION_REQUESTED
+        && s != EmployeeStatus.HR_VERIFIED) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "Employee is not awaiting review (status " + s + ")");
     }
@@ -315,13 +450,16 @@ public class ReviewService {
   }
 
   /**
-   * The employee's overall status follows the items while under HR review: {@code REVISION_REQUESTED}
-   * if any form/document is flagged, otherwise {@code SUBMITTED}. Never touches a routed/approved
-   * record. This keeps Verify ⇄ Send-back re-decidable and the routing gate consistent.
+   * The employee's overall status follows the items while under HR review: {@code REVISION_REQUESTED} if
+   * any form/document is flagged; else {@code HR_VERIFIED} once EVERY item is verified (the auto-transition
+   * that opens the HR approve/reject decision); else {@code SUBMITTED} (some items still unreviewed). Never
+   * touches an APPROVED/REJECTED record. Keeps Verify ⇄ Send-back re-decidable and drives the decision gate.
    */
   private void recomputeReviewStatus(Employee employee) {
     EmployeeStatus s = employee.getStatus();
-    if (s != EmployeeStatus.SUBMITTED && s != EmployeeStatus.REVISION_REQUESTED) {
+    if (s != EmployeeStatus.SUBMITTED
+        && s != EmployeeStatus.REVISION_REQUESTED
+        && s != EmployeeStatus.HR_VERIFIED) {
       return;
     }
     String id = employee.getId();
@@ -332,7 +470,14 @@ public class ReviewService {
                 .anyMatch(r -> r.getStatus() == SectionStatus.REVISION_REQUESTED)
             || documents.findByEmployeeId(id).stream()
                 .anyMatch(d -> d.getStatus() == DocumentStatus.REVISION_REQUESTED);
-    EmployeeStatus target = anyRevision ? EmployeeStatus.REVISION_REQUESTED : EmployeeStatus.SUBMITTED;
+    EmployeeStatus target;
+    if (anyRevision) {
+      target = EmployeeStatus.REVISION_REQUESTED;
+    } else if (assembler.reviewComplete(employee)) {
+      target = EmployeeStatus.HR_VERIFIED; // all items verified — awaiting HR's approve/reject decision
+    } else {
+      target = EmployeeStatus.SUBMITTED;
+    }
     if (target != s) {
       employee.setStatus(target);
       employees.save(employee);

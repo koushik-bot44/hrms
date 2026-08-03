@@ -1,11 +1,12 @@
 import type {
+  ApproveInput,
   AssignCredentialsInput,
   AssignCredentialsResult,
+  DecisionResult,
   EmployeeRecord,
+  RejectInput,
   RevealedSensitive,
   ReviewInput,
-  RouteToManagerInput,
-  RouteToManagerResult,
 } from '@/lib/contract';
 import { apiFetch } from './client';
 
@@ -48,11 +49,20 @@ export function reviewDocument(
   );
 }
 
-export function routeToManager(id: string, body: RouteToManagerInput): Promise<RouteToManagerResult> {
-  return apiFetch<RouteToManagerResult>(
-    `/employees/${encodeURIComponent(id)}/route-to-manager`,
-    { method: 'POST', body },
-  );
+/** HR APPROVES a verified employee (§3.3) — mints the ID; the server resolves the team (onboarding-HR's). */
+export function approveEmployee(id: string, body: ApproveInput): Promise<DecisionResult> {
+  return apiFetch<DecisionResult>(`/employees/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+    body,
+  });
+}
+
+/** HR terminally REJECTS a verified application (§3.3). */
+export function rejectEmployee(id: string, body: RejectInput): Promise<DecisionResult> {
+  return apiFetch<DecisionResult>(`/employees/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body,
+  });
 }
 
 /** Assign (or re-issue) an APPROVED employee internal credentials (§8, Stage 5). HR-only. */

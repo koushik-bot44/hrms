@@ -11,7 +11,7 @@ import { useCompanyPath } from '@/lib/auth/use-company-path';
 export default function ManagerLayout({ children }: { children: ReactNode }) {
   const cp = useCompanyPath();
   const nav: NavItem[] = [
-    { label: 'Approvals', href: cp('/manager'), icon: ClipboardCheck },
+    { label: 'Team onboarding', href: cp('/manager'), icon: ClipboardCheck },
     { label: 'Attendance', href: cp('/manager/attendance'), icon: Clock },
     { label: 'Leave', href: cp('/manager/leave'), icon: CalendarOff },
     { label: 'Notifications', href: cp('/manager/notifications'), icon: Bell },

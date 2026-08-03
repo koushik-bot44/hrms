@@ -4,10 +4,7 @@ import com.ihrms.accountant.dto.AccountantDtos.MyTeamView;
 import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
 import com.ihrms.auth.IhrmsPrincipal;
-import com.ihrms.auth.MailService;
 import com.ihrms.domain.enums.ApprovalStatus;
-import com.ihrms.domain.enums.EmployeeStatus;
-import com.ihrms.domain.enums.NotificationType;
 import com.ihrms.domain.model.ApprovalRequest;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
@@ -19,20 +16,13 @@ import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
-import com.ihrms.domain.support.EmployeeCodeService;
-import com.ihrms.domain.support.EmployeeCodes;
 import com.ihrms.manager.dto.ManagerDtos.ApprovalView;
 import com.ihrms.manager.dto.ManagerDtos.NotificationFeed;
 import com.ihrms.manager.dto.ManagerDtos.NotificationView;
-import com.ihrms.manager.dto.ManagerDtos.RejectApprovalRequest;
-import com.ihrms.onboarding.PdfService;
 import com.ihrms.review.EmployeeRecordAssembler;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,12 +43,7 @@ public class ManagerService {
   private final UserRepository users;
   private final CompanyRepository companies;
   private final TeamRepository teams;
-  private static final Logger log = LoggerFactory.getLogger(ManagerService.class);
-
-  private final EmployeeCodeService codes;
-  private final PdfService pdf;
   private final EmployeeRecordAssembler assembler;
-  private final MailService mail;
   private final AuditService audit;
 
   public ManagerService(
@@ -68,10 +53,7 @@ public class ManagerService {
       UserRepository users,
       CompanyRepository companies,
       TeamRepository teams,
-      EmployeeCodeService codes,
-      PdfService pdf,
       EmployeeRecordAssembler assembler,
-      MailService mail,
       AuditService audit) {
     this.notifications = notifications;
     this.approvals = approvals;
@@ -79,10 +61,7 @@ public class ManagerService {
     this.users = users;
     this.companies = companies;
     this.teams = teams;
-    this.codes = codes;
-    this.pdf = pdf;
     this.assembler = assembler;
-    this.mail = mail;
     this.audit = audit;
   }
 
@@ -145,17 +124,13 @@ public class ManagerService {
     return notifications(manager);
   }
 
-  // --- Approvals ------------------------------------------------------------
+  // --- Team onboarding history (read-only) ----------------------------------
 
-  public List<ApprovalView> pendingApprovals(IhrmsPrincipal.User manager) {
-    return approvals
-        .findByManagerUserIdAndStatusOrderBySubmittedAtAsc(manager.userId(), ApprovalStatus.PENDING)
-        .stream()
-        .map(this::approvalView)
-        .toList();
-  }
-
-  /** Past decisions (approved + rejected) the Manager has made, most recent first. */
+  /**
+   * The employees decided onto the Manager's team, most recent first — the read-only "Team onboarding"
+   * history. Approval authority now sits with HR; the rows are the HR-era approvals routed to this team
+   * plus any legacy manager-era decisions (approved + rejected).
+   */
   public List<ApprovalView> approvalHistory(IhrmsPrincipal.User manager) {
     return approvals
         .findByManagerUserIdAndStatusInOrderByDecidedAtDesc(
@@ -189,118 +164,7 @@ public class ManagerService {
     return assembler.build(employee);
   }
 
-  @Transactional
-  public ApprovalView approve(IhrmsPrincipal.User manager, String approvalId) {
-    ApprovalRequest approval = requirePending(manager, approvalId);
-    approval.setStatus(ApprovalStatus.APPROVED);
-    approval.setDecidedAt(Instant.now());
-    approvals.save(approval);
-
-    Employee employee =
-        employees
-            .findById(approval.getEmployeeId())
-            .orElseThrow(() -> notFound("Employee not found"));
-    // The moment the employee ID is born: mint it from the atomic per-company sequence (§5).
-    if (employee.getEmployeeCode() == null) {
-      employee.setEmployeeCode(allocateCode(employee));
-    }
-    employee.setStatus(EmployeeStatus.APPROVED);
-    employees.save(employee);
-
-    notifyHr(approval, NotificationType.EMPLOYEE_APPROVED);
-    mail.sendEmployeeWelcome(employee.getEmail(), employee.getFullName(), employee.getEmployeeCode());
-
-    audit.record(
-        AuditActor.from(manager),
-        "APPROVAL_APPROVED",
-        "Employee",
-        employee.getId(),
-        Map.<String, Object>of(
-            "approvalRequestId", approval.getId(), "employeeCode", employee.getEmployeeCode()),
-        null);
-    return approvalView(approval);
-  }
-
-  /**
-   * Regenerate the employee's PDFs after an approval has committed, so the freshly-minted ID is
-   * stamped on them. Best-effort: called by the controller AFTER {@link #approve} returns (post-commit),
-   * so a storage/rendering failure is logged but can never fail or roll back the approval itself.
-   */
-  public void regeneratePdfsForApproval(IhrmsPrincipal.User manager, String approvalId) {
-    try {
-      approvals
-          .findByIdAndManagerUserId(approvalId, manager.userId())
-          .flatMap(a -> employees.findById(a.getEmployeeId()))
-          .ifPresent(pdf::generateForEmployee);
-    } catch (Exception e) {
-      log.error("Post-approval PDF generation failed for approval {} (non-fatal)", approvalId, e);
-    }
-  }
-
-  /** Allocate the next unique employee code for the employee's company (atomic, collision-safe, §5). */
-  private String allocateCode(Employee employee) {
-    Company company =
-        companies
-            .findById(employee.getCompanyId())
-            .orElseThrow(() -> notFound("Company not found"));
-    int sequence = codes.allocateSequence(employee.getCompanyId());
-    if (sequence > EmployeeCodes.SEQ_MAX) {
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "Employee ID sequence exhausted for this company");
-    }
-    return EmployeeCodes.format(company.getCode(), sequence);
-  }
-
-  @Transactional
-  public ApprovalView reject(IhrmsPrincipal.User manager, String approvalId, RejectApprovalRequest req) {
-    ApprovalRequest approval = requirePending(manager, approvalId);
-    approval.setStatus(ApprovalStatus.REJECTED);
-    approval.setNote(req.note());
-    approval.setDecidedAt(Instant.now());
-    approvals.save(approval);
-
-    Employee employee = setEmployeeStatus(approval, EmployeeStatus.REJECTED);
-    notifyHr(approval, NotificationType.EMPLOYEE_REJECTED);
-
-    audit.record(
-        AuditActor.from(manager),
-        "APPROVAL_REJECTED",
-        "Employee",
-        employee.getId(),
-        Map.<String, Object>of("approvalRequestId", approval.getId(), "note", req.note()),
-        null);
-    return approvalView(approval);
-  }
-
   // --- internals ------------------------------------------------------------
-
-  private ApprovalRequest requirePending(IhrmsPrincipal.User manager, String approvalId) {
-    ApprovalRequest approval =
-        approvals
-            .findByIdAndManagerUserId(approvalId, manager.userId())
-            .orElseThrow(() -> notFound("Approval not found"));
-    if (approval.getStatus() != ApprovalStatus.PENDING) {
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "This approval was already " + approval.getStatus());
-    }
-    return approval;
-  }
-
-  private Employee setEmployeeStatus(ApprovalRequest approval, EmployeeStatus status) {
-    Employee employee =
-        employees.findById(approval.getEmployeeId()).orElseThrow(() -> notFound("Employee not found"));
-    employee.setStatus(status);
-    employees.save(employee);
-    return employee;
-  }
-
-  private void notifyHr(ApprovalRequest approval, NotificationType type) {
-    Notification n = new Notification();
-    n.setRecipientUserId(approval.getHrUserId());
-    n.setType(type);
-    n.setEmployeeId(approval.getEmployeeId());
-    notifications.save(n);
-  }
 
   private NotificationView notificationView(Notification n) {
     Employee employee =

@@ -3,12 +3,12 @@
 import * as React from 'react';
 import { CheckCircle2, Eye, ExternalLink, FileText, Undo2 } from 'lucide-react';
 import type {
+  DecisionResult,
   EmployeeRecord,
   Form1View,
   Form2View,
   Form3EntryView,
   RevealedSensitive,
-  RouteToManagerResult,
   SectionStatus,
 } from '@/lib/contract';
 import { DOCUMENT_TYPE_LABELS, GeneratedDocumentKind, UserRole } from '@/lib/contract';
@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
 import { surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
-import { RouteToManagerDialog } from '@/components/hr/route-to-manager-dialog';
+import { ApproveDecisionActions } from '@/components/hr/approve-decision';
 import { AssignCredentialsDialog } from '@/components/hr/assign-credentials-dialog';
 
 export type ItemKind = 'form' | 'document';
@@ -41,7 +41,8 @@ interface RecordViewProps {
   onVerify?: (kind: ItemKind, id: string) => void;
   /** Send this item back to the employee for revision — asks for a note (§3.3). */
   onSendBack?: (kind: ItemKind, id: string, label: string) => void;
-  onRouted?: (result: RouteToManagerResult) => void;
+  /** HR's terminal decision (approve onto a team, or reject) once the record is fully verified (§3.3). */
+  onDecided?: (result: DecisionResult) => void;
   /** HR/SA "Edit Employee Info" affordance for the Form 2 card — shown only while INVITED (§3.2). */
   form2EditAction?: React.ReactNode;
 }
@@ -55,7 +56,7 @@ export function RecordView({
   onReveal,
   onVerify,
   onSendBack,
-  onRouted,
+  onDecided,
   form2EditAction,
 }: RecordViewProps) {
   const { session } = useAuth();
@@ -115,8 +116,12 @@ export function RecordView({
               </Button>
             ) : null}
             <StatusBadge status={record.status} />
-            {editable && onRouted ? (
-              <RouteToManagerDialog employeeId={record.id} disabled={!record.reviewComplete} onRouted={onRouted} />
+            {editable && onDecided ? (
+              <ApproveDecisionActions
+                employeeId={record.id}
+                disabled={record.status !== 'HR_VERIFIED'}
+                onDecided={onDecided}
+              />
             ) : null}
             {viewerCanManageMailbox && record.status === 'APPROVED' ? (
               record.credentialsAssigned ? (
@@ -139,8 +144,8 @@ export function RecordView({
         {editable && !record.reviewComplete ? (
           <CardContent className="pt-0 text-sm text-muted-foreground">
             {record.status === 'REVISION_REQUESTED'
-              ? 'Waiting on the employee to fix the items you sent back — they can’t be routed until every item is verified.'
-              : 'Verify every form and document to enable routing to the Manager.'}
+              ? 'Waiting on the employee to fix the items you sent back — you can’t approve until every item is verified.'
+              : 'Verify every form and document to enable Approve / Reject.'}
           </CardContent>
         ) : null}
         {revealed ? (
@@ -493,8 +498,8 @@ function Empty() {
 
 /**
  * The two per-item HR actions (§3.3): Verify, and Send back for revision. There is no per-item Reject
- * — terminal rejection of the application is the Manager's action at approval. Both stay enabled after
- * a decision so HR can re-decide (Verify ⇄ Send-back). For a DOCUMENT (has a {@code viewUrl}), Verify
+ * — terminal rejection of the application is HR's whole-record action once verified. Both stay enabled
+ * after a decision so HR can re-decide (Verify ⇄ Send-back). For a DOCUMENT (has a {@code viewUrl}), Verify
  * stays disabled until HR opens it via Preview — no approving a file sight-unseen; sending it back is
  * always allowed.
  */

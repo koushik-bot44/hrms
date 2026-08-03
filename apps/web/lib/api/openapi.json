@@ -1120,76 +1120,6 @@
         }
       }
     },
-    "/manager/approvals/{id}/reject": {
-      "post": {
-        "tags": [
-          "manager-controller"
-        ],
-        "operationId": "reject",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RejectApprovalRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApprovalView"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/manager/approvals/{id}/approve": {
-      "post": {
-        "tags": [
-          "manager-controller"
-        ],
-        "operationId": "approve",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApprovalView"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/mail/threads/{threadId}/labels/{labelId}": {
       "post": {
         "tags": [
@@ -1742,7 +1672,7 @@
         "tags": [
           "leave-controller"
         ],
-        "operationId": "reject_1",
+        "operationId": "reject",
         "parameters": [
           {
             "name": "id",
@@ -1782,7 +1712,7 @@
         "tags": [
           "leave-controller"
         ],
-        "operationId": "approve_1",
+        "operationId": "approve",
         "parameters": [
           {
             "name": "id",
@@ -1899,45 +1829,6 @@
         }
       }
     },
-    "/employees/{id}/route-to-manager": {
-      "post": {
-        "tags": [
-          "review-controller"
-        ],
-        "operationId": "routeToManager",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RouteToManagerRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/RouteToManagerResult"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/employees/{id}/reveal": {
       "post": {
         "tags": [
@@ -1961,6 +1852,46 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/RevealedSensitive"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/reject": {
+      "post": {
+        "tags": [
+          "review-controller"
+        ],
+        "operationId": "reject_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResult"
                 }
               }
             }
@@ -2001,6 +1932,45 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/AssignCredentialsResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/approve": {
+      "post": {
+        "tags": [
+          "review-controller"
+        ],
+        "operationId": "approve_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResult"
                 }
               }
             }
@@ -3380,29 +3350,6 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/MyTeamView"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/manager/approvals": {
-      "get": {
-        "tags": [
-          "manager-controller"
-        ],
-        "operationId": "approvals",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ApprovalView"
-                  }
                 }
               }
             }
@@ -6308,71 +6255,6 @@
           }
         }
       },
-      "RejectApprovalRequest": {
-        "required": [
-          "note"
-        ],
-        "type": "object",
-        "properties": {
-          "note": {
-            "maxLength": 500,
-            "minLength": 0,
-            "type": "string"
-          }
-        }
-      },
-      "ApprovalView": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "PENDING",
-              "APPROVED",
-              "REJECTED"
-            ]
-          },
-          "note": {
-            "type": "string"
-          },
-          "submittedAt": {
-            "type": "string"
-          },
-          "decidedAt": {
-            "type": "string"
-          },
-          "employeeCode": {
-            "type": "string"
-          },
-          "fullName": {
-            "type": "string"
-          },
-          "employeeEmail": {
-            "type": "string"
-          },
-          "designation": {
-            "type": "string"
-          },
-          "employeeStatus": {
-            "type": "string",
-            "enum": [
-              "INVITED",
-              "IN_PROGRESS",
-              "SUBMITTED",
-              "REVISION_REQUESTED",
-              "HR_VERIFIED",
-              "APPROVED",
-              "REJECTED"
-            ]
-          },
-          "hrName": {
-            "type": "string"
-          }
-        }
-      },
       "UnreadCountView": {
         "type": "object",
         "properties": {
@@ -6764,42 +6646,6 @@
           }
         }
       },
-      "RouteToManagerRequest": {
-        "type": "object",
-        "properties": {
-          "note": {
-            "maxLength": 500,
-            "minLength": 0,
-            "type": "string"
-          }
-        }
-      },
-      "RouteToManagerResult": {
-        "type": "object",
-        "properties": {
-          "employeeCode": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "INVITED",
-              "IN_PROGRESS",
-              "SUBMITTED",
-              "REVISION_REQUESTED",
-              "HR_VERIFIED",
-              "APPROVED",
-              "REJECTED"
-            ]
-          },
-          "approvalRequestId": {
-            "type": "string"
-          },
-          "managerName": {
-            "type": "string"
-          }
-        }
-      },
       "Form2View": {
         "type": "object",
         "properties": {
@@ -6856,6 +6702,48 @@
           }
         }
       },
+      "RejectRequest": {
+        "required": [
+          "note"
+        ],
+        "type": "object",
+        "properties": {
+          "note": {
+            "maxLength": 500,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
+      "DecisionResult": {
+        "type": "object",
+        "properties": {
+          "employeeCode": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "INVITED",
+              "IN_PROGRESS",
+              "SUBMITTED",
+              "REVISION_REQUESTED",
+              "HR_VERIFIED",
+              "APPROVED",
+              "REJECTED"
+            ]
+          },
+          "teamId": {
+            "type": "string"
+          },
+          "teamName": {
+            "type": "string"
+          },
+          "managerName": {
+            "type": "string"
+          }
+        }
+      },
       "AssignCredentialsRequest": {
         "required": [
           "localPart"
@@ -6892,6 +6780,16 @@
           "password": {
             "type": "string",
             "description": "Echoed once in dev; null in prod"
+          }
+        }
+      },
+      "ApproveRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "maxLength": 500,
+            "minLength": 0,
+            "type": "string"
           }
         }
       },
@@ -7555,6 +7453,58 @@
           }
         },
         "description": "The ACCOUNTANT's own team — the roster header (null if none assigned)."
+      },
+      "ApprovalView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "submittedAt": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "employeeCode": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "employeeEmail": {
+            "type": "string"
+          },
+          "designation": {
+            "type": "string"
+          },
+          "employeeStatus": {
+            "type": "string",
+            "enum": [
+              "INVITED",
+              "IN_PROGRESS",
+              "SUBMITTED",
+              "REVISION_REQUESTED",
+              "HR_VERIFIED",
+              "APPROVED",
+              "REJECTED"
+            ]
+          },
+          "hrName": {
+            "type": "string"
+          }
+        }
       },
       "LabelRef": {
         "type": "object",

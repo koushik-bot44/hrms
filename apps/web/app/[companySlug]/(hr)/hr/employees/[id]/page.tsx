@@ -9,7 +9,7 @@ export default function HrEmployeeVerifyPage({ params }: { params: { id: string 
     <div className="space-y-6">
       <PageHeader
         title="Verify employee"
-        description="Review each section and document, then route the record to the team's Manager."
+        description="Review each section and document, then approve or reject the application."
       />
       <VerificationWorkspace employeeId={params.id} />
     </div>

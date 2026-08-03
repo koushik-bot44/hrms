@@ -454,38 +454,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/manager/approvals/{id}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["reject"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/manager/approvals/{id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["approve"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/mail/threads/{threadId}/labels/{labelId}": {
         parameters: {
             query?: never;
@@ -719,7 +687,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["reject_1"];
+        post: operations["reject"];
         delete?: never;
         options?: never;
         head?: never;
@@ -735,7 +703,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["approve_1"];
+        post: operations["approve"];
         delete?: never;
         options?: never;
         head?: never;
@@ -758,22 +726,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/employees/{id}/route-to-manager": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["routeToManager"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/employees/{id}/reveal": {
         parameters: {
             query?: never;
@@ -790,6 +742,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reject_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees/{id}/credentials": {
         parameters: {
             query?: never;
@@ -800,6 +768,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["assignCredentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approve_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1327,22 +1311,6 @@ export interface paths {
             cookie?: never;
         };
         get: operations["myTeam"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/manager/approvals": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["approvals"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2442,24 +2410,6 @@ export interface components {
             /** Format: int64 */
             unreadCount?: number;
         };
-        RejectApprovalRequest: {
-            note: string;
-        };
-        ApprovalView: {
-            id?: string;
-            /** @enum {string} */
-            status?: "PENDING" | "APPROVED" | "REJECTED";
-            note?: string;
-            submittedAt?: string;
-            decidedAt?: string;
-            employeeCode?: string;
-            fullName?: string;
-            employeeEmail?: string;
-            designation?: string;
-            /** @enum {string} */
-            employeeStatus?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
-            hrName?: string;
-        };
         UnreadCountView: {
             /** Format: int64 */
             unread?: number;
@@ -2571,16 +2521,6 @@ export interface components {
             employee?: components["schemas"]["EmployeeSummaryView"];
             loginUrl?: string;
         };
-        RouteToManagerRequest: {
-            note?: string;
-        };
-        RouteToManagerResult: {
-            employeeCode?: string;
-            /** @enum {string} */
-            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
-            approvalRequestId?: string;
-            managerName?: string;
-        };
         Form2View: {
             fullName?: string;
             employeeId?: string;
@@ -2598,6 +2538,17 @@ export interface components {
             form2?: components["schemas"]["Form2View"];
             form3?: components["schemas"]["Form3EntryView"][];
         };
+        RejectRequest: {
+            note: string;
+        };
+        DecisionResult: {
+            employeeCode?: string;
+            /** @enum {string} */
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            teamId?: string;
+            teamName?: string;
+            managerName?: string;
+        };
         AssignCredentialsRequest: {
             localPart: string;
             password?: string;
@@ -2609,6 +2560,9 @@ export interface components {
             credentialsAssignedAt?: string;
             /** @description Echoed once in dev; null in prod */
             password?: string;
+        };
+        ApproveRequest: {
+            note?: string;
         };
         CreateCompanyRequest: {
             name: string;
@@ -2825,6 +2779,21 @@ export interface components {
             companyName?: string;
             hrName?: string;
             managerName?: string;
+        };
+        ApprovalView: {
+            id?: string;
+            /** @enum {string} */
+            status?: "PENDING" | "APPROVED" | "REJECTED";
+            note?: string;
+            submittedAt?: string;
+            decidedAt?: string;
+            employeeCode?: string;
+            fullName?: string;
+            employeeEmail?: string;
+            designation?: string;
+            /** @enum {string} */
+            employeeStatus?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            hrName?: string;
         };
         LabelRef: {
             id?: string;
@@ -4328,54 +4297,6 @@ export interface operations {
             };
         };
     };
-    reject: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RejectApprovalRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApprovalView"];
-                };
-            };
-        };
-    };
-    approve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApprovalView"];
-                };
-            };
-        };
-    };
     applyLabel: {
         parameters: {
             query?: never;
@@ -4800,7 +4721,7 @@ export interface operations {
             };
         };
     };
-    reject_1: {
+    reject: {
         parameters: {
             query?: never;
             header?: never;
@@ -4826,7 +4747,7 @@ export interface operations {
             };
         };
     };
-    approve_1: {
+    approve: {
         parameters: {
             query?: never;
             header?: never;
@@ -4900,32 +4821,6 @@ export interface operations {
             };
         };
     };
-    routeToManager: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["RouteToManagerRequest"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RouteToManagerResult"];
-                };
-            };
-        };
-    };
     reveal: {
         parameters: {
             query?: never;
@@ -4944,6 +4839,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RevealedSensitive"];
+                };
+            };
+        };
+    };
+    reject_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DecisionResult"];
                 };
             };
         };
@@ -4970,6 +4891,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AssignCredentialsResult"];
+                };
+            };
+        };
+    };
+    approve_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DecisionResult"];
                 };
             };
         };
@@ -5961,26 +5908,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MyTeamView"];
-                };
-            };
-        };
-    };
-    approvals: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApprovalView"][];
                 };
             };
         };

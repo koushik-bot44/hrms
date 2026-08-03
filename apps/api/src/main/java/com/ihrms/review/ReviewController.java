@@ -1,13 +1,14 @@
 package com.ihrms.review;
 
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.review.dto.ReviewDtos.ApproveRequest;
 import com.ihrms.review.dto.ReviewDtos.AssignCredentialsRequest;
 import com.ihrms.review.dto.ReviewDtos.AssignCredentialsResult;
+import com.ihrms.review.dto.ReviewDtos.DecisionResult;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
+import com.ihrms.review.dto.ReviewDtos.RejectRequest;
 import com.ihrms.review.dto.ReviewDtos.RevealedSensitive;
 import com.ihrms.review.dto.ReviewDtos.ReviewRequest;
-import com.ihrms.review.dto.ReviewDtos.RouteToManagerRequest;
-import com.ihrms.review.dto.ReviewDtos.RouteToManagerResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -89,14 +90,33 @@ public class ReviewController {
     return review.reviewDocument(actor, id, documentId, body, request.getRemoteAddr());
   }
 
-  @PostMapping("/{id}/route-to-manager")
-  @ResponseStatus(HttpStatus.CREATED)
-  public RouteToManagerResult routeToManager(
+  /**
+   * HR APPROVES a verified employee (§3.3) — mints the ID; the team is the employee's onboarding-HR's team
+   * (resolved server-side, not chosen), whose manager is notified.
+   */
+  @PostMapping("/{id}/approve")
+  public DecisionResult approve(
       @PathVariable String id,
-      @Valid @RequestBody(required = false) RouteToManagerRequest body,
+      @Valid @RequestBody(required = false) ApproveRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return review.routeToManager(actor, id, body, request.getRemoteAddr());
+    DecisionResult result =
+        review.approve(actor, id, body == null ? new ApproveRequest(null) : body, request.getRemoteAddr());
+    // Post-commit + best-effort: push the team's manager + regenerate the PDFs with the minted ID. A failure
+    // here must never undo the approval that already committed above.
+    review.pushApprovalToManager(id);
+    review.regeneratePdfsQuietly(id);
+    return result;
+  }
+
+  /** HR terminally REJECTS a verified application (§3.3). */
+  @PostMapping("/{id}/reject")
+  public DecisionResult reject(
+      @PathVariable String id,
+      @Valid @RequestBody RejectRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return review.reject(actor, id, body, request.getRemoteAddr());
   }
 
   /**

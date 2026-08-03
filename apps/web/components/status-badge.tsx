@@ -30,7 +30,7 @@ const STATUS_MAP: Record<StatusValue, { label: string; tone: Tone }> = {
   INVITED: { label: 'Invited', tone: 'neutral' },
   IN_PROGRESS: { label: 'In progress', tone: 'primarySoft' },
   SUBMITTED: { label: 'Submitted', tone: 'warning' },
-  HR_VERIFIED: { label: 'HR verified', tone: 'primarySoft' },
+  HR_VERIFIED: { label: 'Verified — awaiting approval', tone: 'primarySoft' },
   APPROVED: { label: 'Approved', tone: 'success' },
   REJECTED: { label: 'Rejected', tone: 'danger' },
   // Shared by EmployeeStatus / SectionStatus / DocumentStatus — item sent back for changes (§3.3)

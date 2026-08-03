@@ -152,7 +152,7 @@ export function OnboardedConfirmation({
         <DialogDescription>
           We emailed a selection note and a login link to{' '}
           <span className="font-medium text-foreground">{email}</span>. They sign in with their full
-          name + this email; a unique employee ID is assigned once a Manager approves them.
+          name + this email; a unique employee ID is assigned once HR approves them.
         </DialogDescription>
       </DialogHeader>
       <div className="flex justify-end gap-2">

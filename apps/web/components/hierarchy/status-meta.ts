@@ -12,7 +12,7 @@ export const STATUS_META: Record<FunnelKey, { label: string; color: string }> = 
   invited: { label: 'Invited', color: 'hsl(var(--primary) / 0.35)' },
   inProgress: { label: 'In progress', color: 'hsl(var(--primary) / 0.55)' },
   submitted: { label: 'Submitted', color: 'hsl(var(--primary) / 0.75)' },
-  hrVerified: { label: 'HR verified', color: 'hsl(var(--primary))' },
+  hrVerified: { label: 'Verified', color: 'hsl(var(--primary))' },
   approved: { label: 'Approved', color: 'hsl(var(--success))' },
   revisionRequested: { label: 'Revision requested', color: 'hsl(var(--warning))' },
   rejected: { label: 'Rejected', color: 'hsl(var(--destructive))' },

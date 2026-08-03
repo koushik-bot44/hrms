@@ -182,13 +182,18 @@ export type RevealedSensitive = Omit<
   form3: Form3EntryView[];
 };
 
-export type RouteToManagerResult = Omit<
-  Required<Schemas['RouteToManagerResult']>,
-  'managerName' | 'employeeCode'
+// The HR approve/reject outcome (§3.3). On approve: employeeCode minted + team/manager set. On reject:
+// all of these are null (the employee joined no team) — so override every one as nullable.
+export type DecisionResult = Omit<
+  Required<Schemas['DecisionResult']>,
+  'employeeCode' | 'teamId' | 'teamName' | 'managerName'
 > & {
-  managerName: string | null;
   employeeCode: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  managerName: string | null;
 };
+
 
 /** The mailbox address HR assigned; {@code password} is echoed ONCE (dev) so HR can hand it over (§8). */
 export type AssignCredentialsResult = Omit<Required<Schemas['AssignCredentialsResult']>, 'password'> & {

@@ -32,11 +32,10 @@ const DRILL: Record<string, string> = {
   'hr.inProgress': '/hr/employees?status=IN_PROGRESS',
   'hr.pendingVerification': '/hr/employees?status=SUBMITTED',
   'hr.inRevision': '/hr/employees?status=REVISION_REQUESTED',
+  'hr.pendingApproval': '/hr/employees?status=HR_VERIFIED',
   'hr.approved': '/hr/employees?status=APPROVED',
   'hr.rejected': '/hr/employees?status=REJECTED',
-  'manager.pendingApprovals': '/manager?tab=pending',
-  'manager.approved': '/manager?tab=history&status=APPROVED',
-  'manager.rejected': '/manager?tab=history&status=REJECTED',
+  'manager.approved': '/manager?status=APPROVED',
   'manager.unreadNotifications': '/manager/notifications',
 };
 
@@ -49,11 +48,10 @@ const STAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   'hr.inProgress': Clock,
   'hr.pendingVerification': FileClock,
   'hr.inRevision': FilePen,
+  'hr.pendingApproval': Inbox,
   'hr.approved': CheckCircle2,
   'hr.rejected': XCircle,
-  'manager.pendingApprovals': Inbox,
   'manager.approved': CheckCircle2,
-  'manager.rejected': XCircle,
   'manager.unreadNotifications': Bell,
 };
 
@@ -66,11 +64,10 @@ const STAT_TONE: Record<string, StatTone> = {
   'hr.inProgress': 'primary',
   'hr.pendingVerification': 'warning',
   'hr.inRevision': 'warning',
+  'hr.pendingApproval': 'warning',
   'hr.approved': 'success',
   'hr.rejected': 'danger',
-  'manager.pendingApprovals': 'warning',
   'manager.approved': 'success',
-  'manager.rejected': 'danger',
   'manager.unreadNotifications': 'primary',
 };
 

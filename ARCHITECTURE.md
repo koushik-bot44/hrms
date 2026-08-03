@@ -14,8 +14,8 @@ documents, and (later) issued letters — under a single **unique employee ID**.
 
 The process is **HR-initiated, never employee self-signup**: HR triggers onboarding, the system
 emails the new employee their unique ID, the employee fills in tabbed forms and uploads documents
-under their record, HR verifies them, and a **Manager approves**. Everything that happens in the
-portal is **audit-logged and partitioned per company**.
+under their record, and **HR verifies and then approves** them onto a team (or rejects). Everything that
+happens in the portal is **audit-logged and partitioned per company**.
 
 The system is **multi-tenant**: many companies live under one Super Admin, and all access is scoped
 to the role hierarchy below.
@@ -39,8 +39,8 @@ Super Admin
 | **Accounts Admin** | Entire portal — **read-only** | A central, cross-company **viewer** (`companyId = null`, like Super Admin but never writes). Sees **approved** employees across **all** companies and their **full records** (the four forms + documents/PDFs) with sensitive fields **masked by default** and an **audited reveal** — the exact HR mechanism; and an **approval-only** audit trail across companies. **No onboarding / verify / approve / edit / archive / delete / provisioning — GET-only.** In-flight (non-approved) employees are **not** visible. **Exactly one** may exist; provisioned by Super Admin. |
 | **Hierarchy** | Entire platform — **read-only, aggregates-only** | A top-level, cross-platform **overview** role (`companyId = null`, like Super Admin/Accounts Admin but never writes). Sees only **platform-wide aggregates / counts / summaries** — **never** individual employee records or PII, **never** attendance or leave, **no** writes anywhere. It never appears in any onboarding / verification / approval / provisioning / company-management flow. **Exactly one** may exist; provisioned by Super Admin; signs in with staff **email + password**. _(Aggregate read endpoints are added later; this stage establishes the role, login, provisioning and a placeholder overview.)_ |
 | **Company Admin** | One company | Create teams and assign the team's HR, Manager and Accountant (one each); **assign/reset the mailbox credentials of any APPROVED employee in the company** (§6, alongside the onboarding HR); view **own company's** audit logs. |
-| **HR** | Own team / own onboarded employees | Onboard by **filling Form 2** (which creates the record + sends the invite); **edit Form 2 while the employee is `INVITED`** (locked once they start, 409; a personal-email change re-invites); look up an employee by ID and see all their forms/documents; verify **Forms 1/3/4 + documents** (Form 2 is not verified); route the approval request to the team's Manager. |
-| **Manager** | Own team | Workspace inbox/notifications (who was onboarded, who was verified, pending approvals); **approve** verified employees (approval is the **final step** _[parked: post-approval actions]_); **read-only attendance analytics for their own team** (§8a — the same live per-employee / per-team metrics the Accountant sees, own team only). |
+| **HR** | Own team / own onboarded employees | Onboard by **filling Form 2** (which creates the record + sends the invite); **edit Form 2 while the employee is `INVITED`** (locked once they start, 409; a personal-email change re-invites); look up an employee by ID and see all their forms/documents; verify **Forms 1/3/4 + documents** (Form 2 is not verified); once every item is verified, **approve** the employee onto a **team** (minting the ID) **or terminally reject** the application. |
+| **Manager** | Own team | Workspace **notifications** (who was onboarded, who was verified, who was **approved onto their team**) + a **read-only team-onboarding history** (approval authority sits with HR — no approve/reject/inbox); **read-only attendance analytics for their own team** (§8a — the same live per-employee / per-team metrics the Accountant sees, own team only). |
 | **Accountant** | Own team — **read-only** | A **team-scoped** viewer (a staff `User` with a `teamId`, like HR/Manager, but never writes). Sees the **approved** employees of **its own team** (those onboarded by that team's HR) and their **full records** — masked by default with the same **audited reveal** as HR — plus an **approval-only** audit trail for **its team**. **No writes — GET-only.** Cannot see other teams' or other companies' employees. |
 | **Employee** | Own record only | Authenticate with **full name + personal email/OTP**; fill **Forms 1, 3, 4** and upload documents under their own record (Form 2 is HR/SA-authored — the employee never sees it). |
 
@@ -182,7 +182,7 @@ Accounts Admin, own team for Accountant).
    Submitting Form 2 **creates the employee record** (`status = INVITED`) **and sends the invite in one
    action** — there is no separate 4-field onboard step. The **personal email is the employee's login
    identity** (globally unique, §6). **No employee ID is minted here** — the unique ID is allocated only
-   on Manager approval (see §3.3 / §5), so the Form-2 `employeeId` shows **greyed / blank** until then.
+   on HR approval (see §3.3 / §5), so the Form-2 `employeeId` shows **greyed / blank** until then.
    The **official email** is left **blank/inert** at onboarding (slated for removal — the column stays,
    unpopulated). _Father's name, date of birth, blood group, mobile and Spark ID were **removed from
    Form 2's display + PDF** (they remain on **Form 1**); additive-only — their `form2_info` columns/keys
@@ -244,17 +244,25 @@ the record view still **displays** Form 2 (read-only) and exposes its standalone
      re-uploadable while **everything else stays locked**; the employee's overall status reflects
      that a revision is pending. Verify and Send-back are **re-decidable** (HR may flip an item back
      and forth) and remain available only while the employee is **under HR review** (i.e. not yet
-     routed to the Manager or approved). There is **no per-item Reject** — terminal rejection of the
-     whole application is the Manager's action at approval (step 3).
+     APPROVED/REJECTED — including the verified, awaiting-decision state). There is **no per-item Reject**
+     — terminal rejection of the whole application is HR's whole-record action once verified (step 3).
    The employee fixes the flagged item(s) and **re-submits**: each revised item returns to
    awaiting-HR, the affected form PDFs **regenerate**, the onboarding HR is notified, and the items
    come back for **re-review**.
 2. On completion — **Forms 1, 3, 4 and every document `VERIFIED`** (a single `REVISION_REQUESTED` item
-   blocks this; Form 2 is HR-authored and not gated) — HR **routes an approval request** to the **team's
-   Manager**.
-3. **Manager** sees it in their **notifications/approvals inbox** and **approves** → final step in v1.
-   (Rejecting the application, if needed, is the Manager's decision here.)
-4. **On approval, the system allocates the unique employee ID** (§5) from the company's atomic
+   blocks this; Form 2 is HR-authored and not gated) — the record **auto-transitions to `HR_VERIFIED`**
+   (verified, awaiting the HR decision). There is **no route-to-Manager step** (retired).
+3. **HR decides directly** (approval authority now sits with HR): **Approve** (an optional note) **or**
+   terminally **Reject** (a note is required, recorded in the audit). **The team is NOT chosen at
+   approval** — an employee's team **is their onboarding HR's team** (the system's scoping rule; there is
+   no `Employee.teamId`), so the server resolves it via the same `findByCompanyIdAndHrUserId` used by the
+   leave + document-request flows. On approve, **that** team's **Manager is notified** (durable bell +
+   best-effort OS push) that the employee joined their team — the notification can therefore never name a
+   team the employee isn't in — but the Manager takes **no action** (their area is a **read-only
+   team-onboarding history**). HR no longer receives a "decided" notice (HR is the decider). _(A future
+   build may introduce a real `Employee.teamId` to let HR assign a different team; until then, team is not
+   a choice.)_
+4. **On HR approval, the system allocates the unique employee ID** (§5) from the company's atomic
    per-company sequence, stamps it on the record, and welcomes the employee with it. The ID is an
    **org/HR-facing identifier** — it is *not* used to log in.
 
@@ -372,7 +380,7 @@ areas stay top-level:
 Each form and document carries a `status` (DRAFT | SUBMITTED | VERIFIED | REVISION_REQUESTED | REJECTED)
 plus a nullable `revisionNote` + `revisionRequestedAt` set when HR sends that item back (§3.3). SENSITIVE fields are encrypted at
 rest and masked in HR views (reveal is an explicit **audited** action — §6). `employeeId` is
-**system-assigned on Manager approval** and never employee-editable; `sparkId` is HR/admin-set. The
+**system-assigned on HR approval** and never employee-editable; `sparkId` is HR/admin-set. The
 generated PDFs' header/branding is the employee's **joining company** (resolved from `companyId`).
 
 ### Verification & approval
@@ -411,7 +419,7 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
 ## 5. Unique Employee ID
 
 Every **approved** employee gets a unique, human-readable, **company-scoped** ID. It is allocated **on
-Manager approval** (not at onboarding) and is an **org/HR-facing identifier** — it is **not** used to
+HR approval** (not at onboarding) and is an **org/HR-facing identifier** — it is **not** used to
 log in (employees authenticate with full name + email + OTP, see §6).
 
 - **Format:** `{COMPANY_CODE}-EMP-{NNNNNN}` — e.g. `ACME-EMP-000123`.
@@ -739,7 +747,7 @@ DNS. A "message" is just rows in our own DB, scoped exactly like everything else
     no attachment-only messages. Thread/list responses expose attachment metadata (id, name, type, size)
     and a paperclip indicator, never keys. Text-only threads are unaffected; per-user delete hides the
     viewer's copy but the attachment follows the message (the counterparty keeps theirs).
-- **Employee credentials + mailbox (Stage 5):** once a Manager **approves** an employee (§3.4 — the ID is
+- **Employee credentials + mailbox (Stage 5):** once HR **approves** an employee (§3.4 — the ID is
   minted and the onboarding HR is notified `EMPLOYEE_APPROVED`), the employee's **onboarding HR** — or a
   **`COMPANY_ADMIN` of the same company** (§6) — may **assign the employee internal credentials**: a mailbox
   local part (→ `localpart@companyDomain` via `MailAddresses`, unique across every account through
@@ -822,8 +830,8 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
   open**, a **return-from-break reminder** appears ("You're on break — end your break to resume working") with
   **End Break**. Both survive a slept machine because they read server state, not a timer.
 - **Manager view (team-scope):** a Manager sees attendance ONLY for employees in his team scope — those whose
-  onboarding HR is the HR on the Manager's team (the SAME set he approves; the existing scope resolution is
-  reused). Cross-team / cross-company is denied. A roster (who's clocked in, **late-today**, today + period
+  onboarding HR is the HR on the Manager's team (the same team the employees are approved onto; the existing
+  scope resolution is reused). Cross-team / cross-company is denied. A roster (who's clocked in, **late-today**, today + period
   **worked** hours) with a **late** filter, plus a read-only per-employee **shift-day** history showing each
   session's breaks + worked time + late tag.
 - **Attendance activity feed (pull-based, NO bell):** punches do **not** create notification-bell entries.
@@ -916,14 +924,14 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
 ## 8b. Leave requests
 
 A credentialed employee requests time off from the portal (`/workspace`); the request routes to the
-**Manager who approved them** — the Manager on the employee's onboarding-HR's team — who approves or rejects
+**Manager of their team** — the Manager on the employee's onboarding-HR's team — who approves or rejects
 it. **v1 is request → route → decide: there are NO leave balances / quota / accrual** (history only;
 balances are a future feature).
 
 - **Who can request:** only a **credentialed** employee (the `/workspace` principal — `mailAddress`
   assigned). An OTP-only onboarding employee has no leave → `403` on every leave endpoint.
 - **Routing (reuses the approval resolution):** the approver is `employee.onboardingHr → that HR's team →
-  team.managerUser` — the SAME Manager who approved the employee. There is **no** company-level manager; if
+  team.managerUser` — the team's Manager. There is **no** company-level manager; if
   the team has no Manager yet, the request is refused (`409`). The resolved `managerUserId` is stored on the
   request, and the Manager lists/decides by it (mirroring `ApprovalRequest`).
 - **Request:** `startDate`, `endDate` (dates, not times), `leaveType` (`CASUAL` | `SICK` | `UNPAID`),
@@ -1105,8 +1113,8 @@ surfaces, each designed for its specific job (not a generic admin template).
   - **Super Admin** — company management; a per-company **audit-log explorer** (filter/sort/search).
   - **Company Admin** — team management (create teams, assign HR + Manager); own-company audit view.
   - **HR** — onboarding action (trigger email + ID), **employee lookup by ID**, a **verification
-    workspace** (review sections/documents, mark verified, route to Manager).
-  - **Manager** — a live **notifications/approvals inbox** with a clear approve action.
+    workspace** (review sections/documents, mark verified, then **approve onto a team / reject**).
+  - **Manager** — **notifications** + a **read-only team-onboarding history** (no approve/reject action).
   - **Employee** — a guided, **tabbed form dashboard** with obvious upload states (drag-drop,
     progress, per-item status) — should feel like guidance, not paperwork.
 - **Patterns:** clear status badges (employee status, document status, approval status), optimistic
@@ -1135,7 +1143,7 @@ surfaces, each designed for its specific job (not a generic admin template).
 
 - **Offer & experience letter issuance** — whether HR uploads or the system generates them, and at
   which stage. (Records exist conceptually under the employee; flow TBD.)
-- **Post–Manager-approval steps** — what approval unlocks (e.g. employee → active, letter issuance).
+- **Post-HR-approval steps** — what approval unlocks (e.g. employee → active, letter issuance).
 - **Multi-HR / multi-Manager teams** — v1 is exactly one each.
 - **Deeper BGV workflow** — external provider integration vs. manual document upload.
 - **Decision points to confirm:** employee ID format (§5), staff auth method (§6), and whether HR

@@ -83,7 +83,7 @@ export function ApprovalAudit() {
           <EmptyState
             icon={ScrollText}
             title="No approval events yet"
-            description="Manager approvals and rejections across all companies will appear here."
+            description="Approval decisions across all companies will appear here."
           />
         }
       />
