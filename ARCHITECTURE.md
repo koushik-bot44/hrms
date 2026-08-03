@@ -221,7 +221,8 @@ Accounts Admin, own team for Accountant).
      required for onboardings created after it was introduced (per-employee `itrRequired` flag, set at
      onboard); employees onboarded earlier keep `itrRequired=false` and are never gated on it, so no
      already-submitted/approved record is retroactively re-opened.
-5. The employee **draws or types one e-signature** and **submits**. The system then **generates PDFs** —
+5. The employee **adopts one e-signature** (via the shared **SignatureCapture** — see the Signature-capture
+   standard below) and **submits**. The system then **generates PDFs** —
    one per form plus one **merged complete application** — branded with the **joining company**, the
    signature stamped into Forms 1 & 2; these are stored under the record and **regenerated whenever a
    form is edited and re-submitted** (and `employeeId` is stamped in once approval mints it).
@@ -229,6 +230,20 @@ Accounts Admin, own team for Accountant).
    HR/SA-only PDF** (not merged into the complete application, and never fetchable by the employee).
 6. Every field value, uploaded file, the signature, and the generated PDFs are stored **under that
    employee's record**; submission routes to HR for verification.
+
+**Signature-capture standard.** ALL signature collection — current and future — uses ONE shared component,
+`components/signature/signature-capture.tsx` (`lib/signature/image.ts` = the pure pixel math). It offers
+**four modes — Draw | Generate | Upload | Upload & clean** — behind **one output contract**: whatever the
+mode, adoption emits a single **dark-ink-on-white PNG `Blob` at the standard 520×170**, stored through the
+**existing** signature flow (same `PUT /me/onboarding/signature`, same data-URL shape, same S3 keying, same
+PDF stamp). **Downstream cannot tell which mode was used** (the `type` field is fixed). *Draw* is the canvas
+pad; *Generate* renders the typed name in 3 bundled **SIL-OFL** script faces (Dancing Script / Great Vibes /
+Caveat, self-hosted by next/font — no runtime fetch), scaled to fit; *Upload* white-flattens + crops + fits a
+trusted image; *Upload & clean* does in-browser grayscale → adaptive threshold → despeckle → crop → composite
+(with a sensitivity control) for a photo of ink on paper. Every mode paints on the **theme-invariant**
+`--signature-paper` / `--signature-ink` tokens, so the PDF stamp is dark-on-white in any app theme. Adoption
+is an **explicit action** carrying the line *"By adopting it you agree it is the legal equivalent of your
+handwritten signature."* Future flows MUST reuse this component — never re-implement capture.
 
 ### 3.3 Verification & approval
 **Form 2 is not verified** — HR/SA authored it at onboard, so it carries no Verify / Send-back action
@@ -368,7 +383,8 @@ areas stay top-level:
 - **Document** _(Form 4 uploads)_ — `id`, `employeeId`, `docType` (DocumentType — the Form-4 slots),
   `groupIndex?` (1–4 for the per-employment groups), `fileName`, `storageKey` (never exposed raw),
   `mimeType`, `sha256?`, `status`, `uploadedAt`. Reached only via short-lived presigned URLs.
-- **Signature** — `id`, `employeeId`, the drawn/typed e-signature (image `storageKey`), `signedAt`.
+- **Signature** — `id`, `employeeId`, the adopted e-signature (image `storageKey`; a dark-on-white PNG from
+  SignatureCapture, any mode), `signedAt`.
   Captured once at final submit and stamped into Forms 1 & 2 and the merged PDF.
 - **GeneratedDocument** _(the produced PDFs)_ — `id`, `employeeId`, `kind`
   (FORM1 | FORM2 | FORM3 | FORM4_MANIFEST | MERGED), `storageKey`, `sha256`, `generatedAt`.

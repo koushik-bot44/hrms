@@ -28,7 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { surface } from '@/components/ui/surface';
 import { DocumentUploader } from '@/components/employee/document-uploader';
-import { SignaturePad } from '@/components/employee/signature-pad';
+import { SignatureCapture } from '@/components/signature/signature-capture';
 
 // Form 2 (Employee Info) is HR/SA-authored at onboard (§3.2) — it is NOT a step the employee fills.
 const STEPS = ['Personal', 'Prev. Employment', 'Documents', 'Review', 'Sign & Submit'];
@@ -632,6 +632,16 @@ function SummaryRow({ label, value, ok }: { label: string; value: string; ok: bo
   );
 }
 
+/** The adopted signature PNG (Blob) → a data URL, so it stores via the existing signature endpoint unchanged. */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
 function SignStep({
   dashboard,
   disabled,
@@ -644,7 +654,6 @@ function SignStep({
   onBack: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [pending, setPending] = React.useState<{ dataUrl: string; type: 'DRAWN' | 'TYPED' } | null>(null);
   const { complete, missing } = evaluateOnboarding(
     dashboard.form1,
     dashboard.documents,
@@ -652,8 +661,12 @@ function SignStep({
     dashboard.itrRequired,
   );
 
+  // The adopted signature is a PNG blob (whatever the capture mode); it is stored exactly as before — the
+  // same PUT /me/onboarding/signature with the same data-URL shape. `type` is fixed so downstream (storage,
+  // PDF stamp) can't tell which mode produced it.
   const saveSig = useApiMutation(
-    () => saveSignature({ imageDataUrl: pending!.dataUrl, type: pending!.type }),
+    async (blob: Blob) =>
+      saveSignature({ imageDataUrl: await blobToDataUrl(blob), type: 'DRAWN' }),
     { successMessage: 'Signature saved', onSuccess: onSaved },
   );
 
@@ -670,25 +683,17 @@ function SignStep({
       </CardHeader>
       <CardContent className="space-y-4">
         {dashboard.signature ? (
-          <p className="text-sm text-success">
-            Signed ({dashboard.signature.type.toLowerCase()}). Re-sign below to replace it.
-          </p>
+          <p className="text-sm text-success">Signed. Adopt a new one below to replace it.</p>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Draw or type one signature — it is stamped onto your generated forms.
+            Sign, generate, or upload one signature — it is stamped onto your generated forms.
           </p>
         )}
-        <SignaturePad onChange={(dataUrl, type) => setPending(dataUrl ? { dataUrl, type } : null)} disabled={disabled} />
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => saveSig.mutate()}
-            disabled={disabled || !pending || saveSig.isPending}
-          >
-            {saveSig.isPending ? 'Saving…' : 'Save signature'}
-          </Button>
-        </div>
+        <SignatureCapture
+          fullName={dashboard.form1?.name ?? ''}
+          onAdopt={(blob) => saveSig.mutate(blob)}
+          disabled={disabled || saveSig.isPending}
+        />
 
         {missing.length > 0 ? (
           <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm">
