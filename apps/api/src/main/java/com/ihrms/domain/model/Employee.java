@@ -2,7 +2,9 @@ package com.ihrms.domain.model;
 
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.support.CuidId;
+import com.ihrms.domain.support.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -43,6 +45,15 @@ public class Employee {
 
   @Column(name = "designation")
   private String designation;
+
+  /**
+   * Aadhaar number, typed by the employee while completing the AUP acknowledgement (§Agreements). Sensitive
+   * (PAN-class, §6): encrypted at rest via the same AES-256-GCM converter PAN uses, masked in every DTO, and
+   * revealed only via the audited reveal endpoint. Null until an AUP agreement is completed.
+   */
+  @Convert(converter = EncryptedStringConverter.class)
+  @Column(name = "aadhaarNumber")
+  private String aadhaarNumber;
 
   @JdbcTypeCode(SqlTypes.DATE)
   @Column(name = "dateOfJoining")

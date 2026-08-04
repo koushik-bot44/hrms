@@ -1070,6 +1070,51 @@
         }
       }
     },
+    "/me/agreements/{type}/complete": {
+      "post": {
+        "tags": [
+          "agreement-controller"
+        ],
+        "operationId": "complete",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AUP",
+                "NDA",
+                "NOTICE_PERIOD"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteAgreementRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteAgreementResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/manager/notifications/{id}/read": {
       "post": {
         "tags": [
@@ -1971,6 +2016,36 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/DecisionResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/agreements/send": {
+      "post": {
+        "tags": [
+          "agreement-controller"
+        ],
+        "operationId": "send_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendAgreementsResult"
                 }
               }
             }
@@ -3310,6 +3385,64 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/PresignedView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/agreements": {
+      "get": {
+        "tags": [
+          "agreement-controller"
+        ],
+        "operationId": "myAgreements",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MyAgreementSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/agreements/{type}": {
+      "get": {
+        "tags": [
+          "agreement-controller"
+        ],
+        "operationId": "myAgreement",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AUP",
+                "NDA",
+                "NOTICE_PERIOD"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyAgreementView"
                 }
               }
             }
@@ -6206,6 +6339,55 @@
           }
         }
       },
+      "CompleteAgreementRequest": {
+        "type": "object",
+        "properties": {
+          "consentAccepted": {
+            "type": "boolean"
+          },
+          "designation": {
+            "type": "string"
+          },
+          "aadhaar": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "mobile": {
+            "type": "string"
+          },
+          "signatureDataUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "CompleteAgreementResult": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "AUP",
+              "NDA",
+              "NOTICE_PERIOD"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "COMPLETED"
+            ]
+          },
+          "completedAt": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        }
+      },
       "NotificationView": {
         "type": "object",
         "properties": {
@@ -6220,7 +6402,8 @@
               "APPROVAL_REQUESTED",
               "EMPLOYEE_APPROVED",
               "EMPLOYEE_REJECTED",
-              "LEAVE_REQUESTED"
+              "LEAVE_REQUESTED",
+              "AGREEMENT_COMPLETED"
             ]
           },
           "employeeId": {
@@ -6699,6 +6882,9 @@
             "items": {
               "$ref": "#/components/schemas/Form3EntryView"
             }
+          },
+          "aadhaarNumber": {
+            "type": "string"
           }
         }
       },
@@ -6790,6 +6976,52 @@
             "maxLength": 500,
             "minLength": 0,
             "type": "string"
+          }
+        }
+      },
+      "AgreementSummary": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "AUP",
+              "NDA",
+              "NOTICE_PERIOD"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "COMPLETED"
+            ]
+          },
+          "sentAt": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": "string"
+          },
+          "sentByName": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "SendAgreementsResult": {
+        "type": "object",
+        "properties": {
+          "agreements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgreementSummary"
+            }
           }
         }
       },
@@ -7170,6 +7402,15 @@
             "items": {
               "$ref": "#/components/schemas/RecordGeneratedDocument"
             }
+          },
+          "aadhaarNumber": {
+            "type": "string"
+          },
+          "agreements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgreementSummary"
+            }
           }
         }
       },
@@ -7427,6 +7668,90 @@
           },
           "accountant": {
             "$ref": "#/components/schemas/AccountantView"
+          }
+        }
+      },
+      "MyAgreementSummary": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "AUP",
+              "NDA",
+              "NOTICE_PERIOD"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "COMPLETED"
+            ]
+          },
+          "completedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "AgreementPrefill": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string"
+          },
+          "employeeCode": {
+            "type": "string"
+          },
+          "designation": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "mobile": {
+            "type": "string"
+          }
+        }
+      },
+      "MyAgreementView": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "AUP",
+              "NDA",
+              "NOTICE_PERIOD"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "COMPLETED"
+            ]
+          },
+          "bodyHtml": {
+            "type": "string"
+          },
+          "sentAt": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
+          },
+          "prefill": {
+            "$ref": "#/components/schemas/AgreementPrefill"
           }
         }
       },

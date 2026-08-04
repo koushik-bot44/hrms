@@ -1,5 +1,6 @@
 package com.ihrms.review.dto;
 
+import com.ihrms.agreement.dto.AgreementDtos.AgreementSummary;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.DocumentType;
 import com.ihrms.domain.enums.EmployeeStatus;
@@ -98,10 +99,15 @@ public final class ReviewDtos {
       Form2View form2,
       List<Form3EntryView> form3,
       List<RecordDocument> documents,
-      List<RecordGeneratedDocument> generatedDocuments) {}
+      List<RecordGeneratedDocument> generatedDocuments,
+      // Aadhaar (typed on AUP completion) — masked here, revealed via the audited reveal action (§6).
+      String aadhaarNumber,
+      // Post-approval agreements (§Agreements): per-type status + presigned download when completed.
+      List<AgreementSummary> agreements) {}
 
   /** The plaintext sensitive values returned by the explicit, audited reveal action (§6). */
-  public record RevealedSensitive(Form1View form1, Form2View form2, List<Form3EntryView> form3) {}
+  public record RevealedSensitive(
+      Form1View form1, Form2View form2, List<Form3EntryView> form3, String aadhaarNumber) {}
 
   /**
    * The outcome of an HR approve/reject (§3.3). On approve: the freshly-minted {@code employeeCode} (§5),

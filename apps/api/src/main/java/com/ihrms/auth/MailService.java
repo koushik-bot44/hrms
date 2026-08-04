@@ -121,6 +121,33 @@ public class MailService {
     log.info("Document-request resolved email dispatched to {} ({})", email, label);
   }
 
+  /** Standard-agreements assigned notice to the employee (§Agreements) — the employee has no bell. */
+  public void sendAgreementsAssigned(String email, String fullName) {
+    String body =
+        (fullName == null ? "Hello" : "Hello " + fullName)
+            + " — your employer has sent standard company agreements for you to review and sign. Sign in to"
+            + " read, fill, and submit each one.";
+    if (noSmtp()) {
+      log.warn("[DEV AGREEMENTS] {} -> {}  (no SMTP configured; logging only)", email, body);
+      return;
+    }
+    log.info("Agreements-assigned email dispatched to {}", email);
+  }
+
+  /** Agreement-completed notice to the SENDING HR (§Agreements) — HR has no notification bell feed yet. */
+  public void sendAgreementCompleted(String hrEmail, String employeeName, String agreementTitle) {
+    String body =
+        (employeeName == null ? "An employee" : employeeName)
+            + " has completed and signed the \""
+            + agreementTitle
+            + "\" agreement. Sign in to view the signed PDF on their record.";
+    if (noSmtp()) {
+      log.warn("[DEV AGREEMENT DONE] {} -> {}  (no SMTP configured; logging only)", hrEmail, body);
+      return;
+    }
+    log.info("Agreement-completed email dispatched to {} ({})", hrEmail, agreementTitle);
+  }
+
   private boolean noSmtp() {
     String host = props.mail() == null ? null : props.mail().host();
     return host == null || host.isBlank();

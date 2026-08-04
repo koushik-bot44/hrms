@@ -422,6 +422,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/agreements/{type}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/manager/notifications/{id}/read": {
         parameters: {
             query?: never;
@@ -784,6 +800,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["approve_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/agreements/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["send_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1279,6 +1311,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["viewUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/agreements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["myAgreements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/agreements/{type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["myAgreement"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2395,10 +2459,26 @@ export interface components {
             /** Format: int64 */
             sizeBytes?: number;
         };
+        CompleteAgreementRequest: {
+            consentAccepted?: boolean;
+            designation?: string;
+            aadhaar?: string;
+            address?: string;
+            mobile?: string;
+            signatureDataUrl?: string;
+        };
+        CompleteAgreementResult: {
+            /** @enum {string} */
+            type?: "AUP" | "NDA" | "NOTICE_PERIOD";
+            /** @enum {string} */
+            status?: "PENDING" | "COMPLETED";
+            completedAt?: string;
+            downloadUrl?: string;
+        };
         NotificationView: {
             id?: string;
             /** @enum {string} */
-            type?: "EMPLOYEE_ONBOARDED" | "EMPLOYEE_SUBMITTED" | "APPROVAL_REQUESTED" | "EMPLOYEE_APPROVED" | "EMPLOYEE_REJECTED" | "LEAVE_REQUESTED";
+            type?: "EMPLOYEE_ONBOARDED" | "EMPLOYEE_SUBMITTED" | "APPROVAL_REQUESTED" | "EMPLOYEE_APPROVED" | "EMPLOYEE_REJECTED" | "LEAVE_REQUESTED" | "AGREEMENT_COMPLETED";
             employeeId?: string;
             employeeCode?: string;
             fullName?: string;
@@ -2537,6 +2617,7 @@ export interface components {
             form1?: components["schemas"]["Form1View"];
             form2?: components["schemas"]["Form2View"];
             form3?: components["schemas"]["Form3EntryView"][];
+            aadhaarNumber?: string;
         };
         RejectRequest: {
             note: string;
@@ -2563,6 +2644,20 @@ export interface components {
         };
         ApproveRequest: {
             note?: string;
+        };
+        AgreementSummary: {
+            /** @enum {string} */
+            type?: "AUP" | "NDA" | "NOTICE_PERIOD";
+            title?: string;
+            /** @enum {string} */
+            status?: "PENDING" | "COMPLETED";
+            sentAt?: string;
+            completedAt?: string;
+            sentByName?: string;
+            downloadUrl?: string;
+        };
+        SendAgreementsResult: {
+            agreements?: components["schemas"]["AgreementSummary"][];
         };
         CreateCompanyRequest: {
             name: string;
@@ -2682,6 +2777,8 @@ export interface components {
             form3?: components["schemas"]["Form3EntryView"][];
             documents?: components["schemas"]["RecordDocument"][];
             generatedDocuments?: components["schemas"]["RecordGeneratedDocument"][];
+            aadhaarNumber?: string;
+            agreements?: components["schemas"]["AgreementSummary"][];
         };
         RecordDocument: {
             id?: string;
@@ -2770,6 +2867,33 @@ export interface components {
         AccountantStatus: {
             exists?: boolean;
             accountant?: components["schemas"]["AccountantView"];
+        };
+        MyAgreementSummary: {
+            /** @enum {string} */
+            type?: "AUP" | "NDA" | "NOTICE_PERIOD";
+            title?: string;
+            /** @enum {string} */
+            status?: "PENDING" | "COMPLETED";
+            completedAt?: string;
+        };
+        AgreementPrefill: {
+            fullName?: string;
+            employeeCode?: string;
+            designation?: string;
+            address?: string;
+            mobile?: string;
+        };
+        MyAgreementView: {
+            /** @enum {string} */
+            type?: "AUP" | "NDA" | "NOTICE_PERIOD";
+            title?: string;
+            /** @enum {string} */
+            status?: "PENDING" | "COMPLETED";
+            bodyHtml?: string;
+            sentAt?: string;
+            completedAt?: string;
+            downloadUrl?: string;
+            prefill?: components["schemas"]["AgreementPrefill"];
         };
         /** @description The ACCOUNTANT's own team — the roster header (null if none assigned). */
         MyTeamView: {
@@ -4255,6 +4379,32 @@ export interface operations {
             };
         };
     };
+    complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type: "AUP" | "NDA" | "NOTICE_PERIOD";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteAgreementRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CompleteAgreementResult"];
+                };
+            };
+        };
+    };
     markRead: {
         parameters: {
             query?: never;
@@ -4917,6 +5067,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DecisionResult"];
+                };
+            };
+        };
+    };
+    send_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SendAgreementsResult"];
                 };
             };
         };
@@ -5868,6 +6040,48 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PresignedView"];
+                };
+            };
+        };
+    };
+    myAgreements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MyAgreementSummary"][];
+                };
+            };
+        };
+    };
+    myAgreement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type: "AUP" | "NDA" | "NOTICE_PERIOD";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MyAgreementView"];
                 };
             };
         };

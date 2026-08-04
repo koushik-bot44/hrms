@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"><head><meta charset="utf-8"/>
+<style>
+  /*
+   * Generic agreement layout (§Agreements). The legal body is injected verbatim via th:utext from a single
+   * source fragment (resources/agreements/text/{aup,nda,notice}.html), so the on-screen read view and this
+   * PDF never diverge. Tokens ({{COMPANY_NAME}}, {{HR_NAME}}, {{SIGNATURE_IMG}}, fill values) are substituted
+   * server-side before injection.
+   *
+   * LETTERHEAD SLOT: the @page top margin reserves an empty header band and the bottom margin a footer band on
+   * every page. #letterhead / #footer are the running-element hooks — a future per-company letterhead image or
+   * footer line mounts here (populate the element and it flows onto every page). Kept intentionally empty now.
+   */
+  @page {
+    size: A4;
+    margin: 2.7cm 1.7cm 2.1cm 1.7cm;
+    @top-center { content: element(letterhead); }
+    @bottom-center { content: element(footer); }
+  }
+  body { font-family:"Helvetica","Arial",sans-serif; font-size:10.5px; color:#000; line-height:1.5; }
+
+  #letterhead { position: running(letterhead); height:1.7cm; width:100%; }
+  #footer { position: running(footer); width:100%; text-align:center; font-size:7.5px; color:#999;
+            border-top:0.5px solid #ddd; padding-top:3px; }
+
+  h1.title { text-align:center; font-size:15px; font-weight:bold; margin:0 0 14px; text-transform:uppercase; }
+  h2 { font-size:11.5px; font-weight:bold; margin:14px 0 5px; }
+  h2.ack-head, h2.dd-head { text-align:center; margin-top:20px; }
+  h3 { font-size:10.5px; font-weight:bold; margin:9px 0 3px; }
+  p { margin:5px 0; text-align:justify; }
+  p.g { margin:7px 0; }
+  ul { margin:4px 0 4px 0; padding-left:20px; }
+  li { margin:2px 0; text-align:justify; }
+  .inl { font-weight:bold; }
+
+  /* Acknowledgement / key-value fill grid (AUP, Notice, NDA designation/address/mobile). */
+  table.ack { width:100%; border-collapse:collapse; margin-top:10px; }
+  table.ack td { padding:6px 8px; vertical-align:middle; font-size:10.5px; }
+  table.ack td.ackk { font-weight:bold; width:34%; white-space:nowrap; }
+  table.ack td.ackv { border-bottom:0.75px solid #000; }
+  table.ack td.sigcell { height:46px; }
+
+  /* NDA clause-10 signature blocks (employee + company). */
+  table.sig-block { width:100%; border-collapse:collapse; margin-top:16px; }
+  table.sig-block td { padding:4px 10px; vertical-align:bottom; font-size:10.5px; width:50%; }
+  table.sig-block td.party { font-weight:bold; padding-bottom:2px; }
+  table.sig-block td.ackk { font-weight:bold; width:22%; white-space:nowrap; border:0; }
+  table.sig-block td.ackv { border-bottom:0.75px solid #000; }
+  .sigrule { border-bottom:0.75px solid #000; margin-top:2px; }
+  .siglabel { font-size:8.5px; color:#333; margin-top:2px; }
+  .sigval { min-height:16px; }
+  .sigblank { min-height:44px; }
+  .sigcell img.sig { max-height:44px; max-width:200px; height:auto; width:auto; }
+
+  /* Do's and Don'ts table (Notice). */
+  table.dosdonts { width:100%; border-collapse:collapse; margin-top:8px; }
+  table.dosdonts th, table.dosdonts td { border:0.75px solid #000; padding:5px 7px; font-size:9.5px;
+                                         vertical-align:top; text-align:left; width:50%; }
+  table.dosdonts th { background:#eee; text-align:center; }
+  p.note { margin-top:12px; font-style:italic; }
+</style></head>
+<body>
+
+<!-- LETTERHEAD SLOT (reserved, empty). Future per-company letterhead mounts inside #letterhead. -->
+<div id="letterhead"><!-- reserved header band --></div>
+<div id="footer" th:text="${footerText}">CONFIDENTIAL</div>
+
+<div class="doc" th:utext="${bodyHtml}">document body</div>
+
+</body></html>

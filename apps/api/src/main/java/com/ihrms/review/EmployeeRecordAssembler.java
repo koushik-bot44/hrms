@@ -1,5 +1,6 @@
 package com.ihrms.review;
 
+import com.ihrms.agreement.AgreementService;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.SectionStatus;
@@ -36,6 +37,8 @@ import org.springframework.stereotype.Component;
 public class EmployeeRecordAssembler {
 
   private static final int VIEW_TTL_SECONDS = 60;
+  /** Fixed mask for sensitive values — matches PAN's mask (§6). */
+  private static final String MASKED = "********";
 
   private final Form1PersonalRepository form1s;
   private final Form2InfoRepository form2s;
@@ -44,6 +47,7 @@ public class EmployeeRecordAssembler {
   private final GeneratedDocumentRepository generated;
   private final CompanyRepository companies;
   private final StorageService storage;
+  private final AgreementService agreementService;
 
   public EmployeeRecordAssembler(
       Form1PersonalRepository form1s,
@@ -52,7 +56,8 @@ public class EmployeeRecordAssembler {
       DocumentRepository documents,
       GeneratedDocumentRepository generated,
       CompanyRepository companies,
-      StorageService storage) {
+      StorageService storage,
+      AgreementService agreementService) {
     this.form1s = form1s;
     this.form2s = form2s;
     this.form3s = form3s;
@@ -60,6 +65,7 @@ public class EmployeeRecordAssembler {
     this.generated = generated;
     this.companies = companies;
     this.storage = storage;
+    this.agreementService = agreementService;
   }
 
   public EmployeeRecordView build(Employee employee) {
@@ -95,7 +101,9 @@ public class EmployeeRecordAssembler {
         f2 == null ? null : FormMappers.form2View(f2, employee.getEmployeeCode()),
         f3.stream().map(e -> FormMappers.form3View(e, FormMappers.Mode.MASKED)).toList(),
         docs.stream().map(this::documentView).toList(),
-        gen.stream().map(this::generatedView).toList());
+        gen.stream().map(this::generatedView).toList(),
+        employee.getAadhaarNumber() == null ? null : MASKED,
+        agreementService.forRecord(employee.getId()));
   }
 
   /** Plaintext sensitive values (PLAIN mode) — the caller audits this as a reveal. */
@@ -109,7 +117,8 @@ public class EmployeeRecordAssembler {
     return new RevealedSensitive(
         f1 == null ? null : FormMappers.form1View(f1, f2, FormMappers.Mode.PLAIN),
         f2 == null ? null : FormMappers.form2View(f2, employee.getEmployeeCode()),
-        f3);
+        f3,
+        employee.getAadhaarNumber()); // decrypted by the field converter on read (§6)
   }
 
   public boolean reviewComplete(Employee employee) {

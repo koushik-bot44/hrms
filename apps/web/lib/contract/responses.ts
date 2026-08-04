@@ -157,6 +157,8 @@ export type EmployeeRecord = Omit<
   | 'form3'
   | 'documents'
   | 'generatedDocuments'
+  | 'aadhaarNumber'
+  | 'agreements'
 > & {
   // employeeCode is null until approval (§5); dateOfJoining may be absent on legacy rows.
   employeeCode: string | null;
@@ -170,17 +172,64 @@ export type EmployeeRecord = Omit<
   form3: Form3EntryView[];
   documents: RecordDocument[];
   generatedDocuments: RecordGeneratedDocument[];
+  // Aadhaar (§Agreements): masked ("********") when present, null when not yet provided; revealed via /reveal.
+  aadhaarNumber: string | null;
+  // Post-approval agreements (§Agreements): per-type status + presigned download when completed.
+  agreements: AgreementSummary[];
 };
 
 /** Plaintext sensitive values returned by the explicit, audited reveal action (§6). */
 export type RevealedSensitive = Omit<
   Required<Schemas['RevealedSensitive']>,
-  'form1' | 'form2' | 'form3'
+  'form1' | 'form2' | 'form3' | 'aadhaarNumber'
 > & {
   form1: Form1View | null;
   form2: Form2View | null;
   form3: Form3EntryView[];
+  aadhaarNumber: string | null;
 };
+
+// --- Post-approval agreements (§Agreements) --------------------------------
+
+/** One agreement in the HR record / send result; downloadUrl is null until completed. */
+export type AgreementSummary = Omit<
+  Required<Schemas['AgreementSummary']>,
+  'sentAt' | 'completedAt' | 'sentByName' | 'downloadUrl'
+> & {
+  sentAt: string | null;
+  completedAt: string | null;
+  sentByName: string | null;
+  downloadUrl: string | null;
+};
+
+export type SendAgreementsResult = { agreements: AgreementSummary[] };
+
+/** Prefill values for the employee fill screen; edited values are stamped into the PDF only. */
+export type AgreementPrefill = Required<Schemas['AgreementPrefill']>;
+
+/** A row in the employee's own agreements list. */
+export type MyAgreementSummary = Omit<Required<Schemas['MyAgreementSummary']>, 'completedAt'> & {
+  completedAt: string | null;
+};
+
+/** A single agreement the employee reads and fills. */
+export type MyAgreementView = Omit<
+  Required<Schemas['MyAgreementView']>,
+  'completedAt' | 'downloadUrl' | 'prefill'
+> & {
+  completedAt: string | null;
+  downloadUrl: string | null;
+  prefill: AgreementPrefill;
+};
+
+/** Result of completing one agreement — its COMPLETED state + a presigned link to the stored PDF. */
+export type CompleteAgreementResult = Omit<Required<Schemas['CompleteAgreementResult']>, 'downloadUrl'> & {
+  downloadUrl: string | null;
+};
+
+/** The three standard agreement types (§Agreements). */
+export type AgreementType = NonNullable<Schemas['AgreementSummary']['type']>;
+export type AgreementStatus = NonNullable<Schemas['AgreementSummary']['status']>;
 
 // The HR approve/reject outcome (§3.3). On approve: employeeCode minted + team/manager set. On reject:
 // all of these are null (the employee joined no team) — so override every one as nullable.

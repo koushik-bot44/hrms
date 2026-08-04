@@ -13,6 +13,7 @@ import { OnboardingStepper } from '@/components/employee/onboarding-stepper';
 import { RevisionPanel } from '@/components/employee/revision-panel';
 import { GeneratedDocuments } from '@/components/employee/generated-documents';
 import { OnboardingSummaryCard } from '@/components/employee/onboarding-summary-card';
+import { AgreementsCard } from '@/components/employee/agreements-card';
 
 const EDITABLE_STATUSES = new Set(['INVITED', 'IN_PROGRESS', 'REJECTED']);
 
@@ -84,6 +85,9 @@ export default function EmployeeOnboardingPage() {
           {editable ? <OnboardingStepper dashboard={data} disabled={false} /> : null}
         </>
       )}
+
+      {/* Post-approval agreements (§Agreements) — shown once HR has sent the standard pack. */}
+      <AgreementsCard />
 
       <GeneratedDocuments documents={data.generatedDocuments} />
     </div>

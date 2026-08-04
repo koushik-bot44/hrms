@@ -165,6 +165,7 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
         editable={Boolean(editable)}
         busy={reviewMutation.isPending}
         revealed={revealed}
+        enableSendAgreements
         onReveal={() => revealMutation.mutate()}
         onVerify={verify}
         onSendBack={startSendBack}

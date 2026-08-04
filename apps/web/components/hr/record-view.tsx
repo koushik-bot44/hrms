@@ -21,6 +21,9 @@ import { surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
 import { ApproveDecisionActions } from '@/components/hr/approve-decision';
 import { AssignCredentialsDialog } from '@/components/hr/assign-credentials-dialog';
+import { SendAgreementsDialog } from '@/components/hr/send-agreements-dialog';
+import { AGREEMENT_TITLES } from '@/lib/contract';
+import type { AgreementSummary } from '@/lib/contract';
 
 export type ItemKind = 'form' | 'document';
 
@@ -45,6 +48,8 @@ interface RecordViewProps {
   onDecided?: (result: DecisionResult) => void;
   /** HR/SA "Edit Employee Info" affordance for the Form 2 card — shown only while INVITED (§3.2). */
   form2EditAction?: React.ReactNode;
+  /** Show the HR "Send agreements" action for an APPROVED employee (§Agreements) — HR host only. */
+  enableSendAgreements?: boolean;
 }
 
 /** The employee record: the four forms + Form 4 uploads + generated PDFs, sensitive values masked. */
@@ -58,6 +63,7 @@ export function RecordView({
   onSendBack,
   onDecided,
   form2EditAction,
+  enableSendAgreements = false,
 }: RecordViewProps) {
   const { session } = useAuth();
   const canAct = editable && Boolean(onVerify) && Boolean(onSendBack);
@@ -139,6 +145,11 @@ export function RecordView({
                 />
               )
             ) : null}
+            {enableSendAgreements &&
+            record.status === 'APPROVED' &&
+            record.agreements.length === 0 ? (
+              <SendAgreementsDialog employeeId={record.id} />
+            ) : null}
           </div>
         </CardHeader>
         {editable && !record.reviewComplete ? (
@@ -151,6 +162,16 @@ export function RecordView({
         {revealed ? (
           <CardContent className="pt-0 text-xs text-muted-foreground">
             Sensitive fields are shown in the clear — this reveal was recorded in the audit trail.
+          </CardContent>
+        ) : null}
+        {record.aadhaarNumber ? (
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-3 gap-2 text-sm">
+              <span className="text-muted-foreground">Aadhaar No.</span>
+              <span className="col-span-2 break-words font-mono">
+                {revealed?.aadhaarNumber ?? record.aadhaarNumber}
+              </span>
+            </div>
           </CardContent>
         ) : null}
       </Card>
@@ -284,6 +305,52 @@ export function RecordView({
             ))}
           </div>
         </section>
+      ) : null}
+
+      {record.agreements.length > 0 ? (
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground">Agreements</h3>
+          <p className="text-xs text-muted-foreground">
+            The standard post-approval pack. Completed agreements are signed by the employee and stored on
+            their record.
+          </p>
+          <div className="space-y-2">
+            {record.agreements.map((a) => (
+              <AgreementRow key={a.type} agreement={a} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+/** One row in the HR record Agreements section: title + status + download when completed. */
+function AgreementRow({ agreement }: { agreement: AgreementSummary }) {
+  const done = agreement.status === 'COMPLETED';
+  return (
+    <div className={cn(surface('subtle'), 'flex flex-wrap items-center gap-3 p-3')}>
+      <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">
+          {agreement.title ?? AGREEMENT_TITLES[agreement.type]}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {done && agreement.completedAt
+            ? `Signed ${new Date(agreement.completedAt).toLocaleDateString()}`
+            : agreement.sentByName
+              ? `Sent by ${agreement.sentByName}`
+              : 'Awaiting the employee'}
+        </p>
+      </div>
+      <Badge variant={done ? 'success' : 'warning'}>{done ? 'Completed' : 'Pending'}</Badge>
+      {done && agreement.downloadUrl ? (
+        <a href={agreement.downloadUrl} target="_blank" rel="noreferrer">
+          <Button type="button" variant="outline" size="sm">
+            <ExternalLink />
+            Open
+          </Button>
+        </a>
       ) : null}
     </div>
   );

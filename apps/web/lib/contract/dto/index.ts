@@ -11,3 +11,4 @@ export * from './hierarchy';
 export * from './mail';
 export * from './leave';
 export * from './requests';
+export * from './agreements';

@@ -285,6 +285,59 @@ the record view still **displays** Form 2 (read-only) and exposes its standalone
 At any time, **HR finds an employee** in their workspace (by name/email, or by ID once allocated) and
 sees **all** of that employee's details and documents in one place.
 
+### 3.5 Post-approval agreements
+Once an employee is **APPROVED** (their ID minted), HR may **manually send** a standard pack of three
+company agreements. There is **no verification loop** — the employee's signed submission is terminal.
+
+**The pack (fixed order).** `AUP` — Acceptable Use Policy · `NDA` — Non-Disclosure & Non-Compete Agreement
+· `NOTICE_PERIOD` — Notice Period Conduct Guidelines. Each is one `employee_agreements` row
+`(employeeId, type)` unique, created **PENDING** with `sentByUserId` (the sending HR).
+
+**Flow.**
+1. **HR sends** (`POST /employees/{id}/agreements/send`, HR onboarding-scope): `409` unless APPROVED;
+   idempotent (`409` if a pack already exists); creates the three PENDING rows; audits `AGREEMENTS_SENT`;
+   the employee is notified **after commit, best-effort** (email + Web Push — employees have no bell feed).
+2. **Employee reads & signs** in their onboarding portal (`/{slug}/employee/agreements/{type}`): the **full
+   agreement text** renders (scroll-to-end gates the consent checkbox); the few blanks are prefilled per the
+   map below; the employee types their Aadhaar (AUP only) and captures a **fresh** signature
+   (`SignatureCapture` — never the onboarding signature; a just-captured one may be reused across the pack).
+3. **Employee submits** (`POST /me/agreements/{type}/complete`): PENDING-only; `consentAccepted` must be
+   `true` (server-checked); AUP requires a 12-digit Aadhaar. A PDF is rendered and stored at
+   `companies/{cid}/employees/{eid}/agreements/{type}.pdf`; the row flips **COMPLETED**; the **sending HR**
+   is notified (durable `Notification` `AGREEMENT_COMPLETED` + push + email, after commit); audits
+   `AGREEMENT_COMPLETED`. The signed PDF is presigned-download gated exactly like the onboarding PDFs.
+
+**Single-source rendering.** Each agreement's legal body lives once as an HTML fragment
+(`resources/agreements/text/{aup,nda,notice}.html`) with `{{TOKEN}}` placeholders. The same fragment drives
+**both** the on-screen read view (tokens → prefills/blanks) and the PDF (tokens → filled values +
+signature), so the two can never diverge. The PDF is composed by the generic `templates/pdf/agreement.html`
+(letterhead slot + `th:utext` body) via the existing `HtmlPdfRenderer`/openhtmltopdf pipeline.
+
+**Letterhead slot.** The agreement PDF reserves an **empty header band** (via the `@page` top margin +
+`#letterhead` running element) and a **footer band** on every page. Both are intentionally empty now; a
+future **per-company letterhead** image/footer mounts into `#letterhead` / `#footer` — populate the running
+element and it flows onto every page (no layout change needed).
+
+**Token & field map.**
+- `{{COMPANY_NAME}}` → the employee's **joining company** display name at generation. AUP: every
+  "SCREATIVES SOFTWARE SERVICES" occurrence (~5). NDA: the opening party line. Notice: none.
+- **AUP** acknowledgement: Name (locked prefill) · Employee ID (locked = minted code) · Designation
+  (editable prefill) · **Aadhaar** (typed, 12-digit) · Signature (captured) · Date (auto).
+- **NDA**: "on this ___ day of ___" → signing date (auto); "Employee as ___" → designation (editable
+  prefill); employee block Signature (captured) / Date (auto) / Printed Name (locked) / Designation /
+  Address (editable, from Form-1 current address) / Mobile (editable). **Company block**: signature line
+  renders **blank** (wet-signed later); "(Kiran Thakur)" → `{{HR_NAME}}` (the **sending** HR); "Designation:
+  Manager HR" and the Telangana/Hyderabad governing-law & jurisdiction clauses stay **static**.
+- **Notice**: Name (locked) · Signature (captured) · Date (auto); the Do's & Don'ts table renders as a table.
+- Edited prefills (designation/address/mobile) are stamped into the **PDF only** — never written back to the
+  form data.
+
+**Aadhaar (PAN-class, §6).** The employee types it during AUP completion; it is stored on the
+**employee-level** `aadhaarNumber` column, **encrypted at rest** via the same AES-256-GCM field converter
+PAN uses, **masked** (`********`) in every DTO, and revealed in full only via the existing **audited** reveal
+endpoint (`POST /employees/{id}/reveal` → `SENSITIVE_FIELD_REVEALED`). The generated AUP PDF stamps the full
+number and is itself access-gated like the other generated PDFs.
+
 ---
 
 ## 4. Data Model (conceptual)
@@ -428,7 +481,10 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
 - **LeaveType** _(§8b)_: `CASUAL`, `SICK`, `UNPAID`
 - **LeaveStatus** _(§8b)_: `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`
 - **NotificationType**: `EMPLOYEE_ONBOARDED`, `EMPLOYEE_SUBMITTED`, `APPROVAL_REQUESTED`,
-  `EMPLOYEE_APPROVED`, `EMPLOYEE_REJECTED`, `LEAVE_REQUESTED` _(§8b — Manager bell on a leave submission)_
+  `EMPLOYEE_APPROVED`, `EMPLOYEE_REJECTED`, `LEAVE_REQUESTED` _(§8b — Manager bell on a leave submission)_,
+  `AGREEMENT_COMPLETED` _(§3.5 — durable record for the sending HR when an agreement is signed)_
+- **EmployeeAgreementType** _(§3.5)_: `AUP`, `NDA`, `NOTICE_PERIOD`
+- **AgreementStatus** _(§3.5)_: `PENDING`, `COMPLETED`
 
 ---
 
