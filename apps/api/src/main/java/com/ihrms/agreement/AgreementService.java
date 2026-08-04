@@ -158,7 +158,9 @@ public class AgreementService {
           PrincipalRef.forEmployee(employee.getId(), employee.getCompanyId()),
           "Agreements to sign",
           "Your employer has sent standard agreements for you to review and sign.",
-          "/employee/agreements");
+          // Agreements live in the WORKSPACE (§3.5) — this non-slugged area path resolves to the
+          // employee's slugged workspace home (LegacyRedirect), where the Agreements card awaits.
+          "/workspace/agreements");
     } catch (RuntimeException e) {
       log.warn("Post-send agreement notice skipped (best-effort): {}", e.getMessage());
     }

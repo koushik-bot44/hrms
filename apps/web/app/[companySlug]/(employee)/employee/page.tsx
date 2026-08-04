@@ -13,7 +13,6 @@ import { OnboardingStepper } from '@/components/employee/onboarding-stepper';
 import { RevisionPanel } from '@/components/employee/revision-panel';
 import { GeneratedDocuments } from '@/components/employee/generated-documents';
 import { OnboardingSummaryCard } from '@/components/employee/onboarding-summary-card';
-import { AgreementsCard } from '@/components/employee/agreements-card';
 
 const EDITABLE_STATUSES = new Set(['INVITED', 'IN_PROGRESS', 'REJECTED']);
 
@@ -71,6 +70,13 @@ export default function EmployeeOnboardingPage() {
                   <p className="text-sm text-muted-foreground">
                     Your record is locked while HR and your Manager review it. Your generated forms are below.
                   </p>
+                  {/* Post-approval agreements live in the workspace (§3.5) — point the employee there. */}
+                  {data.status === 'APPROVED' ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Any company agreements to review and sign are waiting in your workspace — sign in with
+                      your workspace credentials.
+                    </p>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>
@@ -85,9 +91,6 @@ export default function EmployeeOnboardingPage() {
           {editable ? <OnboardingStepper dashboard={data} disabled={false} /> : null}
         </>
       )}
-
-      {/* Post-approval agreements (§Agreements) — shown once HR has sent the standard pack. */}
-      <AgreementsCard />
 
       <GeneratedDocuments documents={data.generatedDocuments} />
     </div>

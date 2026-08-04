@@ -6,35 +6,34 @@ import { getMyAgreements } from '@/lib/api/agreements';
 import { useApiQuery } from '@/lib/api/hooks';
 import { AGREEMENT_TITLES } from '@/lib/contract';
 import { useCompanyPath } from '@/lib/auth/use-company-path';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/empty-state';
+import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { Badge } from '@/components/ui/badge';
 
 /**
- * The employee's post-approval agreements (§Agreements). Shown on the onboarding home once HR has sent the
- * pack. Each card links to the read-and-sign screen; completed agreements show a Completed badge and open
- * the signed PDF. Renders nothing until a pack has been sent.
+ * The employee's post-approval agreements list (§3.5) — the workspace Agreements section. Each row links to
+ * the read-and-sign screen; completed agreements show a Completed badge and open the signed PDF.
  */
-export function AgreementsCard() {
-  const { data } = useApiQuery(['my-agreements'], getMyAgreements);
+export function AgreementsList() {
+  const { data, isLoading } = useApiQuery(['my-agreements'], getMyAgreements);
   const cp = useCompanyPath();
 
-  if (!data || data.length === 0) return null;
+  if (isLoading) return <LoadingSkeleton lines={4} />;
 
-  const pending = data.filter((a) => a.status !== 'COMPLETED').length;
+  if (!data || data.length === 0) {
+    return (
+      <EmptyState
+        icon={FileSignature}
+        title="No agreements yet"
+        description="When HR sends you company agreements to sign, they will appear here."
+      />
+    );
+  }
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle className="text-base">Agreements</CardTitle>
-        {pending > 0 ? (
-          <Badge variant="warning">
-            {pending} to sign
-          </Badge>
-        ) : (
-          <Badge variant="success">All signed</Badge>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-2 pt-6">
         <p className="text-sm text-muted-foreground">
           Please read each agreement in full, fill the required details, and sign.
         </p>
@@ -44,7 +43,7 @@ export function AgreementsCard() {
             return (
               <li key={a.type}>
                 <Link
-                  href={cp(`/employee/agreements/${a.type}`)}
+                  href={cp(`/workspace/agreements/${a.type}`)}
                   className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:bg-muted/50"
                 >
                   <FileSignature className="size-4 shrink-0 text-muted-foreground" aria-hidden />

@@ -5,7 +5,7 @@ import { AgreementFill } from '@/components/employee/agreement-fill';
 
 export const metadata: Metadata = { title: 'Agreement' };
 
-export default function EmployeeAgreementPage({ params }: { params: { type: string } }) {
+export default function WorkspaceAgreementPage({ params }: { params: { type: string } }) {
   const type = params.type as AgreementType;
   if (!AgreementTypeValues.includes(type)) notFound();
   return <AgreementFill type={type} />;

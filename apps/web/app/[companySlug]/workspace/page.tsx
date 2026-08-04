@@ -1,11 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowUpRight, CalendarOff, Clock, FileText, Inbox } from 'lucide-react';
+import { ArrowUpRight, CalendarOff, Clock, FileSignature, FileText, Inbox } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { useCompanyPath } from '@/lib/auth/use-company-path';
+import { useApiQuery } from '@/lib/api/hooks';
+import { getMyAgreements } from '@/lib/api/agreements';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /** The portal home: an editorial identity hero + the employee's section entry points. */
@@ -13,6 +16,11 @@ export default function WorkspacePage() {
   const { session } = useAuth();
   const cp = useCompanyPath();
   const emp = session?.type === 'EMPLOYEE' ? session : null;
+  // Post-approval agreements (§3.5) — a section entry appears once HR has sent a pack; the badge counts the
+  // ones still to sign. Same react-query key as the list/shell so the fetch is shared.
+  const { data: agreements } = useApiQuery(['my-agreements'], getMyAgreements);
+  const hasAgreements = (agreements?.length ?? 0) > 0;
+  const pendingAgreements = agreements?.filter((a) => a.status !== 'COMPLETED').length ?? 0;
 
   if (!emp) {
     return (
@@ -67,6 +75,15 @@ export default function WorkspacePage() {
           title="HR/Accounts Requests"
           description="Ask for payslips and other documents."
         />
+        {hasAgreements ? (
+          <SectionCard
+            href={cp('/workspace/agreements')}
+            icon={FileSignature}
+            title="Agreements"
+            description="Read and sign your company agreements."
+            badge={pendingAgreements > 0 ? `${pendingAgreements} pending` : undefined}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -77,11 +94,14 @@ function SectionCard({
   icon: Icon,
   title,
   description,
+  badge,
 }: {
   href: string;
   icon: LucideIcon;
   title: string;
   description: string;
+  /** Optional status pill (e.g. a pending count) shown top-right. */
+  badge?: string;
 }) {
   return (
     <Link
@@ -94,7 +114,7 @@ function SectionCard({
             <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <Icon className="size-5" />
             </div>
-            <ArrowUpRight className="size-4 text-muted-foreground" aria-hidden />
+            {badge ? <Badge variant="warning">{badge}</Badge> : <ArrowUpRight className="size-4 text-muted-foreground" aria-hidden />}
           </div>
           <div className="space-y-1">
             <p className="font-semibold tracking-tight">{title}</p>

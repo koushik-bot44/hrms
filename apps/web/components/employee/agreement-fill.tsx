@@ -140,10 +140,10 @@ export function AgreementFill({ type }: { type: AgreementType }) {
     <div className="space-y-6">
       <style dangerouslySetInnerHTML={{ __html: AGREEMENT_BODY_CSS }} />
       <div>
-        <Link href={cp('/employee')}>
+        <Link href={cp('/workspace/agreements')}>
           <Button type="button" variant="ghost" size="sm" className="mb-2 -ml-2">
             <ArrowLeft className="size-4" />
-            Back
+            Back to agreements
           </Button>
         </Link>
         <PageHeader
