@@ -23,6 +23,8 @@ import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeRequest;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeResult;
 import com.ihrms.employees.dto.EmployeeDtos.SuperAdminOnboardRequest;
 import com.ihrms.onboarding.FormMappers;
+import com.ihrms.onboarding.OfferService;
+import com.ihrms.onboarding.dto.OfferDtos.OfferTermsRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2Request;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
 import jakarta.persistence.criteria.Predicate;
@@ -59,6 +61,7 @@ public class EmployeesService {
   private final MailService mail;
   private final AccountEmails accountEmails;
   private final AuthorizationService authz;
+  private final OfferService offers;
   private final AppProperties props;
 
   public EmployeesService(
@@ -70,6 +73,7 @@ public class EmployeesService {
       MailService mail,
       AccountEmails accountEmails,
       AuthorizationService authz,
+      OfferService offers,
       AppProperties props) {
     this.employees = employees;
     this.companies = companies;
@@ -79,6 +83,7 @@ public class EmployeesService {
     this.mail = mail;
     this.accountEmails = accountEmails;
     this.authz = authz;
+    this.offers = offers;
     this.props = props;
   }
 
@@ -88,7 +93,7 @@ public class EmployeesService {
    */
   public OnboardEmployeeResult onboard(
       OnboardEmployeeRequest input, IhrmsPrincipal.User actor, String ip) {
-    return createAndInvite(companyOf(actor), actor.userId(), input.form2(), actor, ip);
+    return createAndInvite(companyOf(actor), actor.userId(), input.form2(), input.offer(), actor, ip);
   }
 
   /**
@@ -110,7 +115,7 @@ public class EmployeesService {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "The selected team has no HR assigned yet");
     }
-    return createAndInvite(companyId, team.getHrUserId(), input.form2(), actor, ip);
+    return createAndInvite(companyId, team.getHrUserId(), input.form2(), input.offer(), actor, ip);
   }
 
   /**
@@ -122,6 +127,7 @@ public class EmployeesService {
       String companyId,
       String onboardingHrId,
       Form2Request form2,
+      OfferTermsRequest offer,
       IhrmsPrincipal.User actor,
       String ip) {
     Company company =
@@ -157,6 +163,10 @@ public class EmployeesService {
     f2.setEmployeeId(employee.getId());
     f2.setData(FormMappers.toForm2Data(form2, null));
     form2s.save(f2);
+
+    // The Offer Letter opens onboarding (§3.2): a SENT offer the invited employee must accept before any
+    // form unlocks. Terms reuse the Form-2 joining date + designation + name; only salary/location are new.
+    offers.createOffer(employee, offer, actor, ip);
 
     String loginUrl = loginUrl(email);
     mail.sendEmployeeSelection(email, fullName, designation, company.getName(), loginUrl);

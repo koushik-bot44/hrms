@@ -79,6 +79,10 @@ public class SecurityConfig {
                     // (cross-company forms-viewer / Form-2 edit, §2/§3.2). The service scopes each.
                     .requestMatchers(HttpMethod.GET, "/employees/*/record")
                     .hasAnyRole("HR", "COMPANY_ADMIN", "SUPER_ADMIN")
+                    // The accepted Offer Letter PDF (§3.2) carries the salary — same record-read audience;
+                    // manager/accountant never reach it (the /employees/** catch-all is HR-only). Service scopes.
+                    .requestMatchers(HttpMethod.GET, "/employees/*/offer/pdf")
+                    .hasAnyRole("HR", "COMPANY_ADMIN", "SUPER_ADMIN")
                     // Offboarding case READ (§Offboarding) mirrors the record read's gating — the onboarding
                     // HR + the employee's COMPANY_ADMIN + SUPER_ADMIN; the service scopes each. Initiate /
                     // cancel (POST, below) stay HR-only under the /employees/** catch-all.

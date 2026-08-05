@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { EmployeeInfoFields } from '@/components/employee-info/employee-info-fields';
+import { OfferTermsFields } from '@/components/employee-info/offer-terms-fields';
 import { OnboardedConfirmation } from '@/components/hr/onboard-employee-dialog';
 
 const SELECT_CLASS =
@@ -34,6 +35,8 @@ const EMPTY: SuperAdminOnboardInput = {
   designation: '',
   dateOfJoining: '',
   officialEmail: '',
+  salary: 'X,XX,XXX Per Annum',
+  location: 'Hyderabad',
 };
 
 /** Super Admin onboards into any company (§2): pick company → team (→ that team's HR) → fill Form 2. */
@@ -69,8 +72,12 @@ export function SuperAdminOnboardDialog() {
 
   const mutation = useApiMutation(
     (values: SuperAdminOnboardInput) => {
-      const { companyId: cid, teamId: tid, ...form2 } = values;
-      return onboardForCompany(cid, { teamId: tid, form2 });
+      const { companyId: cid, teamId: tid, salary, location, ...form2 } = values;
+      return onboardForCompany(cid, {
+        teamId: tid,
+        form2,
+        offer: { salary, location: location || undefined },
+      });
     },
     {
       successMessage: (data) => `${data.employee.fullName} onboarded`,
@@ -203,6 +210,7 @@ export function SuperAdminOnboardDialog() {
                 dojMin={istTodayIso()}
                 idPrefix="sa-onb"
               />
+              <OfferTermsFields register={register} errors={errors} idPrefix="sa-onb" />
 
               <div className="sticky bottom-0 -mx-6 -mb-6 flex justify-end gap-2 border-t bg-background px-6 py-4">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>

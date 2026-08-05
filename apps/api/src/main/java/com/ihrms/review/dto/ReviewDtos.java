@@ -5,6 +5,7 @@ import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.DocumentType;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.GeneratedDocumentKind;
+import com.ihrms.onboarding.dto.OfferDtos.OfferRecordView;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1View;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form3EntryView;
@@ -103,7 +104,10 @@ public final class ReviewDtos {
       // Aadhaar (typed on AUP completion) — masked here, revealed via the audited reveal action (§6).
       String aadhaarNumber,
       // Post-approval agreements (§Agreements): per-type status + presigned download when completed.
-      List<AgreementSummary> agreements) {}
+      List<AgreementSummary> agreements,
+      // The Offer Letter (§3.2): status + dates only. Null when there is no offer (a pre-feature employee).
+      // The PDF (which carries the salary) is fetched via GET /employees/{id}/offer/pdf (role-gated), NOT here.
+      OfferRecordView offer) {}
 
   /** The plaintext sensitive values returned by the explicit, audited reveal action (§6). */
   public record RevealedSensitive(

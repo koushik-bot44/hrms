@@ -8,6 +8,7 @@ import {
   type Form1View,
   type Form3EntryView,
   type Form3Values,
+  type MyOfferView,
   type OnboardingDashboard,
   type PresignedUpload,
   type PresignedView,
@@ -18,6 +19,21 @@ import { ApiError, apiFetch } from './client';
 
 export function getDashboard(signal?: AbortSignal): Promise<OnboardingDashboard> {
   return apiFetch<OnboardingDashboard>('/me/onboarding', { signal });
+}
+
+// --- Offer Letter (§3.2): the gate that opens onboarding --------------------
+
+/** The invited employee's offer (full text + status); the API returns null when there is no offer. */
+export function getMyOffer(signal?: AbortSignal): Promise<MyOfferView | null> {
+  return apiFetch<MyOfferView | null>('/me/onboarding/offer', { signal });
+}
+
+/** Accept the offer — consent + signature; unlocks the forms + returns the fresh dashboard. */
+export function acceptOffer(body: {
+  consentAccepted: true;
+  signatureDataUrl: string;
+}): Promise<OnboardingDashboard> {
+  return apiFetch<OnboardingDashboard>('/me/onboarding/offer/accept', { method: 'POST', body });
 }
 
 export function saveForm1(body: Form1Values): Promise<Form1View> {

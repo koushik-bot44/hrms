@@ -91,6 +91,7 @@ public class OnboardingService {
   private final UserRepository users;
   private final StorageService storage;
   private final PdfService pdf;
+  private final OfferService offers;
   private final AuditService audit;
 
   public OnboardingService(
@@ -105,6 +106,7 @@ public class OnboardingService {
       UserRepository users,
       StorageService storage,
       PdfService pdf,
+      OfferService offers,
       AuditService audit) {
     this.employees = employees;
     this.form1s = form1s;
@@ -117,6 +119,7 @@ public class OnboardingService {
     this.users = users;
     this.storage = storage;
     this.pdf = pdf;
+    this.offers = offers;
     this.audit = audit;
   }
 
@@ -257,6 +260,7 @@ public class OnboardingService {
       IhrmsPrincipal.Employee emp, String documentId, DocumentReviseRequest body, String ip) {
     Document doc = loadOwnDocument(emp.employeeId(), documentId);
     Employee employee = loadEmployee(emp.employeeId());
+    offers.assertAccepted(employee.getId()); // §3.2: defense-in-depth (unreachable while the offer is SENT)
     if (employee.getStatus() != EmployeeStatus.REVISION_REQUESTED
         || doc.getStatus() != DocumentStatus.REVISION_REQUESTED) {
       throw new ResponseStatusException(
@@ -349,6 +353,7 @@ public class OnboardingService {
   @Transactional
   public OnboardingDashboard submit(IhrmsPrincipal.Employee emp, String ip) {
     Employee employee = loadEmployee(emp.employeeId());
+    offers.assertAccepted(employee.getId()); // §3.2: cannot submit before accepting the offer
     if (!EDITABLE.contains(employee.getStatus())) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "Cannot submit from status " + employee.getStatus());
@@ -392,6 +397,7 @@ public class OnboardingService {
   @Transactional
   public OnboardingDashboard resubmit(IhrmsPrincipal.Employee emp, String ip) {
     Employee employee = loadEmployee(emp.employeeId());
+    offers.assertAccepted(employee.getId()); // §3.2: defense-in-depth (unreachable while the offer is SENT)
     if (employee.getStatus() != EmployeeStatus.REVISION_REQUESTED) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "No revision is in progress on your record");
@@ -519,6 +525,7 @@ public class OnboardingService {
         employee.getDesignation(),
         employee.getStatus(),
         employee.isItrRequired(),
+        offers.dashboardOffer(employee.getId()),
         form1,
         form3,
         docs,
@@ -593,6 +600,7 @@ public class OnboardingService {
   }
 
   private void assertEditable(Employee employee) {
+    offers.assertAccepted(employee.getId()); // §3.2: the offer letter gates every onboarding write
     if (!EDITABLE.contains(employee.getStatus())) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "Your record is locked for verification");
@@ -605,6 +613,7 @@ public class OnboardingService {
    * {@code REVISION_REQUESTED} or, once saved, {@code DRAFT}). Every other item stays locked (§3.3).
    */
   private void assertFormEditable(Employee employee, SectionStatus currentFormStatus) {
+    offers.assertAccepted(employee.getId()); // §3.2: the offer letter gates every onboarding write
     if (EDITABLE.contains(employee.getStatus())) {
       return;
     }
@@ -619,6 +628,7 @@ public class OnboardingService {
 
   /** Confirming an upload is allowed for a fresh upload (EDITABLE) or a revision re-upload. */
   private void assertCanUploadDocuments(Employee employee) {
+    offers.assertAccepted(employee.getId()); // §3.2: the offer letter gates every onboarding write
     if (!EDITABLE.contains(employee.getStatus())
         && employee.getStatus() != EmployeeStatus.REVISION_REQUESTED) {
       throw new ResponseStatusException(

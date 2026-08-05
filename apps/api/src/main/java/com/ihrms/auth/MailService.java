@@ -98,6 +98,19 @@ public class MailService {
     log.info("Welcome email dispatched to {} (ID {})", email, employeeCode);
   }
 
+  /** Offer-accepted notice to the onboarding HR (§3.2) — HR has no notification bell feed. */
+  public void sendOfferAccepted(String hrEmail, String employeeName) {
+    String body =
+        (employeeName == null ? "An employee" : employeeName)
+            + " has accepted their offer letter and can now begin onboarding. Sign in to view the signed"
+            + " offer on their record.";
+    if (noSmtp()) {
+      log.warn("[DEV OFFER ACCEPTED] {} -> {}  (no SMTP configured; logging only)", hrEmail, body);
+      return;
+    }
+    log.info("Offer-accepted email dispatched to {}", hrEmail);
+  }
+
   /** Leave decision notice to the employee (§8b) — the employee has no notification bell. */
   public void sendLeaveDecision(String email, boolean approved, String note) {
     String outcome = approved ? "approved" : "rejected";

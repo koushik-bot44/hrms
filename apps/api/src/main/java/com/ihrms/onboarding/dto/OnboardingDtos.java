@@ -234,6 +234,8 @@ public final class OnboardingDtos {
 
   // The employee's own dashboard covers Forms 1, 3, 4 only — Form 2 is HR/SA-authored and never shown
   // to the employee (no view, and its standalone PDF is filtered out of generatedDocuments — §3.2).
+  // {@code offer} is the Offer Letter gate (§3.2): null when there is no offer (a pre-feature employee is
+  // ungated); SENT locks the forms until the employee accepts; ACCEPTED unlocks them.
   public record OnboardingDashboard(
       String employeeCode,
       String email,
@@ -241,6 +243,7 @@ public final class OnboardingDtos {
       String designation,
       EmployeeStatus status,
       boolean itrRequired,
+      OfferDtos.OfferSummary offer,
       Form1View form1,
       List<Form3EntryView> form3,
       List<DocumentView> documents,

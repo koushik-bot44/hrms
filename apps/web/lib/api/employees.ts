@@ -3,6 +3,7 @@ import type {
   EmployeeStatus,
   Form2Values,
   Form2View,
+  OfferTermsInput,
   OnboardEmployeeInput,
   OnboardEmployeeResult,
   SuperAdminOnboardInput,
@@ -47,14 +48,18 @@ export function getCompanyEmployees(
  * invite to the personal email (the login/OTP identity). No employee ID is minted here (allocated on
  * Manager approval, §5).
  */
-export function onboardEmployee(body: OnboardEmployeeInput): Promise<OnboardEmployeeResult> {
-  return apiFetch<OnboardEmployeeResult>('/employees', { method: 'POST', body: { form2: body } });
+export function onboardEmployee(input: OnboardEmployeeInput): Promise<OnboardEmployeeResult> {
+  const { salary, location, ...form2 } = input;
+  return apiFetch<OnboardEmployeeResult>('/employees', {
+    method: 'POST',
+    body: { form2, offer: { salary, location: location || undefined } },
+  });
 }
 
 /** SUPER_ADMIN onboards into a chosen company by selecting a team (its HR is resolved server-side). */
 export function onboardForCompany(
   companyId: string,
-  body: { teamId: string; form2: Form2Values },
+  body: { teamId: string; form2: Form2Values; offer: OfferTermsInput },
 ): Promise<OnboardEmployeeResult> {
   return apiFetch<OnboardEmployeeResult>(`/companies/${companyId}/employees`, {
     method: 'POST',

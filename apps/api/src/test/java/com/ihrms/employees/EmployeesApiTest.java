@@ -249,7 +249,13 @@ class EmployeesApiTest {
     return post("/employees")
         .header("Authorization", "Bearer " + hrToken)
         .contentType(MediaType.APPLICATION_JSON)
-        .content(json.writeValueAsString(Map.of("form2", form2Body(fullName, email))));
+        .content(
+            json.writeValueAsString(
+                Map.of(
+                    "form2",
+                    form2Body(fullName, email),
+                    "offer",
+                    Map.of("salary", "5,40,000 Per Annum")))); // §3.2: the offer opens onboarding
   }
 
   private static Map<String, Object> form2Body(String fullName, String personalEmail) {

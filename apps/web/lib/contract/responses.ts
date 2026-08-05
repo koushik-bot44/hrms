@@ -119,11 +119,21 @@ export type GeneratedDocumentView = Omit<Required<Schemas['GeneratedDocumentView
 // employee (no view; its standalone PDF is filtered out of generatedDocuments — §3.2).
 export type OnboardingDashboard = Omit<
   Required<Schemas['OnboardingDashboard']>,
-  'employeeCode' | 'fullName' | 'designation' | 'form1' | 'form3' | 'documents' | 'signature' | 'generatedDocuments'
+  | 'employeeCode'
+  | 'fullName'
+  | 'designation'
+  | 'offer'
+  | 'form1'
+  | 'form3'
+  | 'documents'
+  | 'signature'
+  | 'generatedDocuments'
 > & {
   employeeCode: string | null;
   fullName: string | null;
   designation: string | null;
+  // The Offer Letter gate (§3.2): null when there is no offer (a pre-feature employee is ungated).
+  offer: OfferSummary | null;
   form1: Form1View | null;
   form3: Form3EntryView[];
   documents: DocumentDto[];
@@ -134,6 +144,33 @@ export type OnboardingDashboard = Omit<
 export type PresignedUpload = Required<Schemas['PresignedUpload']>;
 
 export type PresignedView = Required<Schemas['PresignedView']>;
+
+// --- Offer Letter (§3.2) — the company-issued letter that opens onboarding -----
+
+export type OfferStatus = NonNullable<Schemas['OfferSummary']['status']>;
+
+/** The invited employee's own offer screen (full text + status); returned only when an offer exists. */
+export type MyOfferView = Omit<
+  Required<Schemas['MyOfferView']>,
+  'status' | 'acceptedAt' | 'downloadUrl'
+> & {
+  status: OfferStatus;
+  acceptedAt: string | null;
+  downloadUrl: string | null;
+};
+
+/** The lightweight offer state on the onboarding dashboard (null when there is no offer — ungated). */
+export type OfferSummary = Omit<Required<Schemas['OfferSummary']>, 'status' | 'acceptedAt' | 'downloadUrl'> & {
+  status: OfferStatus;
+  acceptedAt: string | null;
+  downloadUrl: string | null;
+};
+
+/** The offer state on the HR record panel — status + dates only (the PDF is fetched via a gated endpoint). */
+export type OfferRecordView = Omit<Required<Schemas['OfferRecordView']>, 'status' | 'acceptedAt'> & {
+  status: OfferStatus;
+  acceptedAt: string | null;
+};
 
 // --- HR verification & routing (§3.3/§3.4) --------------------------------
 
@@ -159,6 +196,7 @@ export type EmployeeRecord = Omit<
   | 'generatedDocuments'
   | 'aadhaarNumber'
   | 'agreements'
+  | 'offer'
 > & {
   // employeeCode is null until approval (§5); dateOfJoining may be absent on legacy rows.
   employeeCode: string | null;
@@ -176,6 +214,9 @@ export type EmployeeRecord = Omit<
   aadhaarNumber: string | null;
   // Post-approval agreements (§Agreements): per-type status + presigned download when completed.
   agreements: AgreementSummary[];
+  // The Offer Letter (§3.2): status + dates only; null when there is no offer. The PDF (with the salary) is
+  // fetched via GET /employees/{id}/offer/pdf (role-gated), not embedded here.
+  offer: OfferRecordView | null;
 };
 
 /** Plaintext sensitive values returned by the explicit, audited reveal action (§6). */

@@ -200,7 +200,8 @@ class SuperAdminTeamsAndOnboardTest {
                 "fullName", fullName,
                 "personalEmail", email,
                 "designation", "Engineer",
-                "dateOfJoining", "2026-08-01"));
+                "dateOfJoining", "2026-08-01"),
+        "offer", Map.of("salary", "6,00,000 Per Annum")); // §3.2: the offer opens onboarding
   }
 
   private MvcResult perform(MockHttpServletRequestBuilder req, String token, Object body, int expected)

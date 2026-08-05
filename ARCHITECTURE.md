@@ -178,9 +178,10 @@ Accounts Admin, own team for Accountant).
 
 ### 3.2 Onboarding (the spine — starts with HR)
 1. **HR** (or the **Super Admin**, cross-company) initiates onboarding by **filling Form 2 — Employee
-   Info** for the new hire (**full name**, DOJ, **personal email**, designation).
-   Submitting Form 2 **creates the employee record** (`status = INVITED`) **and sends the invite in one
-   action** — there is no separate 4-field onboard step. The **personal email is the employee's login
+   Info** for the new hire (**full name**, DOJ, **personal email**, designation) **plus the Offer Letter
+   terms** (a free-text **salary**, seeded `X,XX,XXX Per Annum`, and a **location**, default Hyderabad).
+   Submitting Form 2 **creates the employee record** (`status = INVITED`), **the SENT offer**, **and sends
+   the invite in one action** — there is no separate 4-field onboard step. The **personal email is the employee's login
    identity** (globally unique, §6). **No employee ID is minted here** — the unique ID is allocated only
    on HR approval (see §3.3 / §5), so the Form-2 `employeeId` shows **greyed / blank** until then.
    The **official email** is left **blank/inert** at onboarding (slated for removal — the column stays,
@@ -198,6 +199,28 @@ Accounts Admin, own team for Accountant).
    - **Changing the personal email (while `INVITED`) re-invites.** Because the personal email *is* the
      login identity, editing it **re-sends the invite to the new address** (the old address gets nothing
      further) and re-checks global uniqueness. Editing any **other** Form-2 field does **not** re-invite.
+   - **The Offer Letter opens onboarding.** The offer is a **company-issued** letter (`employee_offers`,
+     status `SENT`) rendered from a single-source template (`resources/onboarding/text/offer.html` → the
+     shared `agreement.html` letterhead slot → openhtmltopdf); `{{SALARY}}`/`{{LOCATION}}` and the reused
+     `{{JOINING_DATE}}`/`{{DESIGNATION}}`/`{{EMPLOYEE_NAME}}`/`{{COMPANY_NAME}}` (every SCREATIVE variant,
+     incl. clause 24's inline one) are substituted; clause 24 stays **bold**; probation/notice/non-compete/
+     jurisdiction are static legal text; the company signature area is `For {{COMPANY_NAME}},` + a blank
+     wet-sign line. The invited employee's **onboarding portal shows the offer FIRST**: read
+     (scroll-to-consent — *"I agree to accept the employment on the terms & conditions mentioned in the
+     above letter"*), sign (a **fresh SignatureCapture**), **Accept**. The employee **never fills or edits**
+     the terms. Until accepted, **every onboarding write is blocked server-side (409)** — Forms 1/3 saves,
+     Form-4 upload/confirm/revise/delete, the signature, submit and resubmit all gate on
+     `OfferService.assertAccepted` (not just the UI). **Accept** stores the signed PDF on the record
+     (`companies/{cid}/employees/{eid}/offer/OFFER_LETTER.pdf`), sets `ACCEPTED`, audits `OFFER_ACCEPTED`,
+     notifies the onboarding HR, and unlocks the forms. **Existing in-flight employees have no offer row and
+     are never gated.** No decline path in v1. Letterheads come later — the plain slot layout is used now.
+   - **Salary visibility.** The offer PDF carries the salary, so its download is **role-gated and properly
+     enforced**: `GET /employees/{id}/offer/pdf` is HR/COMPANY_ADMIN/SUPER_ADMIN + `canAccessEmployee` only,
+     and the employee reads their own via `GET /me/onboarding/offer`; **manager/accountant/lookup get 403**.
+     The shared record view (`EmployeeRecordAssembler`) carries only the offer **STATUS + accepted date** —
+     never the PDF URL — so it does not leak the salary the way the Form-2-PDF precedent does (the shared
+     assembler hands the Form-2 PDF's presigned URL to manager/accountant too; only the frontend labels it
+     "HR only"). The offer PDF fixes that leak for its own artifact.
 3. **Employee** logs in with **full name + email → OTP** (the OTP to that email is the security
    factor) and lands on their **dashboard**.
 4. Employee completes a **guided stepper** under their own record — **Forms 1, 3 and 4 only** (the
@@ -643,6 +666,7 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
 - **DocumentStatus**: `PENDING`, `UPLOADED`, `VERIFIED`, `REVISION_REQUESTED` _(HR asked for a
   re-upload)_, `REJECTED`
 - **GeneratedDocumentKind**: `FORM1`, `FORM2`, `FORM3`, `FORM4_MANIFEST`, `MERGED`
+- **OfferStatus** _(§3.2 — the Offer Letter that opens onboarding)_: `SENT`, `ACCEPTED`
 - **ApprovalStatus**: `PENDING`, `APPROVED`, `REJECTED`
 - **LeaveType** _(§8b)_: `CASUAL`, `SICK`, `UNPAID`
 - **LeaveStatus** _(§8b)_: `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`

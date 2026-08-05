@@ -1038,6 +1038,35 @@
         }
       }
     },
+    "/me/onboarding/offer/accept": {
+      "post": {
+        "tags": [
+          "onboarding-controller"
+        ],
+        "operationId": "acceptOffer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptOfferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingDashboard"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/onboarding/documents": {
       "post": {
         "tags": [
@@ -4062,6 +4091,26 @@
         }
       }
     },
+    "/me/onboarding/offer": {
+      "get": {
+        "tags": [
+          "onboarding-controller"
+        ],
+        "operationId": "offer",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyOfferView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/onboarding/generated/{id}/url": {
       "get": {
         "tags": [
@@ -4985,6 +5034,36 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/EmployeeRecordView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offer/pdf": {
+      "get": {
+        "tags": [
+          "review-controller"
+        ],
+        "operationId": "offerPdf",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedView"
                 }
               }
             }
@@ -7235,6 +7314,24 @@
           }
         }
       },
+      "OfferSummary": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "SENT",
+              "ACCEPTED"
+            ]
+          },
+          "acceptedAt": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        }
+      },
       "OnboardingDashboard": {
         "type": "object",
         "properties": {
@@ -7266,6 +7363,9 @@
           "itrRequired": {
             "type": "boolean"
           },
+          "offer": {
+            "$ref": "#/components/schemas/OfferSummary"
+          },
           "form1": {
             "$ref": "#/components/schemas/Form1View"
           },
@@ -7289,6 +7389,17 @@
             "items": {
               "$ref": "#/components/schemas/GeneratedDocumentView"
             }
+          }
+        }
+      },
+      "AcceptOfferRequest": {
+        "type": "object",
+        "properties": {
+          "consentAccepted": {
+            "type": "boolean"
+          },
+          "signatureDataUrl": {
+            "type": "string"
           }
         }
       },
@@ -7944,14 +8055,36 @@
           }
         }
       },
+      "OfferTermsRequest": {
+        "required": [
+          "salary"
+        ],
+        "type": "object",
+        "properties": {
+          "salary": {
+            "maxLength": 200,
+            "minLength": 0,
+            "type": "string"
+          },
+          "location": {
+            "maxLength": 120,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
       "OnboardEmployeeRequest": {
         "required": [
-          "form2"
+          "form2",
+          "offer"
         ],
         "type": "object",
         "properties": {
           "form2": {
             "$ref": "#/components/schemas/Form2Request"
+          },
+          "offer": {
+            "$ref": "#/components/schemas/OfferTermsRequest"
           }
         }
       },
@@ -8691,6 +8824,7 @@
       "SuperAdminOnboardRequest": {
         "required": [
           "form2",
+          "offer",
           "teamId"
         ],
         "type": "object",
@@ -8700,6 +8834,9 @@
           },
           "form2": {
             "$ref": "#/components/schemas/Form2Request"
+          },
+          "offer": {
+            "$ref": "#/components/schemas/OfferTermsRequest"
           }
         }
       },
@@ -8952,6 +9089,27 @@
             "items": {
               "$ref": "#/components/schemas/AgreementSummary"
             }
+          },
+          "offer": {
+            "$ref": "#/components/schemas/OfferRecordView"
+          }
+        }
+      },
+      "OfferRecordView": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "SENT",
+              "ACCEPTED"
+            ]
+          },
+          "offerDate": {
+            "type": "string"
+          },
+          "acceptedAt": {
+            "type": "string"
           }
         }
       },
@@ -9209,6 +9367,33 @@
           },
           "accountant": {
             "$ref": "#/components/schemas/AccountantView"
+          }
+        }
+      },
+      "MyOfferView": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "SENT",
+              "ACCEPTED"
+            ]
+          },
+          "bodyHtml": {
+            "type": "string"
+          },
+          "employeeName": {
+            "type": "string"
+          },
+          "offerDate": {
+            "type": "string"
+          },
+          "acceptedAt": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
           }
         }
       },

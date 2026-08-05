@@ -18,6 +18,7 @@ import com.ihrms.domain.repository.Form2InfoRepository;
 import com.ihrms.domain.repository.Form3PrevEmploymentRepository;
 import com.ihrms.domain.repository.GeneratedDocumentRepository;
 import com.ihrms.onboarding.FormMappers;
+import com.ihrms.onboarding.OfferService;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form3EntryView;
 import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
 import com.ihrms.review.dto.ReviewDtos.RecordDocument;
@@ -48,6 +49,7 @@ public class EmployeeRecordAssembler {
   private final CompanyRepository companies;
   private final StorageService storage;
   private final AgreementService agreementService;
+  private final OfferService offerService;
 
   public EmployeeRecordAssembler(
       Form1PersonalRepository form1s,
@@ -57,7 +59,8 @@ public class EmployeeRecordAssembler {
       GeneratedDocumentRepository generated,
       CompanyRepository companies,
       StorageService storage,
-      AgreementService agreementService) {
+      AgreementService agreementService,
+      OfferService offerService) {
     this.form1s = form1s;
     this.form2s = form2s;
     this.form3s = form3s;
@@ -66,6 +69,7 @@ public class EmployeeRecordAssembler {
     this.companies = companies;
     this.storage = storage;
     this.agreementService = agreementService;
+    this.offerService = offerService;
   }
 
   public EmployeeRecordView build(Employee employee) {
@@ -103,7 +107,10 @@ public class EmployeeRecordAssembler {
         docs.stream().map(this::documentView).toList(),
         gen.stream().map(this::generatedView).toList(),
         employee.getAadhaarNumber() == null ? null : MASKED,
-        agreementService.forRecord(employee.getId()));
+        agreementService.forRecord(employee.getId()),
+        // Offer status only (§3.2) — the PDF with the salary is fetched via the role-gated endpoint, so this
+        // is safe even though the shared record view reaches manager/accountant too.
+        offerService.recordOffer(employee.getId()));
   }
 
   /** Plaintext sensitive values (PLAIN mode) — the caller audits this as a reveal. */

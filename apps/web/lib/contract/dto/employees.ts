@@ -21,15 +21,27 @@ export const AssignCredentialsSchema = z.object({
 });
 export type AssignCredentialsInput = z.infer<typeof AssignCredentialsSchema>;
 
-/** Onboarding = fill Form 2 (§3.2). The HR onboard form IS the Employee-Info form. */
-export const OnboardEmployeeSchema = Form2Schema;
+/**
+ * The Offer Letter terms HR provides at invite (§3.2). The offer opens onboarding — the invited employee must
+ * accept it before any form unlocks. `salary` is free text so HR controls the wording (seeded
+ * "X,XX,XXX Per Annum"); `location` defaults to Hyderabad. Joining date / designation / name are reused from
+ * the Form-2 payload — not duplicated here.
+ */
+export const OfferTermsSchema = z.object({
+  salary: z.string().trim().min(1, 'Salary is required').max(200, 'Salary is too long'),
+  location: z.string().trim().max(120, 'Location is too long').optional(),
+});
+export type OfferTermsInput = z.infer<typeof OfferTermsSchema>;
+
+/** Onboarding = fill Form 2 (§3.2) + the OFFER terms. The HR onboard form is Employee-Info + the offer. */
+export const OnboardEmployeeSchema = Form2Schema.extend(OfferTermsSchema.shape);
 export type OnboardEmployeeInput = z.infer<typeof OnboardEmployeeSchema>;
 
 /**
- * SUPER_ADMIN onboarding form (§2): pick company → team (which determines the HR) → fill Form 2.
- * `companyId` addresses the endpoint (`/companies/{companyId}/employees`); `teamId` + the Form-2 body.
+ * SUPER_ADMIN onboarding form (§2): pick company → team (which determines the HR) → fill Form 2 + the offer.
+ * `companyId` addresses the endpoint (`/companies/{companyId}/employees`); `teamId` + the Form-2 + offer body.
  */
-export const SuperAdminOnboardSchema = Form2Schema.extend({
+export const SuperAdminOnboardSchema = Form2Schema.extend(OfferTermsSchema.shape).extend({
   companyId: z.string().min(1, 'Select a company'),
   teamId: z.string().min(1, 'Select a team'),
 });

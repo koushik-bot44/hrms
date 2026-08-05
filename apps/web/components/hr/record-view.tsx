@@ -8,10 +8,13 @@ import type {
   Form1View,
   Form2View,
   Form3EntryView,
+  OfferRecordView,
   RevealedSensitive,
   SectionStatus,
 } from '@/lib/contract';
 import { DOCUMENT_TYPE_LABELS, GeneratedDocumentKind, UserRole } from '@/lib/contract';
+import { getOfferPdfUrl } from '@/lib/api/review';
+import { useApiMutation } from '@/lib/api/hooks';
 import { useAuth } from '@/components/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +90,14 @@ export function RecordView({
   const viewerCanManageMailbox =
     session?.type === 'USER' &&
     (session.role === UserRole.HR || session.role === UserRole.COMPANY_ADMIN);
+  // The Offer Letter PDF (§3.2) carries the salary — HR/COMPANY_ADMIN/SUPER_ADMIN only (the same audience
+  // as the record read). Manager/Accountant share this record view; the API 403s them, and this hides the
+  // download button so it never even appears (the offer STATUS below is harmless and shown to everyone).
+  const viewerCanDownloadOffer =
+    session?.type === 'USER' &&
+    (session.role === UserRole.HR ||
+      session.role === UserRole.COMPANY_ADMIN ||
+      session.role === UserRole.SUPER_ADMIN);
   const f1 = revealed?.form1 ?? record.form1;
   const f2 = revealed?.form2 ?? record.form2;
   const f3 = revealed ? revealed.form3 : record.form3;
@@ -281,6 +292,14 @@ export function RecordView({
         )}
       </section>
 
+      {record.offer ? (
+        <OfferRecordSection
+          employeeId={record.id}
+          offer={record.offer}
+          canDownload={viewerCanDownloadOffer}
+        />
+      ) : null}
+
       {record.generatedDocuments.length > 0 ? (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Generated PDFs</h3>
@@ -335,6 +354,62 @@ export function RecordView({
 }
 
 /** One row in the HR record Agreements section: title + status + download when completed. */
+/**
+ * The Offer Letter (§3.2) on the record: status + accepted date, always visible to record viewers. The PDF
+ * carries the salary, so its download is role-gated — the button shows only for HR/COMPANY_ADMIN/SUPER_ADMIN
+ * ({@code canDownload}) and the URL is fetched on demand from the role-gated endpoint (never embedded here).
+ */
+function OfferRecordSection({
+  employeeId,
+  offer,
+  canDownload,
+}: {
+  employeeId: string;
+  offer: OfferRecordView;
+  canDownload: boolean;
+}) {
+  const accepted = offer.status === 'ACCEPTED';
+  // Open a blank tab synchronously on click, then navigate it once the presigned URL resolves — so the
+  // popup is tied to the user gesture (not blocked) even though the URL is fetched on demand.
+  const openPdf = useApiMutation(() => getOfferPdfUrl(employeeId), {
+    onSuccess: (r) => {
+      window.open(r.url, '_blank', 'noopener');
+    },
+  });
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold text-muted-foreground">Offer letter</h3>
+      <div className={cn(surface('subtle'), 'flex flex-wrap items-center gap-3 p-3')}>
+        <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">Offer Letter</p>
+          <p className="text-xs text-muted-foreground">
+            {accepted && offer.acceptedAt
+              ? `Accepted ${new Date(offer.acceptedAt).toLocaleDateString()}`
+              : offer.offerDate
+                ? `Sent ${offer.offerDate}`
+                : 'Sent with the invite'}
+          </p>
+        </div>
+        <Badge variant={accepted ? 'success' : 'warning'}>{accepted ? 'Accepted' : 'Sent'}</Badge>
+        {accepted && canDownload ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={openPdf.isPending}
+            onClick={() => openPdf.mutate()}
+          >
+            <ExternalLink />
+            {openPdf.isPending ? 'Opening…' : 'Open'}
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function AgreementRow({ agreement }: { agreement: AgreementSummary }) {
   const done = agreement.status === 'COMPLETED';
   return (

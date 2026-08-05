@@ -1,6 +1,8 @@
 package com.ihrms.onboarding;
 
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.onboarding.dto.OfferDtos.AcceptOfferRequest;
+import com.ihrms.onboarding.dto.OfferDtos.MyOfferView;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentReviseRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentUploadRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.DocumentView;
@@ -36,13 +38,34 @@ import org.springframework.web.bind.annotation.RestController;
 public class OnboardingController {
 
   private final OnboardingService onboarding;
+  private final OfferService offers;
 
-  public OnboardingController(OnboardingService onboarding) {
+  public OnboardingController(OnboardingService onboarding, OfferService offers) {
     this.onboarding = onboarding;
+    this.offers = offers;
   }
 
   @GetMapping
   public OnboardingDashboard dashboard(@AuthenticationPrincipal IhrmsPrincipal.Employee emp) {
+    return onboarding.dashboard(emp);
+  }
+
+  // --- Offer Letter (§3.2): the gate that opens onboarding ------------------
+
+  /** The invited employee's offer screen (full text + status); null when there is no offer (ungated). */
+  @GetMapping("/offer")
+  public MyOfferView offer(@AuthenticationPrincipal IhrmsPrincipal.Employee emp) {
+    return offers.myOffer(emp);
+  }
+
+  /** Accept the offer — consent + signature; unlocks the forms + stores the accepted PDF on the record. */
+  @PostMapping("/offer/accept")
+  public OnboardingDashboard acceptOffer(
+      @RequestBody(required = false) AcceptOfferRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.Employee emp,
+      HttpServletRequest request) {
+    offers.accept(emp, body, request.getRemoteAddr());
+    offers.notifyHrAfterAccept(emp.employeeId()); // post-commit, best-effort
     return onboarding.dashboard(emp);
   }
 

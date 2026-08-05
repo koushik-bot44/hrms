@@ -1,6 +1,7 @@
 package com.ihrms.employees.dto;
 
 import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.onboarding.dto.OfferDtos.OfferTermsRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2Request;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -13,18 +14,21 @@ public final class EmployeeDtos {
   private EmployeeDtos() {}
 
   /**
-   * HR onboards by FILLING FORM 2 — Employee Info (§3.2). Submitting it creates the record and sends
-   * the invite in one action; the personal email is the login identity. No employee ID is minted here —
-   * it is allocated on Manager approval (§5).
+   * HR onboards by FILLING FORM 2 — Employee Info (§3.2) — and providing the OFFER terms (§3.2). Submitting
+   * creates the record + the SENT offer and sends the invite in one action; the personal email is the login
+   * identity. No employee ID is minted here — it is allocated on Manager approval (§5).
    */
-  public record OnboardEmployeeRequest(@NotNull @Valid Form2Request form2) {}
+  public record OnboardEmployeeRequest(
+      @NotNull @Valid Form2Request form2, @NotNull @Valid OfferTermsRequest offer) {}
 
   /**
    * SUPER_ADMIN onboards into a chosen company (companyId is the path) by selecting a {@code teamId} and
-   * filling Form 2; the employee attaches to that team's HR (§2). Same Form-2 payload as the HR form.
+   * filling Form 2 + the offer; the employee attaches to that team's HR (§2). Same payload as the HR form.
    */
   public record SuperAdminOnboardRequest(
-      @NotBlank(message = "Team is required") String teamId, @NotNull @Valid Form2Request form2) {}
+      @NotBlank(message = "Team is required") String teamId,
+      @NotNull @Valid Form2Request form2,
+      @NotNull @Valid OfferTermsRequest offer) {}
 
   /** {@code employeeCode} is null until the employee is approved (§5). */
   public record EmployeeSummaryView(

@@ -23,6 +23,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { EmployeeInfoFields } from '@/components/employee-info/employee-info-fields';
+import { OfferTermsFields } from '@/components/employee-info/offer-terms-fields';
 
 const EMPLOYEES_KEY = ['hr-employees'] as const;
 
@@ -32,6 +33,8 @@ export const EMPTY_FORM2: OnboardEmployeeInput = {
   designation: '',
   dateOfJoining: '',
   officialEmail: '',
+  salary: 'X,XX,XXX Per Annum',
+  location: 'Hyderabad',
 };
 
 /** HR onboarding = fill FORM 2 — Employee Info (§3.2). Submitting it creates the record + sends the invite. */
@@ -116,6 +119,7 @@ export function OnboardEmployeeDialog({ trigger }: { trigger?: React.ReactNode }
                 dojMin={istTodayIso()}
                 idPrefix="onb"
               />
+              <OfferTermsFields register={register} errors={errors} idPrefix="onb" />
               <div className="sticky bottom-0 -mx-6 -mb-6 flex justify-end gap-2 border-t bg-background px-6 py-4">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                   Cancel

@@ -1,6 +1,8 @@
 package com.ihrms.review;
 
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.onboarding.OfferService;
+import com.ihrms.onboarding.dto.OnboardingDtos.PresignedView;
 import com.ihrms.review.dto.ReviewDtos.ApproveRequest;
 import com.ihrms.review.dto.ReviewDtos.AssignCredentialsRequest;
 import com.ihrms.review.dto.ReviewDtos.AssignCredentialsResult;
@@ -35,10 +37,13 @@ public class ReviewController {
 
   private final ReviewService review;
   private final EmployeeCredentialsService credentials;
+  private final OfferService offers;
 
-  public ReviewController(ReviewService review, EmployeeCredentialsService credentials) {
+  public ReviewController(
+      ReviewService review, EmployeeCredentialsService credentials, OfferService offers) {
     this.review = review;
     this.credentials = credentials;
+    this.offers = offers;
   }
 
   // Reading a record is open to the onboarding HR, the employee's COMPANY_ADMIN (same company), OR the
@@ -51,6 +56,20 @@ public class ReviewController {
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     return review.getRecord(actor, id, request.getRemoteAddr());
+  }
+
+  /**
+   * The accepted Offer Letter PDF (§3.2) — role-gated because it carries the SALARY. HR/COMPANY_ADMIN/
+   * SUPER_ADMIN + canAccessEmployee only (the same audience as the record read); manager/accountant/lookup
+   * never reach it (403). 404 until the offer is accepted. The employee reads their own via /me/onboarding/offer.
+   */
+  @GetMapping("/{id}/offer/pdf")
+  @PreAuthorize("hasAnyRole('HR','COMPANY_ADMIN','SUPER_ADMIN')")
+  public PresignedView offerPdf(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return offers.recordPdfUrl(actor, id, request.getRemoteAddr());
   }
 
   @GetMapping("/lookup/{employeeCode}")

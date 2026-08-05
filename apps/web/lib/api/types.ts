@@ -390,6 +390,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/onboarding/offer/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["acceptOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding/documents": {
         parameters: {
             query?: never;
@@ -1527,6 +1543,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/onboarding/offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["offer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding/generated/{id}/url": {
         parameters: {
             query?: never;
@@ -1999,6 +2031,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["record"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offer/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["offerPdf"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2811,6 +2859,12 @@ export interface components {
             sha256?: string;
             generatedAt?: string;
         };
+        OfferSummary: {
+            /** @enum {string} */
+            status?: "SENT" | "ACCEPTED";
+            acceptedAt?: string;
+            downloadUrl?: string;
+        };
         OnboardingDashboard: {
             employeeCode?: string;
             email?: string;
@@ -2819,11 +2873,16 @@ export interface components {
             /** @enum {string} */
             status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED" | "OFFBOARDED";
             itrRequired?: boolean;
+            offer?: components["schemas"]["OfferSummary"];
             form1?: components["schemas"]["Form1View"];
             form3?: components["schemas"]["Form3EntryView"][];
             documents?: components["schemas"]["DocumentView"][];
             signature?: components["schemas"]["SignatureView"];
             generatedDocuments?: components["schemas"]["GeneratedDocumentView"][];
+        };
+        AcceptOfferRequest: {
+            consentAccepted?: boolean;
+            signatureDataUrl?: string;
         };
         DocumentUploadRequest: {
             /** @enum {string} */
@@ -3012,8 +3071,13 @@ export interface components {
             personalEmail: string;
             designation: string;
         };
+        OfferTermsRequest: {
+            salary: string;
+            location?: string;
+        };
         OnboardEmployeeRequest: {
             form2: components["schemas"]["Form2Request"];
+            offer: components["schemas"]["OfferTermsRequest"];
         };
         EmployeeSummaryView: {
             id?: string;
@@ -3236,6 +3300,7 @@ export interface components {
         SuperAdminOnboardRequest: {
             teamId: string;
             form2: components["schemas"]["Form2Request"];
+            offer: components["schemas"]["OfferTermsRequest"];
         };
         OtpVerifyRequest: {
             email: string;
@@ -3316,6 +3381,13 @@ export interface components {
             generatedDocuments?: components["schemas"]["RecordGeneratedDocument"][];
             aadhaarNumber?: string;
             agreements?: components["schemas"]["AgreementSummary"][];
+            offer?: components["schemas"]["OfferRecordView"];
+        };
+        OfferRecordView: {
+            /** @enum {string} */
+            status?: "SENT" | "ACCEPTED";
+            offerDate?: string;
+            acceptedAt?: string;
         };
         RecordDocument: {
             id?: string;
@@ -3404,6 +3476,15 @@ export interface components {
         AccountantStatus: {
             exists?: boolean;
             accountant?: components["schemas"]["AccountantView"];
+        };
+        MyOfferView: {
+            /** @enum {string} */
+            status?: "SENT" | "ACCEPTED";
+            bodyHtml?: string;
+            employeeName?: string;
+            offerDate?: string;
+            acceptedAt?: string;
+            downloadUrl?: string;
         };
         MyDocSummary: {
             /** @enum {string} */
@@ -4922,6 +5003,30 @@ export interface operations {
         responses: {
             /** @description Created */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OnboardingDashboard"];
+                };
+            };
+        };
+    };
+    acceptOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AcceptOfferRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6994,6 +7099,26 @@ export interface operations {
             };
         };
     };
+    offer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MyOfferView"];
+                };
+            };
+        };
+    };
     generatedUrl: {
         parameters: {
             query?: never;
@@ -7661,6 +7786,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
+    offerPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedView"];
                 };
             };
         };

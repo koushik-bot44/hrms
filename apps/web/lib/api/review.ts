@@ -4,6 +4,7 @@ import type {
   AssignCredentialsResult,
   DecisionResult,
   EmployeeRecord,
+  PresignedView,
   RejectInput,
   RevealedSensitive,
   ReviewInput,
@@ -13,6 +14,14 @@ import { apiFetch } from './client';
 /** Open an employee's record by INTERNAL id — the verification entry (pre-approval has no code). */
 export function getEmployeeRecord(id: string, signal?: AbortSignal): Promise<EmployeeRecord> {
   return apiFetch<EmployeeRecord>(`/employees/${encodeURIComponent(id)}/record`, { signal });
+}
+
+/**
+ * A short-lived presigned URL to the accepted Offer Letter PDF (§3.2) — role-gated (HR/COMPANY_ADMIN/
+ * SUPER_ADMIN) because it carries the salary; manager/accountant get a 403. 404 until the offer is accepted.
+ */
+export function getOfferPdfUrl(id: string): Promise<PresignedView> {
+  return apiFetch<PresignedView>(`/employees/${encodeURIComponent(id)}/offer/pdf`);
 }
 
 /** §3.4 records lookup by employee ID (code) — resolves approved employees only. */
