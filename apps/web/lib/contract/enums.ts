@@ -25,6 +25,7 @@ export const EmployeeStatus = {
   HR_VERIFIED: 'HR_VERIFIED',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
+  OFFBOARDED: 'OFFBOARDED',
 } as const;
 export type EmployeeStatus = (typeof EmployeeStatus)[keyof typeof EmployeeStatus];
 
@@ -118,8 +119,20 @@ export const RequestType = {
   FORM16: 'FORM16',
   TAX_DOCUMENT: 'TAX_DOCUMENT',
   OTHER: 'OTHER',
+  // §3.6 stage 3 — HR-routed offboarding letters (requested only via the workspace Offboarding section).
+  RELIEVING_LETTER: 'RELIEVING_LETTER',
+  EXPERIENCE_LETTER: 'EXPERIENCE_LETTER',
 } as const;
 export type RequestType = (typeof RequestType)[keyof typeof RequestType];
+
+/** The accountant-routed types the generic "HR/Accounts Requests" picker offers (letters excluded). */
+export const GENERIC_REQUEST_TYPES: RequestType[] = [
+  RequestType.PAYSLIP,
+  RequestType.SALARY_CERTIFICATE,
+  RequestType.FORM16,
+  RequestType.TAX_DOCUMENT,
+  RequestType.OTHER,
+];
 
 export const RequestStatus = {
   SUBMITTED: 'SUBMITTED',

@@ -327,7 +327,7 @@ export function RecordView({
         </section>
       ) : null}
 
-      {enableOffboarding && record.status === 'APPROVED' ? (
+      {enableOffboarding && (record.status === 'APPROVED' || record.status === 'OFFBOARDED') ? (
         <OffboardingPanel employeeId={record.id} />
       ) : null}
     </div>

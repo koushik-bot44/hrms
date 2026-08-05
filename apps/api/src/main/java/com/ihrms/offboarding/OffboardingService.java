@@ -54,6 +54,7 @@ public class OffboardingService {
 
   private final EmployeeRepository employees;
   private final OffboardingCaseRepository cases;
+  private final com.ihrms.domain.repository.OffboardingDocumentRepository docs;
   private final UserRepository users;
   private final CompanyRepository companies;
   private final TeamRepository teams;
@@ -66,6 +67,7 @@ public class OffboardingService {
   public OffboardingService(
       EmployeeRepository employees,
       OffboardingCaseRepository cases,
+      com.ihrms.domain.repository.OffboardingDocumentRepository docs,
       UserRepository users,
       CompanyRepository companies,
       TeamRepository teams,
@@ -76,6 +78,7 @@ public class OffboardingService {
       PushService push) {
     this.employees = employees;
     this.cases = cases;
+    this.docs = docs;
     this.users = users;
     this.companies = companies;
     this.teams = teams;
@@ -161,6 +164,82 @@ public class OffboardingService {
   public OffboardingCaseView forRecord(IhrmsPrincipal.User actor, String employeeId) {
     authz.assertCanAccessEmployee(actor, employeeId); // same gating as the record read (§6)
     return cases.findFirstByEmployeeIdOrderByInitiatedAtDesc(employeeId).map(this::view).orElse(null);
+  }
+
+  /**
+   * HR completes the offboarding (§3.6 stage 3) — the case must be APPROVED and every SENT document VERIFIED
+   * (the letters are HR's judgment, not gated). One transaction: case → COMPLETED, Employee → OFFBOARDED
+   * (login disabled, record retained). The employee + the team manager are notified after commit.
+   */
+  @Transactional
+  public OffboardingCaseView complete(
+      IhrmsPrincipal.User actor, String employeeId, String note, String ip) {
+    Employee employee = loadOwn(actor, employeeId);
+    OffboardingCase c =
+        cases
+            .findFirstByEmployeeIdAndStatusIn(employeeId, List.of(OffboardingStatus.PENDING_APPROVAL, OffboardingStatus.APPROVED))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "No active offboarding case to complete"));
+    if (c.getStatus() != OffboardingStatus.APPROVED) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "The offboarding case is not approved yet");
+    }
+    List<com.ihrms.domain.model.OffboardingDocument> sent = docs.findByCaseId(c.getId());
+    if (sent.isEmpty()) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Send and verify the offboarding documents before completing");
+    }
+    boolean allVerified =
+        sent.stream().allMatch(d -> d.getStatus() == com.ihrms.domain.enums.OffboardingDocStatus.VERIFIED);
+    if (!allVerified) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Every sent document must be verified before completing");
+    }
+
+    c.setStatus(OffboardingStatus.COMPLETED);
+    c.setCompletedByUserId(actor.userId());
+    c.setCompletedAt(Instant.now());
+    c.setCompletionNote(note);
+    cases.save(c);
+
+    employee.setStatus(EmployeeStatus.OFFBOARDED);
+    employees.save(employee);
+
+    audit.record(
+        AuditActor.from(actor),
+        "OFFBOARDING_COMPLETED",
+        "Employee",
+        employee.getId(),
+        Map.<String, Object>of("caseId", c.getId(), "note", note == null ? "" : note),
+        ip);
+    return view(c);
+  }
+
+  /** Best-effort after complete commits: notify the employee (final) + the team manager. Never throws. */
+  public void notifyAfterComplete(String employeeId) {
+    try {
+      Employee employee = employees.findById(employeeId).orElse(null);
+      if (employee == null) {
+        return;
+      }
+      String who = employee.getFullName() == null ? "The employee" : employee.getFullName();
+      // Final notice to the (now offboarded) employee — they can no longer sign in, but a push/email still lands.
+      mail.sendOffboardingCompleted(employee.getEmail(), employee.getFullName());
+      push.sendToPrincipal(
+          PrincipalRef.forEmployee(employee.getId(), employee.getCompanyId()),
+          "Offboarding complete",
+          "Your offboarding is complete. Thank you.",
+          "/login");
+      Team team =
+          teams.findByCompanyIdAndHrUserId(employee.getCompanyId(), employee.getOnboardingHrId()).orElse(null);
+      if (team != null && team.getManagerUserId() != null) {
+        push.sendToPrincipal(
+            PrincipalRef.forUser(team.getManagerUserId(), team.getCompanyId()),
+            "Team member offboarded",
+            who + " has been offboarded from " + team.getName() + ".",
+            "/manager");
+      }
+    } catch (RuntimeException e) {
+      log.warn("Post-completion notice skipped (best-effort): {}", e.getMessage());
+    }
   }
 
   // --- HIERARCHY: pending inbox + approve / reject --------------------------
@@ -329,6 +408,9 @@ public class OffboardingService {
         userName(c.getCancelledByUserId()),
         c.getCancelledAt() == null ? null : c.getCancelledAt().toString(),
         c.getCancelNote(),
+        userName(c.getCompletedByUserId()),
+        c.getCompletedAt() == null ? null : c.getCompletedAt().toString(),
+        c.getCompletionNote(),
         cancellable);
   }
 

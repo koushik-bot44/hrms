@@ -40,6 +40,10 @@ public final class OffboardingDtos {
       String cancelledByName,
       String cancelledAt,
       String cancelNote,
+      // HR completion (§3.6 stage 3); null until COMPLETED.
+      String completedByName,
+      String completedAt,
+      String completionNote,
       // Convenience flags for the UI (mirrors the service's transition rules).
       boolean cancellable) {}
 

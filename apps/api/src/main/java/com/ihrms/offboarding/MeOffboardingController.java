@@ -2,10 +2,14 @@ package com.ihrms.offboarding;
 
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.domain.enums.OffboardingDocType;
+import com.ihrms.domain.enums.RequestType;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.CompleteDocRequest;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.CompleteDocResult;
+import com.ihrms.offboarding.dto.OffboardingDocDtos.LetterView;
+import com.ihrms.offboarding.dto.OffboardingDocDtos.LettersView;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.MyDocSummary;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.MyDocView;
+import com.ihrms.offboarding.dto.OffboardingDocDtos.RequestLetterRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,9 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeOffboardingController {
 
   private final OffboardingDocumentService documents;
+  private final OffboardingLetterService letters;
 
-  public MeOffboardingController(OffboardingDocumentService documents) {
+  public MeOffboardingController(OffboardingDocumentService documents, OffboardingLetterService letters) {
     this.documents = documents;
+    this.letters = letters;
   }
 
   @GetMapping
@@ -52,5 +58,21 @@ public class MeOffboardingController {
     CompleteDocResult result = documents.complete(emp, type, body, request.getRemoteAddr());
     documents.notifyHrAfterSubmit(emp.employeeId(), type); // post-commit, best-effort
     return result;
+  }
+
+  // --- Letters (§3.6 stage 3) -----------------------------------------------
+
+  @GetMapping("/letters")
+  public LettersView myLetters(@AuthenticationPrincipal IhrmsPrincipal.Employee emp) {
+    return letters.myLetters(emp);
+  }
+
+  @PostMapping("/letters/{type}")
+  public LetterView requestLetter(
+      @PathVariable RequestType type,
+      @RequestBody(required = false) RequestLetterRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.Employee emp,
+      HttpServletRequest request) {
+    return letters.requestLetter(emp, type, body == null ? null : body.note(), request.getRemoteAddr());
   }
 }

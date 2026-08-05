@@ -1183,6 +1183,54 @@
         }
       }
     },
+    "/me/offboarding/letters/{type}": {
+      "post": {
+        "tags": [
+          "me-offboarding-controller"
+        ],
+        "operationId": "requestLetter",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PAYSLIP",
+                "SALARY_CERTIFICATE",
+                "FORM16",
+                "TAX_DOCUMENT",
+                "OTHER",
+                "RELIEVING_LETTER",
+                "EXPERIENCE_LETTER"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestLetterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/agreements/{type}/complete": {
       "post": {
         "tags": [
@@ -2011,7 +2059,8 @@
                 "REVISION_REQUESTED",
                 "HR_VERIFIED",
                 "APPROVED",
-                "REJECTED"
+                "REJECTED",
+                "OFFBOARDED"
               ]
             }
           },
@@ -2129,6 +2178,120 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/DecisionResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/letters/{type}/resolve": {
+      "post": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "resolveLetter",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PAYSLIP",
+                "SALARY_CERTIFICATE",
+                "FORM16",
+                "TAX_DOCUMENT",
+                "OTHER",
+                "RELIEVING_LETTER",
+                "EXPERIENCE_LETTER"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LettersView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/letters/{type}/begin-upload": {
+      "post": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "beginLetterUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PAYSLIP",
+                "SALARY_CERTIFICATE",
+                "FORM16",
+                "TAX_DOCUMENT",
+                "OTHER",
+                "RELIEVING_LETTER",
+                "EXPERIENCE_LETTER"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestUpload"
                 }
               }
             }
@@ -2304,6 +2467,45 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/SendDocumentsResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/complete": {
+      "post": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "complete_2",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OffboardingCaseView"
                 }
               }
             }
@@ -2707,7 +2909,8 @@
                 "REVISION_REQUESTED",
                 "HR_VERIFIED",
                 "APPROVED",
-                "REJECTED"
+                "REJECTED",
+                "OFFBOARDED"
               ]
             }
           },
@@ -3865,6 +4068,26 @@
         }
       }
     },
+    "/me/offboarding/letters": {
+      "get": {
+        "tags": [
+          "me-offboarding-controller"
+        ],
+        "operationId": "myLetters",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LettersView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/agreements": {
       "get": {
         "tags": [
@@ -4680,6 +4903,36 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/OffboardingCaseResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/letters": {
+      "get": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "recordLetters",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LettersView"
                 }
               }
             }
@@ -6399,7 +6652,9 @@
               "SALARY_CERTIFICATE",
               "FORM16",
               "TAX_DOCUMENT",
-              "OTHER"
+              "OTHER",
+              "RELIEVING_LETTER",
+              "EXPERIENCE_LETTER"
             ]
           },
           "note": {
@@ -6422,7 +6677,9 @@
               "SALARY_CERTIFICATE",
               "FORM16",
               "TAX_DOCUMENT",
-              "OTHER"
+              "OTHER",
+              "RELIEVING_LETTER",
+              "EXPERIENCE_LETTER"
             ]
           },
           "note": {
@@ -6522,7 +6779,9 @@
               "SALARY_CERTIFICATE",
               "FORM16",
               "TAX_DOCUMENT",
-              "OTHER"
+              "OTHER",
+              "RELIEVING_LETTER",
+              "EXPERIENCE_LETTER"
             ]
           },
           "note": {
@@ -6888,7 +7147,8 @@
               "REVISION_REQUESTED",
               "HR_VERIFIED",
               "APPROVED",
-              "REJECTED"
+              "REJECTED",
+              "OFFBOARDED"
             ]
           },
           "itrRequired": {
@@ -7052,6 +7312,55 @@
               "VERIFIED",
               "REVISION_REQUESTED"
             ]
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "RequestLetterRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "LetterView": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PAYSLIP",
+              "SALARY_CERTIFICATE",
+              "FORM16",
+              "TAX_DOCUMENT",
+              "OTHER",
+              "RELIEVING_LETTER",
+              "EXPERIENCE_LETTER"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "SUBMITTED",
+              "IN_PROGRESS",
+              "RESOLVED",
+              "CANCELLED"
+            ]
+          },
+          "requestedAt": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
           },
           "downloadUrl": {
             "type": "string"
@@ -7480,7 +7789,8 @@
               "PENDING_APPROVAL",
               "APPROVED",
               "REJECTED",
-              "CANCELLED"
+              "CANCELLED",
+              "COMPLETED"
             ]
           }
         }
@@ -7560,7 +7870,8 @@
               "REVISION_REQUESTED",
               "HR_VERIFIED",
               "APPROVED",
-              "REJECTED"
+              "REJECTED",
+              "OFFBOARDED"
             ]
           },
           "createdAt": {
@@ -7666,7 +7977,8 @@
               "REVISION_REQUESTED",
               "HR_VERIFIED",
               "APPROVED",
-              "REJECTED"
+              "REJECTED",
+              "OFFBOARDED"
             ]
           },
           "teamId": {
@@ -7677,6 +7989,20 @@
           },
           "managerName": {
             "type": "string"
+          }
+        }
+      },
+      "LettersView": {
+        "type": "object",
+        "properties": {
+          "gateOpen": {
+            "type": "boolean"
+          },
+          "letters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LetterView"
+            }
           }
         }
       },
@@ -7710,7 +8036,8 @@
               "PENDING_APPROVAL",
               "APPROVED",
               "REJECTED",
-              "CANCELLED"
+              "CANCELLED",
+              "COMPLETED"
             ]
           },
           "reason": {
@@ -7741,6 +8068,15 @@
             "type": "string"
           },
           "cancelNote": {
+            "type": "string"
+          },
+          "completedByName": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": "string"
+          },
+          "completionNote": {
             "type": "string"
           },
           "cancellable": {
@@ -8364,7 +8700,8 @@
               "REVISION_REQUESTED",
               "HR_VERIFIED",
               "APPROVED",
-              "REJECTED"
+              "REJECTED",
+              "OFFBOARDED"
             ]
           },
           "reviewComplete": {
@@ -8894,7 +9231,8 @@
               "REVISION_REQUESTED",
               "HR_VERIFIED",
               "APPROVED",
-              "REJECTED"
+              "REJECTED",
+              "OFFBOARDED"
             ]
           },
           "hrName": {
@@ -9273,6 +9611,10 @@
           "rejected": {
             "type": "integer",
             "format": "int64"
+          },
+          "offboarded": {
+            "type": "integer",
+            "format": "int64"
           }
         },
         "description": "The current onboarding funnel — how many employees sit at each status right now."
@@ -9396,7 +9738,8 @@
               "REVISION_REQUESTED",
               "HR_VERIFIED",
               "APPROVED",
-              "REJECTED"
+              "REJECTED",
+              "OFFBOARDED"
             ]
           },
           "count": {

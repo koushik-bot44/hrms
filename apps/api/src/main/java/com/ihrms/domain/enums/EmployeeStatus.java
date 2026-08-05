@@ -9,5 +9,7 @@ public enum EmployeeStatus {
   REVISION_REQUESTED,
   HR_VERIFIED,
   APPROVED,
-  REJECTED
+  REJECTED,
+  /** Offboarding completed (§3.6 stage 3) — terminal; login disabled, record retained. */
+  OFFBOARDED
 }

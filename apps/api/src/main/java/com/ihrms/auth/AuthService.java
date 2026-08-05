@@ -161,6 +161,12 @@ public class AuthService {
     if (employee == null || authz.isCompanyDeleted(employee.getCompanyId())) {
       throw unauthorized("Invalid or expired code");
     }
+    // §3.6 stage 3: an OFFBOARDED employee's account is deactivated — no new session (a clear message here,
+    // since the OTP already proved identity).
+    if (employee.getStatus() == com.ihrms.domain.enums.EmployeeStatus.OFFBOARDED) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.FORBIDDEN, "This account has been deactivated");
+    }
     assertOtpValid(employee.getOtpHash(), employee.getOtpExpiresAt(), req.otp());
     employee.setOtpHash(null); // single-use
     employee.setOtpExpiresAt(null);
@@ -210,6 +216,11 @@ public class AuthService {
     Employee employee = employees.findById(claims.subject()).orElse(null);
     if (employee == null || authz.isCompanyDeleted(employee.getCompanyId())) {
       throw unauthorized("Session no longer valid");
+    }
+    // §3.6 stage 3: an OFFBOARDED employee's session dies at the next refresh (deactivated account).
+    if (employee.getStatus() == com.ihrms.domain.enums.EmployeeStatus.OFFBOARDED) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.FORBIDDEN, "This account has been deactivated");
     }
     return Principals.of(employee);
   }

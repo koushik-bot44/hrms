@@ -52,6 +52,10 @@ public interface EmployeeRepository
 
   long countByOnboardingHrIdInAndStatusNot(Collection<String> onboardingHrIds, EmployeeStatus status);
 
+  /** Onboarding-queue count that also excludes the terminal OFFBOARDED state (§3.6 stage 3). */
+  long countByOnboardingHrIdInAndStatusNotIn(
+      Collection<String> onboardingHrIds, Collection<EmployeeStatus> statuses);
+
   // --- Dashboard activity (scoped recent records by updatedAt) ---
   List<Employee> findTop10ByOrderByUpdatedAtDesc();
 

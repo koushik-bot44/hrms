@@ -33,6 +33,7 @@ const STATUS_MAP: Record<StatusValue, { label: string; tone: Tone }> = {
   HR_VERIFIED: { label: 'Verified — awaiting approval', tone: 'primarySoft' },
   APPROVED: { label: 'Approved', tone: 'success' },
   REJECTED: { label: 'Rejected', tone: 'danger' },
+  OFFBOARDED: { label: 'Offboarded', tone: 'neutral' },
   // Shared by EmployeeStatus / SectionStatus / DocumentStatus — item sent back for changes (§3.3)
   REVISION_REQUESTED: { label: 'Revision requested', tone: 'warning' },
   // DocumentStatus / SectionStatus extras

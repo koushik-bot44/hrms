@@ -21,4 +21,6 @@ export const REQUEST_TYPE_LABELS: Record<RequestType, string> = {
   FORM16: 'Form 16',
   TAX_DOCUMENT: 'Tax Document',
   OTHER: 'Other',
+  RELIEVING_LETTER: 'Relieving Letter',
+  EXPERIENCE_LETTER: 'Experience Letter',
 };

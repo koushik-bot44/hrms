@@ -76,4 +76,15 @@ public class OffboardingCase {
 
   @Column(name = "cancelNote")
   private String cancelNote;
+
+  // --- HR completion (§3.6 stage 3); null until COMPLETED ---
+  @Column(name = "completedByUserId")
+  private String completedByUserId;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "completedAt")
+  private Instant completedAt;
+
+  @Column(name = "completionNote")
+  private String completionNote;
 }

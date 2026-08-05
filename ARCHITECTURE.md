@@ -443,6 +443,48 @@ expansion, a per-document status timeline with verify/send-back + downloads) and
 dialog. The workspace gains an **Offboarding** section beside Agreements (presence-conditional, pending-count
 badge) → list → per-document read-and-sign with the revision panel (HR's note + re-sign/resubmit).
 
+#### Stage 3 — letters, completion & reconciliation
+**Letters** (Relieving + Experience). These **reuse the HR/Accounts document-requests machinery** — a letter
+is a `DocumentRequest` with the new `RELIEVING_LETTER`/`EXPERIENCE_LETTER` type, **routed to the case HR**
+(stored in the `accountantUserId` routee field, not an accountant), and HR fulfils via the **same
+upload→resolve handshake** (files land under the `requests` prefix; the resolve notifies the employee). The
+generic requests type-picker excludes the two letter types and the generic `submit` rejects them (they are
+requested only from the offboarding flow). **Gate:** requestable only when the case is APPROVED and **every
+sent document is VERIFIED** (`409` otherwise); at most one open request per type. `GET/POST
+/me/offboarding/letters[/{type}]` (employee) + `GET /employees/{id}/offboarding/letters` (record) +
+`.../letters/{type}/begin-upload|resolve` (HR fulfil). Letterhead templates are still pending (HR uploads a
+prepared PDF for now).
+
+**Completion.** `POST /employees/{id}/offboarding/complete {note?}` — HR, case-scoped, at their judgment (no
+date gate). Requires the case APPROVED and **all sent documents VERIFIED** (the letters are HR's judgment, not
+gated). One transaction: case → `COMPLETED` (`completedBy/at/note`), `Employee.status → OFFBOARDED`; audits
+`OFFBOARDING_COMPLETED`. After commit: the employee gets a final notice + the team manager is notified. The
+record (forms, PDFs, agreements, offboarding docs, letters, audit) is **retained** and stays visible to the
+same viewers; the record shows the `OFFBOARDED` status badge and the panel keeps the completed case read-only.
+
+**Login gate.** An `OFFBOARDED` employee cannot authenticate — `AuthService.verifyOtp` (token issue) and
+`refresh` both reject with **"This account has been deactivated"** (403). An access token lives out its short
+TTL, so existing sessions die at the next refresh. Staff sessions are unaffected.
+
+**Reconciliation** (OFFBOARDED is a *new* status, so every `status == APPROVED` filter / `countByStatus(APPROVED)`
+already excludes offboarded employees — most of the sweep is free). Explicit adjustments:
+- **Rosters & "Total inhouse" counts** (HR / CA / viewer / super-admin dashboards, accountant/manager rosters +
+  attendance aggregation) are APPROVED-scoped → offboarded employees drop automatically.
+- **Dashboard onboarding-queue** now excludes `[APPROVED, OFFBOARDED]` (an offboarded employee is not in-flight).
+- **Mail send-graph**: an offboarded mailbox is no longer a valid send **target** — excluded from the compose
+  candidates and from `resolveRecipient` (so new sends to them are rejected); existing threads stay readable.
+- **Hierarchy**: the funnel/status-distribution gains an `offboarded` off-path count; the **trends' offboarded
+  series is real** — completed cases bucketed by `offboarding_cases.completedAt` in IST months (the placeholder
+  is gone).
+- **Attendance/leave semantics** (landed): team aggregates are current-roster (APPROVED), so an offboarded
+  employee drops from forward *and* team period reports; their individual attendance/leave rows are **retained**
+  and remain viewable on their retained record — historical individual data is not lost, but team roll-ups after
+  offboarding no longer include them.
+- **Retention & access**: viewers reach the record by id/code (the `employeeCode != null` gate stays true), so
+  the full record is retained and viewable; only the active *rosters* drop them.
+- **Terminal**: once COMPLETED, cancel / initiate-a-fresh-case / send-docs / send-agreements / request-letters
+  all `409` (they require an APPROVED status/case) — an offboarded employee cannot start anything new.
+
 ---
 
 ## 4. Data Model (conceptual)
@@ -573,7 +615,8 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
   `HIERARCHY` _(cross-platform read-only, aggregates-only; singleton)_, `COMPANY_ADMIN`, `HR`,
   `MANAGER`, `ACCOUNTANT` _(team-scoped read-only viewer)_
 - **EmployeeStatus**: `INVITED`, `IN_PROGRESS`, `SUBMITTED`, `REVISION_REQUESTED` _(HR sent one or more
-  items back; the employee is fixing them)_, `HR_VERIFIED`, `APPROVED`, `REJECTED`
+  items back; the employee is fixing them)_, `HR_VERIFIED`, `APPROVED`, `REJECTED`, `OFFBOARDED`
+  _(§3.6 stage 3 — terminal; login disabled, record retained)_
 - **SectionStatus** _(status of each form + review item)_: `DRAFT`, `SUBMITTED`, `VERIFIED`,
   `REVISION_REQUESTED` _(HR asked for changes to this item)_, `REJECTED`
 - **DocumentType** _(Form 4 slots)_: `SECONDARY`, `INTERMEDIATE`, `DIPLOMA`, `GRADUATION`,
@@ -590,9 +633,11 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
   `AGREEMENT_COMPLETED` _(§3.5 — durable record for the sending HR when an agreement is signed)_,
   `OFFBOARDING_INITIATED` _(§3.6 → hierarchy)_, `OFFBOARDING_APPROVED`, `OFFBOARDING_REJECTED` _(§3.6 → HR)_,
   `OFFBOARDING_DOC_SUBMITTED` _(§3.6 stage 2 → sending HR)_
+- **RequestType** _(§8d / §3.6 stage 3)_: `PAYSLIP`, `SALARY_CERTIFICATE`, `FORM16`, `TAX_DOCUMENT`, `OTHER`
+  _(→ team Accountant)_, `RELIEVING_LETTER`, `EXPERIENCE_LETTER` _(§3.6 stage 3 → offboarding case HR)_
 - **EmployeeAgreementType** _(§3.5)_: `AUP`, `NDA`, `NOTICE_PERIOD`
 - **AgreementStatus** _(§3.5)_: `PENDING`, `COMPLETED`
-- **OffboardingStatus** _(§3.6)_: `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `CANCELLED` _(`COMPLETED` in stage 3)_
+- **OffboardingStatus** _(§3.6)_: `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `CANCELLED`, `COMPLETED` _(stage 3)_
 - **OffboardingDocType** _(§3.6 stage 2)_: `EXIT_FORMALITIES`, `SETTLEMENT`, `SEPARATION`
 - **OffboardingDocStatus** _(§3.6 stage 2)_: `PENDING`, `SUBMITTED`, `VERIFIED`, `REVISION_REQUESTED`
 - **ClearanceFinalStatus** _(§3.6 stage 2)_: `APPROVED`, `PENDING`, `ON_HOLD`

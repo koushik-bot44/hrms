@@ -201,12 +201,13 @@ public class DashboardService {
             .filter(Objects::nonNull)
             .distinct()
             .toList();
-    // The onboarding queue = the team's employees still going through onboarding (approved ones have
-    // left the pipeline, so they're excluded).
+    // The onboarding queue = the team's employees still going through onboarding (APPROVED ones have left
+    // the pipeline; OFFBOARDED ones are terminal — both excluded, §3.6 stage 3).
     long onboardingQueue =
         hrIds.isEmpty()
             ? 0
-            : employees.countByOnboardingHrIdInAndStatusNot(hrIds, EmployeeStatus.APPROVED);
+            : employees.countByOnboardingHrIdInAndStatusNotIn(
+                hrIds, List.of(EmployeeStatus.APPROVED, EmployeeStatus.OFFBOARDED));
     List<Employee> recent =
         hrIds.isEmpty() ? List.of() : employees.findTop10ByOnboardingHrIdInOrderByUpdatedAtDesc(hrIds);
 
@@ -264,6 +265,7 @@ public class DashboardService {
           e.getEmployeeCode() == null
               ? "Approved — welcome aboard!"
               : "Approved — your employee ID is " + e.getEmployeeCode() + ".";
+      case OFFBOARDED -> "Your offboarding is complete.";
     };
   }
 
@@ -309,6 +311,7 @@ public class DashboardService {
       case HR_VERIFIED -> "Verified — awaiting approval";
       case APPROVED -> "Approved";
       case REJECTED -> "Rejected";
+      case OFFBOARDED -> "Offboarded";
     };
   }
 }

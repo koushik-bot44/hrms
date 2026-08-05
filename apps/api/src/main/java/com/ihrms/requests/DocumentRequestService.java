@@ -102,6 +102,13 @@ public class DocumentRequestService {
   @Transactional
   public DocumentRequestView submit(IhrmsPrincipal actor, SubmitDocumentRequest req, String ip) {
     Employee me = requireCredentialedEmployee(actor);
+    // §3.6 stage 3: the offboarding LETTER types are not generic accountant requests — they are requested
+    // (gated + routed to the case HR) through the offboarding flow, never here.
+    if (req.requestType() == com.ihrms.domain.enums.RequestType.RELIEVING_LETTER
+        || req.requestType() == com.ihrms.domain.enums.RequestType.EXPERIENCE_LETTER) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Letters are requested from your offboarding section");
+    }
     String accountantUserId = resolveAccountant(me);
 
     DocumentRequest request = new DocumentRequest();

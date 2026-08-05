@@ -39,14 +39,20 @@ public class OffboardingController {
   private final OffboardingService offboarding;
   private final OffboardingDocumentService documents;
   private final OffboardingClearanceService clearance;
+  private final OffboardingLetterService letters;
+  private final com.ihrms.requests.DocumentRequestService requestFulfilment;
 
   public OffboardingController(
       OffboardingService offboarding,
       OffboardingDocumentService documents,
-      OffboardingClearanceService clearance) {
+      OffboardingClearanceService clearance,
+      OffboardingLetterService letters,
+      com.ihrms.requests.DocumentRequestService requestFulfilment) {
     this.offboarding = offboarding;
     this.documents = documents;
     this.clearance = clearance;
+    this.letters = letters;
+    this.requestFulfilment = requestFulfilment;
   }
 
   @PostMapping("/initiate")
@@ -82,6 +88,20 @@ public class OffboardingController {
     // Best-effort: nudge the hierarchy that a request was withdrawn (a cancelled case leaves the pending
     // inbox regardless, so this is a courtesy — the audit records whether it was pending).
     offboarding.notifyHierarchyAfterCancel(id);
+    return result;
+  }
+
+  /** HR completes the offboarding (§3.6 stage 3): case COMPLETED + employee OFFBOARDED. */
+  @PostMapping("/complete")
+  @PreAuthorize("hasRole('HR')")
+  public OffboardingCaseView complete(
+      @PathVariable String id,
+      @RequestBody(required = false) com.ihrms.offboarding.dto.OffboardingDtos.CancelRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    OffboardingCaseView result =
+        offboarding.complete(actor, id, body == null ? null : body.note(), request.getRemoteAddr());
+    offboarding.notifyAfterComplete(id); // post-commit, best-effort
     return result;
   }
 
@@ -149,5 +169,41 @@ public class OffboardingController {
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     return clearance.save(actor, id, body, request.getRemoteAddr());
+  }
+
+  // --- Stage 3: letters (read + fulfil, reusing the requests handshake) ------
+
+  @GetMapping("/letters")
+  @PreAuthorize("hasAnyRole('HR','COMPANY_ADMIN','SUPER_ADMIN')")
+  public com.ihrms.offboarding.dto.OffboardingDocDtos.LettersView recordLetters(
+      @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
+    return letters.forRecord(actor, id);
+  }
+
+  /** HR fulfil step 1 — a presigned PUT for the letter file (reuses the document-requests handshake). */
+  @PostMapping("/letters/{type}/begin-upload")
+  @PreAuthorize("hasRole('HR')")
+  public com.ihrms.requests.dto.DocumentRequestDtos.RequestUpload beginLetterUpload(
+      @PathVariable String id,
+      @PathVariable com.ihrms.domain.enums.RequestType type,
+      @jakarta.validation.Valid @RequestBody com.ihrms.requests.dto.DocumentRequestDtos.UploadDocumentRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    String reqId = letters.letterRequestId(actor, id, type);
+    return requestFulfilment.requestDocumentUpload(actor, reqId, body, request.getRemoteAddr());
+  }
+
+  /** HR fulfil step 2 — bind the uploaded file + mark the request RESOLVED (notifies the employee). */
+  @PostMapping("/letters/{type}/resolve")
+  @PreAuthorize("hasRole('HR')")
+  public com.ihrms.offboarding.dto.OffboardingDocDtos.LettersView resolveLetter(
+      @PathVariable String id,
+      @PathVariable com.ihrms.domain.enums.RequestType type,
+      @jakarta.validation.Valid @RequestBody com.ihrms.requests.dto.DocumentRequestDtos.ResolveRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    String reqId = letters.letterRequestId(actor, id, type);
+    requestFulfilment.resolve(actor, reqId, body, request.getRemoteAddr());
+    return letters.forRecord(actor, id);
   }
 }

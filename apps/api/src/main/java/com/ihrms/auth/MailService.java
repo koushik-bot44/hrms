@@ -195,6 +195,18 @@ public class MailService {
     log.info("Offboarding-doc-returned email dispatched to {}", email);
   }
 
+  /** Final offboarding-complete notice to the (now offboarded) employee (§3.6 stage 3). */
+  public void sendOffboardingCompleted(String email, String fullName) {
+    String body =
+        (fullName == null ? "Hello" : "Hello " + fullName)
+            + " — your offboarding is now complete. Your account has been deactivated. We wish you well.";
+    if (noSmtp()) {
+      log.warn("[DEV OFFB DONE] {} -> {}  (no SMTP configured; logging only)", email, body);
+      return;
+    }
+    log.info("Offboarding-complete email dispatched to {}", email);
+  }
+
   private boolean noSmtp() {
     String host = props.mail() == null ? null : props.mail().host();
     return host == null || host.isBlank();

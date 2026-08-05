@@ -170,7 +170,10 @@ public class InternalMailService {
       // Company Admin actually reaches the Super Admin — the graph filter drops it for everyone else).
       userCandidates.addAll(users.findByCompanyId(me.companyId()));
       userCandidates.addAll(users.findByRoleIn(PLATFORM));
-      employeeCandidates.addAll(employees.findByCompanyIdAndMailAddressIsNotNull(me.companyId()));
+      // Exclude OFFBOARDED employees from the compose candidates (§3.6 stage 3) — deactivated mailboxes.
+      employees.findByCompanyIdAndMailAddressIsNotNull(me.companyId()).stream()
+          .filter(e -> e.getStatus() != com.ihrms.domain.enums.EmployeeStatus.OFFBOARDED)
+          .forEach(employeeCandidates::add);
     } else {
       // Platform actor (Super / Accounts Admin): only company admins + the platform roles.
       userCandidates.addAll(
@@ -1273,7 +1276,14 @@ public class InternalMailService {
     if (u != null) {
       return MailParticipant.user(u);
     }
-    Employee e = employees.findById(id).filter(x -> x.getMailAddress() != null).orElse(null);
+    // An OFFBOARDED employee's mailbox is no longer a valid send TARGET (§3.6 stage 3) — existing threads
+    // stay readable to others, but nothing new can be sent to them.
+    Employee e =
+        employees
+            .findById(id)
+            .filter(x -> x.getMailAddress() != null)
+            .filter(x -> x.getStatus() != com.ihrms.domain.enums.EmployeeStatus.OFFBOARDED)
+            .orElse(null);
     if (e != null) {
       return MailParticipant.employee(e);
     }

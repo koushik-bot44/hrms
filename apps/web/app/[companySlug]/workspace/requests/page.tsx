@@ -9,6 +9,7 @@ import {
   formatFileSize,
   REQUEST_TYPE_LABELS,
   RequestType,
+  GENERIC_REQUEST_TYPES,
   SubmitRequestSchema,
   type DocumentRequestView,
   type SubmitRequestInput,
@@ -95,7 +96,7 @@ function NewRequestForm() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Document" error={errors.requestType?.message}>
               <select className={SELECT_CLASS} {...register('requestType')}>
-                {Object.values(RequestType).map((t) => (
+                {GENERIC_REQUEST_TYPES.map((t) => (
                   <option key={t} value={t}>
                     {REQUEST_TYPE_LABELS[t]}
                   </option>

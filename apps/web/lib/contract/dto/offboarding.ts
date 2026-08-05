@@ -18,6 +18,7 @@ export const OFFBOARDING_STATUS_LABELS = {
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   CANCELLED: 'Cancelled',
+  COMPLETED: 'Completed',
 } as const;
 
 /** The three offboarding document types, in send order, with titles (§3.6 stage 2). */

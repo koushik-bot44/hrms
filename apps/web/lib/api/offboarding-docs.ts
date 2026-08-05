@@ -1,12 +1,16 @@
 import type {
   ClearanceView,
   CompleteOffboardingDocResult,
+  LetterView,
+  LettersView,
   MyOffboardingDocSummary,
   MyOffboardingDocView,
   OffboardingDocSummary,
   OffboardingDocType,
   RecordDocuments,
+  RequestType,
 } from '@/lib/contract';
+import type { RequestUpload } from '@/lib/contract';
 import { apiFetch } from './client';
 
 /** Offboarding documents + clearance (§3.6 stage 2). */
@@ -93,5 +97,69 @@ export function completeOffboardingDocument(
   return apiFetch<CompleteOffboardingDocResult>(`/me/offboarding/${type}/complete`, {
     method: 'POST',
     body,
+  });
+}
+
+// --- Letters (§3.6 stage 3) -------------------------------------------------
+
+/** Employee: my offboarding letters + whether the request gate is open (all documents verified). */
+export function getMyLetters(signal?: AbortSignal): Promise<LettersView> {
+  return apiFetch<LettersView>('/me/offboarding/letters', { signal });
+}
+
+/** Employee: request a letter (gated on all documents verified; routed to the case HR). */
+export function requestLetter(type: RequestType, note?: string): Promise<LetterView> {
+  return apiFetch<LetterView>(`/me/offboarding/letters/${type}`, {
+    method: 'POST',
+    body: { note: note ?? null },
+  });
+}
+
+/** HR / record viewers: the letter requests + gate state for the record panel. */
+export function getRecordLetters(employeeId: string, signal?: AbortSignal): Promise<LettersView> {
+  return apiFetch<LettersView>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/letters`,
+    { signal },
+  );
+}
+
+/** HR fulfil step 1: presigned PUT for the letter file, then upload the bytes; returns the draft doc id. */
+export async function uploadLetterFile(
+  employeeId: string,
+  type: RequestType,
+  file: File,
+): Promise<string> {
+  const presign = await apiFetch<RequestUpload>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/letters/${type}/begin-upload`,
+    { method: 'POST', body: { fileName: file.name, contentType: file.type, sizeBytes: file.size } },
+  );
+  const res = await fetch(presign.uploadUrl, {
+    method: presign.method ?? 'PUT',
+    headers: presign.headers ?? undefined,
+    body: file,
+  });
+  if (!res.ok) {
+    throw new Error('Upload failed');
+  }
+  return presign.documentId;
+}
+
+/** HR fulfil step 2: bind the uploaded file + mark RESOLVED (notifies the employee). */
+export function resolveLetter(
+  employeeId: string,
+  type: RequestType,
+  documentIds: string[],
+): Promise<LettersView> {
+  return apiFetch<LettersView>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/letters/${type}/resolve`,
+    { method: 'POST', body: { documentIds } },
+  );
+}
+
+/** HR: complete the offboarding — case COMPLETED + employee OFFBOARDED. */
+export function completeOffboarding(employeeId: string, note?: string): Promise<unknown> {
+  return apiFetch<unknown>(`/employees/${encodeURIComponent(employeeId)}/offboarding/complete`, {
+    method: 'POST',
+    body: { note: note ?? null },
   });
 }

@@ -454,6 +454,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/offboarding/letters/{type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["requestLetter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/agreements/{type}/complete": {
         parameters: {
             query?: never;
@@ -838,6 +854,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/{id}/offboarding/letters/{type}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolveLetter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding/letters/{type}/begin-upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["beginLetterUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees/{id}/offboarding/initiate": {
         parameters: {
             query?: never;
@@ -896,6 +944,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["sendDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["complete_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1495,6 +1559,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/offboarding/letters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["myLetters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/agreements": {
         parameters: {
             query?: never;
@@ -1903,6 +1983,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding/letters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["recordLetters"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2536,13 +2632,13 @@ export interface components {
         };
         SubmitDocumentRequest: {
             /** @enum {string} */
-            requestType: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER";
+            requestType: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
             note?: string;
         };
         DocumentRequestView: {
             id?: string;
             /** @enum {string} */
-            requestType?: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER";
+            requestType?: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
             note?: string;
             /** @enum {string} */
             status?: "SUBMITTED" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
@@ -2571,7 +2667,7 @@ export interface components {
             employeeName?: string;
             teamName?: string;
             /** @enum {string} */
-            requestType?: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER";
+            requestType?: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
             note?: string;
             /** @enum {string} */
             status?: "SUBMITTED" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
@@ -2689,7 +2785,7 @@ export interface components {
             fullName?: string;
             designation?: string;
             /** @enum {string} */
-            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED" | "OFFBOARDED";
             itrRequired?: boolean;
             form1?: components["schemas"]["Form1View"];
             form3?: components["schemas"]["Form3EntryView"][];
@@ -2735,6 +2831,20 @@ export interface components {
             type?: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
             /** @enum {string} */
             status?: "PENDING" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED";
+            downloadUrl?: string;
+        };
+        RequestLetterRequest: {
+            note?: string;
+        };
+        LetterView: {
+            /** @enum {string} */
+            type?: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
+            title?: string;
+            /** @enum {string} */
+            status?: "SUBMITTED" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
+            requestedAt?: string;
+            resolvedAt?: string;
+            note?: string;
             downloadUrl?: string;
         };
         CompleteAgreementRequest: {
@@ -2860,7 +2970,7 @@ export interface components {
         OffboardingDecisionResult: {
             caseId?: string;
             /** @enum {string} */
-            status?: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED";
+            status?: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED" | "COMPLETED";
         };
         Form2Request: {
             fullName: string;
@@ -2880,7 +2990,7 @@ export interface components {
             designation?: string;
             dateOfJoining?: string;
             /** @enum {string} */
-            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED" | "OFFBOARDED";
             createdAt?: string;
         };
         OnboardEmployeeResult: {
@@ -2911,10 +3021,14 @@ export interface components {
         DecisionResult: {
             employeeCode?: string;
             /** @enum {string} */
-            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED" | "OFFBOARDED";
             teamId?: string;
             teamName?: string;
             managerName?: string;
+        };
+        LettersView: {
+            gateOpen?: boolean;
+            letters?: components["schemas"]["LetterView"][];
         };
         InitiateRequest: {
             reason: string;
@@ -2924,7 +3038,7 @@ export interface components {
         OffboardingCaseView: {
             id?: string;
             /** @enum {string} */
-            status?: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED";
+            status?: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED" | "COMPLETED";
             reason?: string;
             lastWorkingDay?: string;
             initiatedByName?: string;
@@ -2935,6 +3049,9 @@ export interface components {
             cancelledByName?: string;
             cancelledAt?: string;
             cancelNote?: string;
+            completedByName?: string;
+            completedAt?: string;
+            completionNote?: string;
             cancellable?: boolean;
         };
         DocSummary: {
@@ -3127,7 +3244,7 @@ export interface components {
             designation?: string;
             dateOfJoining?: string;
             /** @enum {string} */
-            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED" | "OFFBOARDED";
             reviewComplete?: boolean;
             sensitiveRevealable?: boolean;
             credentialsAssigned?: boolean;
@@ -3296,7 +3413,7 @@ export interface components {
             employeeEmail?: string;
             designation?: string;
             /** @enum {string} */
-            employeeStatus?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            employeeStatus?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED" | "OFFBOARDED";
             hrName?: string;
         };
         LabelRef: {
@@ -3436,6 +3553,8 @@ export interface components {
             approved?: number;
             /** Format: int64 */
             rejected?: number;
+            /** Format: int64 */
+            offboarded?: number;
         };
         /** @description Operational metrics over the whole platform (all-time unless noted). */
         OpsMetrics: {
@@ -3504,7 +3623,7 @@ export interface components {
         /** @description Employees stuck at a given pre-approval stage past the threshold. */
         StuckStage: {
             /** @enum {string} */
-            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+            status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED" | "OFFBOARDED";
             /** Format: int64 */
             count?: number;
         };
@@ -4847,6 +4966,32 @@ export interface operations {
             };
         };
     };
+    requestLetter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RequestLetterRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterView"];
+                };
+            };
+        };
+    };
     complete_1: {
         parameters: {
             query?: never;
@@ -5447,7 +5592,7 @@ export interface operations {
         parameters: {
             query: {
                 search?: string;
-                status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+                status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED" | "OFFBOARDED";
                 pageable: components["schemas"]["Pageable"];
             };
             header?: never;
@@ -5535,6 +5680,60 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DecisionResult"];
+                };
+            };
+        };
+    };
+    resolveLetter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                type: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LettersView"];
+                };
+            };
+        };
+    };
+    beginLetterUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                type: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RequestUpload"];
                 };
             };
         };
@@ -5637,6 +5836,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SendDocumentsResult"];
+                };
+            };
+        };
+    };
+    complete_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CancelRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OffboardingCaseView"];
                 };
             };
         };
@@ -5891,7 +6116,7 @@ export interface operations {
         parameters: {
             query: {
                 search?: string;
-                status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED";
+                status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED" | "OFFBOARDED";
                 pageable: components["schemas"]["Pageable"];
             };
             header?: never;
@@ -6738,6 +6963,26 @@ export interface operations {
             };
         };
     };
+    myLetters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LettersView"];
+                };
+            };
+        };
+    };
     myAgreements: {
         parameters: {
             query?: never;
@@ -7321,6 +7566,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["OffboardingCaseResponse"];
+                };
+            };
+        };
+    };
+    recordLetters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LettersView"];
                 };
             };
         };

@@ -335,6 +335,18 @@ export type ClearanceView = Omit<
   downloadUrl: string | null;
 };
 
+/** An offboarding letter request (§3.6 stage 3); downloadUrl is null until fulfilled. */
+export type LetterView = Omit<
+  Required<Schemas['LetterView']>,
+  'requestedAt' | 'resolvedAt' | 'note' | 'downloadUrl'
+> & {
+  requestedAt: string | null;
+  resolvedAt: string | null;
+  note: string | null;
+  downloadUrl: string | null;
+};
+export type LettersView = { gateOpen: boolean; letters: LetterView[] };
+
 // The HR approve/reject outcome (§3.3). On approve: employeeCode minted + team/manager set. On reject:
 // all of these are null (the employee joined no team) — so override every one as nullable.
 export type DecisionResult = Omit<

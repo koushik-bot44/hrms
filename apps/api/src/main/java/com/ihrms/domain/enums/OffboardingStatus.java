@@ -13,5 +13,7 @@ public enum OffboardingStatus {
   /** Rejected by the HIERARCHY role — terminal for this case (HR may initiate a fresh one). */
   REJECTED,
   /** Cancelled by HR before completion — terminal. */
-  CANCELLED
+  CANCELLED,
+  /** Completed by HR (§3.6 stage 3) — the employee is OFFBOARDED. Terminal. */
+  COMPLETED
 }

@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
 import { OffboardingClearanceDialog } from '@/components/hr/offboarding-clearance-dialog';
+import { OffboardingLetters } from '@/components/hr/offboarding-letters';
 import {
   Dialog,
   DialogContent,
@@ -66,6 +67,8 @@ export function OffboardingDocuments({ employeeId }: { employeeId: string }) {
           ))}
         </div>
       )}
+
+      <OffboardingLetters employeeId={employeeId} />
     </div>
   );
 }

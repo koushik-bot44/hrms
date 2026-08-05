@@ -9,6 +9,7 @@ import {
   type OffboardingStatus,
 } from '@/lib/contract';
 import { getOffboardingCase, initiateOffboarding, cancelOffboarding } from '@/lib/api/offboarding';
+import { completeOffboarding } from '@/lib/api/offboarding-docs';
 import { useApiQuery, useApiMutation } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,7 @@ const STATUS_TONE: Record<OffboardingStatus, 'warning' | 'success' | 'danger' | 
   APPROVED: 'success',
   REJECTED: 'danger',
   CANCELLED: 'neutral',
+  COMPLETED: 'neutral',
 };
 
 /**
@@ -59,6 +61,8 @@ export function OffboardingPanel({ employeeId }: { employeeId: string }) {
       <CardContent className="space-y-4">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : current?.status === 'COMPLETED' ? (
+          <CompletedCase employeeId={employeeId} caseView={current} />
         ) : active && current ? (
           <ActiveCase employeeId={employeeId} caseView={current} caseKey={caseKey} />
         ) : (
@@ -150,6 +154,11 @@ function ActiveCase({
       {/* Stage 2: the documents section + clearance, once the case is approved. */}
       {caseView.status === 'APPROVED' ? <OffboardingDocuments employeeId={employeeId} /> : null}
 
+      {/* Stage 3: complete the offboarding (backend gates on all documents verified). */}
+      {caseView.status === 'APPROVED' ? (
+        <CompleteButton employeeId={employeeId} caseKey={caseKey} />
+      ) : null}
+
       {caseView.cancellable ? (
         <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
           <DialogTrigger asChild>
@@ -188,6 +197,76 @@ function ActiveCase({
         </Dialog>
       ) : null}
     </div>
+  );
+}
+
+/** A completed case (employee is OFFBOARDED) — the retained record: summary + documents + letters, read-only. */
+function CompletedCase({ employeeId, caseView }: { employeeId: string; caseView: OffboardingCaseView }) {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">
+        <p className="flex items-center gap-2 font-medium">
+          <CheckCircle2 className="size-4 text-success" /> Offboarding complete
+        </p>
+        <p className="mt-1 text-muted-foreground">
+          {caseView.completedByName ? `Completed by ${caseView.completedByName}` : 'Completed'}
+          {caseView.completedAt ? ` on ${new Date(caseView.completedAt).toLocaleDateString()}` : ''}. The
+          employee is offboarded; this record is retained.
+        </p>
+        {caseView.completionNote ? (
+          <p className="mt-1 text-muted-foreground">{caseView.completionNote}</p>
+        ) : null}
+      </div>
+      <OffboardingDocuments employeeId={employeeId} />
+    </div>
+  );
+}
+
+/** Complete the offboarding — a confirm dialog; the backend gates on all documents being verified. */
+function CompleteButton({ employeeId, caseKey }: { employeeId: string; caseKey: readonly unknown[] }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = React.useState(false);
+  const [note, setNote] = React.useState('');
+  const complete = useApiMutation(() => completeOffboarding(employeeId, note || undefined), {
+    successMessage: 'Offboarding completed',
+    onSuccess: () => {
+      setOpen(false);
+      void queryClient.invalidateQueries({ queryKey: caseKey });
+      void queryClient.invalidateQueries({ queryKey: ['hr-record', employeeId] });
+    },
+  });
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="default" size="sm">
+          <CheckCircle2 className="size-4" />
+          Complete offboarding
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Complete this offboarding?</DialogTitle>
+          <DialogDescription>
+            The employee becomes offboarded and can no longer sign in. Every sent document must be verified
+            first. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium" htmlFor="complete-note">
+            Note (optional)
+          </label>
+          <Input id="complete-note" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={complete.isPending}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={() => complete.mutate()} disabled={complete.isPending}>
+            {complete.isPending ? 'Completing…' : 'Complete offboarding'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

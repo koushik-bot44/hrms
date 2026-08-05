@@ -68,18 +68,21 @@ public class HierarchyAnalyticsService {
   private final CompanyRepository companies;
   private final TeamRepository teams;
   private final UserRepository users;
+  private final com.ihrms.domain.repository.OffboardingCaseRepository offboardingCases;
 
   public HierarchyAnalyticsService(
       EmployeeRepository employees,
       ApprovalRequestRepository approvals,
       CompanyRepository companies,
       TeamRepository teams,
-      UserRepository users) {
+      UserRepository users,
+      com.ihrms.domain.repository.OffboardingCaseRepository offboardingCases) {
     this.employees = employees;
     this.approvals = approvals;
     this.companies = companies;
     this.teams = teams;
     this.users = users;
+    this.offboardingCases = offboardingCases;
   }
 
   // --- GET /hierarchy/overview ----------------------------------------------
@@ -122,13 +125,19 @@ public class HierarchyAnalyticsService {
     int n = Math.max(1, Math.min(months, MAX_TREND_MONTHS));
     Map<String, Long> joined = monthMap(employees.joinedPerIstMonth());
     Map<String, Long> approved = monthMap(approvals.approvedPerIstMonth());
+    // §3.6 stage 3 — the offboarded series is real: completed offboarding cases bucketed by IST month.
+    Map<String, Long> offboarded = monthMap(offboardingCases.completedPerIstMonth());
 
     YearMonth end = YearMonth.now(ShiftConfig.ZONE);
     List<TrendPoint> series = new ArrayList<>(n);
     for (int i = n - 1; i >= 0; i--) {
       String key = end.minusMonths(i).toString(); // "YYYY-MM" (Asia/Kolkata)
-      // offboarded is a 0 placeholder — offboarding isn't built yet (§2).
-      series.add(new TrendPoint(key, joined.getOrDefault(key, 0L), approved.getOrDefault(key, 0L), 0L));
+      series.add(
+          new TrendPoint(
+              key,
+              joined.getOrDefault(key, 0L),
+              approved.getOrDefault(key, 0L),
+              offboarded.getOrDefault(key, 0L)));
     }
     return new TrendsResponse(n, series);
   }
@@ -225,7 +234,8 @@ public class HierarchyAnalyticsService {
         m.getOrDefault(EmployeeStatus.REVISION_REQUESTED, 0L),
         m.getOrDefault(EmployeeStatus.HR_VERIFIED, 0L),
         m.getOrDefault(EmployeeStatus.APPROVED, 0L),
-        m.getOrDefault(EmployeeStatus.REJECTED, 0L));
+        m.getOrDefault(EmployeeStatus.REJECTED, 0L),
+        m.getOrDefault(EmployeeStatus.OFFBOARDED, 0L));
   }
 
   /** Mean days between onboard (Employee.createdAt) and approval (decidedAt); null when none approved. */

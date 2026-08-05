@@ -16,12 +16,13 @@ export const STATUS_META: Record<FunnelKey, { label: string; color: string }> = 
   approved: { label: 'Approved', color: 'hsl(var(--success))' },
   revisionRequested: { label: 'Revision requested', color: 'hsl(var(--warning))' },
   rejected: { label: 'Rejected', color: 'hsl(var(--destructive))' },
+  offboarded: { label: 'Offboarded', color: 'hsl(var(--muted-foreground))' },
 };
 
 /** The main onboarding path, in order. */
 export const MAIN_PATH: FunnelKey[] = ['invited', 'inProgress', 'submitted', 'hrVerified', 'approved'];
-/** Off the main path — shown distinctly (not part of the linear funnel). */
-export const OFF_PATH: FunnelKey[] = ['revisionRequested', 'rejected'];
+/** Off the main path — shown distinctly (not part of the linear funnel); offboarded is terminal (§3.6). */
+export const OFF_PATH: FunnelKey[] = ['revisionRequested', 'rejected', 'offboarded'];
 export const ALL_STATUSES: FunnelKey[] = [...MAIN_PATH, ...OFF_PATH];
 
 export function funnelTotal(funnel: OnboardingFunnel): number {

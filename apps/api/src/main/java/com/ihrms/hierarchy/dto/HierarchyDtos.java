@@ -60,7 +60,9 @@ public final class HierarchyDtos {
       long revisionRequested,
       long hrVerified,
       long approved,
-      long rejected) {}
+      long rejected,
+      // §3.6 stage 3 — the terminal offboarded count, an off-path status beside rejected.
+      long offboarded) {}
 
   @Schema(description = "Employees stuck at a given pre-approval stage past the threshold.")
   public record StuckStage(EmployeeStatus status, long count) {}

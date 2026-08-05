@@ -108,4 +108,23 @@ public final class OffboardingDocDtos {
 
   /** A small summary for the record panel (status + download). */
   public record ClearanceSummary(ClearanceFinalStatus finalStatus, String downloadUrl) {}
+
+  // --- Letters (§3.6 stage 3; reuse the document-requests machinery) ---------
+
+  public record LetterView(
+      com.ihrms.domain.enums.RequestType type,
+      String title,
+      com.ihrms.domain.enums.RequestStatus status,
+      String requestedAt,
+      String resolvedAt,
+      String note,
+      String downloadUrl) {}
+
+  /**
+   * The letters area for the workspace/record. {@code gateOpen} is true only when every sent offboarding
+   * document is VERIFIED — the letters can be requested only then.
+   */
+  public record LettersView(boolean gateOpen, List<LetterView> letters) {}
+
+  public record RequestLetterRequest(String note) {}
 }
