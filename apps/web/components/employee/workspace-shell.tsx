@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarOff, Clock, FileText, Inbox } from 'lucide-react';
+import { CalendarOff, Clock, FileText, Home, Inbox } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { AppShell, type NavItem } from '@/components/app-shell';
 import { WorkspaceEntryGuard } from '@/components/attendance/workspace-entry-guard';
@@ -20,6 +20,8 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const cp = useCompanyPath();
 
   const nav: NavItem[] = [
+    // Return to the portal home (the section-cards overview — where Agreements/Offboarding surface).
+    { label: 'Home', href: cp('/workspace'), icon: Home },
     { label: 'Mailbox', href: '/mail', icon: Inbox },
     { label: 'Attendance', href: cp('/workspace/attendance'), icon: Clock },
     { label: 'Leave', href: cp('/workspace/leave'), icon: CalendarOff },
