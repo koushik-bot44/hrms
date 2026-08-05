@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { OffboardingDocuments } from '@/components/hr/offboarding-documents';
 import {
   Dialog,
   DialogContent,
@@ -145,6 +146,9 @@ function ActiveCase({
           )}
         </dd>
       </dl>
+
+      {/* Stage 2: the documents section + clearance, once the case is approved. */}
+      {caseView.status === 'APPROVED' ? <OffboardingDocuments employeeId={employeeId} /> : null}
 
       {caseView.cancellable ? (
         <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>

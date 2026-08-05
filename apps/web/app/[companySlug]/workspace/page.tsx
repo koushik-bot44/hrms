@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowUpRight, CalendarOff, Clock, FileSignature, FileText, Inbox } from 'lucide-react';
+import { ArrowUpRight, CalendarOff, Clock, FileSignature, FileText, Inbox, LogOut } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { useCompanyPath } from '@/lib/auth/use-company-path';
 import { useApiQuery } from '@/lib/api/hooks';
 import { getMyAgreements } from '@/lib/api/agreements';
+import { getMyOffboardingDocuments } from '@/lib/api/offboarding-docs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,6 +22,12 @@ export default function WorkspacePage() {
   const { data: agreements } = useApiQuery(['my-agreements'], getMyAgreements);
   const hasAgreements = (agreements?.length ?? 0) > 0;
   const pendingAgreements = agreements?.filter((a) => a.status !== 'COMPLETED').length ?? 0;
+  // Post-approval offboarding documents (§3.6 stage 2) — a section entry once HR has sent any; the badge
+  // counts the ones still to sign (PENDING or sent back).
+  const { data: offDocs } = useApiQuery(['my-offboarding-docs'], getMyOffboardingDocuments);
+  const hasOffboarding = (offDocs?.length ?? 0) > 0;
+  const pendingOffboarding =
+    offDocs?.filter((d) => d.status === 'PENDING' || d.status === 'REVISION_REQUESTED').length ?? 0;
 
   if (!emp) {
     return (
@@ -82,6 +89,15 @@ export default function WorkspacePage() {
             title="Agreements"
             description="Read and sign your company agreements."
             badge={pendingAgreements > 0 ? `${pendingAgreements} pending` : undefined}
+          />
+        ) : null}
+        {hasOffboarding ? (
+          <SectionCard
+            href={cp('/workspace/offboarding')}
+            icon={LogOut}
+            title="Offboarding"
+            description="Read and sign your offboarding documents."
+            badge={pendingOffboarding > 0 ? `${pendingOffboarding} pending` : undefined}
           />
         ) : null}
       </div>

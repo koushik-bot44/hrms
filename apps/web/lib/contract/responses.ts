@@ -264,6 +264,77 @@ export type HierarchyPendingRow = Omit<
 
 export type OffboardingDecisionResult = Required<Schemas['OffboardingDecisionResult']>;
 
+// --- Offboarding documents (§3.6 stage 2) ----------------------------------
+
+export type OffboardingDocType = NonNullable<Schemas['DocSummary']['type']>;
+export type OffboardingDocStatus = NonNullable<Schemas['DocSummary']['status']>;
+export type ClearanceFinalStatus = NonNullable<Schemas['ClearanceView']['finalStatus']>;
+export type FieldKind = NonNullable<Schemas['FieldView']['kind']>;
+
+export type OffboardingFieldView = Required<Schemas['FieldView']>;
+export type SendableDoc = Omit<Required<Schemas['SendableDoc']>, 'hrFields'> & {
+  hrFields: OffboardingFieldView[];
+};
+
+export type OffboardingDocSummary = Omit<
+  Required<Schemas['DocSummary']>,
+  'sentAt' | 'submittedAt' | 'verifiedAt' | 'revisionNote' | 'sentByName' | 'downloadUrl'
+> & {
+  sentAt: string | null;
+  submittedAt: string | null;
+  verifiedAt: string | null;
+  revisionNote: string | null;
+  sentByName: string | null;
+  downloadUrl: string | null;
+};
+
+export type RecordDocuments = {
+  documents: OffboardingDocSummary[];
+  sendable: SendableDoc[];
+};
+
+export type MyOffboardingDocSummary = Omit<Required<Schemas['MyDocSummary']>, 'revisionNote'> & {
+  revisionNote: string | null;
+};
+
+export type MyOffboardingDocView = Omit<
+  Required<Schemas['MyDocView']>,
+  'revisionNote' | 'downloadUrl' | 'employeeFields'
+> & {
+  revisionNote: string | null;
+  downloadUrl: string | null;
+  employeeFields: OffboardingFieldView[];
+};
+
+export type CompleteOffboardingDocResult = Omit<Required<Schemas['CompleteDocResult']>, 'downloadUrl'> & {
+  downloadUrl: string | null;
+};
+
+export type ClearanceItemView = Omit<Required<Schemas['ClearanceItemView']>, 'value' | 'remarks'> & {
+  value: string | null;
+  remarks: string | null;
+};
+export type ClearanceSectionView = Omit<Required<Schemas['ClearanceSectionView']>, 'items'> & {
+  items: ClearanceItemView[];
+};
+export type ClearanceDetails = {
+  name: string | null;
+  employeeId: string | null;
+  department: string | null;
+  designation: string | null;
+  manager: string | null;
+  lastWorkingDay: string | null;
+};
+export type ClearanceView = Omit<
+  Required<Schemas['ClearanceView']>,
+  'details' | 'sections' | 'finalItSignoff' | 'downloadUrl'
+> & {
+  details: ClearanceDetails;
+  sections: ClearanceSectionView[];
+  finalItSignoff: string | null;
+  downloadUrl: string | null;
+};
+
 // The HR approve/reject outcome (§3.3). On approve: employeeCode minted + team/manager set. On reject:
 // all of these are null (the employee joined no team) — so override every one as nullable.
 export type DecisionResult = Omit<

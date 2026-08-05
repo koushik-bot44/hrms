@@ -17,5 +17,7 @@ public enum NotificationType {
   // pending inbox is the primary surface); APPROVED/REJECTED target the initiating HR (no bell feed → push+email).
   OFFBOARDING_INITIATED,
   OFFBOARDING_APPROVED,
-  OFFBOARDING_REJECTED
+  OFFBOARDING_REJECTED,
+  // §3.6 stage 2 — a durable trail for the SENDING HR when the employee submits an offboarding document.
+  OFFBOARDING_DOC_SUBMITTED
 }

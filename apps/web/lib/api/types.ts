@@ -132,6 +132,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/{id}/offboarding/clearance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getClearance"];
+        put: operations["putClearance"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/teams/{id}/manager": {
         parameters: {
             query?: never;
@@ -422,7 +438,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/me/agreements/{type}/complete": {
+    "/me/offboarding/{type}/complete": {
         parameters: {
             query?: never;
             header?: never;
@@ -432,6 +448,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/agreements/{type}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["complete_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -816,6 +848,54 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["initiate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding/documents/{type}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["verifyDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding/documents/{type}/send-back": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sendBackDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding/documents/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sendDocuments"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1383,6 +1463,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/offboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["myDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/offboarding/{type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["myDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/agreements": {
         parameters: {
             query?: never;
@@ -1791,6 +1903,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["recordDocuments"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2363,6 +2491,46 @@ export interface components {
             /** @enum {string} */
             role?: "SUPER_ADMIN" | "ACCOUNTS_ADMIN" | "HIERARCHY" | "COMPANY_ADMIN" | "HR" | "MANAGER" | "ACCOUNTANT";
         };
+        ClearanceUpdateItem: {
+            value?: string;
+            remarks?: string;
+        };
+        ClearanceUpdateRequest: {
+            items?: {
+                [key: string]: components["schemas"]["ClearanceUpdateItem"];
+            };
+            finalItSignoff?: string;
+            /** @enum {string} */
+            finalStatus?: "APPROVED" | "PENDING" | "ON_HOLD";
+        };
+        ClearanceDetails: {
+            name?: string;
+            employeeId?: string;
+            department?: string;
+            designation?: string;
+            manager?: string;
+            lastWorkingDay?: string;
+        };
+        ClearanceItemView: {
+            key?: string;
+            label?: string;
+            value?: string;
+            remarks?: string;
+        };
+        ClearanceSectionView: {
+            key?: string;
+            title?: string;
+            kind?: string;
+            items?: components["schemas"]["ClearanceItemView"][];
+        };
+        ClearanceView: {
+            details?: components["schemas"]["ClearanceDetails"];
+            sections?: components["schemas"]["ClearanceSectionView"][];
+            finalItSignoff?: string;
+            /** @enum {string} */
+            finalStatus?: "APPROVED" | "PENDING" | "ON_HOLD";
+            downloadUrl?: string;
+        };
         CreateTeamRequest: {
             name: string;
         };
@@ -2555,6 +2723,20 @@ export interface components {
             /** Format: int64 */
             sizeBytes?: number;
         };
+        CompleteDocRequest: {
+            consentAccepted?: boolean;
+            fillValues?: {
+                [key: string]: string;
+            };
+            signatureDataUrl?: string;
+        };
+        CompleteDocResult: {
+            /** @enum {string} */
+            type?: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
+            /** @enum {string} */
+            status?: "PENDING" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED";
+            downloadUrl?: string;
+        };
         CompleteAgreementRequest: {
             consentAccepted?: boolean;
             designation?: string;
@@ -2574,7 +2756,7 @@ export interface components {
         NotificationView: {
             id?: string;
             /** @enum {string} */
-            type?: "EMPLOYEE_ONBOARDED" | "EMPLOYEE_SUBMITTED" | "APPROVAL_REQUESTED" | "EMPLOYEE_APPROVED" | "EMPLOYEE_REJECTED" | "LEAVE_REQUESTED" | "AGREEMENT_COMPLETED" | "OFFBOARDING_INITIATED" | "OFFBOARDING_APPROVED" | "OFFBOARDING_REJECTED";
+            type?: "EMPLOYEE_ONBOARDED" | "EMPLOYEE_SUBMITTED" | "APPROVAL_REQUESTED" | "EMPLOYEE_APPROVED" | "EMPLOYEE_REJECTED" | "LEAVE_REQUESTED" | "AGREEMENT_COMPLETED" | "OFFBOARDING_INITIATED" | "OFFBOARDING_APPROVED" | "OFFBOARDING_REJECTED" | "OFFBOARDING_DOC_SUBMITTED";
             employeeId?: string;
             employeeCode?: string;
             fullName?: string;
@@ -2754,6 +2936,54 @@ export interface components {
             cancelledAt?: string;
             cancelNote?: string;
             cancellable?: boolean;
+        };
+        DocSummary: {
+            /** @enum {string} */
+            type?: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
+            title?: string;
+            /** @enum {string} */
+            status?: "PENDING" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED";
+            sentAt?: string;
+            submittedAt?: string;
+            verifiedAt?: string;
+            revisionNote?: string;
+            sentByName?: string;
+            downloadUrl?: string;
+        };
+        FieldView: {
+            key?: string;
+            label?: string;
+            /** @enum {string} */
+            kind?: "TEXT" | "DATE" | "MULTILINE";
+            value?: string;
+            required?: boolean;
+        };
+        RecordDocuments: {
+            documents?: components["schemas"]["DocSummary"][];
+            sendable?: components["schemas"]["SendableDoc"][];
+        };
+        SendableDoc: {
+            /** @enum {string} */
+            type?: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
+            title?: string;
+            alreadySent?: boolean;
+            hrFields?: components["schemas"]["FieldView"][];
+        };
+        SendBackRequest: {
+            note?: string;
+        };
+        SendDocSelection: {
+            /** @enum {string} */
+            type?: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
+            hrValues?: {
+                [key: string]: string;
+            };
+        };
+        SendDocumentsRequest: {
+            documents?: components["schemas"]["SendDocSelection"][];
+        };
+        SendDocumentsResult: {
+            documents?: components["schemas"]["DocSummary"][];
         };
         CancelRequest: {
             note?: string;
@@ -2998,6 +3228,25 @@ export interface components {
         AccountantStatus: {
             exists?: boolean;
             accountant?: components["schemas"]["AccountantView"];
+        };
+        MyDocSummary: {
+            /** @enum {string} */
+            type?: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
+            title?: string;
+            /** @enum {string} */
+            status?: "PENDING" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED";
+            revisionNote?: string;
+        };
+        MyDocView: {
+            /** @enum {string} */
+            type?: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
+            title?: string;
+            /** @enum {string} */
+            status?: "PENDING" | "SUBMITTED" | "VERIFIED" | "REVISION_REQUESTED";
+            bodyHtml?: string;
+            revisionNote?: string;
+            downloadUrl?: string;
+            employeeFields?: components["schemas"]["FieldView"][];
         };
         MyAgreementSummary: {
             /** @enum {string} */
@@ -3995,6 +4244,54 @@ export interface operations {
             };
         };
     };
+    getClearance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ClearanceView"];
+                };
+            };
+        };
+    };
+    putClearance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClearanceUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ClearanceView"];
+                };
+            };
+        };
+    };
     assignManager_1: {
         parameters: {
             query?: never;
@@ -4525,6 +4822,32 @@ export interface operations {
         };
     };
     complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteDocRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CompleteDocResult"];
+                };
+            };
+        };
+    };
+    complete_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -5238,6 +5561,82 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["OffboardingCaseView"];
+                };
+            };
+        };
+    };
+    verifyDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                type: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordDocuments"];
+                };
+            };
+        };
+    };
+    sendBackDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                type: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendBackRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordDocuments"];
+                };
+            };
+        };
+    };
+    sendDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SendDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SendDocumentsResult"];
                 };
             };
         };
@@ -6297,6 +6696,48 @@ export interface operations {
             };
         };
     };
+    myDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MyDocSummary"][];
+                };
+            };
+        };
+    };
+    myDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type: "EXIT_FORMALITIES" | "SETTLEMENT" | "SEPARATION";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MyDocView"];
+                };
+            };
+        };
+    };
     myAgreements: {
         parameters: {
             query?: never;
@@ -6880,6 +7321,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["OffboardingCaseResponse"];
+                };
+            };
+        };
+    };
+    recordDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordDocuments"];
                 };
             };
         };

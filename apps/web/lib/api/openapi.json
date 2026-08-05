@@ -381,6 +381,74 @@
         }
       }
     },
+    "/employees/{id}/offboarding/clearance": {
+      "get": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "getClearance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearanceView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "putClearance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClearanceUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearanceView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/companies/{companyId}/teams/{id}/manager": {
       "put": {
         "tags": [
@@ -1070,12 +1138,57 @@
         }
       }
     },
+    "/me/offboarding/{type}/complete": {
+      "post": {
+        "tags": [
+          "me-offboarding-controller"
+        ],
+        "operationId": "complete",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "EXIT_FORMALITIES",
+                "SETTLEMENT",
+                "SEPARATION"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteDocRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteDocResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/agreements/{type}/complete": {
       "post": {
         "tags": [
           "agreement-controller"
         ],
-        "operationId": "complete",
+        "operationId": "complete_1",
         "parameters": [
           {
             "name": "type",
@@ -2056,6 +2169,141 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/OffboardingCaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/documents/{type}/verify": {
+      "post": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "verifyDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "EXIT_FORMALITIES",
+                "SETTLEMENT",
+                "SEPARATION"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordDocuments"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/documents/{type}/send-back": {
+      "post": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "sendBackDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "EXIT_FORMALITIES",
+                "SETTLEMENT",
+                "SEPARATION"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordDocuments"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/documents/send": {
+      "post": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "sendDocuments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendDocumentsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendDocumentsResult"
                 }
               }
             }
@@ -3559,6 +3807,64 @@
         }
       }
     },
+    "/me/offboarding": {
+      "get": {
+        "tags": [
+          "me-offboarding-controller"
+        ],
+        "operationId": "myDocuments",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MyDocSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/offboarding/{type}": {
+      "get": {
+        "tags": [
+          "me-offboarding-controller"
+        ],
+        "operationId": "myDocument",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "EXIT_FORMALITIES",
+                "SETTLEMENT",
+                "SEPARATION"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyDocView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/agreements": {
       "get": {
         "tags": [
@@ -4374,6 +4680,36 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/OffboardingCaseResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/documents": {
+      "get": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "recordDocuments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordDocuments"
                 }
               }
             }
@@ -5916,6 +6252,127 @@
           }
         }
       },
+      "ClearanceUpdateItem": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "remarks": {
+            "type": "string"
+          }
+        }
+      },
+      "ClearanceUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ClearanceUpdateItem"
+            }
+          },
+          "finalItSignoff": {
+            "type": "string"
+          },
+          "finalStatus": {
+            "type": "string",
+            "enum": [
+              "APPROVED",
+              "PENDING",
+              "ON_HOLD"
+            ]
+          }
+        }
+      },
+      "ClearanceDetails": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "employeeId": {
+            "type": "string"
+          },
+          "department": {
+            "type": "string"
+          },
+          "designation": {
+            "type": "string"
+          },
+          "manager": {
+            "type": "string"
+          },
+          "lastWorkingDay": {
+            "type": "string"
+          }
+        }
+      },
+      "ClearanceItemView": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "remarks": {
+            "type": "string"
+          }
+        }
+      },
+      "ClearanceSectionView": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClearanceItemView"
+            }
+          }
+        }
+      },
+      "ClearanceView": {
+        "type": "object",
+        "properties": {
+          "details": {
+            "$ref": "#/components/schemas/ClearanceDetails"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClearanceSectionView"
+            }
+          },
+          "finalItSignoff": {
+            "type": "string"
+          },
+          "finalStatus": {
+            "type": "string",
+            "enum": [
+              "APPROVED",
+              "PENDING",
+              "ON_HOLD"
+            ]
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        }
+      },
       "CreateTeamRequest": {
         "required": [
           "name"
@@ -6559,6 +7016,48 @@
           }
         }
       },
+      "CompleteDocRequest": {
+        "type": "object",
+        "properties": {
+          "consentAccepted": {
+            "type": "boolean"
+          },
+          "fillValues": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "signatureDataUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "CompleteDocResult": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "EXIT_FORMALITIES",
+              "SETTLEMENT",
+              "SEPARATION"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SUBMITTED",
+              "VERIFIED",
+              "REVISION_REQUESTED"
+            ]
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        }
+      },
       "CompleteAgreementRequest": {
         "type": "object",
         "properties": {
@@ -6626,7 +7125,8 @@
               "AGREEMENT_COMPLETED",
               "OFFBOARDING_INITIATED",
               "OFFBOARDING_APPROVED",
-              "OFFBOARDING_REJECTED"
+              "OFFBOARDING_REJECTED",
+              "OFFBOARDING_DOC_SUBMITTED"
             ]
           },
           "employeeId": {
@@ -7245,6 +7745,165 @@
           },
           "cancellable": {
             "type": "boolean"
+          }
+        }
+      },
+      "DocSummary": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "EXIT_FORMALITIES",
+              "SETTLEMENT",
+              "SEPARATION"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SUBMITTED",
+              "VERIFIED",
+              "REVISION_REQUESTED"
+            ]
+          },
+          "sentAt": {
+            "type": "string"
+          },
+          "submittedAt": {
+            "type": "string"
+          },
+          "verifiedAt": {
+            "type": "string"
+          },
+          "revisionNote": {
+            "type": "string"
+          },
+          "sentByName": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "FieldView": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "TEXT",
+              "DATE",
+              "MULTILINE"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RecordDocuments": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocSummary"
+            }
+          },
+          "sendable": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SendableDoc"
+            }
+          }
+        }
+      },
+      "SendableDoc": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "EXIT_FORMALITIES",
+              "SETTLEMENT",
+              "SEPARATION"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "alreadySent": {
+            "type": "boolean"
+          },
+          "hrFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldView"
+            }
+          }
+        }
+      },
+      "SendBackRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "SendDocSelection": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "EXIT_FORMALITIES",
+              "SETTLEMENT",
+              "SEPARATION"
+            ]
+          },
+          "hrValues": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SendDocumentsRequest": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SendDocSelection"
+            }
+          }
+        }
+      },
+      "SendDocumentsResult": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocSummary"
+            }
           }
         }
       },
@@ -8012,6 +8671,74 @@
           },
           "accountant": {
             "$ref": "#/components/schemas/AccountantView"
+          }
+        }
+      },
+      "MyDocSummary": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "EXIT_FORMALITIES",
+              "SETTLEMENT",
+              "SEPARATION"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SUBMITTED",
+              "VERIFIED",
+              "REVISION_REQUESTED"
+            ]
+          },
+          "revisionNote": {
+            "type": "string"
+          }
+        }
+      },
+      "MyDocView": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "EXIT_FORMALITIES",
+              "SETTLEMENT",
+              "SEPARATION"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SUBMITTED",
+              "VERIFIED",
+              "REVISION_REQUESTED"
+            ]
+          },
+          "bodyHtml": {
+            "type": "string"
+          },
+          "revisionNote": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
+          },
+          "employeeFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldView"
+            }
           }
         }
       },

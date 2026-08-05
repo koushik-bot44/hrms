@@ -1,0 +1,97 @@
+import type {
+  ClearanceView,
+  CompleteOffboardingDocResult,
+  MyOffboardingDocSummary,
+  MyOffboardingDocView,
+  OffboardingDocSummary,
+  OffboardingDocType,
+  RecordDocuments,
+} from '@/lib/contract';
+import { apiFetch } from './client';
+
+/** Offboarding documents + clearance (§3.6 stage 2). */
+
+// --- HR ---------------------------------------------------------------------
+
+/** The record documents section — statuses + the send specs. */
+export function getRecordDocuments(employeeId: string, signal?: AbortSignal): Promise<RecordDocuments> {
+  return apiFetch<RecordDocuments>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/documents`,
+    { signal },
+  );
+}
+
+export function sendOffboardingDocuments(
+  employeeId: string,
+  documents: Array<{ type: OffboardingDocType; hrValues: Record<string, string> }>,
+): Promise<{ documents: OffboardingDocSummary[] }> {
+  return apiFetch<{ documents: OffboardingDocSummary[] }>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/documents/send`,
+    { method: 'POST', body: { documents } },
+  );
+}
+
+export function verifyOffboardingDocument(
+  employeeId: string,
+  type: OffboardingDocType,
+): Promise<RecordDocuments> {
+  return apiFetch<RecordDocuments>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/documents/${type}/verify`,
+    { method: 'POST' },
+  );
+}
+
+export function sendBackOffboardingDocument(
+  employeeId: string,
+  type: OffboardingDocType,
+  note: string,
+): Promise<RecordDocuments> {
+  return apiFetch<RecordDocuments>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/documents/${type}/send-back`,
+    { method: 'POST', body: { note } },
+  );
+}
+
+export function getClearance(employeeId: string, signal?: AbortSignal): Promise<ClearanceView> {
+  return apiFetch<ClearanceView>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/clearance`,
+    { signal },
+  );
+}
+
+export function saveClearance(
+  employeeId: string,
+  body: {
+    items: Record<string, { value: string | null; remarks: string | null }>;
+    finalItSignoff: string | null;
+    finalStatus: 'APPROVED' | 'PENDING' | 'ON_HOLD';
+  },
+): Promise<ClearanceView> {
+  return apiFetch<ClearanceView>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/clearance`,
+    { method: 'PUT', body },
+  );
+}
+
+// --- Employee (workspace) ---------------------------------------------------
+
+export function getMyOffboardingDocuments(signal?: AbortSignal): Promise<MyOffboardingDocSummary[]> {
+  return apiFetch<MyOffboardingDocSummary[]>('/me/offboarding', { signal });
+}
+
+export function getMyOffboardingDocument(
+  type: OffboardingDocType,
+  signal?: AbortSignal,
+): Promise<MyOffboardingDocView> {
+  return apiFetch<MyOffboardingDocView>(`/me/offboarding/${type}`, { signal });
+}
+
+export function completeOffboardingDocument(
+  type: OffboardingDocType,
+  body: { consentAccepted: true; fillValues: Record<string, string>; signatureDataUrl: string },
+): Promise<CompleteOffboardingDocResult> {
+  return apiFetch<CompleteOffboardingDocResult>(`/me/offboarding/${type}/complete`, {
+    method: 'POST',
+    body,
+  });
+}

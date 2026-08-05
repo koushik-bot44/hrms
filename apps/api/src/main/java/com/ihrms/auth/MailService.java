@@ -166,6 +166,35 @@ public class MailService {
     log.info("Offboarding decision email dispatched to {} ({})", hrEmail, outcome);
   }
 
+  /** Offboarding documents assigned notice to the employee (§3.6 stage 2) — no bell feed, so mail + push. */
+  public void sendOffboardingDocsAssigned(String email, String fullName) {
+    String body =
+        (fullName == null ? "Hello" : "Hello " + fullName)
+            + " — offboarding documents have been sent for you to read and sign. Sign in to your workspace"
+            + " to complete them.";
+    if (noSmtp()) {
+      log.warn("[DEV OFFB DOCS] {} -> {}  (no SMTP configured; logging only)", email, body);
+      return;
+    }
+    log.info("Offboarding-docs email dispatched to {}", email);
+  }
+
+  /** Offboarding document sent back for revision (§3.6 stage 2) — carries HR's note. */
+  public void sendOffboardingDocReturned(String email, String fullName, String docTitle, String note) {
+    String body =
+        (fullName == null ? "Hello" : "Hello " + fullName)
+            + " — your \""
+            + docTitle
+            + "\" needs changes"
+            + (note == null || note.isBlank() ? "." : ": " + note)
+            + " Please update and resubmit it in your workspace.";
+    if (noSmtp()) {
+      log.warn("[DEV OFFB RETURN] {} -> {}  (no SMTP configured; logging only)", email, body);
+      return;
+    }
+    log.info("Offboarding-doc-returned email dispatched to {}", email);
+  }
+
   private boolean noSmtp() {
     String host = props.mail() == null ? null : props.mail().host();
     return host == null || host.isBlank();

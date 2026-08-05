@@ -392,7 +392,7 @@ function Field({
 }
 
 /** On-screen styles for the injected agreement body (matches the PDF layout at a screen-readable scale). */
-const AGREEMENT_BODY_CSS = `
+export const AGREEMENT_BODY_CSS = `
 .agreement-body { font-size: 13px; line-height: 1.6; color: inherit; }
 .agreement-body h1.title { text-align:center; font-size:18px; font-weight:700; margin:0 0 16px; text-transform:uppercase; }
 .agreement-body h2 { font-size:15px; font-weight:700; margin:18px 0 6px; }

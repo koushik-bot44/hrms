@@ -383,9 +383,65 @@ the **hierarchy's pending inbox** is its primary surface, and **push** (+ **emai
 live nudge. All notifications fire **controller-after-commit, best-effort** (a failure never rolls the case
 back), matching the approve/agreements pattern.
 
-**UI.** HR gets an **Offboarding** panel on the record view (initiate → status → cancel; stage-2 document
-controls mount here later). The HIERARCHY area gains an **Offboarding approvals** nav item (badged with the
+**UI.** HR gets an **Offboarding** panel on the record view (initiate → status → cancel; the stage-2 document
+controls mount inside it). The HIERARCHY area gains an **Offboarding approvals** nav item (badged with the
 pending count) → the minimal-PII inbox → approve/reject dialogs — its only non-read-only screen.
+
+#### Stage 2 — the documents
+Once a case is **APPROVED**, HR sends employee-facing **documents** with per-case values; the employee
+reads/fills/signs them in the **workspace**; submissions go through an HR **verification loop** (verify /
+send-back per document, the Form-4 pattern). A separate HR-side **Clearance** checklist completes the picture.
+Rendering reuses the agreements pipeline verbatim: single-source HTML fragments
+(`resources/offboarding/text/*.html`) → the shared `agreement.html` letterhead-slot template → openhtmltopdf
+→ `StorageService`. The three source DOCX + the Clearance PDF live under `resources/offboarding/source/`.
+
+**The documents** (`offboarding_documents`, unique per `(caseId, type)`):
+- **EXIT_FORMALITIES** (Separation & Exit Formalities) — generic "the Company", **no fill-ins in the source**;
+  a standard **acknowledgement block** (Name locked + Signature + Date) is appended (the Notice-Period
+  pattern). Read + acknowledge only.
+- **SETTLEMENT** — `{{COMPANY_NAME}}` (all SCREATIVES occurrences), `{{HR_NAME}}` (was "Ms. Kiran Thakur", now
+  the **sending HR**); the **registered-office address stays static template text** for v1 _(future
+  per-company field — flagged)_. HR-at-send: `{{AGREEMENT_DATE}}` (today), `{{EMPLOYMENT_START}}` (joining
+  date), `{{LAST_DATE}}` (case last-working-day), `{{DESIGNATION}}`, `{{SETTLEMENT_TERMS_LINE}}` (the per-case
+  salary/deductions sentence, free text seeded with the template wording). Employee: father's name (S/O),
+  age (prefilled from Form-1 DOB), residential address (Form-1 current), signature. The **₹10,00,000** penalty
+  is static; the witness + Second-Party (company) signature lines render **blank** for wet signing.
+- **SEPARATION** (Separation Agreement & Release) — `{{COMPANY_NAME}}`, `{{HR_NAME}}` (was "[KIRAN THAKUR, HR
+  MANAGER]"); the **"[INSERT WHEREAS CLAUSE(S)…]" placeholder line is dropped** (v1). HR-at-send:
+  `{{RESIGNED_DATE}}`, `{{EMPLOYMENT_AGREEMENT_DATE}}`, `{{GARDEN_LEAVE_START}}` (the "26th September 2025"
+  slot), `{{PAYMENT_AMOUNT}}` (free text — HR controls the exact wording), company-car/plate default `[NA]`.
+  Employee: residential address, Place (default "Hyderabad"), Date (auto), signature. The **₹2,00,000** penalty
+  + Telangana/Hyderabad governing-law clauses are static; the company signature line is **blank**.
+- Edited prefills are stamped into the **PDF only** — never written back to Form data.
+
+**Flow.** `POST /employees/{id}/offboarding/documents/send {documents:[{type, hrValues}]}` — HR
+(onboarding-scope), the case must be **APPROVED** (`409` if PENDING_APPROVAL/none); **per-type idempotency**
+like the agreements pack (create only the not-yet-sent selected types; `409` on a full duplicate); required
+`hrValues` validated per type. The employee reads + signs under `/me/offboarding/{type}` (workspace,
+scroll-to-consent + prefilled fields + fresh `SignatureCapture`); `POST /me/offboarding/{type}/complete`
+(PENDING **or** REVISION_REQUESTED only) renders + stores the PDF at
+`companies/{cid}/employees/{eid}/offboarding/{type}.pdf` (**stable key — resubmission overwrites**), sets
+SUBMITTED, notifies the sending HR (durable row + push), audits `OFFBOARDING_DOC_SUBMITTED`. HR then
+`POST …/{type}/verify` → VERIFIED or `POST …/{type}/send-back {note}` → REVISION_REQUESTED (the note reaches
+the employee, who re-signs and resubmits). Notifications fire controller-after-commit, best-effort.
+
+**Clearance** (`offboarding_clearance`, one per case, **HR-only — the employee never has an endpoint**). A
+digital version of the Off-Boarding Clearance form: the employee-details header (prefilled from the record),
+the five sections (HR/Clearance, IT Access, IT Asset Return, ERM, Data Verification) as yes/no + remarks
+(asset return is a single "returned"), the Final IT Sign-Off, and the **Final Status** (Approved / Pending /
+On Hold). `GET|PUT /employees/{id}/offboarding/clearance` — a `PUT` upserts the checklist and **regenerates**
+the clearance PDF (all Name & Sign / Date lines render blank for wet signing); audited `OFFBOARDING_CLEARANCE_SAVED`.
+The clearance structure lives once in `ClearanceSpec` (drives the form, the stored keys, and the PDF).
+
+**Access.** Document READ (`GET …/offboarding/documents`) shares the record read's gating
+(HR/COMPANY_ADMIN/SUPER_ADMIN); every write + the entire clearance are **HR, case-scoped**; the employee's
+`/me/offboarding` is EMPLOYEE-only over their own approved case. New audit events: `OFFBOARDING_DOCS_SENT`,
+`OFFBOARDING_DOC_SUBMITTED`, `OFFBOARDING_DOC_VERIFIED`, `OFFBOARDING_DOC_SENT_BACK`, `OFFBOARDING_CLEARANCE_SAVED`.
+
+**UI (stage 2).** The HR Offboarding panel grows a **Documents** section (send dialog with per-case field
+expansion, a per-document status timeline with verify/send-back + downloads) and a **Clearance** checklist
+dialog. The workspace gains an **Offboarding** section beside Agreements (presence-conditional, pending-count
+badge) → list → per-document read-and-sign with the revision panel (HR's note + re-sign/resubmit).
 
 ---
 
@@ -532,10 +588,14 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
 - **NotificationType**: `EMPLOYEE_ONBOARDED`, `EMPLOYEE_SUBMITTED`, `APPROVAL_REQUESTED`,
   `EMPLOYEE_APPROVED`, `EMPLOYEE_REJECTED`, `LEAVE_REQUESTED` _(§8b — Manager bell on a leave submission)_,
   `AGREEMENT_COMPLETED` _(§3.5 — durable record for the sending HR when an agreement is signed)_,
-  `OFFBOARDING_INITIATED` _(§3.6 → hierarchy)_, `OFFBOARDING_APPROVED`, `OFFBOARDING_REJECTED` _(§3.6 → HR)_
+  `OFFBOARDING_INITIATED` _(§3.6 → hierarchy)_, `OFFBOARDING_APPROVED`, `OFFBOARDING_REJECTED` _(§3.6 → HR)_,
+  `OFFBOARDING_DOC_SUBMITTED` _(§3.6 stage 2 → sending HR)_
 - **EmployeeAgreementType** _(§3.5)_: `AUP`, `NDA`, `NOTICE_PERIOD`
 - **AgreementStatus** _(§3.5)_: `PENDING`, `COMPLETED`
 - **OffboardingStatus** _(§3.6)_: `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `CANCELLED` _(`COMPLETED` in stage 3)_
+- **OffboardingDocType** _(§3.6 stage 2)_: `EXIT_FORMALITIES`, `SETTLEMENT`, `SEPARATION`
+- **OffboardingDocStatus** _(§3.6 stage 2)_: `PENDING`, `SUBMITTED`, `VERIFIED`, `REVISION_REQUESTED`
+- **ClearanceFinalStatus** _(§3.6 stage 2)_: `APPROVED`, `PENDING`, `ON_HOLD`
 
 ---
 

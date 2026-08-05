@@ -84,6 +84,10 @@ public class SecurityConfig {
                     // cancel (POST, below) stay HR-only under the /employees/** catch-all.
                     .requestMatchers(HttpMethod.GET, "/employees/*/offboarding")
                     .hasAnyRole("HR", "COMPANY_ADMIN", "SUPER_ADMIN")
+                    // Offboarding documents READ (§3.6 stage 2) shares the record read's gating; the clearance
+                    // read + all writes stay HR-only under the /employees/** catch-all below.
+                    .requestMatchers(HttpMethod.GET, "/employees/*/offboarding/documents")
+                    .hasAnyRole("HR", "COMPANY_ADMIN", "SUPER_ADMIN")
                     .requestMatchers(HttpMethod.POST, "/employees/*/credentials")
                     .hasAnyRole("HR", "COMPANY_ADMIN")
                     // Form-2 edit at onboard (§3.2): HR (own onboarded) + SUPER_ADMIN (cross-company);

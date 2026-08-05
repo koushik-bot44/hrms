@@ -19,3 +19,20 @@ export const OFFBOARDING_STATUS_LABELS = {
   REJECTED: 'Rejected',
   CANCELLED: 'Cancelled',
 } as const;
+
+/** The three offboarding document types, in send order, with titles (§3.6 stage 2). */
+export const OFFBOARDING_DOC_TYPES = ['EXIT_FORMALITIES', 'SETTLEMENT', 'SEPARATION'] as const;
+
+export const OFFBOARDING_DOC_TITLES: Record<(typeof OFFBOARDING_DOC_TYPES)[number], string> = {
+  EXIT_FORMALITIES: 'Separation & Exit Formalities',
+  SETTLEMENT: 'Settlement Agreement',
+  SEPARATION: 'Employee Separation Agreement and Release',
+};
+
+/** Per-document status labels for the timeline. */
+export const OFFBOARDING_DOC_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'To sign',
+  SUBMITTED: 'Submitted — awaiting HR',
+  VERIFIED: 'Verified',
+  REVISION_REQUESTED: 'Sent back',
+};

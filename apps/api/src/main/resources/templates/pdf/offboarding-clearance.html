@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"><head><meta charset="utf-8"/>
+<style>
+  /*
+   * The HR-side offboarding Clearance form (§3.6 stage 2). Same reserved letterhead + footer slots as
+   * agreement.html so a future per-company letterhead drop-in covers offboarding too. Checkboxes are drawn
+   * with CSS boxes (font-glyph-independent): a filled box = checked. All Name and Sign / Date lines render
+   * BLANK for wet signing.
+   */
+  @page {
+    size: A4;
+    margin: 2.7cm 1.7cm 2.1cm 1.7cm;
+    @top-center { content: element(letterhead); }
+    @bottom-center { content: element(footer); }
+  }
+  body { font-family:"Helvetica","Arial",sans-serif; font-size:10px; color:#000; line-height:1.45; }
+  #letterhead { position: running(letterhead); height:1.7cm; width:100%; }
+  #footer { position: running(footer); width:100%; text-align:center; font-size:7.5px; color:#999;
+            border-top:0.5px solid #ddd; padding-top:3px; }
+  .brand { text-align:center; font-weight:bold; font-size:12px; }
+  .brand .addr { display:block; font-size:7.5px; font-weight:normal; color:#333; margin-top:1px; }
+  h1.title { text-align:center; font-size:14px; font-weight:bold; margin:12px 0 2px; text-transform:uppercase; }
+  .subtitle { text-align:center; font-size:9px; color:#333; margin-bottom:12px; }
+  h2 { font-size:11px; font-weight:bold; margin:14px 0 4px; }
+  table.details { width:100%; border-collapse:collapse; margin-bottom:6px; }
+  table.details td { padding:3px 6px; font-size:10px; }
+  table.details td.k { font-weight:bold; width:32%; }
+  table.chk { width:100%; border-collapse:collapse; margin-top:4px; }
+  table.chk th, table.chk td { border:0.75px solid #000; padding:4px 6px; font-size:9px; vertical-align:top; }
+  table.chk th { background:#eee; text-align:left; }
+  table.chk td.c { text-align:center; width:9%; }
+  table.chk td.r { width:34%; }
+  .box { display:inline-block; width:9px; height:9px; border:1px solid #000; }
+  .box.on { background:#000; }
+  .signline { margin-top:14px; font-size:10px; }
+  .status { margin-top:8px; font-size:10px; }
+  .status .opt { margin-right:18px; }
+</style></head>
+<body>
+<div id="letterhead"><!-- reserved header band --></div>
+<div id="footer" th:text="${footerText}">CONFIDENTIAL</div>
+
+<div class="brand"><span th:text="${companyName}">SCREATIVES SOFTWARE SERVICES</span><span class="addr" th:text="${companyAddress}"></span></div>
+
+<h1 class="title">Employee Off-Boarding Clearance Form</h1>
+<div class="subtitle">(HR &amp; IT Data Verification)</div>
+
+<h2>1. Employee Details</h2>
+<table class="details">
+  <tr><td class="k">Employee Name:</td><td th:text="${d_name}"></td></tr>
+  <tr><td class="k">Employee ID:</td><td th:text="${d_employeeId}"></td></tr>
+  <tr><td class="k">Department:</td><td th:text="${d_department}"></td></tr>
+  <tr><td class="k">Designation:</td><td th:text="${d_designation}"></td></tr>
+  <tr><td class="k">Manager Name:</td><td th:text="${d_manager}"></td></tr>
+  <tr><td class="k">Last Working Day:</td><td th:text="${d_lastWorkingDay}"></td></tr>
+</table>
+
+<div th:each="section,ss : ${sections}">
+  <h2 th:text="${(ss.index + 2)} + '. ' + ${section.title}">2. Section</h2>
+  <table class="chk">
+    <tr>
+      <th>Item</th>
+      <th class="c" th:text="${section.returned} ? 'Returned' : 'Yes'">Yes</th>
+      <th class="c" th:if="${!section.returned}">No</th>
+      <th class="r">Remarks</th>
+    </tr>
+    <tr th:each="row : ${section.rows}">
+      <td th:text="${row.label}">Item</td>
+      <td class="c"><span th:classappend="${row.yes} ? ' on' : ''" class="box"></span></td>
+      <td class="c" th:if="${!section.returned}"><span th:classappend="${row.no} ? ' on' : ''" class="box"></span></td>
+      <td class="r" th:text="${row.remarks}"></td>
+    </tr>
+  </table>
+</div>
+
+<div class="signline">
+  Final IT Sign-Off: All access revoked and data verified as per policy:
+  <span class="box" th:classappend="${finalSignoffYes} ? ' on' : ''"></span> Yes
+  <span class="box" th:classappend="${finalSignoffNo} ? ' on' : ''"></span> No
+</div>
+<div class="signline">IT Representative Name &amp; Sign: ____________________ Date: ________</div>
+<div class="signline">Manager Confirmation: Data handover and knowledge transfer complete.</div>
+<div class="signline">Manager Name &amp; Sign: ____________________ Date: ________</div>
+
+<h2>Final Clearance Status</h2>
+<div class="status">
+  <span class="opt"><span class="box" th:classappend="${statusApproved} ? ' on' : ''"></span> Approved</span>
+  <span class="opt"><span class="box" th:classappend="${statusPending} ? ' on' : ''"></span> Pending</span>
+  <span class="opt"><span class="box" th:classappend="${statusOnHold} ? ' on' : ''"></span> On Hold</span>
+</div>
+<div class="signline">Authorized Signatory: ____________________ Date: ________</div>
+<div class="signline">HR Representative Name &amp; Sign: ____________________ Date: ________</div>
+
+</body></html>
