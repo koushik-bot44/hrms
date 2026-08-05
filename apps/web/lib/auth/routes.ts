@@ -4,14 +4,17 @@ import { buildCompanyPath } from '@/lib/company-url';
 /**
  * The landing path for a session (Stage 2 — tenant-scoped URLs). Company-scoped areas live under the
  * company's slug (`/{companySlug}/…`); platform roles stay top-level. Same EMPLOYEE principal, two homes
- * (Stage 6): a PASSWORD (credentialed) sign-in lands in the employee PORTAL, an OTP sign-in in the
- * ONBOARDING area — both slugged. A company-scoped session with no slug (shouldn't happen for an
- * authenticated principal) falls back to /login.
+ * (Stage 6): a CREDENTIALED employee (has a mailbox) lands in the employee PORTAL / workspace — where mail,
+ * agreements and offboarding live — while an employee still onboarding (no mailbox yet) lands in the
+ * ONBOARDING area. We key off the MAILBOX, not the auth method: an approved employee who signs in via OTP
+ * still belongs in their workspace (matching WorkspaceShell's own mailbox gate) — otherwise offboarding /
+ * agreements sent to them would be invisible, stranding them in onboarding. A company-scoped session with
+ * no slug (shouldn't happen for an authenticated principal) falls back to /login.
  */
 export function homePathForSession(session: Session): string {
   const slug = session.companySlug;
   if (session.type === 'EMPLOYEE') {
-    const area = session.authMethod === 'PASSWORD' ? 'workspace' : 'employee';
+    const area = session.mailAddress ? 'workspace' : 'employee';
     return slug ? buildCompanyPath(slug, `/${area}`) : '/login';
   }
   switch (session.role) {
