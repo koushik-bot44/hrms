@@ -418,6 +418,23 @@ export type LetterPreview = { bodyHtml: string };
 /** HR issues (or previews) a letter with the typed field values (+ gender for Experience). */
 export type IssueLetterRequest = { hrValues: Record<string, string>; gender?: LetterGender | null };
 
+/** One row in the HR letter-requests inbox (§3.6) — the employee's identity + the request state. */
+export type HrLetterRequestRow = Omit<
+  Required<Schemas['HrLetterRequestRow']>,
+  'employeeCode' | 'employeeName' | 'note' | 'requestedAt' | 'resolvedAt'
+> & {
+  employeeCode: string | null;
+  employeeName: string | null;
+  note: string | null;
+  requestedAt: string | null;
+  resolvedAt: string | null;
+};
+
+/** The HR's letter-requests inbox: all letter requests routed to them + the open count (nav badge). */
+export type HrLetterRequestsResponse = Omit<Required<Schemas['HrLetterRequestsResponse']>, 'requests'> & {
+  requests: HrLetterRequestRow[];
+};
+
 // The HR approve/reject outcome (§3.3). On approve: employeeCode minted + team/manager set. On reject:
 // all of these are null (the employee joined no team) — so override every one as nullable.
 export type DecisionResult = Omit<

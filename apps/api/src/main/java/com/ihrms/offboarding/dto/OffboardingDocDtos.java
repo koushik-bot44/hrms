@@ -171,4 +171,22 @@ public final class OffboardingDocDtos {
 
   /** The substituted letter body HTML for the HR preview dialog (before issuing). */
   public record LetterPreview(String bodyHtml) {}
+
+  // --- HR letter-requests inbox (§3.6) --------------------------------------
+
+  /** One row in the HR's letter-requests inbox — the employee's identity + the request state. */
+  public record HrLetterRequestRow(
+      String id,
+      String employeeId,
+      String employeeCode,
+      String employeeName,
+      com.ihrms.domain.enums.RequestType type,
+      String title,
+      String note,
+      com.ihrms.domain.enums.RequestStatus status,
+      String requestedAt,
+      String resolvedAt) {}
+
+  /** The HR's letter-requests inbox: all letter requests routed to them + the pending count (nav badge). */
+  public record HrLetterRequestsResponse(List<HrLetterRequestRow> requests, long pendingCount) {}
 }

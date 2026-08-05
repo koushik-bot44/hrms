@@ -104,6 +104,11 @@ public class AuthService {
         || !encoder.matches(req.password(), employee.getPasswordHash())) {
       throw unauthorized("Invalid email or password");
     }
+    // §3.6: a deactivated account cannot sign in via the credentialed workspace door either. The password
+    // already proved identity, so a clear message is fine (not an enumeration leak).
+    if (employee.isAccountDeactivated()) {
+      throw deactivated();
+    }
     return issue(Principals.of(employee), PASSWORD);
   }
 
@@ -134,7 +139,8 @@ public class AuthService {
     Employee employee = employees.findByEmail(email).orElse(null);
     if (employee != null
         && nameMatches(employee.getFullName(), fullName)
-        && !authz.isCompanyDeleted(employee.getCompanyId())) {
+        && !authz.isCompanyDeleted(employee.getCompanyId())
+        && !employee.isAccountDeactivated()) { // §3.6: withhold the OTP from a deactivated account (enum-safe)
       String otp = issueOtp(email);
       employee.setOtpHash(encoder.encode(otp));
       employee.setOtpExpiresAt(Instant.now().plusSeconds(ttl));
@@ -161,11 +167,10 @@ public class AuthService {
     if (employee == null || authz.isCompanyDeleted(employee.getCompanyId())) {
       throw unauthorized("Invalid or expired code");
     }
-    // §3.6 stage 3: an OFFBOARDED employee's account is deactivated — no new session (a clear message here,
-    // since the OTP already proved identity).
-    if (employee.getStatus() == com.ihrms.domain.enums.EmployeeStatus.OFFBOARDED) {
-      throw new org.springframework.web.server.ResponseStatusException(
-          org.springframework.http.HttpStatus.FORBIDDEN, "This account has been deactivated");
+    // §3.6: a DEACTIVATED account gets no new session (a clear message — the OTP flow proved identity).
+    // Note: this is the deactivation flag, NOT status==OFFBOARDED — completion alone no longer blocks login.
+    if (employee.isAccountDeactivated()) {
+      throw deactivated();
     }
     assertOtpValid(employee.getOtpHash(), employee.getOtpExpiresAt(), req.otp());
     employee.setOtpHash(null); // single-use
@@ -217,10 +222,10 @@ public class AuthService {
     if (employee == null || authz.isCompanyDeleted(employee.getCompanyId())) {
       throw unauthorized("Session no longer valid");
     }
-    // §3.6 stage 3: an OFFBOARDED employee's session dies at the next refresh (deactivated account).
-    if (employee.getStatus() == com.ihrms.domain.enums.EmployeeStatus.OFFBOARDED) {
-      throw new org.springframework.web.server.ResponseStatusException(
-          org.springframework.http.HttpStatus.FORBIDDEN, "This account has been deactivated");
+    // §3.6: a DEACTIVATED employee's session dies at the next refresh (covers BOTH doors — the refresh
+    // preserves the original authMethod). Completion alone (status==OFFBOARDED) no longer ends the session.
+    if (employee.isAccountDeactivated()) {
+      throw deactivated();
     }
     return Principals.of(employee);
   }
@@ -262,5 +267,10 @@ public class AuthService {
 
   private ResponseStatusException unauthorized(String message) {
     return new ResponseStatusException(HttpStatus.UNAUTHORIZED, message);
+  }
+
+  /** The clear, shared denial for a deactivated account (§3.6) — both doors + refresh. */
+  private ResponseStatusException deactivated() {
+    return new ResponseStatusException(HttpStatus.FORBIDDEN, "This account has been deactivated");
   }
 }

@@ -27,6 +27,8 @@ import com.ihrms.domain.repository.RequestDocumentRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.FieldKind;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.FieldView;
+import com.ihrms.offboarding.dto.OffboardingDocDtos.HrLetterRequestRow;
+import com.ihrms.offboarding.dto.OffboardingDocDtos.HrLetterRequestsResponse;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.IssueLetterRequest;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.LetterGender;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.LetterIssuePanel;
@@ -43,10 +45,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -138,7 +142,7 @@ public class OffboardingLetterService {
   @Transactional(readOnly = true)
   public LettersView myLetters(IhrmsPrincipal.Employee emp) {
     Employee employee = employees.findById(emp.employeeId()).orElseThrow();
-    OffboardingCase c = approvedCase(employee.getId());
+    OffboardingCase c = caseForLetters(employee.getId());
     return new LettersView(gateOpen(c), letterViews(employee.getId(), c));
   }
 
@@ -150,9 +154,12 @@ public class OffboardingLetterService {
   public LetterView requestLetter(IhrmsPrincipal.Employee emp, RequestType type, String note, String ip) {
     requireLetterType(type);
     Employee employee = employees.findById(emp.employeeId()).orElseThrow();
-    OffboardingCase c = approvedCase(employee.getId());
+    if (employee.isAccountDeactivated()) { // §3.6: defense-in-depth (a deactivated employee can't sign in)
+      throw conflict("This account has been deactivated");
+    }
+    OffboardingCase c = caseForLetters(employee.getId());
     if (c == null) {
-      throw conflict("No approved offboarding case");
+      throw conflict("No offboarding case");
     }
     if (!gateOpen(c)) {
       throw conflict(
@@ -217,9 +224,9 @@ public class OffboardingLetterService {
       IhrmsPrincipal.User actor, String employeeId, RequestType type, IssueLetterRequest body, String ip) {
     Employee employee = loadOwn(actor, employeeId);
     requireLetterType(type);
-    OffboardingCase c = approvedCase(employeeId);
+    OffboardingCase c = caseForLetters(employeeId);
     if (c == null) {
-      throw conflict("This employee has no approved offboarding case");
+      throw conflict("This employee has no offboarding case");
     }
     if (!gateOpen(c)) {
       throw conflict(GATE_MSG);
@@ -277,6 +284,47 @@ public class OffboardingLetterService {
   }
 
   // --- HR record panel: the upload fulfil FALLBACK --------------------------
+
+  /**
+   * The HR's letter-requests inbox (§3.6) — every letter request ROUTED to this HR (the routee field, the same
+   * scope the accountant queue uses), pending first, + the open count for the nav badge. Both-layer gated: the
+   * URL/@PreAuthorize gates to HR and this query scopes to the acting HR's own id, so a foreign HR sees none.
+   */
+  @Transactional(readOnly = true)
+  public HrLetterRequestsResponse hrLetterRequests(IhrmsPrincipal.User actor) {
+    List<DocumentRequest> rows =
+        requests.findByAccountantUserIdAndRequestTypeInOrderByCreatedAtDesc(actor.userId(), LETTER_TYPES);
+    Map<String, Employee> byId =
+        rows.isEmpty()
+            ? Map.of()
+            : employees
+                .findAllById(rows.stream().map(DocumentRequest::getEmployeeId).collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(Employee::getId, e -> e));
+    List<HrLetterRequestRow> out =
+        rows.stream()
+            .map(
+                r -> {
+                  Employee e = byId.get(r.getEmployeeId());
+                  return new HrLetterRequestRow(
+                      r.getId(),
+                      r.getEmployeeId(),
+                      e == null ? null : e.getEmployeeCode(),
+                      e == null ? null : e.getFullName(),
+                      r.getRequestType(),
+                      title(r.getRequestType()),
+                      r.getNote(),
+                      r.getStatus(),
+                      iso(r.getCreatedAt()),
+                      iso(r.getResolvedAt()));
+                })
+            // Pending first; the source is already newest-first and the sort is stable, so recency holds.
+            .sorted(Comparator.comparingInt(row -> OPEN.contains(row.status()) ? 0 : 1))
+            .toList();
+    long pending =
+        requests.countByAccountantUserIdAndRequestTypeInAndStatusIn(actor.userId(), LETTER_TYPES, OPEN);
+    return new HrLetterRequestsResponse(out, pending);
+  }
 
   /** Resolve the letter request id for the upload fulfilment handshake (HR own-scope). 404 if none. */
   @Transactional(readOnly = true)
@@ -509,27 +557,25 @@ public class OffboardingLetterService {
 
   // --- internals: gate + scoping --------------------------------------------
 
-  /** The gate: the case is APPROVED and every SENT offboarding document exists and is VERIFIED. */
+  /**
+   * The gate: the case is APPROVED or COMPLETED and every SENT offboarding document exists and is VERIFIED.
+   * COMPLETED is allowed because letters are the PRIMARY post-completion action (§3.6) — completion no longer
+   * blocks the letter flow.
+   */
   private boolean gateOpen(OffboardingCase c) {
-    if (c == null || c.getStatus() != OffboardingStatus.APPROVED) {
+    if (c == null
+        || (c.getStatus() != OffboardingStatus.APPROVED
+            && c.getStatus() != OffboardingStatus.COMPLETED)) {
       return false;
     }
     List<OffboardingDocument> docs = offboardingDocs.findByCaseId(c.getId());
     return !docs.isEmpty() && docs.stream().allMatch(d -> d.getStatus() == OffboardingDocStatus.VERIFIED);
   }
 
-  /** The employee's APPROVED case (issuing / requesting / the gate) — null otherwise. */
-  private OffboardingCase approvedCase(String employeeId) {
-    return cases
-        .findFirstByEmployeeIdAndStatusIn(
-            employeeId, List.of(OffboardingStatus.PENDING_APPROVAL, OffboardingStatus.APPROVED))
-        .filter(c -> c.getStatus() == OffboardingStatus.APPROVED)
-        .orElse(null);
-  }
-
   /**
-   * The case whose letters we READ (the HR record panel) — the latest APPROVED or COMPLETED case, so issued
-   * letters remain visible after the employee is offboarded (retention).
+   * The case the letter flow operates on — the latest APPROVED or COMPLETED case. Post-completion (COMPLETED)
+   * is included so the employee can still request and HR can still issue: completion is the primary letters
+   * scenario, and issued letters remain visible after the employee is offboarded (retention).
    */
   private OffboardingCase caseForLetters(String employeeId) {
     OffboardingCase c = cases.findFirstByEmployeeIdOrderByInitiatedAtDesc(employeeId).orElse(null);

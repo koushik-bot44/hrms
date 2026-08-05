@@ -107,7 +107,9 @@ public final class ReviewDtos {
       List<AgreementSummary> agreements,
       // The Offer Letter (§3.2): status + dates only. Null when there is no offer (a pre-feature employee).
       // The PDF (which carries the salary) is fetched via GET /employees/{id}/offer/pdf (role-gated), NOT here.
-      OfferRecordView offer) {}
+      OfferRecordView offer,
+      // Whether HR has deactivated the account (§3.6) — the "Deactivated" chip shown alongside OFFBOARDED.
+      boolean accountDeactivated) {}
 
   /** The plaintext sensitive values returned by the explicit, audited reveal action (§6). */
   public record RevealedSensitive(

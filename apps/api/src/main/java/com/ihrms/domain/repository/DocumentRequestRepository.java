@@ -31,4 +31,12 @@ public interface DocumentRequestRepository
   /** Whether an open (SUBMITTED/IN_PROGRESS) request of this type already exists — one-open-per-type. */
   boolean existsByEmployeeIdAndRequestTypeAndStatusIn(
       String employeeId, RequestType type, Collection<RequestStatus> statuses);
+
+  /** The HR's letter-request inbox (§3.6): requests routed to this HR (the routee field), newest first. */
+  List<DocumentRequest> findByAccountantUserIdAndRequestTypeInOrderByCreatedAtDesc(
+      String accountantUserId, Collection<RequestType> types);
+
+  /** The pending-count for the HR letters nav badge — open letter requests routed to this HR. */
+  long countByAccountantUserIdAndRequestTypeInAndStatusIn(
+      String accountantUserId, Collection<RequestType> types, Collection<RequestStatus> statuses);
 }

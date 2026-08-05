@@ -10,6 +10,7 @@ import {
 } from '@/lib/contract';
 import { getOffboardingCase, initiateOffboarding, cancelOffboarding } from '@/lib/api/offboarding';
 import { completeOffboarding } from '@/lib/api/offboarding-docs';
+import { deactivateAccount } from '@/lib/api/review';
 import { useApiQuery, useApiMutation } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,7 +40,14 @@ const STATUS_TONE: Record<OffboardingStatus, 'warning' | 'success' | 'danger' | 
  * note / cancelled) with a Cancel action while it is active. Stage-2 document controls will mount inside this
  * panel's body later — it is intentionally a Card with room to grow.
  */
-export function OffboardingPanel({ employeeId }: { employeeId: string }) {
+export function OffboardingPanel({
+  employeeId,
+  deactivated = false,
+}: {
+  employeeId: string;
+  /** Whether HR has deactivated the account (§3.6) — drives the "Deactivated" chip + hides the button. */
+  deactivated?: boolean;
+}) {
   const caseKey = ['offboarding-case', employeeId] as const;
   const { data, isLoading } = useApiQuery(caseKey, (signal) => getOffboardingCase(employeeId, signal));
   const current = data?.offboarding ?? null;
@@ -53,16 +61,19 @@ export function OffboardingPanel({ employeeId }: { employeeId: string }) {
           Offboarding
         </CardTitle>
         {current ? (
-          <Badge variant={STATUS_TONE[current.status]}>
-            {OFFBOARDING_STATUS_LABELS[current.status]}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={STATUS_TONE[current.status]}>
+              {OFFBOARDING_STATUS_LABELS[current.status]}
+            </Badge>
+            {deactivated ? <Badge variant="danger">Deactivated</Badge> : null}
+          </div>
         ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : current?.status === 'COMPLETED' ? (
-          <CompletedCase employeeId={employeeId} caseView={current} />
+          <CompletedCase employeeId={employeeId} caseView={current} deactivated={deactivated} />
         ) : active && current ? (
           <ActiveCase employeeId={employeeId} caseView={current} caseKey={caseKey} />
         ) : (
@@ -201,7 +212,15 @@ function ActiveCase({
 }
 
 /** A completed case (employee is OFFBOARDED) — the retained record: summary + documents + letters, read-only. */
-function CompletedCase({ employeeId, caseView }: { employeeId: string; caseView: OffboardingCaseView }) {
+function CompletedCase({
+  employeeId,
+  caseView,
+  deactivated,
+}: {
+  employeeId: string;
+  caseView: OffboardingCaseView;
+  deactivated: boolean;
+}) {
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">
@@ -217,8 +236,73 @@ function CompletedCase({ employeeId, caseView }: { employeeId: string; caseView:
           <p className="mt-1 text-muted-foreground">{caseView.completionNote}</p>
         ) : null}
       </div>
+
+      {/* Deactivation is the SEPARATE auth step (§3.6): completion no longer blocks login — the employee can
+          still sign in to request/download their letters until HR explicitly deactivates the account. */}
+      <div className="rounded-md border p-3 text-sm">
+        {deactivated ? (
+          <p className="flex items-center gap-2 text-muted-foreground">
+            <Ban className="size-4" /> The account is deactivated — the employee can no longer sign in.
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-muted-foreground">
+              The employee can still sign in to request and download their letters. Deactivate to disable
+              both sign-in doors.
+            </p>
+            <DeactivateButton employeeId={employeeId} />
+          </div>
+        )}
+      </div>
+
       <OffboardingDocuments employeeId={employeeId} />
     </div>
+  );
+}
+
+/** Deactivate the offboarded employee's account — a confirm dialog; disables BOTH portals. One-way (§3.6). */
+function DeactivateButton({ employeeId }: { employeeId: string }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = React.useState(false);
+  const deactivate = useApiMutation(() => deactivateAccount(employeeId), {
+    successMessage: 'Account deactivated',
+    onSuccess: () => {
+      setOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ['hr-record', employeeId] });
+      void queryClient.invalidateQueries({ queryKey: ['offboarding-case', employeeId] });
+    },
+  });
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="destructive" size="sm">
+          <Ban className="size-4" />
+          Deactivate account
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Deactivate this account?</DialogTitle>
+          <DialogDescription>
+            The employee will no longer be able to sign in to either the onboarding portal or the workspace,
+            and any active session ends at its next refresh. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={deactivate.isPending}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => deactivate.mutate()}
+            disabled={deactivate.isPending}
+          >
+            {deactivate.isPending ? 'Deactivating…' : 'Deactivate account'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -247,8 +331,9 @@ function CompleteButton({ employeeId, caseKey }: { employeeId: string; caseKey: 
         <DialogHeader>
           <DialogTitle>Complete this offboarding?</DialogTitle>
           <DialogDescription>
-            The employee becomes offboarded and can no longer sign in. Every sent document must be verified
-            first. This cannot be undone.
+            The employee becomes offboarded — dropped from active rosters and reports. They can still sign in
+            to request and download their letters until you deactivate the account. Every sent document must be
+            verified first. This cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">

@@ -829,7 +829,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_1"];
+        get: operations["list_2"];
         put?: never;
         post: operations["onboard"];
         delete?: never;
@@ -1030,6 +1030,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees/{id}/credentials": {
         parameters: {
             query?: never;
@@ -1085,7 +1101,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_2"];
+        get: operations["list_3"];
         put?: never;
         post: operations["create_1"];
         delete?: never;
@@ -1133,7 +1149,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_3"];
+        get: operations["list_4"];
         put?: never;
         post: operations["create_2"];
         delete?: never;
@@ -1149,7 +1165,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_4"];
+        get: operations["list_5"];
         put?: never;
         post: operations["onboard_1"];
         delete?: never;
@@ -1502,6 +1518,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requests/hr-letters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3382,6 +3414,7 @@ export interface components {
             aadhaarNumber?: string;
             agreements?: components["schemas"]["AgreementSummary"][];
             offer?: components["schemas"]["OfferRecordView"];
+            accountDeactivated?: boolean;
         };
         OfferRecordView: {
             /** @enum {string} */
@@ -3461,6 +3494,25 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+        };
+        HrLetterRequestRow: {
+            id?: string;
+            employeeId?: string;
+            employeeCode?: string;
+            employeeName?: string;
+            /** @enum {string} */
+            type?: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
+            title?: string;
+            note?: string;
+            /** @enum {string} */
+            status?: "SUBMITTED" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
+            requestedAt?: string;
+            resolvedAt?: string;
+        };
+        HrLetterRequestsResponse: {
+            requests?: components["schemas"]["HrLetterRequestRow"][];
+            /** Format: int64 */
+            pendingCount?: number;
         };
         /** @description The VAPID public key the browser needs to create a PushSubscription. */
         PublicKeyResponse: {
@@ -5756,7 +5808,7 @@ export interface operations {
             };
         };
     };
-    list_1: {
+    list_2: {
         parameters: {
             query: {
                 search?: string;
@@ -6114,6 +6166,26 @@ export interface operations {
             };
         };
     };
+    deactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     assignCredentials: {
         parameters: {
             query?: never;
@@ -6192,7 +6264,7 @@ export interface operations {
             };
         };
     };
-    list_2: {
+    list_3: {
         parameters: {
             query?: {
                 deleted?: boolean;
@@ -6286,7 +6358,7 @@ export interface operations {
             };
         };
     };
-    list_3: {
+    list_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -6334,7 +6406,7 @@ export interface operations {
             };
         };
     };
-    list_4: {
+    list_5: {
         parameters: {
             query: {
                 search?: string;
@@ -7055,6 +7127,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MyRequestsPage"];
+                };
+            };
+        };
+    };
+    list_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HrLetterRequestsResponse"];
                 };
             };
         };

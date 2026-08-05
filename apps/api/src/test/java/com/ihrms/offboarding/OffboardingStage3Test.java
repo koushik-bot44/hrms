@@ -53,7 +53,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Offboarding stage 3 (§3.6): the letters (gate + routing + fulfil), HR completion (all-docs-verified →
- * case COMPLETED + employee OFFBOARDED + terminal), the OFFBOARDED login gate, and the reconciliation.
+ * case COMPLETED + employee OFFBOARDED + terminal), the DEACTIVATION login gate (completion no longer blocks
+ * login — deactivation does, §3.6), and the reconciliation.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -202,17 +203,22 @@ class OffboardingStage3Test {
         .andExpect(status().isConflict());
   }
 
-  // --- login gate -----------------------------------------------------------
+  // --- login gate (deactivation, NOT completion — the corrected §3.6 rule) --
 
   @Test
-  void offboardedEmployeeCannotRefresh() {
+  void offboardedStillRefreshesUntilDeactivated() {
     String refresh = tokens.issueRefresh(
         new IhrmsPrincipal.Employee(emp.getId(), emp.getEmployeeCode(), emp.getEmail(), companyA), "OTP");
     // Before offboarding: refresh works.
     assertThat(auth.refresh(refresh)).isNotNull();
 
-    // Offboard and try again -> deactivated.
+    // Completion sets OFFBOARDED but NO LONGER ends the session — the employee can still refresh.
     emp.setStatus(EmployeeStatus.OFFBOARDED);
+    employees.save(emp);
+    assertThat(auth.refresh(refresh)).isNotNull();
+
+    // DEACTIVATION is what kills the session.
+    emp.setAccountDeactivated(true);
     employees.save(emp);
     assertThatThrownBy(() -> auth.refresh(refresh))
         .isInstanceOf(ResponseStatusException.class)

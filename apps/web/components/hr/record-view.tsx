@@ -137,6 +137,7 @@ export function RecordView({
               </Button>
             ) : null}
             <StatusBadge status={record.status} />
+            {record.accountDeactivated ? <Badge variant="danger">Deactivated</Badge> : null}
             {editable && onDecided ? (
               <ApproveDecisionActions
                 employeeId={record.id}
@@ -347,7 +348,7 @@ export function RecordView({
       ) : null}
 
       {enableOffboarding && (record.status === 'APPROVED' || record.status === 'OFFBOARDED') ? (
-        <OffboardingPanel employeeId={record.id} />
+        <OffboardingPanel employeeId={record.id} deactivated={record.accountDeactivated} />
       ) : null}
     </div>
   );

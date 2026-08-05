@@ -24,6 +24,14 @@ export function getOfferPdfUrl(id: string): Promise<PresignedView> {
   return apiFetch<PresignedView>(`/employees/${encodeURIComponent(id)}/offer/pdf`);
 }
 
+/**
+ * HR deactivates an offboarded employee's account (§3.6) — disables BOTH sign-in doors. One-way; 409 if
+ * already deactivated. Allowed only once the employee is OFFBOARDED (the record's Offboarding panel gates it).
+ */
+export function deactivateAccount(id: string): Promise<void> {
+  return apiFetch<void>(`/employees/${encodeURIComponent(id)}/deactivate`, { method: 'POST' });
+}
+
 /** §3.4 records lookup by employee ID (code) — resolves approved employees only. */
 export function lookupEmployeeByCode(
   employeeCode: string,

@@ -110,7 +110,8 @@ public class EmployeeRecordAssembler {
         agreementService.forRecord(employee.getId()),
         // Offer status only (§3.2) — the PDF with the salary is fetched via the role-gated endpoint, so this
         // is safe even though the shared record view reaches manager/accountant too.
-        offerService.recordOffer(employee.getId()));
+        offerService.recordOffer(employee.getId()),
+        employee.isAccountDeactivated());
   }
 
   /** Plaintext sensitive values (PLAIN mode) — the caller audits this as a reveal. */

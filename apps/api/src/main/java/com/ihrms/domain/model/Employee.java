@@ -102,6 +102,24 @@ public class Employee {
   @Column(name = "credentialsAssignedAt")
   private Instant credentialsAssignedAt;
 
+  // --- Account deactivation (§3.6) — the AUTH consequence, decoupled from OFFBOARDED status ---
+
+  /**
+   * Whether the account is deactivated: a deactivated employee cannot authenticate through EITHER door (the
+   * OTP path and the credentialed workspace login), and existing sessions die at the next refresh. Set by HR's
+   * explicit "Deactivate account" action AFTER an offboarding completes — NOT by completion itself (§3.6).
+   * One-way in v1 (no reactivate). Distinct from {@code status == OFFBOARDED}, which drives reconciliation only.
+   */
+  @Column(name = "accountDeactivated", nullable = false)
+  private boolean accountDeactivated;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "deactivatedAt")
+  private Instant deactivatedAt;
+
+  @Column(name = "deactivatedByUserId")
+  private String deactivatedByUserId;
+
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "createdAt", nullable = false, updatable = false)

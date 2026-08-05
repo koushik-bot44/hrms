@@ -1,6 +1,7 @@
 package com.ihrms.review;
 
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.offboarding.OffboardingService;
 import com.ihrms.onboarding.OfferService;
 import com.ihrms.onboarding.dto.OnboardingDtos.PresignedView;
 import com.ihrms.review.dto.ReviewDtos.ApproveRequest;
@@ -38,12 +39,17 @@ public class ReviewController {
   private final ReviewService review;
   private final EmployeeCredentialsService credentials;
   private final OfferService offers;
+  private final OffboardingService offboarding;
 
   public ReviewController(
-      ReviewService review, EmployeeCredentialsService credentials, OfferService offers) {
+      ReviewService review,
+      EmployeeCredentialsService credentials,
+      OfferService offers,
+      OffboardingService offboarding) {
     this.review = review;
     this.credentials = credentials;
     this.offers = offers;
+    this.offboarding = offboarding;
   }
 
   // Reading a record is open to the onboarding HR, the employee's COMPANY_ADMIN (same company), OR the
@@ -126,6 +132,18 @@ public class ReviewController {
     review.pushApprovalToManager(id);
     review.regeneratePdfsQuietly(id);
     return result;
+  }
+
+  /**
+   * HR deactivates an offboarded employee's account (§3.6) — disables BOTH sign-in doors. Own case scope;
+   * allowed only once the employee is OFFBOARDED; 409 if already deactivated. One-way (no reactivate).
+   */
+  @PostMapping("/{id}/deactivate")
+  public void deactivate(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    offboarding.deactivate(actor, id, request.getRemoteAddr());
   }
 
   /** HR terminally REJECTS a verified application (§3.3). */

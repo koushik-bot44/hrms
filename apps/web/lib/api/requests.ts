@@ -1,5 +1,6 @@
 import type {
   DocumentRequestView,
+  HrLetterRequestsResponse,
   MyRequestsPage,
   PresignedView,
   RequestUpload,
@@ -20,7 +21,15 @@ import { putWithProgress } from './onboarding';
 export const requestKeys = {
   mine: (page: number) => ['requests', 'me', page] as const,
   team: (status: string, page: number) => ['requests', 'team', status, page] as const,
+  hrLetters: () => ['requests', 'hr-letters'] as const,
 };
+
+// --- HR letter-requests inbox (§3.6) ---------------------------------------
+
+/** The HR's offboarding-letter requests (all routed to them) + the pending count for the nav badge. */
+export function getHrLetterRequests(signal?: AbortSignal): Promise<HrLetterRequestsResponse> {
+  return apiFetch<HrLetterRequestsResponse>('/requests/hr-letters', { signal });
+}
 
 // --- Employee --------------------------------------------------------------
 

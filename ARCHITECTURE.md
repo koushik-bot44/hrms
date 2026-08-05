@@ -482,8 +482,11 @@ Issued letters persist in a **sibling table `offboarding_letters`** (`caseId`, `
 stable per-type storage key `…/offboarding/{TYPE}.pdf` — re-issue overwrites — `issuedBy/At`), **not** an
 extension of `offboarding_documents`: a letter is `ISSUED`, not fill/verify, and the "all documents VERIFIED"
 gates scan every `offboarding_documents` row expecting `VERIFIED`, so a letter there would jam them. Audit
-`LETTER_ISSUED`; the employee is notified (mail + push) after commit. **Gate:** issuable only when the case is
-APPROVED and **every sent document is VERIFIED** (`409` otherwise).
+`LETTER_ISSUED`; the employee is notified (mail + push) after commit. **Gate:** requestable/issuable when the
+case is **APPROVED _or_ COMPLETED**, **every sent document is VERIFIED**, and the requester is not deactivated
+(`409` otherwise). COMPLETED is included because letters are the **primary post-completion action** — completing
+an offboarding no longer blocks the letter flow (that was the earlier bug where the employee-side UI looked "not
+built": post-completion the case left APPROVED and every letter call 409'd).
 
 The employee may still **request** a letter first (a `DocumentRequest` with the `RELIEVING_LETTER`/
 `EXPERIENCE_LETTER` type, **routed to the case HR** via the `accountantUserId` routee field — the generic
@@ -494,18 +497,37 @@ prefix). Both paths coexist. Endpoints: `GET/POST /me/offboarding/letters[/{type
 read), `GET /employees/{id}/offboarding/letters` (record issue panel), `POST
 /employees/{id}/offboarding/letters/{type}/{preview,issue}` (HR generate) + `.../{type}/begin-upload|resolve`
 (HR upload fallback). The `employeeId` on Relieving/Experience is the minted code (offboarding follows
-approval). Source templates live at `resources/offboarding/source/` (originals) + `…/text/` (extracted).
+approval). Source templates live at `resources/offboarding/source/` (originals) + `…/text/` (extracted). The
+workspace Offboarding section shows the request buttons **always** (disabled with a reason until the documents
+are verified, not hidden), and remains fully functional post-completion for a not-deactivated employee.
+
+**HR Requests inbox.** `GET /requests/hr-letters` lists every letter request **routed to the acting HR** (the
+same routee scope — `accountantUserId == HR` — the Accountant queue uses; a foreign HR sees none), pending
+first, + the open `pendingCount`. The HR-area **Requests** nav tab surfaces it with a **pending-count badge**
+(the hierarchy-badge pattern), each row **deep-linking to that employee's record** where the existing
+Offboarding panel issues the letter (no duplicated dialog). This is HR's letters inbox; the Accountant's
+`/requests/team` inbox is untouched.
 
 **Completion.** `POST /employees/{id}/offboarding/complete {note?}` — HR, case-scoped, at their judgment (no
 date gate). Requires the case APPROVED and **all sent documents VERIFIED** (the letters are HR's judgment, not
 gated). One transaction: case → `COMPLETED` (`completedBy/at/note`), `Employee.status → OFFBOARDED`; audits
-`OFFBOARDING_COMPLETED`. After commit: the employee gets a final notice + the team manager is notified. The
-record (forms, PDFs, agreements, offboarding docs, letters, audit) is **retained** and stays visible to the
-same viewers; the record shows the `OFFBOARDED` status badge and the panel keeps the completed case read-only.
+`OFFBOARDING_COMPLETED`. After commit: the employee gets a final notice + the team manager is notified.
+**Completion is reconciliation + retention only — it does NOT disable login** (so the employee can still sign
+in to request/download their letters). The record (forms, PDFs, agreements, offboarding docs, letters, audit)
+is **retained** and stays visible to the same viewers; the record shows the `OFFBOARDED` badge, and the panel
+keeps the letters flow live + offers the Deactivate action.
 
-**Login gate.** An `OFFBOARDED` employee cannot authenticate — `AuthService.verifyOtp` (token issue) and
-`refresh` both reject with **"This account has been deactivated"** (403). An access token lives out its short
-TTL, so existing sessions die at the next refresh. Staff sessions are unaffected.
+**Account deactivation (the auth gate — decoupled from completion, §3.6).** The login block lives on a separate
+`Employee.accountDeactivated` flag, set by HR's explicit **"Deactivate account"** action (record Offboarding
+panel, once the case is COMPLETED / status OFFBOARDED). `POST /employees/{id}/deactivate` — HR case-scope,
+allowed only while OFFBOARDED, **idempotent-guarded** (`409` if already deactivated), audits
+`ACCOUNT_DEACTIVATED`, **one-way in v1 (no reactivate)**, no employee notice. A deactivated account cannot
+authenticate through **either door** — the OTP path (`requestOtp` withholds the code, `verifyOtp` rejects) and
+the credentialed workspace login (`loginStaff`) — and **both** employee session types die at the next
+`refresh`, all with **"This account has been deactivated"** (403). Staff sessions are unaffected. The record +
+Offboarding panel show a **"Deactivated"** chip alongside `OFFBOARDED`. **Migration (V36):** every
+currently-OFFBOARDED employee is marked `accountDeactivated = true` on deploy so nobody login-blocked under the
+old status-based rule silently regains access; fresh completions after the deploy stay active until the button.
 
 **Reconciliation** (OFFBOARDED is a *new* status, so every `status == APPROVED` filter / `countByStatus(APPROVED)`
 already excludes offboarded employees — most of the sweep is free). Explicit adjustments:

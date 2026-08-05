@@ -2065,7 +2065,7 @@
         "tags": [
           "employees-controller"
         ],
-        "operationId": "list_1",
+        "operationId": "list_2",
         "parameters": [
           {
             "name": "search",
@@ -2693,6 +2693,29 @@
         }
       }
     },
+    "/employees/{id}/deactivate": {
+      "post": {
+        "tags": [
+          "review-controller"
+        ],
+        "operationId": "deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/employees/{id}/credentials": {
       "post": {
         "tags": [
@@ -2816,7 +2839,7 @@
         "tags": [
           "companies-controller"
         ],
-        "operationId": "list_2",
+        "operationId": "list_3",
         "parameters": [
           {
             "name": "deleted",
@@ -2948,7 +2971,7 @@
         "tags": [
           "company-teams-controller"
         ],
-        "operationId": "list_3",
+        "operationId": "list_4",
         "parameters": [
           {
             "name": "companyId",
@@ -3019,7 +3042,7 @@
         "tags": [
           "company-employees-controller"
         ],
-        "operationId": "list_4",
+        "operationId": "list_5",
         "parameters": [
           {
             "name": "companyId",
@@ -4043,6 +4066,26 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/MyRequestsPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/hr-letters": {
+      "get": {
+        "tags": [
+          "hr-letter-requests-controller"
+        ],
+        "operationId": "list_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrLetterRequestsResponse"
                 }
               }
             }
@@ -9092,6 +9135,9 @@
           },
           "offer": {
             "$ref": "#/components/schemas/OfferRecordView"
+          },
+          "accountDeactivated": {
+            "type": "boolean"
           }
         }
       },
@@ -9331,6 +9377,71 @@
           "totalPages": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "HrLetterRequestRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "employeeId": {
+            "type": "string"
+          },
+          "employeeCode": {
+            "type": "string"
+          },
+          "employeeName": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "PAYSLIP",
+              "SALARY_CERTIFICATE",
+              "FORM16",
+              "TAX_DOCUMENT",
+              "OTHER",
+              "RELIEVING_LETTER",
+              "EXPERIENCE_LETTER"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "SUBMITTED",
+              "IN_PROGRESS",
+              "RESOLVED",
+              "CANCELLED"
+            ]
+          },
+          "requestedAt": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "HrLetterRequestsResponse": {
+        "type": "object",
+        "properties": {
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HrLetterRequestRow"
+            }
+          },
+          "pendingCount": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

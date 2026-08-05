@@ -213,6 +213,36 @@ public class OffboardingService {
     return view(c);
   }
 
+  /**
+   * HR deactivates an offboarded employee's account (§3.6) — the AUTH consequence, separate from completion:
+   * once deactivated the employee cannot sign in through EITHER door and existing sessions die at the next
+   * refresh. HR case-scope; allowed only once the employee is OFFBOARDED; idempotent-guarded (409 if already
+   * deactivated). One-way in v1 — there is no reactivate. Audited ACCOUNT_DEACTIVATED. No employee notice
+   * (they cannot see it).
+   */
+  @Transactional
+  public void deactivate(IhrmsPrincipal.User actor, String employeeId, String ip) {
+    Employee employee = loadOwn(actor, employeeId);
+    if (employee.getStatus() != EmployeeStatus.OFFBOARDED) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Only an offboarded employee's account can be deactivated");
+    }
+    if (employee.isAccountDeactivated()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "This account is already deactivated");
+    }
+    employee.setAccountDeactivated(true);
+    employee.setDeactivatedAt(Instant.now());
+    employee.setDeactivatedByUserId(actor.userId());
+    employees.save(employee);
+    audit.record(
+        AuditActor.from(actor),
+        "ACCOUNT_DEACTIVATED",
+        "Employee",
+        employee.getId(),
+        Map.<String, Object>of("employeeId", employee.getId()),
+        ip);
+  }
+
   /** Best-effort after complete commits: notify the employee (final) + the team manager. Never throws. */
   public void notifyAfterComplete(String employeeId) {
     try {
