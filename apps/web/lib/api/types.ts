@@ -870,6 +870,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/{id}/offboarding/letters/{type}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewLetter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding/letters/{type}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["issueLetter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees/{id}/offboarding/letters/{type}/begin-upload": {
         parameters: {
             query?: never;
@@ -2840,10 +2872,11 @@ export interface components {
             /** @enum {string} */
             type?: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
             title?: string;
+            issued?: boolean;
             /** @enum {string} */
-            status?: "SUBMITTED" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
+            requestStatus?: "SUBMITTED" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
             requestedAt?: string;
-            resolvedAt?: string;
+            issuedAt?: string;
             note?: string;
             downloadUrl?: string;
         };
@@ -3026,9 +3059,43 @@ export interface components {
             teamName?: string;
             managerName?: string;
         };
-        LettersView: {
+        FieldView: {
+            key?: string;
+            label?: string;
+            /** @enum {string} */
+            kind?: "TEXT" | "DATE" | "MULTILINE";
+            value?: string;
+            required?: boolean;
+        };
+        LetterIssuePanel: {
             gateOpen?: boolean;
-            letters?: components["schemas"]["LetterView"][];
+            letters?: components["schemas"]["LetterIssueSpec"][];
+        };
+        LetterIssueSpec: {
+            /** @enum {string} */
+            type?: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
+            title?: string;
+            requiresGender?: boolean;
+            fields?: components["schemas"]["FieldView"][];
+            issued?: boolean;
+            issuedAt?: string;
+            downloadUrl?: string;
+            /** @enum {string} */
+            requestStatus?: "SUBMITTED" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
+            requestNote?: string;
+            requestedAt?: string;
+            /** @enum {string} */
+            gender?: "MALE" | "FEMALE";
+        };
+        IssueLetterRequest: {
+            hrValues?: {
+                [key: string]: string;
+            };
+            /** @enum {string} */
+            gender?: "MALE" | "FEMALE";
+        };
+        LetterPreview: {
+            bodyHtml?: string;
         };
         InitiateRequest: {
             reason: string;
@@ -3066,14 +3133,6 @@ export interface components {
             revisionNote?: string;
             sentByName?: string;
             downloadUrl?: string;
-        };
-        FieldView: {
-            key?: string;
-            label?: string;
-            /** @enum {string} */
-            kind?: "TEXT" | "DATE" | "MULTILINE";
-            value?: string;
-            required?: boolean;
         };
         RecordDocuments: {
             documents?: components["schemas"]["DocSummary"][];
@@ -3364,6 +3423,10 @@ export interface components {
             revisionNote?: string;
             downloadUrl?: string;
             employeeFields?: components["schemas"]["FieldView"][];
+        };
+        LettersView: {
+            gateOpen?: boolean;
+            letters?: components["schemas"]["LetterView"][];
         };
         MyAgreementSummary: {
             /** @enum {string} */
@@ -5706,7 +5769,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["LettersView"];
+                    "*/*": components["schemas"]["LetterIssuePanel"];
+                };
+            };
+        };
+    };
+    previewLetter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                type: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["IssueLetterRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterPreview"];
+                };
+            };
+        };
+    };
+    issueLetter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                type: "PAYSLIP" | "SALARY_CERTIFICATE" | "FORM16" | "TAX_DOCUMENT" | "OTHER" | "RELIEVING_LETTER" | "EXPERIENCE_LETTER";
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["IssueLetterRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterIssuePanel"];
                 };
             };
         };
@@ -7587,7 +7704,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["LettersView"];
+                    "*/*": components["schemas"]["LetterIssuePanel"];
                 };
             };
         };

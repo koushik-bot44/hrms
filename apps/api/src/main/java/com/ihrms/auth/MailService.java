@@ -195,6 +195,20 @@ public class MailService {
     log.info("Offboarding-doc-returned email dispatched to {}", email);
   }
 
+  /** Offboarding letter issued notice to the employee (§3.6 stage 3) — no bell feed, so mail + push. */
+  public void sendOffboardingLetterIssued(String email, String fullName, String letterTitle) {
+    String body =
+        (fullName == null ? "Hello" : "Hello " + fullName)
+            + " — your \""
+            + letterTitle
+            + "\" is ready. Sign in to your workspace to download it.";
+    if (noSmtp()) {
+      log.warn("[DEV OFFB LETTER] {} -> {}  (no SMTP configured; logging only)", email, body);
+      return;
+    }
+    log.info("Offboarding-letter-issued email dispatched to {} ({})", email, letterTitle);
+  }
+
   /** Final offboarding-complete notice to the (now offboarded) employee (§3.6 stage 3). */
   public void sendOffboardingCompleted(String email, String fullName) {
     String body =

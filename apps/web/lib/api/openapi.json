@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:8090",
+      "url": "http://127.0.0.1:8090",
       "description": "Generated server url"
     }
   ],
@@ -2234,7 +2234,119 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/LettersView"
+                  "$ref": "#/components/schemas/LetterIssuePanel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/letters/{type}/preview": {
+      "post": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "previewLetter",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PAYSLIP",
+                "SALARY_CERTIFICATE",
+                "FORM16",
+                "TAX_DOCUMENT",
+                "OTHER",
+                "RELIEVING_LETTER",
+                "EXPERIENCE_LETTER"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueLetterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterPreview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/letters/{type}/issue": {
+      "post": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "issueLetter",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PAYSLIP",
+                "SALARY_CERTIFICATE",
+                "FORM16",
+                "TAX_DOCUMENT",
+                "OTHER",
+                "RELIEVING_LETTER",
+                "EXPERIENCE_LETTER"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueLetterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterIssuePanel"
                 }
               }
             }
@@ -4932,7 +5044,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/LettersView"
+                  "$ref": "#/components/schemas/LetterIssuePanel"
                 }
               }
             }
@@ -7344,7 +7456,10 @@
           "title": {
             "type": "string"
           },
-          "status": {
+          "issued": {
+            "type": "boolean"
+          },
+          "requestStatus": {
             "type": "string",
             "enum": [
               "SUBMITTED",
@@ -7356,7 +7471,7 @@
           "requestedAt": {
             "type": "string"
           },
-          "resolvedAt": {
+          "issuedAt": {
             "type": "string"
           },
           "note": {
@@ -7992,7 +8107,32 @@
           }
         }
       },
-      "LettersView": {
+      "FieldView": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "TEXT",
+              "DATE",
+              "MULTILINE"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LetterIssuePanel": {
         "type": "object",
         "properties": {
           "gateOpen": {
@@ -8001,8 +8141,94 @@
           "letters": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/LetterView"
+              "$ref": "#/components/schemas/LetterIssueSpec"
             }
+          }
+        }
+      },
+      "LetterIssueSpec": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PAYSLIP",
+              "SALARY_CERTIFICATE",
+              "FORM16",
+              "TAX_DOCUMENT",
+              "OTHER",
+              "RELIEVING_LETTER",
+              "EXPERIENCE_LETTER"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "requiresGender": {
+            "type": "boolean"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldView"
+            }
+          },
+          "issued": {
+            "type": "boolean"
+          },
+          "issuedAt": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
+          },
+          "requestStatus": {
+            "type": "string",
+            "enum": [
+              "SUBMITTED",
+              "IN_PROGRESS",
+              "RESOLVED",
+              "CANCELLED"
+            ]
+          },
+          "requestNote": {
+            "type": "string"
+          },
+          "requestedAt": {
+            "type": "string"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "MALE",
+              "FEMALE"
+            ]
+          }
+        }
+      },
+      "IssueLetterRequest": {
+        "type": "object",
+        "properties": {
+          "hrValues": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "MALE",
+              "FEMALE"
+            ]
+          }
+        }
+      },
+      "LetterPreview": {
+        "type": "object",
+        "properties": {
+          "bodyHtml": {
+            "type": "string"
           }
         }
       },
@@ -8124,31 +8350,6 @@
           },
           "downloadUrl": {
             "type": "string"
-          }
-        }
-      },
-      "FieldView": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "TEXT",
-              "DATE",
-              "MULTILINE"
-            ]
-          },
-          "value": {
-            "type": "string"
-          },
-          "required": {
-            "type": "boolean"
           }
         }
       },
@@ -9075,6 +9276,20 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/FieldView"
+            }
+          }
+        }
+      },
+      "LettersView": {
+        "type": "object",
+        "properties": {
+          "gateOpen": {
+            "type": "boolean"
+          },
+          "letters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LetterView"
             }
           }
         }

@@ -109,22 +109,66 @@ public final class OffboardingDocDtos {
   /** A small summary for the record panel (status + download). */
   public record ClearanceSummary(ClearanceFinalStatus finalStatus, String downloadUrl) {}
 
-  // --- Letters (§3.6 stage 3; reuse the document-requests machinery) ---------
+  // --- Letters (§3.6 stage 3) -----------------------------------------------
+  //
+  // The Relieving + Experience letters are COMPANY-ISSUED: HR generates the PDF from single-source templates
+  // (the employee never fills or signs them). The employee may still REQUEST a letter (a DocumentRequest
+  // routed to the case HR); issuing resolves an open request, or issues directly. The upload fulfil path
+  // remains as an HR fallback on a request.
 
+  /** The gender selector on the Experience letter — drives the pronoun + title (Mr./Ms.) tokens. */
+  public enum LetterGender {
+    MALE,
+    FEMALE
+  }
+
+  /**
+   * One letter as the employee/record sees it. {@code issued} is true once HR has generated the PDF (or the
+   * upload fallback fulfilled the request); {@code downloadUrl} is present whenever there is a file to
+   * download (the issued PDF, or an upload-fulfilled request). {@code requestStatus} is the employee's request
+   * state (null if never requested).
+   */
   public record LetterView(
       com.ihrms.domain.enums.RequestType type,
       String title,
-      com.ihrms.domain.enums.RequestStatus status,
+      boolean issued,
+      com.ihrms.domain.enums.RequestStatus requestStatus,
       String requestedAt,
-      String resolvedAt,
+      String issuedAt,
       String note,
       String downloadUrl) {}
 
   /**
-   * The letters area for the workspace/record. {@code gateOpen} is true only when every sent offboarding
-   * document is VERIFIED — the letters can be requested only then.
+   * The employee's letters area. {@code gateOpen} is true only when every sent offboarding document is
+   * VERIFIED — the employee can request letters only then. Issued letters appear regardless of a request.
    */
   public record LettersView(boolean gateOpen, List<LetterView> letters) {}
 
   public record RequestLetterRequest(String note) {}
+
+  /**
+   * One letter on the HR record's Issue panel: the prefilled field form, whether a gender selector is needed
+   * (Experience), the already-issued state (+ download), and any open/resolved employee request.
+   */
+  public record LetterIssueSpec(
+      com.ihrms.domain.enums.RequestType type,
+      String title,
+      boolean requiresGender,
+      List<FieldView> fields,
+      boolean issued,
+      String issuedAt,
+      String downloadUrl,
+      com.ihrms.domain.enums.RequestStatus requestStatus,
+      String requestNote,
+      String requestedAt,
+      LetterGender gender) {}
+
+  /** The HR record's letters section: the gate state + the two letters with their issue specs. */
+  public record LetterIssuePanel(boolean gateOpen, List<LetterIssueSpec> letters) {}
+
+  /** HR issues (or previews) a letter with the typed field values (+ gender for Experience). */
+  public record IssueLetterRequest(Map<String, String> hrValues, LetterGender gender) {}
+
+  /** The substituted letter body HTML for the HR preview dialog (before issuing). */
+  public record LetterPreview(String bodyHtml) {}
 }

@@ -444,16 +444,34 @@ dialog. The workspace gains an **Offboarding** section beside Agreements (presen
 badge) → list → per-document read-and-sign with the revision panel (HR's note + re-sign/resubmit).
 
 #### Stage 3 — letters, completion & reconciliation
-**Letters** (Relieving + Experience). These **reuse the HR/Accounts document-requests machinery** — a letter
-is a `DocumentRequest` with the new `RELIEVING_LETTER`/`EXPERIENCE_LETTER` type, **routed to the case HR**
-(stored in the `accountantUserId` routee field, not an accountant), and HR fulfils via the **same
-upload→resolve handshake** (files land under the `requests` prefix; the resolve notifies the employee). The
-generic requests type-picker excludes the two letter types and the generic `submit` rejects them (they are
-requested only from the offboarding flow). **Gate:** requestable only when the case is APPROVED and **every
-sent document is VERIFIED** (`409` otherwise); at most one open request per type. `GET/POST
-/me/offboarding/letters[/{type}]` (employee) + `GET /employees/{id}/offboarding/letters` (record) +
-`.../letters/{type}/begin-upload|resolve` (HR fulfil). Letterhead templates are still pending (HR uploads a
-prepared PDF for now).
+**Letters** (Relieving + Experience) are **COMPANY-ISSUED, generated PDFs**: HR generates each from a
+single-source template — the employee never fills or signs them. Rendering + storage reuse the
+agreements/documents pipeline (a fragment under `resources/offboarding/text/{relieving,experience}.html` →
+token substitution → the `agreement.html` letterhead-slot template → openhtmltopdf), so the future
+per-company letterhead covers letters automatically. HR issues from the record panel: a **prefilled field
+form** (letter date, resignation/relieving dates, tenure, designation — seeded from the record + case), a
+**he/she selector** on the Experience letter that drives the cased pronoun + title (`Mr.`/`Ms.`) tokens, a
+**preview** (the substituted body before issuing), then **Issue**. `{{COMPANY_NAME}}` renders the joining
+company and `{{HR_NAME}}` the issuing HR (replacing the template's SCREATIVE / signatory); the Relieving
+full-and-final-settlement sentence stays static text.
+
+Issued letters persist in a **sibling table `offboarding_letters`** (`caseId`, `type`, `hrValues` JSONB,
+stable per-type storage key `…/offboarding/{TYPE}.pdf` — re-issue overwrites — `issuedBy/At`), **not** an
+extension of `offboarding_documents`: a letter is `ISSUED`, not fill/verify, and the "all documents VERIFIED"
+gates scan every `offboarding_documents` row expecting `VERIFIED`, so a letter there would jam them. Audit
+`LETTER_ISSUED`; the employee is notified (mail + push) after commit. **Gate:** issuable only when the case is
+APPROVED and **every sent document is VERIFIED** (`409` otherwise).
+
+The employee may still **request** a letter first (a `DocumentRequest` with the `RELIEVING_LETTER`/
+`EXPERIENCE_LETTER` type, **routed to the case HR** via the `accountantUserId` routee field — the generic
+requests picker excludes the two types and generic `submit` rejects them). **Issuing resolves an open request**
+(it binds the generated PDF so the requests flow sees it fulfilled) or issues directly with no request; the
+**upload→resolve handshake remains as an HR fallback** on an open request (a prepared PDF under the `requests`
+prefix). Both paths coexist. Endpoints: `GET/POST /me/offboarding/letters[/{type}]` (employee request +
+read), `GET /employees/{id}/offboarding/letters` (record issue panel), `POST
+/employees/{id}/offboarding/letters/{type}/{preview,issue}` (HR generate) + `.../{type}/begin-upload|resolve`
+(HR upload fallback). The `employeeId` on Relieving/Experience is the minted code (offboarding follows
+approval). Source templates live at `resources/offboarding/source/` (originals) + `…/text/` (extracted).
 
 **Completion.** `POST /employees/{id}/offboarding/complete {note?}` — HR, case-scoped, at their judgment (no
 date gate). Requires the case APPROVED and **all sent documents VERIFIED** (the letters are HR's judgment, not

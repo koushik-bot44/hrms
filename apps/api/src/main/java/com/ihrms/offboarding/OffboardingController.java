@@ -171,16 +171,47 @@ public class OffboardingController {
     return clearance.save(actor, id, body, request.getRemoteAddr());
   }
 
-  // --- Stage 3: letters (read + fulfil, reusing the requests handshake) ------
+  // --- Stage 3: letters -----------------------------------------------------
+  //
+  // The Relieving + Experience letters are COMPANY-ISSUED: HR generates the PDF (below). The employee may have
+  // requested one first (reusing the requests machinery); issuing resolves an open request. The upload fulfil
+  // handshake remains as a fallback on a request.
 
+  /** The letters section for the record panel — the gate + the two issue specs. HR/COMPANY_ADMIN/SUPER_ADMIN. */
   @GetMapping("/letters")
   @PreAuthorize("hasAnyRole('HR','COMPANY_ADMIN','SUPER_ADMIN')")
-  public com.ihrms.offboarding.dto.OffboardingDocDtos.LettersView recordLetters(
+  public com.ihrms.offboarding.dto.OffboardingDocDtos.LetterIssuePanel recordLetters(
       @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
-    return letters.forRecord(actor, id);
+    return letters.issuePanel(actor, id);
   }
 
-  /** HR fulfil step 1 — a presigned PUT for the letter file (reuses the document-requests handshake). */
+  /** HR previews the substituted letter text before issuing (a dry run — not gated, not persisted). */
+  @PostMapping("/letters/{type}/preview")
+  @PreAuthorize("hasRole('HR')")
+  public com.ihrms.offboarding.dto.OffboardingDocDtos.LetterPreview previewLetter(
+      @PathVariable String id,
+      @PathVariable com.ihrms.domain.enums.RequestType type,
+      @RequestBody(required = false) com.ihrms.offboarding.dto.OffboardingDocDtos.IssueLetterRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor) {
+    return letters.preview(actor, id, type, body);
+  }
+
+  /** HR issues (generates) the letter PDF — gated on all documents VERIFIED; resolves an open request. */
+  @PostMapping("/letters/{type}/issue")
+  @PreAuthorize("hasRole('HR')")
+  public com.ihrms.offboarding.dto.OffboardingDocDtos.LetterIssuePanel issueLetter(
+      @PathVariable String id,
+      @PathVariable com.ihrms.domain.enums.RequestType type,
+      @RequestBody(required = false) com.ihrms.offboarding.dto.OffboardingDocDtos.IssueLetterRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    com.ihrms.offboarding.dto.OffboardingDocDtos.LetterIssuePanel result =
+        letters.issue(actor, id, type, body, request.getRemoteAddr());
+    letters.notifyAfterIssue(id, type); // post-commit, best-effort
+    return result;
+  }
+
+  /** HR fulfil step 1 (upload fallback) — a presigned PUT for the letter file (requests handshake). */
   @PostMapping("/letters/{type}/begin-upload")
   @PreAuthorize("hasRole('HR')")
   public com.ihrms.requests.dto.DocumentRequestDtos.RequestUpload beginLetterUpload(
@@ -193,10 +224,10 @@ public class OffboardingController {
     return requestFulfilment.requestDocumentUpload(actor, reqId, body, request.getRemoteAddr());
   }
 
-  /** HR fulfil step 2 — bind the uploaded file + mark the request RESOLVED (notifies the employee). */
+  /** HR fulfil step 2 (upload fallback) — bind the uploaded file + mark the request RESOLVED. */
   @PostMapping("/letters/{type}/resolve")
   @PreAuthorize("hasRole('HR')")
-  public com.ihrms.offboarding.dto.OffboardingDocDtos.LettersView resolveLetter(
+  public com.ihrms.offboarding.dto.OffboardingDocDtos.LetterIssuePanel resolveLetter(
       @PathVariable String id,
       @PathVariable com.ihrms.domain.enums.RequestType type,
       @jakarta.validation.Valid @RequestBody com.ihrms.requests.dto.DocumentRequestDtos.ResolveRequest body,
@@ -204,6 +235,6 @@ public class OffboardingController {
       HttpServletRequest request) {
     String reqId = letters.letterRequestId(actor, id, type);
     requestFulfilment.resolve(actor, reqId, body, request.getRemoteAddr());
-    return letters.forRecord(actor, id);
+    return letters.issuePanel(actor, id);
   }
 }

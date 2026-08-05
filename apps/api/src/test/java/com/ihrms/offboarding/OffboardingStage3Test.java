@@ -170,7 +170,7 @@ class OffboardingStage3Test {
             .filter(l -> l.get("type").asText().equals("RELIEVING_LETTER"))
             .findFirst()
             .orElseThrow();
-    assertThat(relieving.get("status").asText()).isEqualTo("RESOLVED");
+    assertThat(relieving.get("requestStatus").asText()).isEqualTo("RESOLVED");
     assertThat(relieving.get("downloadUrl").asText()).startsWith("http");
   }
 

@@ -47,6 +47,7 @@ export function OffboardingLetters() {
             <p className="text-sm text-muted-foreground">Request your letters — HR will prepare each one.</p>
             {LETTER_TYPES.map((type) => {
               const existing = data.letters.find((l) => l.type === type);
+              const ready = !!existing?.downloadUrl; // issued PDF (or an upload-fulfilled request)
               return (
                 <div key={type} className={cn(surface('subtle'), 'flex flex-wrap items-center gap-3 p-3')}>
                   <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -54,9 +55,7 @@ export function OffboardingLetters() {
                     {REQUEST_TYPE_LABELS[type]}
                   </span>
                   {existing ? (
-                    <Badge variant={existing.status === 'RESOLVED' ? 'success' : 'warning'}>
-                      {existing.status === 'RESOLVED' ? 'Ready' : 'Requested'}
-                    </Badge>
+                    <Badge variant={ready ? 'success' : 'warning'}>{ready ? 'Ready' : 'Requested'}</Badge>
                   ) : null}
                   {existing?.downloadUrl ? (
                     <a href={existing.downloadUrl} target="_blank" rel="noreferrer">

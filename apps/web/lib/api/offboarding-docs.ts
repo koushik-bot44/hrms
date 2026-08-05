@@ -1,6 +1,9 @@
 import type {
   ClearanceView,
   CompleteOffboardingDocResult,
+  IssueLetterRequest,
+  LetterIssuePanel,
+  LetterPreview,
   LetterView,
   LettersView,
   MyOffboardingDocSummary,
@@ -115,15 +118,39 @@ export function requestLetter(type: RequestType, note?: string): Promise<LetterV
   });
 }
 
-/** HR / record viewers: the letter requests + gate state for the record panel. */
-export function getRecordLetters(employeeId: string, signal?: AbortSignal): Promise<LettersView> {
-  return apiFetch<LettersView>(
+/** HR / record viewers: the two letters' issue specs (prefilled fields, issued state) + the gate. */
+export function getRecordLetters(employeeId: string, signal?: AbortSignal): Promise<LetterIssuePanel> {
+  return apiFetch<LetterIssuePanel>(
     `/employees/${encodeURIComponent(employeeId)}/offboarding/letters`,
     { signal },
   );
 }
 
-/** HR fulfil step 1: presigned PUT for the letter file, then upload the bytes; returns the draft doc id. */
+/** HR: preview the substituted letter text before issuing (a dry run — not gated, not persisted). */
+export function previewLetter(
+  employeeId: string,
+  type: RequestType,
+  body: IssueLetterRequest,
+): Promise<LetterPreview> {
+  return apiFetch<LetterPreview>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/letters/${type}/preview`,
+    { method: 'POST', body },
+  );
+}
+
+/** HR: issue (generate) the letter PDF — gated on all documents verified; resolves an open request. */
+export function issueLetter(
+  employeeId: string,
+  type: RequestType,
+  body: IssueLetterRequest,
+): Promise<LetterIssuePanel> {
+  return apiFetch<LetterIssuePanel>(
+    `/employees/${encodeURIComponent(employeeId)}/offboarding/letters/${type}/issue`,
+    { method: 'POST', body },
+  );
+}
+
+/** HR fulfil step 1 (upload fallback): presigned PUT for the letter file, then upload; returns draft id. */
 export async function uploadLetterFile(
   employeeId: string,
   type: RequestType,
@@ -144,13 +171,13 @@ export async function uploadLetterFile(
   return presign.documentId;
 }
 
-/** HR fulfil step 2: bind the uploaded file + mark RESOLVED (notifies the employee). */
+/** HR fulfil step 2 (upload fallback): bind the uploaded file + mark RESOLVED (notifies the employee). */
 export function resolveLetter(
   employeeId: string,
   type: RequestType,
   documentIds: string[],
-): Promise<LettersView> {
-  return apiFetch<LettersView>(
+): Promise<LetterIssuePanel> {
+  return apiFetch<LetterIssuePanel>(
     `/employees/${encodeURIComponent(employeeId)}/offboarding/letters/${type}/resolve`,
     { method: 'POST', body: { documentIds } },
   );

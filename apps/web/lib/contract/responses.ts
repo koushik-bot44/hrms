@@ -335,17 +335,47 @@ export type ClearanceView = Omit<
   downloadUrl: string | null;
 };
 
-/** An offboarding letter request (§3.6 stage 3); downloadUrl is null until fulfilled. */
+/**
+ * One offboarding letter as the employee/record sees it (§3.6 stage 3). Letters are COMPANY-ISSUED: {@code
+ * issued} is true once HR has generated the PDF; {@code downloadUrl} is present whenever there is a file
+ * (the issued PDF, or an upload-fulfilled request). {@code requestStatus} is the employee's request state.
+ */
 export type LetterView = Omit<
   Required<Schemas['LetterView']>,
-  'requestedAt' | 'resolvedAt' | 'note' | 'downloadUrl'
+  'requestStatus' | 'requestedAt' | 'issuedAt' | 'note' | 'downloadUrl'
 > & {
+  requestStatus: NonNullable<Schemas['LetterView']['requestStatus']> | null;
   requestedAt: string | null;
-  resolvedAt: string | null;
+  issuedAt: string | null;
   note: string | null;
   downloadUrl: string | null;
 };
 export type LettersView = { gateOpen: boolean; letters: LetterView[] };
+
+/** The he/she selector on the Experience letter (drives the pronoun + Mr./Ms. tokens). */
+export type LetterGender = NonNullable<Schemas['LetterIssueSpec']['gender']>;
+
+/** One letter on the HR record's Issue panel: the prefilled field form + the issued/request state. */
+export type LetterIssueSpec = Omit<
+  Required<Schemas['LetterIssueSpec']>,
+  'fields' | 'issuedAt' | 'downloadUrl' | 'requestStatus' | 'requestNote' | 'requestedAt' | 'gender'
+> & {
+  fields: OffboardingFieldView[];
+  issuedAt: string | null;
+  downloadUrl: string | null;
+  requestStatus: NonNullable<Schemas['LetterIssueSpec']['requestStatus']> | null;
+  requestNote: string | null;
+  requestedAt: string | null;
+  gender: LetterGender | null;
+};
+
+export type LetterIssuePanel = { gateOpen: boolean; letters: LetterIssueSpec[] };
+
+/** The substituted letter body HTML for the HR preview dialog (before issuing). */
+export type LetterPreview = { bodyHtml: string };
+
+/** HR issues (or previews) a letter with the typed field values (+ gender for Experience). */
+export type IssueLetterRequest = { hrValues: Record<string, string>; gender?: LetterGender | null };
 
 // The HR approve/reject outcome (§3.3). On approve: employeeCode minted + team/manager set. On reject:
 // all of these are null (the employee joined no team) — so override every one as nullable.
