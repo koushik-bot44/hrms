@@ -231,6 +231,39 @@ export type CompleteAgreementResult = Omit<Required<Schemas['CompleteAgreementRe
 export type AgreementType = NonNullable<Schemas['AgreementSummary']['type']>;
 export type AgreementStatus = NonNullable<Schemas['AgreementSummary']['status']>;
 
+// --- Offboarding (§Offboarding, stage 1) -----------------------------------
+
+export type OffboardingStatus = NonNullable<Schemas['OffboardingCaseView']['status']>;
+
+/** The full case for the HR record panel; decision/cancel fields are null until they happen. */
+export type OffboardingCaseView = Omit<
+  Required<Schemas['OffboardingCaseView']>,
+  'decidedByName' | 'decidedAt' | 'decisionNote' | 'cancelledByName' | 'cancelledAt' | 'cancelNote'
+> & {
+  decidedByName: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  cancelledByName: string | null;
+  cancelledAt: string | null;
+  cancelNote: string | null;
+};
+
+/** The record-panel read: the latest case, or null when the employee has none. */
+export type OffboardingCaseResponse = { offboarding: OffboardingCaseView | null };
+
+/** A pending case in the HIERARCHY inbox — the minimal-PII contract (no PII beyond name/code). */
+export type HierarchyPendingRow = Omit<
+  Required<Schemas['HierarchyPendingRow']>,
+  'employeeName' | 'employeeCode' | 'companyName' | 'teamName'
+> & {
+  employeeName: string | null;
+  employeeCode: string | null;
+  companyName: string | null;
+  teamName: string | null;
+};
+
+export type OffboardingDecisionResult = Required<Schemas['OffboardingDecisionResult']>;
+
 // The HR approve/reject outcome (§3.3). On approve: employeeCode minted + team/manager set. On reject:
 // all of these are null (the employee joined no team) — so override every one as nullable.
 export type DecisionResult = Omit<

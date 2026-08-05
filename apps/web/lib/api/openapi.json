@@ -1791,6 +1791,85 @@
         }
       }
     },
+    "/hierarchy/offboarding/{caseId}/reject": {
+      "post": {
+        "tags": [
+          "hierarchy-offboarding-controller"
+        ],
+        "operationId": "reject_1",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OffboardingDecisionResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hierarchy/offboarding/{caseId}/approve": {
+      "post": {
+        "tags": [
+          "hierarchy-offboarding-controller"
+        ],
+        "operationId": "approve_1",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OffboardingDecisionResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/employees": {
       "get": {
         "tags": [
@@ -1909,7 +1988,7 @@
         "tags": [
           "review-controller"
         ],
-        "operationId": "reject_1",
+        "operationId": "reject_2",
         "parameters": [
           {
             "name": "id",
@@ -1937,6 +2016,85 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/DecisionResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/initiate": {
+      "post": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "initiate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OffboardingCaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding/cancel": {
+      "post": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "cancel_2",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OffboardingCaseView"
                 }
               }
             }
@@ -1989,7 +2147,7 @@
         "tags": [
           "review-controller"
         ],
-        "operationId": "approve_1",
+        "operationId": "approve_2",
         "parameters": [
           {
             "name": "id",
@@ -2039,6 +2197,15 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendAgreementsRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Created",
@@ -2938,7 +3105,7 @@
         "tags": [
           "companies-controller"
         ],
-        "operationId": "get_1",
+        "operationId": "get_2",
         "parameters": [
           {
             "name": "id",
@@ -3034,7 +3201,7 @@
         "tags": [
           "company-teams-controller"
         ],
-        "operationId": "get_2",
+        "operationId": "get_3",
         "parameters": [
           {
             "name": "companyId",
@@ -4058,6 +4225,29 @@
         }
       }
     },
+    "/hierarchy/offboarding/pending": {
+      "get": {
+        "tags": [
+          "hierarchy-offboarding-controller"
+        ],
+        "operationId": "pending",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HierarchyPendingRow"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/hierarchy/companies": {
       "get": {
         "tags": [
@@ -4154,6 +4344,36 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/EmployeeRecordView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/offboarding": {
+      "get": {
+        "tags": [
+          "offboarding-controller"
+        ],
+        "operationId": "get_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OffboardingCaseResponse"
                 }
               }
             }
@@ -6403,7 +6623,10 @@
               "EMPLOYEE_APPROVED",
               "EMPLOYEE_REJECTED",
               "LEAVE_REQUESTED",
-              "AGREEMENT_COMPLETED"
+              "AGREEMENT_COMPLETED",
+              "OFFBOARDING_INITIATED",
+              "OFFBOARDING_APPROVED",
+              "OFFBOARDING_REJECTED"
             ]
           },
           "employeeId": {
@@ -6735,6 +6958,33 @@
           }
         }
       },
+      "DecisionRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "maxLength": 1000,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
+      "OffboardingDecisionResult": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "REJECTED",
+              "CANCELLED"
+            ]
+          }
+        }
+      },
       "Form2Request": {
         "required": [
           "designation",
@@ -6930,6 +7180,84 @@
           }
         }
       },
+      "InitiateRequest": {
+        "required": [
+          "lastWorkingDay",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 0,
+            "type": "string"
+          },
+          "lastWorkingDay": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "OffboardingCaseView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "REJECTED",
+              "CANCELLED"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "lastWorkingDay": {
+            "type": "string"
+          },
+          "initiatedByName": {
+            "type": "string"
+          },
+          "initiatedAt": {
+            "type": "string"
+          },
+          "decidedByName": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "decisionNote": {
+            "type": "string"
+          },
+          "cancelledByName": {
+            "type": "string"
+          },
+          "cancelledAt": {
+            "type": "string"
+          },
+          "cancelNote": {
+            "type": "string"
+          },
+          "cancellable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CancelRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "maxLength": 1000,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
       "AssignCredentialsRequest": {
         "required": [
           "localPart"
@@ -6976,6 +7304,22 @@
             "maxLength": 500,
             "minLength": 0,
             "type": "string"
+          }
+        }
+      },
+      "SendAgreementsRequest": {
+        "type": "object",
+        "properties": {
+          "types": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "AUP",
+                "NDA",
+                "NOTICE_PERIOD"
+              ]
+            }
           }
         }
       },
@@ -8335,6 +8679,38 @@
         },
         "description": "Employees stuck at a given pre-approval stage past the threshold."
       },
+      "HierarchyPendingRow": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "employeeName": {
+            "type": "string"
+          },
+          "employeeCode": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "teamName": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "lastWorkingDay": {
+            "type": "string"
+          },
+          "initiatedByName": {
+            "type": "string"
+          },
+          "initiatedAt": {
+            "type": "string"
+          }
+        }
+      },
       "CompaniesResponse": {
         "type": "object",
         "properties": {
@@ -8474,6 +8850,14 @@
           "totalPages": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "OffboardingCaseResponse": {
+        "type": "object",
+        "properties": {
+          "offboarding": {
+            "$ref": "#/components/schemas/OffboardingCaseView"
           }
         }
       },

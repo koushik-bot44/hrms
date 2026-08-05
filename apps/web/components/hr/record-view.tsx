@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { ApproveDecisionActions } from '@/components/hr/approve-decision';
 import { AssignCredentialsDialog } from '@/components/hr/assign-credentials-dialog';
 import { SendAgreementsDialog } from '@/components/hr/send-agreements-dialog';
+import { OffboardingPanel } from '@/components/hr/offboarding-panel';
 import { AGREEMENT_TITLES } from '@/lib/contract';
 import type { AgreementSummary } from '@/lib/contract';
 
@@ -50,6 +51,8 @@ interface RecordViewProps {
   form2EditAction?: React.ReactNode;
   /** Show the HR "Send agreements" action for an APPROVED employee (§Agreements) — HR host only. */
   enableSendAgreements?: boolean;
+  /** Show the HR "Offboarding" panel for an APPROVED employee (§Offboarding) — HR host only. */
+  enableOffboarding?: boolean;
 }
 
 /** The employee record: the four forms + Form 4 uploads + generated PDFs, sensitive values masked. */
@@ -64,6 +67,7 @@ export function RecordView({
   onDecided,
   form2EditAction,
   enableSendAgreements = false,
+  enableOffboarding = false,
 }: RecordViewProps) {
   const { session } = useAuth();
   const canAct = editable && Boolean(onVerify) && Boolean(onSendBack);
@@ -145,10 +149,11 @@ export function RecordView({
                 />
               )
             ) : null}
-            {enableSendAgreements &&
-            record.status === 'APPROVED' &&
-            record.agreements.length === 0 ? (
-              <SendAgreementsDialog employeeId={record.id} />
+            {enableSendAgreements && record.status === 'APPROVED' && record.agreements.length < 3 ? (
+              <SendAgreementsDialog
+                employeeId={record.id}
+                existingTypes={record.agreements.map((a) => a.type)}
+              />
             ) : null}
           </div>
         </CardHeader>
@@ -320,6 +325,10 @@ export function RecordView({
             ))}
           </div>
         </section>
+      ) : null}
+
+      {enableOffboarding && record.status === 'APPROVED' ? (
+        <OffboardingPanel employeeId={record.id} />
       ) : null}
     </div>
   );

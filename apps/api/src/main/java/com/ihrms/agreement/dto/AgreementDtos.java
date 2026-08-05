@@ -22,7 +22,14 @@ public final class AgreementDtos {
       String sentByName,
       String downloadUrl) {}
 
-  /** Result of HR sending the standard pack — the three PENDING agreements. */
+  /**
+   * HR's send selection (§3.5, Rider A): which agreement types to send. Each selected type that the employee
+   * does not already have is created; sending is idempotent per type (already-sent types are skipped), so HR
+   * can send some now and the rest later.
+   */
+  public record SendAgreementsRequest(List<EmployeeAgreementType> types) {}
+
+  /** Result of HR sending the pack — all of the employee's agreements (existing + newly created). */
   public record SendAgreementsResult(List<AgreementSummary> agreements) {}
 
   /** Prefill values for the employee fill screen; edited values are stamped into the PDF only. */

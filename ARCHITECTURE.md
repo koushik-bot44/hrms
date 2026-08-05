@@ -37,7 +37,7 @@ Super Admin
 |------|-------|--------|
 | **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **provision the single Accounts Admin**; **archive (soft-delete) a company and restore it**; **manage teams in any company** (create / rename / reassign HR + Manager + Accountant) and **onboard employees into any company** (selecting company → team → HR); view **all** companies' audit logs (separated per company), including archived companies'. |
 | **Accounts Admin** | Entire portal — **read-only** | A central, cross-company **viewer** (`companyId = null`, like Super Admin but never writes). Sees **approved** employees across **all** companies and their **full records** (the four forms + documents/PDFs) with sensitive fields **masked by default** and an **audited reveal** — the exact HR mechanism; and an **approval-only** audit trail across companies. **No onboarding / verify / approve / edit / archive / delete / provisioning — GET-only.** In-flight (non-approved) employees are **not** visible. **Exactly one** may exist; provisioned by Super Admin. |
-| **Hierarchy** | Entire platform — **read-only, aggregates-only** | A top-level, cross-platform **overview** role (`companyId = null`, like Super Admin/Accounts Admin but never writes). Sees only **platform-wide aggregates / counts / summaries** — **never** individual employee records or PII, **never** attendance or leave, **no** writes anywhere. It never appears in any onboarding / verification / approval / provisioning / company-management flow. **Exactly one** may exist; provisioned by Super Admin; signs in with staff **email + password**. _(Aggregate read endpoints are added later; this stage establishes the role, login, provisioning and a placeholder overview.)_ |
+| **Hierarchy** | Entire platform — **read-only, aggregates-only** | A top-level, cross-platform **overview** role (`companyId = null`, like Super Admin/Accounts Admin but never writes). Sees only **platform-wide aggregates / counts / summaries** — **never** individual employee records or PII, **never** attendance or leave. Its **one** write surface is **offboarding approval** (§3.6): a pending inbox with a deliberate **minimal-PII** contract (name/code/company/team/reason/last-day/initiator only) where it approves or rejects HR's offboarding requests — nothing else about the employee is reachable. Otherwise no writes and no onboarding / verification / provisioning / company-management involvement. **Exactly one** may exist; provisioned by Super Admin; signs in with staff **email + password**. |
 | **Company Admin** | One company | Create teams and assign the team's HR, Manager and Accountant (one each); **assign/reset the mailbox credentials of any APPROVED employee in the company** (§6, alongside the onboarding HR); view **own company's** audit logs. |
 | **HR** | Own team / own onboarded employees | Onboard by **filling Form 2** (which creates the record + sends the invite); **edit Form 2 while the employee is `INVITED`** (locked once they start, 409; a personal-email change re-invites); look up an employee by ID and see all their forms/documents; verify **Forms 1/3/4 + documents** (Form 2 is not verified); once every item is verified, **approve** the employee onto a **team** (minting the ID) **or terminally reject** the application. |
 | **Manager** | Own team | Workspace **notifications** (who was onboarded, who was verified, who was **approved onto their team**) + a **read-only team-onboarding history** (approval authority sits with HR — no approve/reject/inbox); **read-only attendance analytics for their own team** (§8a — the same live per-employee / per-team metrics the Accountant sees, own team only). |
@@ -294,9 +294,12 @@ company agreements. There is **no verification loop** — the employee's signed 
 `(employeeId, type)` unique, created **PENDING** with `sentByUserId` (the sending HR).
 
 **Flow.**
-1. **HR sends** (`POST /employees/{id}/agreements/send`, HR onboarding-scope): `409` unless APPROVED;
-   idempotent (`409` if a pack already exists); creates the three PENDING rows; audits `AGREEMENTS_SENT`;
-   the employee is notified **after commit, best-effort** (email + Web Push — employees have no bell feed).
+1. **HR sends** (`POST /employees/{id}/agreements/send {types}`, HR onboarding-scope): `409` unless APPROVED.
+   HR chooses which of the three to send (the dialog lists them, default all checked); send creates the
+   selected types the employee does **not** already have and is **idempotent per type** — so HR can send the
+   AUP now and the NDA later. `409` only when **every** selected type already exists (a full duplicate);
+   `400` if the selection is empty. Audits `AGREEMENTS_SENT` with the created types; the employee is notified
+   **after commit, best-effort** (email + Web Push — employees have no bell feed).
 2. **Employee reads & signs** in their onboarding portal (`/{slug}/employee/agreements/{type}`): the **full
    agreement text** renders (scroll-to-end gates the consent checkbox); the few blanks are prefilled per the
    map below; the employee types their Aadhaar (AUP only) and captures a **fresh** signature
@@ -337,6 +340,52 @@ element and it flows onto every page (no layout change needed).
 PAN uses, **masked** (`********`) in every DTO, and revealed in full only via the existing **audited** reveal
 endpoint (`POST /employees/{id}/reveal` → `SENSITIVE_FIELD_REVEALED`). The generated AUP PDF stamps the full
 number and is itself access-gated like the other generated PDFs.
+
+### 3.6 Offboarding
+Ending an employee's tenure is an **offboarding case** that HR initiates and the platform **HIERARCHY** role
+approves. It is built in three stages; **stage 1 (here)** is the lifecycle + the hierarchy approval. Stage 2
+adds the offboarding **documents** (Separation & Exit Formalities, Settlement Agreement, Employee Separation
+Agreement, and the Clearance form); stage 3 adds the **letters / completion** (and the terminal `COMPLETED`
+state + the `OFFBOARDED` employee status). Stage 1 leaves the case machinery structured so those bolt on.
+
+**The case** (`offboarding_cases`). One case per attempt: `status` (PENDING_APPROVAL | APPROVED | REJECTED |
+CANCELLED), `reason`, `lastWorkingDay`, the initiating HR + timestamp, the hierarchy decision (by/at/note),
+and the HR cancellation (by/at/note). **`Employee.status` is NOT touched in stage 1** — the employee stays
+APPROVED throughout; `OFFBOARDED` arrives in stage 3.
+
+**One active case per employee.** At most one case in a **non-terminal** status (PENDING_APPROVAL or APPROVED)
+may exist for an employee — enforced in the service **and** by a partial unique index. A rejected/cancelled
+case is terminal and frees the employee for a fresh case.
+
+**Flow.**
+1. **HR initiates** (`POST /employees/{id}/offboarding/initiate {reason, lastWorkingDay}`, HR onboarding-scope):
+   `409` unless the employee is APPROVED and there is no active case. Creates PENDING_APPROVAL; audits
+   `OFFBOARDING_INITIATED`; the HIERARCHY reviewer is notified (durable row + push — see the channel note).
+2. **HIERARCHY decides** (`POST /hierarchy/offboarding/{caseId}/approve|reject`): PENDING_APPROVAL only (`409`
+   otherwise); records the decision by/at/note; audits `OFFBOARDING_APPROVED` / `OFFBOARDING_REJECTED`. A
+   **reject requires a note** and is terminal. The initiating HR is notified (durable row + push + email).
+3. **HR may cancel** (`POST /employees/{id}/offboarding/cancel {note?}`) while PENDING_APPROVAL or APPROVED
+   (pre-completion) → CANCELLED; audits `OFFBOARDING_CANCELLED`; the hierarchy is nudged if it was pending.
+4. **Read** (`GET /employees/{id}/offboarding`): the latest case for the HR record panel — gated exactly like
+   the record read (onboarding HR + the employee's COMPANY_ADMIN + SUPER_ADMIN; the service scopes each).
+
+**Hierarchy charter — the one loosening.** The HIERARCHY role is otherwise **read-only, aggregates-only, no
+individual PII** (§2/§6). Offboarding approval is its **single write surface**, and its pending inbox is the
+**only** place it sees anything employee-shaped — under a deliberate **MINIMAL-PII contract**: each pending
+row exposes **only** `employeeName, employeeCode, companyName, teamName, reason, lastWorkingDay,
+initiatedByName, initiatedAt` — no forms, no documents, no contact data, nothing else. `canAccessEmployee`
+stays **false** for the role everywhere else; the minimal shape is asserted in a test.
+
+**Notification channels.** Neither the HIERARCHY user nor HR has a bell **feed** (the Manager inbox is the
+only `Notification` consumer). So the durable `Notification` rows (`OFFBOARDING_INITIATED` → hierarchy;
+`OFFBOARDING_APPROVED`/`OFFBOARDING_REJECTED` → the initiating HR) are the durable trail + future-proofing,
+the **hierarchy's pending inbox** is its primary surface, and **push** (+ **email** for HR's decision) is the
+live nudge. All notifications fire **controller-after-commit, best-effort** (a failure never rolls the case
+back), matching the approve/agreements pattern.
+
+**UI.** HR gets an **Offboarding** panel on the record view (initiate → status → cancel; stage-2 document
+controls mount here later). The HIERARCHY area gains an **Offboarding approvals** nav item (badged with the
+pending count) → the minimal-PII inbox → approve/reject dialogs — its only non-read-only screen.
 
 ---
 
@@ -482,9 +531,11 @@ generated PDFs' header/branding is the employee's **joining company** (resolved 
 - **LeaveStatus** _(§8b)_: `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`
 - **NotificationType**: `EMPLOYEE_ONBOARDED`, `EMPLOYEE_SUBMITTED`, `APPROVAL_REQUESTED`,
   `EMPLOYEE_APPROVED`, `EMPLOYEE_REJECTED`, `LEAVE_REQUESTED` _(§8b — Manager bell on a leave submission)_,
-  `AGREEMENT_COMPLETED` _(§3.5 — durable record for the sending HR when an agreement is signed)_
+  `AGREEMENT_COMPLETED` _(§3.5 — durable record for the sending HR when an agreement is signed)_,
+  `OFFBOARDING_INITIATED` _(§3.6 → hierarchy)_, `OFFBOARDING_APPROVED`, `OFFBOARDING_REJECTED` _(§3.6 → HR)_
 - **EmployeeAgreementType** _(§3.5)_: `AUP`, `NDA`, `NOTICE_PERIOD`
 - **AgreementStatus** _(§3.5)_: `PENDING`, `COMPLETED`
+- **OffboardingStatus** _(§3.6)_: `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `CANCELLED` _(`COMPLETED` in stage 3)_
 
 ---
 

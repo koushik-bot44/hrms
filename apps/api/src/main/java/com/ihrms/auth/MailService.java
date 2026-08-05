@@ -148,6 +148,24 @@ public class MailService {
     log.info("Agreement-completed email dispatched to {} ({})", hrEmail, agreementTitle);
   }
 
+  /** Offboarding decision notice to the INITIATING HR (§Offboarding) — HR has no notification bell feed. */
+  public void sendOffboardingDecision(
+      String hrEmail, String employeeName, boolean approved, String note) {
+    String outcome = approved ? "approved" : "rejected";
+    String body =
+        "The offboarding case for "
+            + (employeeName == null ? "an employee" : employeeName)
+            + " was "
+            + outcome
+            + " by the platform reviewer"
+            + (note == null || note.isBlank() ? "." : ". Note: " + note);
+    if (noSmtp()) {
+      log.warn("[DEV OFFBOARDING] {} -> {}  (no SMTP configured; logging only)", hrEmail, body);
+      return;
+    }
+    log.info("Offboarding decision email dispatched to {} ({})", hrEmail, outcome);
+  }
+
   private boolean noSmtp() {
     String host = props.mail() == null ? null : props.mail().host();
     return host == null || host.isBlank();

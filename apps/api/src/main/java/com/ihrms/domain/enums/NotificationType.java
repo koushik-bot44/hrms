@@ -12,5 +12,10 @@ public enum NotificationType {
   // §Agreements — a durable record for the SENDING HR when an employee completes a sent agreement. HR has no
   // bell feed yet (the Manager inbox is the only Notification consumer); HR is reached by push + email, and
   // this row is the durable trail + future-proofs an HR feed.
-  AGREEMENT_COMPLETED
+  AGREEMENT_COMPLETED,
+  // §Offboarding (stage 1) — durable trails alongside push/email. INITIATED targets the HIERARCHY user (whose
+  // pending inbox is the primary surface); APPROVED/REJECTED target the initiating HR (no bell feed → push+email).
+  OFFBOARDING_INITIATED,
+  OFFBOARDING_APPROVED,
+  OFFBOARDING_REJECTED
 }

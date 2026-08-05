@@ -49,6 +49,8 @@ export interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  /** Optional count pill shown after the label (e.g. pending approvals); hidden when 0/undefined. */
+  badge?: number;
 }
 
 function NavLinks({
@@ -94,7 +96,12 @@ function NavLinks({
             )}
           >
             <item.icon className="size-4 shrink-0" />
-            {collapsed ? null : item.label}
+            {collapsed ? null : <span className="flex-1">{item.label}</span>}
+            {!collapsed && item.badge ? (
+              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-warning/20 px-1.5 text-xs font-semibold text-warning">
+                {item.badge}
+              </span>
+            ) : null}
           </Link>
         );
       })}

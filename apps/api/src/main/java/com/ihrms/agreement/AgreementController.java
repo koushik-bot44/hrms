@@ -4,6 +4,7 @@ import com.ihrms.agreement.dto.AgreementDtos.CompleteAgreementRequest;
 import com.ihrms.agreement.dto.AgreementDtos.CompleteAgreementResult;
 import com.ihrms.agreement.dto.AgreementDtos.MyAgreementSummary;
 import com.ihrms.agreement.dto.AgreementDtos.MyAgreementView;
+import com.ihrms.agreement.dto.AgreementDtos.SendAgreementsRequest;
 import com.ihrms.agreement.dto.AgreementDtos.SendAgreementsResult;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.domain.enums.EmployeeAgreementType;
@@ -40,9 +41,11 @@ public class AgreementController {
   @ResponseStatus(HttpStatus.CREATED)
   public SendAgreementsResult send(
       @PathVariable String id,
+      @RequestBody(required = false) SendAgreementsRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    SendAgreementsResult result = agreements.send(actor, id, request.getRemoteAddr());
+    SendAgreementsResult result =
+        agreements.send(actor, id, body == null ? null : body.types(), request.getRemoteAddr());
     agreements.notifyEmployeeAfterSend(id); // post-commit, best-effort
     return result;
   }

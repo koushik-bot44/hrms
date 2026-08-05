@@ -119,10 +119,7 @@ class AgreementApiTest {
 
   @Test
   void hrSendsPackCreatingThreePendingRowsAndAuditsIt() throws Exception {
-    var res =
-        mvc.perform(post("/employees/" + emp.getId() + "/agreements/send").header("Authorization", "Bearer " + hr1Token))
-            .andExpect(status().isCreated())
-            .andReturn();
+    var res = send().andExpect(status().isCreated()).andReturn();
     JsonNode body = json.readTree(res.getResponse().getContentAsString());
     assertThat(body.get("agreements")).hasSize(3);
     assertThat(body.get("agreements").get(0).get("status").asText()).isEqualTo("PENDING");
@@ -159,6 +156,26 @@ class AgreementApiTest {
     send().andExpect(status().isCreated());
     send().andExpect(status().isConflict()); // second send rejected
     assertThat(agreements.findByEmployeeId(emp.getId())).hasSize(3); // still only one pack
+  }
+
+  @Test
+  void riderAPartialSendThenRemainderThenFullDuplicate() throws Exception {
+    // Send only the AUP now.
+    sendTypes(emp.getId(), hr1Token, "AUP").andExpect(status().isCreated());
+    assertThat(agreements.findByEmployeeId(emp.getId())).hasSize(1);
+    assertThat(agreements.findByEmployeeIdAndType(emp.getId(), com.ihrms.domain.enums.EmployeeAgreementType.AUP))
+        .isPresent();
+
+    // Re-selecting a mix where AUP already exists creates ONLY the missing ones (NDA, Notice), not a 409.
+    sendTypes(emp.getId(), hr1Token, "AUP", "NDA", "NOTICE_PERIOD").andExpect(status().isCreated());
+    assertThat(agreements.findByEmployeeId(emp.getId())).hasSize(3); // no duplicate AUP
+
+    // Now every selected type exists -> a full duplicate is a 409.
+    sendTypes(emp.getId(), hr1Token, "AUP", "NDA").andExpect(status().isConflict());
+    assertThat(agreements.findByEmployeeId(emp.getId())).hasSize(3);
+
+    // Empty selection is a 400.
+    sendTypes(emp.getId(), hr1Token).andExpect(status().isBadRequest());
   }
 
   @Test
@@ -311,8 +328,18 @@ class AgreementApiTest {
     }
   }
 
+  /** Send the full standard pack (all three types). */
   private org.springframework.test.web.servlet.ResultActions send() throws Exception {
-    return mvc.perform(post("/employees/" + emp.getId() + "/agreements/send").header("Authorization", "Bearer " + hr1Token));
+    return sendTypes(emp.getId(), hr1Token, "AUP", "NDA", "NOTICE_PERIOD");
+  }
+
+  /** Send a chosen subset (Rider A). */
+  private org.springframework.test.web.servlet.ResultActions sendTypes(
+      String employeeId, String token, String... types) throws Exception {
+    return mvc.perform(post("/employees/" + employeeId + "/agreements/send")
+        .header("Authorization", "Bearer " + token)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsString(Map.of("types", java.util.List.of(types)))));
   }
 
   private org.springframework.test.web.servlet.ResultActions complete(String type, Map<String, Object> payload)

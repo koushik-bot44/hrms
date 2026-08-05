@@ -166,6 +166,7 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
         busy={reviewMutation.isPending}
         revealed={revealed}
         enableSendAgreements
+        enableOffboarding
         onReveal={() => revealMutation.mutate()}
         onVerify={verify}
         onSendBack={startSendBack}

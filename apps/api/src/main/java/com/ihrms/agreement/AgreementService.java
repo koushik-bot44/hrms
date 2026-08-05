@@ -41,9 +41,11 @@ import com.ihrms.support.Hashing;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -118,17 +120,31 @@ public class AgreementService {
    * controller is HR-only and the employee's onboardingHrId must match). 409 if not APPROVED or already sent.
    */
   @Transactional
-  public SendAgreementsResult send(IhrmsPrincipal.User actor, String employeeId, String ip) {
+  public SendAgreementsResult send(
+      IhrmsPrincipal.User actor, String employeeId, List<EmployeeAgreementType> requested, String ip) {
     Employee employee = loadOwn(actor, employeeId);
     if (employee.getStatus() != EmployeeStatus.APPROVED) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "Agreements can only be sent to an APPROVED employee");
     }
-    if (agreements.existsByEmployeeId(employee.getId())) {
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "Agreements have already been sent to this employee");
+    // Normalise the selection: distinct, valid, in the fixed pack order. At least one must be chosen.
+    List<EmployeeAgreementType> selected =
+        PACK.stream().filter(t -> requested != null && requested.contains(t)).toList();
+    if (selected.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one agreement to send");
     }
-    for (EmployeeAgreementType type : PACK) {
+    // Rider A idempotency: create only the selected types the employee does not already have; a full
+    // duplicate (every selected type already exists) is a 409 — so HR can send some now and the rest later.
+    Set<EmployeeAgreementType> existing =
+        agreements.findByEmployeeId(employee.getId()).stream()
+            .map(EmployeeAgreement::getType)
+            .collect(java.util.stream.Collectors.toCollection(() -> EnumSet.noneOf(EmployeeAgreementType.class)));
+    List<EmployeeAgreementType> toCreate = selected.stream().filter(t -> !existing.contains(t)).toList();
+    if (toCreate.isEmpty()) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "The selected agreements have already been sent to this employee");
+    }
+    for (EmployeeAgreementType type : toCreate) {
       EmployeeAgreement a = new EmployeeAgreement();
       a.setEmployeeId(employee.getId());
       a.setType(type);
@@ -141,7 +157,7 @@ public class AgreementService {
         "AGREEMENTS_SENT",
         "Employee",
         employee.getId(),
-        Map.<String, Object>of("types", PACK.stream().map(Enum::name).toList()),
+        Map.<String, Object>of("types", toCreate.stream().map(Enum::name).toList()),
         ip);
     return new SendAgreementsResult(summaries(employee.getId(), actor.name()));
   }

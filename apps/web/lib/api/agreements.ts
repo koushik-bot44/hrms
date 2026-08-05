@@ -13,11 +13,17 @@ import { apiFetch } from './client';
  * submits each one under `/me/agreements`.
  */
 
-/** HR: send the three-agreement pack to an APPROVED employee (idempotent; onboarding-HR-scoped). */
-export function sendAgreements(employeeId: string): Promise<SendAgreementsResult> {
+/**
+ * HR: send the selected agreements to an APPROVED employee. Idempotent per type — already-sent types are
+ * skipped, so HR can send some now and the rest later; a full duplicate (all selected already sent) is a 409.
+ */
+export function sendAgreements(
+  employeeId: string,
+  types: AgreementType[],
+): Promise<SendAgreementsResult> {
   return apiFetch<SendAgreementsResult>(
     `/employees/${encodeURIComponent(employeeId)}/agreements/send`,
-    { method: 'POST' },
+    { method: 'POST', body: { types } },
   );
 }
 

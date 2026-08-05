@@ -79,6 +79,11 @@ public class SecurityConfig {
                     // (cross-company forms-viewer / Form-2 edit, §2/§3.2). The service scopes each.
                     .requestMatchers(HttpMethod.GET, "/employees/*/record")
                     .hasAnyRole("HR", "COMPANY_ADMIN", "SUPER_ADMIN")
+                    // Offboarding case READ (§Offboarding) mirrors the record read's gating — the onboarding
+                    // HR + the employee's COMPANY_ADMIN + SUPER_ADMIN; the service scopes each. Initiate /
+                    // cancel (POST, below) stay HR-only under the /employees/** catch-all.
+                    .requestMatchers(HttpMethod.GET, "/employees/*/offboarding")
+                    .hasAnyRole("HR", "COMPANY_ADMIN", "SUPER_ADMIN")
                     .requestMatchers(HttpMethod.POST, "/employees/*/credentials")
                     .hasAnyRole("HR", "COMPANY_ADMIN")
                     // Form-2 edit at onboard (§3.2): HR (own onboarded) + SUPER_ADMIN (cross-company);

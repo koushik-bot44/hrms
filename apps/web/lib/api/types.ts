@@ -726,6 +726,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hierarchy/offboarding/{caseId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reject_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hierarchy/offboarding/{caseId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approve_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees": {
         parameters: {
             query?: never;
@@ -767,7 +799,39 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["reject_1"];
+        post: operations["reject_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding/initiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["initiate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancel_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -799,7 +863,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["approve_1"];
+        post: operations["approve_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1165,7 +1229,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["get_1"];
+        get: operations["get_2"];
         put?: never;
         post?: never;
         delete: operations["delete_1"];
@@ -1181,7 +1245,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["get_2"];
+        get: operations["get_3"];
         put?: never;
         post?: never;
         delete: operations["remove_3"];
@@ -1639,6 +1703,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hierarchy/offboarding/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["pending"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hierarchy/companies": {
         parameters: {
             query?: never;
@@ -1695,6 +1775,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["record"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/offboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2478,7 +2574,7 @@ export interface components {
         NotificationView: {
             id?: string;
             /** @enum {string} */
-            type?: "EMPLOYEE_ONBOARDED" | "EMPLOYEE_SUBMITTED" | "APPROVAL_REQUESTED" | "EMPLOYEE_APPROVED" | "EMPLOYEE_REJECTED" | "LEAVE_REQUESTED" | "AGREEMENT_COMPLETED";
+            type?: "EMPLOYEE_ONBOARDED" | "EMPLOYEE_SUBMITTED" | "APPROVAL_REQUESTED" | "EMPLOYEE_APPROVED" | "EMPLOYEE_REJECTED" | "LEAVE_REQUESTED" | "AGREEMENT_COMPLETED" | "OFFBOARDING_INITIATED" | "OFFBOARDING_APPROVED" | "OFFBOARDING_REJECTED";
             employeeId?: string;
             employeeCode?: string;
             fullName?: string;
@@ -2576,6 +2672,14 @@ export interface components {
             decidedAt?: string;
             createdAt?: string;
         };
+        DecisionRequest: {
+            note?: string;
+        };
+        OffboardingDecisionResult: {
+            caseId?: string;
+            /** @enum {string} */
+            status?: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED";
+        };
         Form2Request: {
             fullName: string;
             dateOfJoining?: string;
@@ -2630,6 +2734,30 @@ export interface components {
             teamName?: string;
             managerName?: string;
         };
+        InitiateRequest: {
+            reason: string;
+            /** Format: date */
+            lastWorkingDay: string;
+        };
+        OffboardingCaseView: {
+            id?: string;
+            /** @enum {string} */
+            status?: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED";
+            reason?: string;
+            lastWorkingDay?: string;
+            initiatedByName?: string;
+            initiatedAt?: string;
+            decidedByName?: string;
+            decidedAt?: string;
+            decisionNote?: string;
+            cancelledByName?: string;
+            cancelledAt?: string;
+            cancelNote?: string;
+            cancellable?: boolean;
+        };
+        CancelRequest: {
+            note?: string;
+        };
         AssignCredentialsRequest: {
             localPart: string;
             password?: string;
@@ -2644,6 +2772,9 @@ export interface components {
         };
         ApproveRequest: {
             note?: string;
+        };
+        SendAgreementsRequest: {
+            types?: ("AUP" | "NDA" | "NOTICE_PERIOD")[];
         };
         AgreementSummary: {
             /** @enum {string} */
@@ -3128,6 +3259,17 @@ export interface components {
             /** Format: int64 */
             count?: number;
         };
+        HierarchyPendingRow: {
+            caseId?: string;
+            employeeName?: string;
+            employeeCode?: string;
+            companyName?: string;
+            teamName?: string;
+            reason?: string;
+            lastWorkingDay?: string;
+            initiatedByName?: string;
+            initiatedAt?: string;
+        };
         CompaniesResponse: {
             companies?: components["schemas"]["CompanySizeRow"][];
         };
@@ -3182,6 +3324,9 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+        };
+        OffboardingCaseResponse: {
+            offboarding?: components["schemas"]["OffboardingCaseView"];
         };
         ActivityItem: {
             at?: string;
@@ -4923,6 +5068,58 @@ export interface operations {
             };
         };
     };
+    reject_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OffboardingDecisionResult"];
+                };
+            };
+        };
+    };
+    approve_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OffboardingDecisionResult"];
+                };
+            };
+        };
+    };
     list_1: {
         parameters: {
             query: {
@@ -4993,7 +5190,7 @@ export interface operations {
             };
         };
     };
-    reject_1: {
+    reject_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -5015,6 +5212,58 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DecisionResult"];
+                };
+            };
+        };
+    };
+    initiate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitiateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OffboardingCaseView"];
+                };
+            };
+        };
+    };
+    cancel_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CancelRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OffboardingCaseView"];
                 };
             };
         };
@@ -5045,7 +5294,7 @@ export interface operations {
             };
         };
     };
-    approve_1: {
+    approve_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -5080,7 +5329,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SendAgreementsRequest"];
+            };
+        };
         responses: {
             /** @description Created */
             201: {
@@ -5725,7 +5978,7 @@ export interface operations {
             };
         };
     };
-    get_1: {
+    get_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -5795,7 +6048,7 @@ export interface operations {
             };
         };
     };
-    get_2: {
+    get_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -6503,6 +6756,26 @@ export interface operations {
             };
         };
     };
+    pending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HierarchyPendingRow"][];
+                };
+            };
+        };
+    };
     companies: {
         parameters: {
             query?: never;
@@ -6585,6 +6858,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EmployeeRecordView"];
+                };
+            };
+        };
+    };
+    get_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OffboardingCaseResponse"];
                 };
             };
         };
