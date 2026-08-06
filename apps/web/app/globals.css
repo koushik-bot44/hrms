@@ -153,8 +153,146 @@
 }
 
 /*
+ * ── Marketing surface (public one-pager at `/`) ──────────────────────────────────────────────────────
+ * A SELF-CONTAINED dark-first surface, independent of the app's light/dark theme. `.marketing` (on <html>)
+ * re-points the SAME core tokens the shared UI primitives already consume (Button/Card/Badge read
+ * --primary/--card/--border/…), so those components render correctly on the deep indigo-navy surface with
+ * NO per-component overrides — the tokens-only discipline. It also adds a few marketing-only tokens for the
+ * hero glow / grid / glass. The values are richer/deeper than the app's dark ramp (a product-site look), but
+ * stay on the indigo brand. Defined once = the page is dark in both app modes (mode-independent by design).
+ */
+.marketing {
+  --background: 245 46% 7%; /* deep indigo-navy, a step below the sidebar for full-bleed depth */
+  --foreground: 240 24% 96%;
+
+  --card: 245 40% 11%;
+  --card-foreground: 240 24% 96%;
+
+  --popover: 245 42% 10%;
+  --popover-foreground: 240 24% 96%;
+
+  --primary: 243 82% 67%; /* lifted indigo — white text stays AA on the solid pill */
+  --primary-foreground: 0 0% 100%;
+  --primary-bright: 239 90% 74%; /* brighter core for glows, gradient text, vignette accents */
+
+  --secondary: 245 30% 16%;
+  --secondary-foreground: 240 24% 96%;
+
+  --muted: 245 30% 15%;
+  --muted-foreground: 240 16% 68%;
+
+  --accent: 245 32% 18%;
+  --accent-foreground: 240 24% 96%;
+
+  --surface-tint: 244 46% 15%;
+
+  --destructive: 0 72% 58%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 66% 46%;
+  --success-foreground: 0 0% 100%;
+  --warning: 32 92% 56%;
+  --warning-foreground: 245 46% 7%;
+
+  --border: 245 26% 20%;
+  --input: 245 26% 20%;
+  --ring: 243 82% 67%;
+
+  --radius: 0.75rem;
+
+  /* Marketing-only decorative tokens (never a lone signal; purely behind content). */
+  --m-glow: 250 90% 62%; /* hero aurora glow */
+  --m-glow-2: 268 84% 62%; /* secondary violet glow for depth */
+  --m-grid: 240 40% 70%; /* faint blueprint grid lines */
+  --m-hairline: 240 30% 80%; /* thin separators / frame chrome on glass */
+}
+
+/* Editorial gradient text — indigo → violet, token-derived. Decorative accent on headlines. */
+.marketing .text-gradient {
+  background-image: linear-gradient(
+    100deg,
+    hsl(var(--foreground)) 0%,
+    hsl(var(--primary-bright)) 55%,
+    hsl(var(--m-glow-2)) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* A faint blueprint grid, radial-masked so it fades toward the edges. Behind hero/section content. */
+.marketing .m-grid {
+  background-image:
+    linear-gradient(to right, hsl(var(--m-grid) / 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--m-grid) / 0.08) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 75%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 75%);
+}
+
+/* Soft indigo aurora blobs (drift slowly). Used behind the hero + final CTA. */
+.marketing .m-aurora {
+  background:
+    radial-gradient(38% 42% at 22% 28%, hsl(var(--m-glow) / 0.28), transparent 70%),
+    radial-gradient(34% 40% at 82% 22%, hsl(var(--m-glow-2) / 0.22), transparent 72%),
+    radial-gradient(46% 46% at 60% 88%, hsl(var(--primary) / 0.2), transparent 74%);
+  animation: m-drift 22s ease-in-out infinite alternate;
+}
+
+/* Glass panel chrome (nav, vignette frames, cards on the dark surface). */
+.marketing .m-glass {
+  background: hsl(var(--card) / 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid hsl(var(--m-hairline) / 0.12);
+}
+
+/* A slow vertical float for accent chips/orbs (decorative). */
+.marketing .m-float {
+  animation: m-float 6s ease-in-out infinite;
+}
+
+/* A traveling sheen across a surface (e.g. the lifecycle connector). */
+.marketing .m-sheen {
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    hsl(var(--primary-bright) / 0.5) 50%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: m-sheen 5.5s linear infinite;
+}
+
+@keyframes m-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(0, -3%, 0) scale(1.06);
+  }
+}
+@keyframes m-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes m-sheen {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+/*
  * Motion accessibility: honour prefers-reduced-motion by neutralising animations/transitions globally.
- * The design's page-enter / hover-lift / tab / dialog motions all collapse to ~instant here.
+ * The design's page-enter / hover-lift / tab / dialog motions AND the marketing aurora/float/sheen all
+ * collapse to ~instant here (the marketing JS motion additionally guards on useReducedMotion()).
  */
 @media (prefers-reduced-motion: reduce) {
   *,

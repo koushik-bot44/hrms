@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
-import { Providers } from './providers';
+import { Providers } from '../providers';
 import { Toaster } from '@/components/ui/sonner';
-import { SIGNATURE_FONT_VARS } from './fonts';
-import './globals.css';
+import { SIGNATURE_FONT_VARS } from '../fonts';
+import '../globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 
