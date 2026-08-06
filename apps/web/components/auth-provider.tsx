@@ -11,6 +11,7 @@ import type {
   StaffLoginInput,
 } from '@/lib/contract';
 import { setAuthHooks } from '@/lib/api/client';
+import { clearWebSession, markWebSession } from '@/lib/auth/web-session-hint';
 import {
   changePassword as apiChangePassword,
   loginStaff as apiLoginStaff,
@@ -56,6 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionRef.current = result.session;
     setSession(result.session);
     setStatus('authenticated');
+    // Non-sensitive web-origin marker so middleware can redirect logged-in visitors off the marketing `/`.
+    markWebSession();
   }, []);
 
   const clearAuth = React.useCallback(() => {
@@ -63,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionRef.current = null;
     setSession(null);
     setStatus('unauthenticated');
+    clearWebSession();
   }, []);
 
   // Deduped silent refresh — concurrent 401s share one in-flight request.
