@@ -22,6 +22,9 @@ import com.ihrms.domain.model.Form1Personal;
 import com.ihrms.domain.model.Form2Info;
 import com.ihrms.domain.model.Notification;
 import com.ihrms.domain.model.User;
+import com.ihrms.offboarding.dto.OffboardingDocDtos.FieldKind;
+import com.ihrms.offboarding.dto.OffboardingDocDtos.FieldView;
+import com.ihrms.support.DocumentFieldMarkers;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeAgreementRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
@@ -214,7 +217,8 @@ public class AgreementService {
         a.getSentAt() == null ? null : a.getSentAt().toString(),
         a.getCompletedAt() == null ? null : a.getCompletedAt().toString(),
         downloadUrl(a),
-        new AgreementPrefill(p.fullName, p.employeeCode, p.designation, p.address, p.mobile));
+        new AgreementPrefill(p.fullName, p.employeeCode, p.designation, p.address, p.mobile),
+        agreementFields(type, p));
   }
 
   /**
@@ -357,14 +361,42 @@ public class AgreementService {
     t.put("HR_NAME", hrName);
     t.put("EMPLOYEE_NAME", p.fullName);
     t.put("EMPLOYEE_ID", p.employeeCode);
-    t.put("DESIGNATION", p.designation);
-    t.put("ADDRESS", p.address);
-    t.put("MOBILE", p.mobile);
-    // Not-yet-provided fields render as visible blanks in the reading view.
-    t.put("AADHAAR", "");
+    // Server date stamps stay blank in the read view (server-stamped at complete).
     t.put("SIGN_DATE", "");
     t.put("SIGN_DATE_LONG", "________________");
-    return templates.render(type, t, ""); // no signature image in the read view
+    // Employee-fill tokens render as INLINE MARKERS (the client hydrates a controlled input at each from the
+    // fields manifest below); the signature spot renders a signature marker. The PDF render (renderPdfBody)
+    // is untouched — it substitutes the real values. The manifest key is the lowercased fragment token.
+    Map<String, String> markers = new LinkedHashMap<>();
+    for (String token : fillTokens(type)) {
+      markers.put(token, DocumentFieldMarkers.field(token.toLowerCase(), "text"));
+    }
+    return templates.render(type, t, markers, DocumentFieldMarkers.SIGNATURE);
+  }
+
+  /** The employee-fill fragment tokens per type (uppercase); the manifest key is each lowercased. */
+  private static List<String> fillTokens(EmployeeAgreementType type) {
+    return switch (type) {
+      case AUP -> List.of("DESIGNATION", "AADHAAR");
+      case NDA -> List.of("DESIGNATION", "ADDRESS", "MOBILE");
+      case NOTICE_PERIOD -> List.of();
+    };
+  }
+
+  /** The uniform inline-fill manifest per type (key/label/kind/prefill/required) — the marker hydration source. */
+  private List<FieldView> agreementFields(EmployeeAgreementType type, Prefills p) {
+    return switch (type) {
+      case AUP ->
+          List.of(
+              new FieldView("designation", "Designation", FieldKind.TEXT, p.designation, false),
+              new FieldView("aadhaar", "Aadhaar No.", FieldKind.TEXT, "", true));
+      case NDA ->
+          List.of(
+              new FieldView("designation", "Designation", FieldKind.TEXT, p.designation, false),
+              new FieldView("address", "Address", FieldKind.TEXT, p.address, false),
+              new FieldView("mobile", "Mobile", FieldKind.TEXT, p.mobile, false));
+      case NOTICE_PERIOD -> List.of();
+    };
   }
 
   private String renderPdfBody(

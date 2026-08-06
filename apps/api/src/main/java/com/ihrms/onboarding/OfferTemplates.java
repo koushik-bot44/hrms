@@ -41,9 +41,22 @@ public class OfferTemplates {
 
   /** Substitute {@code textTokens} (escaped) + {@code signatureImgHtml} (raw); strip any unfilled token. */
   public String render(Map<String, String> textTokens, String signatureImgHtml) {
+    return render(textTokens, Map.of(), signatureImgHtml);
+  }
+
+  /**
+   * The DISPLAY variant: {@code textTokens} escaped, plus {@code rawTokens} (inline field markers) injected RAW.
+   * The offer has no employee-fill fields, so its only raw token is the signature slot — but the overload keeps
+   * the three template classes symmetric. The PDF render uses the escaped-only overload.
+   */
+  public String render(
+      Map<String, String> textTokens, Map<String, String> rawTokens, String signatureImgHtml) {
     String body = fragment();
     for (Map.Entry<String, String> e : textTokens.entrySet()) {
       body = body.replace("{{" + e.getKey() + "}}", escape(e.getValue()));
+    }
+    for (Map.Entry<String, String> e : rawTokens.entrySet()) {
+      body = body.replace("{{" + e.getKey() + "}}", e.getValue()); // raw markers
     }
     body = body.replace("{{SIGNATURE_IMG}}", signatureImgHtml == null ? "" : signatureImgHtml);
     return LEFTOVER.matcher(body).replaceAll("");

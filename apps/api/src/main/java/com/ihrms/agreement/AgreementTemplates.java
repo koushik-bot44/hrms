@@ -60,9 +60,25 @@ public class AgreementTemplates {
    */
   public String render(
       EmployeeAgreementType type, Map<String, String> textTokens, String signatureImgHtml) {
+    return render(type, textTokens, Map.of(), signatureImgHtml);
+  }
+
+  /**
+   * The DISPLAY variant: {@code textTokens} escaped as usual, plus {@code rawTokens} (inline field markers)
+   * injected RAW at their placeholders — the same raw-injection the signature slot uses. The PDF render uses
+   * the escaped-only overload above, so the generated PDF is unchanged.
+   */
+  public String render(
+      EmployeeAgreementType type,
+      Map<String, String> textTokens,
+      Map<String, String> rawTokens,
+      String signatureImgHtml) {
     String body = fragment(type);
     for (Map.Entry<String, String> e : textTokens.entrySet()) {
       body = body.replace("{{" + e.getKey() + "}}", escape(e.getValue()));
+    }
+    for (Map.Entry<String, String> e : rawTokens.entrySet()) {
+      body = body.replace("{{" + e.getKey() + "}}", e.getValue()); // raw markers
     }
     body = body.replace("{{SIGNATURE_IMG}}", signatureImgHtml == null ? "" : signatureImgHtml);
     return LEFTOVER.matcher(body).replaceAll("");

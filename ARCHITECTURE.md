@@ -207,8 +207,9 @@ Accounts Admin, own team for Accountant).
      jurisdiction are static legal text; the company signature area is `For {{COMPANY_NAME}},` + a blank
      wet-sign line. The invited employee's **onboarding portal shows the offer FIRST**: read
      (scroll-to-consent — *"I agree to accept the employment on the terms & conditions mentioned in the
-     above letter"*), sign (a **fresh SignatureCapture**), **Accept**. The employee **never fills or edits**
-     the terms. Until accepted, **every onboarding write is blocked server-side (409)** — Forms 1/3 saves,
+     above letter"*), sign at the letter's **inline signature line** (a **fresh SignatureCapture**; see the
+     *Inline in-document fill* standard in §3.5 — the offer has no fill blanks, only the signature), **Accept**.
+     The employee **never fills or edits** the terms. Until accepted, **every onboarding write is blocked server-side (409)** — Forms 1/3 saves,
      Form-4 upload/confirm/revise/delete, the signature, submit and resubmit all gate on
      `OfferService.assertAccepted` (not just the UI). **Accept** stores the signed PDF on the record
      (`companies/{cid}/employees/{eid}/offer/OFFER_LETTER.pdf`), sets `ACCEPTED`, audits `OFFER_ACCEPTED`,
@@ -324,9 +325,10 @@ company agreements. There is **no verification loop** — the employee's signed 
    `400` if the selection is empty. Audits `AGREEMENTS_SENT` with the created types; the employee is notified
    **after commit, best-effort** (email + Web Push — employees have no bell feed).
 2. **Employee reads & signs** in their onboarding portal (`/{slug}/employee/agreements/{type}`): the **full
-   agreement text** renders (scroll-to-end gates the consent checkbox); the few blanks are prefilled per the
-   map below; the employee types their Aadhaar (AUP only) and captures a **fresh** signature
-   (`SignatureCapture` — never the onboarding signature; a just-captured one may be reused across the pack).
+   agreement text** renders (scroll-to-end gates the consent checkbox); the blanks are filled **inline, inside
+   the document** (see *Inline in-document fill* below) — prefilled per the map below, the employee types their
+   Aadhaar (AUP only) and signs at the signature line by capturing a **fresh** signature (`SignatureCapture` —
+   never the onboarding signature; a just-captured one may be reused across the pack).
 3. **Employee submits** (`POST /me/agreements/{type}/complete`): PENDING-only; `consentAccepted` must be
    `true` (server-checked); AUP requires a 12-digit Aadhaar. A PDF is rendered and stored at
    `companies/{cid}/employees/{eid}/agreements/{type}.pdf`; the row flips **COMPLETED**; the **sending HR**
@@ -338,6 +340,34 @@ company agreements. There is **no verification loop** — the employee's signed 
 **both** the on-screen read view (tokens → prefills/blanks) and the PDF (tokens → filled values +
 signature), so the two can never diverge. The PDF is composed by the generic `templates/pdf/agreement.html`
 (letterhead slot + `th:utext` body) via the existing `HtmlPdfRenderer`/openhtmltopdf pipeline.
+
+**Inline in-document fill (the standard for employee-facing documents).** The employee fills and signs
+**inside the document body**, not in a separate side panel. It applies to every read-and-sign document — the
+**Offer Letter** (§3.2), the three **agreements** (§3.5), and the **offboarding documents** (§3.6 stage 2);
+the **onboarding Forms 1–4 are exempt** (they stay structured multi-step forms in the onboarding stepper, not
+free-text documents). Mechanism:
+- **Display render (server).** The read-view render substitutes each **server-owned** token (company / HR /
+  HR-values) as text exactly as before, but substitutes each **employee-fill** token with a stable field
+  marker `<span data-field="KEY" data-kind="text|date"></span>`, and the signature spot with a signature
+  marker `<span data-field="__signature" data-kind="signature"></span>` (`support.DocumentFieldMarkers`). This
+  is a **display-only** overload of each template's `render(…)`; the **PDF/accept render path is a separate
+  overload and is byte-for-byte unchanged** — it still substitutes real values, never markers (the existing
+  `*RenderTest` fidelity suites pass untouched).
+- **Field manifest.** Each document returns a uniform `FieldView` list (`key/label/kind/value/required`) — the
+  offboarding docs already did (`employeeFields`); the agreements now carry an additive `fields` on
+  `MyAgreementView` (the offer has none). `data-field` joins the marker to its manifest entry (the source of
+  truth for kind/required/prefill; an unknown marker fails loudly).
+- **Client hydration.** One shared `InlineDocument` component parses the returned HTML and mounts a controlled
+  underline-style input at each marker that **flows with the prose** (never a block box), validates inline
+  (required + the Aadhaar 12-digit rule) at the field, and renders the signature line as an inline
+  **"Sign here"** slot → `SignatureCapture` in a dialog → the image stamps inline (a fresh signature may be
+  reused across documents the same session). Scroll-to-end + consent gating are unchanged.
+- **Submit — zero API change.** The inline values are collected into the **exact** payloads the
+  `complete`/`accept` endpoints already accept (agreement → `{consentAccepted, designation?, aadhaar?,
+  address?, mobile?, signatureDataUrl}`; offboarding → `{consentAccepted, fillValues, signatureDataUrl}`;
+  offer → `{consentAccepted, signatureDataUrl}`). The only OpenAPI delta is the additive `MyAgreementView.fields`.
+- **Revision reopen** (offboarding send-back) shows the prior values (they arrive in the manifest prefills),
+  editable, above HR's note.
 
 **Letterhead slot.** The agreement PDF reserves an **empty header band** (via the `@page` top margin +
 `#letterhead` running element) and a **footer band** on every page. Both are intentionally empty now; a
@@ -441,7 +471,7 @@ Rendering reuses the agreements pipeline verbatim: single-source HTML fragments
 (onboarding-scope), the case must be **APPROVED** (`409` if PENDING_APPROVAL/none); **per-type idempotency**
 like the agreements pack (create only the not-yet-sent selected types; `409` on a full duplicate); required
 `hrValues` validated per type. The employee reads + signs under `/me/offboarding/{type}` (workspace,
-scroll-to-consent + prefilled fields + fresh `SignatureCapture`); `POST /me/offboarding/{type}/complete`
+scroll-to-consent + **inline in-document fill** (see §3.5) + fresh `SignatureCapture`); `POST /me/offboarding/{type}/complete`
 (PENDING **or** REVISION_REQUESTED only) renders + stores the PDF at
 `companies/{cid}/employees/{eid}/offboarding/{type}.pdf` (**stable key — resubmission overwrites**), sets
 SUBMITTED, notifies the sending HR (durable row + push), audits `OFFBOARDING_DOC_SUBMITTED`. HR then

@@ -45,6 +45,7 @@ import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
 import com.ihrms.push.PushService;
 import com.ihrms.push.PushService.PrincipalRef;
 import com.ihrms.storage.StorageService;
+import com.ihrms.support.DocumentFieldMarkers;
 import com.ihrms.support.Hashing;
 import java.time.LocalDate;
 import java.time.Period;
@@ -378,12 +379,15 @@ public class OffboardingDocumentService {
 
   private String renderReadView(OffboardingDocument d, Employee employee) {
     Map<String, String> t = commonTokens(d, employee);
-    // Employee fill spots shown as prefills (read preview); signature/date left blank.
+    // Employee fill spots render as INLINE MARKERS (the client hydrates a controlled input at each, seeded
+    // from the employeeFields manifest); the signature spot renders a signature marker. Server-substituted
+    // tokens (company/HR/hrValues) stay text. The PDF render (renderPdfBody) is untouched — real values.
+    Map<String, String> markers = new java.util.LinkedHashMap<>();
     for (FieldView f : employeeFields(d.getType(), employee)) {
-      t.put(f.key(), f.value());
+      markers.put(f.key(), DocumentFieldMarkers.field(f.key(), f.kind().name().toLowerCase()));
     }
-    t.putIfAbsent("SIGN_DATE", "");
-    return templates.render(d.getType(), t, "");
+    t.putIfAbsent("SIGN_DATE", ""); // date is server-stamped at submit
+    return templates.render(d.getType(), t, markers, DocumentFieldMarkers.SIGNATURE);
   }
 
   private String renderPdfBody(

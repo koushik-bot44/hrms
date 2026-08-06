@@ -9671,6 +9671,12 @@
           },
           "prefill": {
             "$ref": "#/components/schemas/AgreementPrefill"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldView"
+            }
           }
         }
       },

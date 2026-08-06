@@ -256,11 +256,14 @@ export type MyAgreementSummary = Omit<Required<Schemas['MyAgreementSummary']>, '
 /** A single agreement the employee reads and fills. */
 export type MyAgreementView = Omit<
   Required<Schemas['MyAgreementView']>,
-  'completedAt' | 'downloadUrl' | 'prefill'
+  'completedAt' | 'downloadUrl' | 'prefill' | 'fields'
 > & {
   completedAt: string | null;
   downloadUrl: string | null;
   prefill: AgreementPrefill;
+  // The inline-fill manifest (§3.2) — the same uniform FieldView the offboarding docs use, so the shared
+  // InlineDocument hydrates a controlled input at each marker keyed by data-field. Empty for Notice Period.
+  fields: OffboardingFieldView[];
 };
 
 /** Result of completing one agreement — its COMPLETED state + a presigned link to the stored PDF. */

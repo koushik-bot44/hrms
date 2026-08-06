@@ -3587,6 +3587,7 @@ export interface components {
             completedAt?: string;
             downloadUrl?: string;
             prefill?: components["schemas"]["AgreementPrefill"];
+            fields?: components["schemas"]["FieldView"][];
         };
         /** @description The ACCOUNTANT's own team — the roster header (null if none assigned). */
         MyTeamView: {

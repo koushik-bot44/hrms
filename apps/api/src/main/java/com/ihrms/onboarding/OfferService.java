@@ -24,6 +24,7 @@ import com.ihrms.onboarding.dto.OnboardingDtos.PresignedView;
 import com.ihrms.push.PushService;
 import com.ihrms.push.PushService.PrincipalRef;
 import com.ihrms.storage.StorageService;
+import com.ihrms.support.DocumentFieldMarkers;
 import com.ihrms.support.Hashing;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -134,7 +135,11 @@ public class OfferService {
       return null;
     }
     Employee employee = employees.findById(emp.employeeId()).orElseThrow();
-    String bodyHtml = templates.render(readTokens(employee, offer), "");
+    // Display render: the offer has no employee-fill fields — the only inline marker is the signature slot
+    // (the employee signs at the line). The accepted-PDF render (accept) is unchanged (real signature image).
+    String bodyHtml =
+        templates.render(
+            readTokens(employee, offer), java.util.Map.of(), DocumentFieldMarkers.SIGNATURE);
     return new MyOfferView(
         offer.getStatus(),
         bodyHtml,

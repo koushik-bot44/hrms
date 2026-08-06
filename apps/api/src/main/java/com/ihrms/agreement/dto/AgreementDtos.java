@@ -37,9 +37,11 @@ public final class AgreementDtos {
       String fullName, String employeeCode, String designation, String address, String mobile) {}
 
   /**
-   * The single-agreement view the employee reads and fills. {@code bodyHtml} is the full agreement text
-   * with {{COMPANY_NAME}}/{{HR_NAME}} substituted and fill spots shown as blanks (the single source shared
-   * with the PDF). The frontend renders the per-type fill fields from {@code prefill}.
+   * The single-agreement view the employee reads and fills. {@code bodyHtml} is the full agreement text with
+   * server tokens ({{COMPANY_NAME}}/{{HR_NAME}}/name/id) substituted and the EMPLOYEE-FILL spots rendered as
+   * inline field markers (the single source shared with the PDF). {@code fields} is the uniform manifest the
+   * client hydrates each marker from (key/label/kind/prefill/required), matched by the marker's data-field.
+   * {@code prefill} is retained for compatibility (the record shape does not shrink).
    */
   public record MyAgreementView(
       EmployeeAgreementType type,
@@ -49,7 +51,8 @@ public final class AgreementDtos {
       String sentAt,
       String completedAt,
       String downloadUrl,
-      AgreementPrefill prefill) {}
+      AgreementPrefill prefill,
+      List<com.ihrms.offboarding.dto.OffboardingDocDtos.FieldView> fields) {}
 
   /** The employee's agreement list (status + titles), newest send first not required — fixed type order. */
   public record MyAgreementSummary(
