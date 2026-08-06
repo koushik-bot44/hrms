@@ -15,28 +15,27 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swa
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
 
+const DESCRIPTION =
+  'hrorg.in runs and secures internal HR operations for organizations — onboarding to exit, with e-signed ' +
+  'employment documents, attendance and leave, internal communications, and audit-ready records. Confidential ' +
+  'by design.';
+
 export const metadata: Metadata = {
   ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
-  title: 'IHRMS — The complete employee lifecycle platform',
-  description:
-    'IHRMS runs the entire employee lifecycle for multi-company organizations — offer letters, e-signatures, ' +
-    'attendance, leave, internal mail, and audited legal documents in one governed system.',
-  applicationName: 'IHRMS',
+  title: 'hrorg.in — Internal HR management services',
+  description: DESCRIPTION,
+  applicationName: 'hrorg.in',
   robots: { index: true, follow: true },
   openGraph: {
     type: 'website',
-    title: 'IHRMS — The complete employee lifecycle platform',
-    description:
-      'Onboarding to offboarding — offer letters, e-signatures, attendance, leave, internal mail, and audited ' +
-      'legal documents in one system.',
-    siteName: 'IHRMS',
+    title: 'hrorg.in — Internal HR management services',
+    description: DESCRIPTION,
+    siteName: 'hrorg.in',
   },
   twitter: {
     card: 'summary',
-    title: 'IHRMS — The complete employee lifecycle platform',
-    description:
-      'Onboarding to offboarding — offer letters, e-signatures, attendance, leave, internal mail, and audited ' +
-      'legal documents in one system.',
+    title: 'hrorg.in — Internal HR management services',
+    description: DESCRIPTION,
   },
 };
 

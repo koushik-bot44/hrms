@@ -162,9 +162,7 @@ export function InlineDocVignette() {
         , subject to the terms below.
       </p>
       <p className="text-muted-foreground">
-        Employee ID{' '}
-        <span className="border-b border-dashed border-white/25 px-6 text-transparent">.</span> will be issued
-        on approval.
+        Please review the terms and sign below to accept.
       </p>
       <div className="flex items-end justify-between rounded-lg bg-white/[0.03] p-3 ring-1 ring-inset ring-white/5">
         <div>
@@ -219,7 +217,7 @@ export function MailVignette() {
         </div>
       ))}
       <div className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground">
-        <Archive className="size-3.5" /> Archive · Drafts · Labels · Filters — isolated per company
+        <Archive className="size-3.5" /> Archive · Drafts · Labels · Filters — private to your organization
       </div>
     </div>
   );
@@ -309,23 +307,23 @@ export function ClearanceVignette() {
 // ── 6. Security: masked field + audit line ───────────────────────────────────────────────────────────
 export function SecurityVignette() {
   const audit = [
-    { who: 'HR · R. Iyer', act: 'revealed PAN', tag: 'Audited' },
-    { who: 'System', act: 'offer PDF stored', tag: 'Record' },
-    { who: 'Manager', act: 'approved · ID minted', tag: 'Approval' },
+    { who: 'HR', act: 'viewed a masked field', tag: 'Audited' },
+    { who: 'System', act: 'stored a signed document', tag: 'Record' },
+    { who: 'Admin', act: 'updated access', tag: 'Access' },
   ];
   return (
     <div className="space-y-3 text-[12px]">
       <div className="flex items-center justify-between">
         <div className="font-semibold text-foreground">Employee record</div>
-        <Chip tone="primary">Role-scoped</Chip>
+        <Chip tone="primary">Access-controlled</Chip>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-lg bg-white/[0.03] p-2.5 ring-1 ring-inset ring-white/5">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">PAN</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tax ID</div>
           <div className="mt-1 font-mono text-foreground">•••• •••• ••</div>
         </div>
         <div className="rounded-lg bg-white/[0.03] p-2.5 ring-1 ring-inset ring-white/5">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Aadhaar</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">National ID</div>
           <div className="mt-1 font-mono text-foreground">•••• •••• ••••</div>
         </div>
       </div>
@@ -351,9 +349,9 @@ export function SecurityVignette() {
 // ── 7. Requests routing ──────────────────────────────────────────────────────────────────────────────
 export function RequestVignette() {
   const rows = [
-    { k: 'Payslip · July', to: 'Accounts', tone: 'primary' as const, status: 'In progress' },
-    { k: 'Experience letter', to: 'HR', tone: 'success' as const, status: 'Issued' },
-    { k: 'Address proof', to: 'HR', tone: 'warning' as const, status: 'Requested' },
+    { k: 'Payslip', sub: 'July', tone: 'primary' as const, status: 'In progress' },
+    { k: 'Experience letter', sub: 'Requested 2 Aug', tone: 'success' as const, status: 'Issued' },
+    { k: 'Address proof', sub: 'Requested today', tone: 'warning' as const, status: 'Requested' },
   ];
   return (
     <div className="space-y-2 text-[12px]">
@@ -368,7 +366,7 @@ export function RequestVignette() {
         >
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium text-foreground">{r.k}</div>
-            <div className="text-[11px] text-muted-foreground">Routed to {r.to}</div>
+            <div className="text-[11px] text-muted-foreground">{r.sub}</div>
           </div>
           <Chip tone={r.tone}>{r.status}</Chip>
         </div>

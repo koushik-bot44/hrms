@@ -1,40 +1,40 @@
 import * as React from 'react';
-import { FileSignature, Layers, ScrollText, ShieldCheck } from 'lucide-react';
+import { FileSignature, Layers, Lock, ScrollText } from 'lucide-react';
 import { Eyebrow, Section, SectionHeading } from '@/components/marketing/chrome';
 import { Reveal, RevealGroup, RevealItem } from '@/components/marketing/motion';
 
-/** §7 — why IHRMS. Four benefit cards, each a truthful consequence of the platform. */
+/** §5 — why hrorg.in. Outcome cards in a corporate register; each a truthful consequence of the service. */
 const BENEFITS = [
   {
     icon: Layers,
-    title: 'One system for the whole lifecycle',
-    body: 'From invite to relieving letter, every stage lives in the same place — no handoffs between disconnected tools.',
+    title: 'One partner for the whole employee journey',
+    body: 'Onboarding to exit, operated and secured in one place — no scattered tools or handoffs.',
   },
   {
     icon: ScrollText,
-    title: 'Every action attributable',
-    body: 'An append-only audit trail means you can always answer who did what, and when.',
+    title: 'Audit-ready records',
+    body: 'Every action is recorded, so you can always show what happened, and when.',
   },
   {
     icon: FileSignature,
-    title: 'Legal documents without paper',
-    body: 'Offers and agreements are generated, signed in place, and stored as PDFs on the record.',
+    title: 'Digitally executed employment documentation',
+    body: 'Employment documents generated, e-signed, and stored as finished PDFs — no paper.',
   },
   {
-    icon: ShieldCheck,
-    title: 'Role clarity across companies',
-    body: 'Scoped roles and per-company isolation keep responsibilities — and data — exactly where they belong.',
+    icon: Lock,
+    title: 'Confidentiality by design',
+    body: 'Your operations and data stay private, protected, and yours.',
   },
 ];
 
-export function WhyIhrms() {
+export function WhyHrorg() {
   return (
     <Section id="why" className="border-t border-white/5">
       <div className="mx-auto max-w-2xl text-center">
         <Reveal>
-          <Eyebrow>Why IHRMS</Eyebrow>
+          <Eyebrow>Why hrorg.in</Eyebrow>
           <SectionHeading className="mt-4">
-            The whole lifecycle, <span className="text-gradient">governed by default</span>.
+            Outcomes your organization can <span className="text-gradient">stand behind</span>.
           </SectionHeading>
         </Reveal>
       </div>

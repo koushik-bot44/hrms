@@ -1,17 +1,18 @@
 import * as React from 'react';
 import Link from 'next/link';
-import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Mail, ShieldCheck } from 'lucide-react';
 import { Reveal } from '@/components/marketing/motion';
 
 /**
- * §8 — final CTA + footer. A sign-in panel over an aurora backdrop, then a slim footer with the brand, the
- * anchor links, and the two real sign-in doors. No fake contact/social, no invented company details.
+ * §7 — final CTA + footer. A sign-in panel over an aurora backdrop with the subscription line beneath the two
+ * doors, then a slim footer with the brand + subtitle, anchors, the two real sign-in doors, and the contact
+ * address. No fake contact/social, no invented company details.
  */
 const FOOTER_LINKS = [
   { href: '#product', label: 'Product' },
-  { href: '#workflow', label: 'Workflow' },
   { href: '#features', label: 'Features' },
   { href: '#security', label: 'Security' },
+  { href: '#contact', label: 'Contact' },
 ] as const;
 
 export function FooterCta() {
@@ -27,10 +28,10 @@ export function FooterCta() {
               Ready when you are
             </span>
             <h2 className="mt-5 text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Run the entire employee lifecycle in <span className="text-gradient">one place</span>.
+              Hand off your internal HR — <span className="text-gradient">run and secured</span>.
             </h2>
             <p className="mx-auto mt-4 max-w-lg text-pretty text-muted-foreground">
-              Sign in to your workspace to continue. Onboarding employees have their own door.
+              Sign in to your workspace to continue. Employees have their own door.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link
@@ -47,18 +48,24 @@ export function FooterCta() {
                 Employee sign-in
               </Link>
             </div>
+            <p className="mt-4 text-sm text-muted-foreground">
+              Not subscribed yet?{' '}
+              <a href="#contact" className="font-medium text-primary-bright underline-offset-4 hover:underline">
+                Contact us
+              </a>
+            </p>
           </div>
         </Reveal>
 
         {/* slim footer */}
         <div className="mt-14 flex flex-col items-center justify-between gap-6 border-t border-white/5 pt-8 sm:flex-row">
           <div className="flex items-center gap-2.5">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <ShieldCheck className="size-4" />
             </span>
             <div className="leading-tight">
-              <div className="text-sm font-semibold text-foreground">IHRMS</div>
-              <div className="text-[11px] text-muted-foreground">Employee lifecycle platform</div>
+              <div className="text-sm font-semibold text-foreground">hrorg.in</div>
+              <div className="text-[11px] text-muted-foreground/70">Internal HR management services</div>
             </div>
           </div>
 
@@ -71,14 +78,18 @@ export function FooterCta() {
             <Link href="/login" className="transition-colors hover:text-foreground">
               Sign in
             </Link>
-            <Link href="/employee/login" className="transition-colors hover:text-foreground">
-              Employee
-            </Link>
+            <a
+              href="mailto:info@hrorg.in"
+              className="inline-flex items-center gap-1.5 text-primary-bright transition-colors hover:text-foreground"
+            >
+              <Mail className="size-3.5" />
+              info@hrorg.in
+            </a>
           </nav>
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground/70">
-          © IHRMS · Internal HR platform.
+          © hrorg.in · Internal HR management services.
         </p>
       </div>
     </footer>

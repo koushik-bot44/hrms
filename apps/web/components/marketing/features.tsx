@@ -12,8 +12,9 @@ import {
 } from '@/components/marketing/vignettes';
 
 /**
- * §4 — feature groups, alternating layout. Each: an eyebrow + headline, 3–5 REAL capability points, and a
- * browser-framed in-code vignette. Copy is drawn strictly from the shipped inventory — no extrapolation.
+ * §3 — capability groups, alternating layout. Each: an eyebrow + headline, outcome-focused points (WHAT the
+ * client gets, never HOW the machinery works inside), and a browser-framed in-code vignette. No internal
+ * workflow vocabulary.
  */
 type Group = {
   eyebrow: string;
@@ -25,65 +26,64 @@ type Group = {
 
 const GROUPS: Group[] = [
   {
-    eyebrow: 'Documents & e-sign',
-    title: 'Legal documents, generated and signed in place',
+    eyebrow: 'Onboarding & documents',
+    title: 'Digital onboarding with e-signed employment documents',
     points: [
-      'Offer letters and agreements generated from your templates, with the company name and terms filled in',
-      'Employees fill the blanks inside the document and sign right at the line',
-      'Four ways to sign — draw, type a style, upload, or upload and clean up',
-      'Every submission becomes a stored PDF on the employee record',
+      'New hires brought onboard digitally, start to finish',
+      'Employment documents e-signed in place and issued as finished PDFs',
+      'Signatures captured however people prefer — draw, type, or upload',
+      'Completed paperwork kept on file, ready whenever you need it',
     ],
-    url: 'acme.company.example/offer',
+    url: 'acme.company.example/onboarding',
     vignette: <InlineDocVignette />,
   },
   {
     eyebrow: 'Attendance & leave',
-    title: 'Time tracked correctly, analytics that hold up',
+    title: 'Attendance and leave, with analytics and payroll-cycle reporting',
     points: [
-      'Clock in and out with breaks — overnight shifts handled correctly',
-      'Adherence and unapproved-absence analytics',
-      'Today, Month, Payroll-cycle and Custom date ranges',
-      'Team composition views and CSV export',
-      'Leave applications routed for approval',
+      'Clock-in and clock-out with breaks — overnight shifts handled correctly',
+      'Adherence and absence analytics at a glance',
+      'Reporting by day, month, payroll cycle, or custom range',
+      'Team views and CSV export; leave managed through to a decision',
     ],
     url: 'acme.company.example/attendance',
     vignette: <AttendanceVignette />,
   },
   {
-    eyebrow: 'Internal mail',
-    title: 'A full mail client, isolated per company',
+    eyebrow: 'Internal communications',
+    title: 'A private communications space for your organization',
     points: [
-      'Conversations with CC/BCC and attachments',
-      'Stars, archive, drafts and labels',
-      'Powerful filters to find anything fast',
-      'On your company’s own mail domain, isolated per company',
+      'Conversations with attachments, stars, and labels',
+      'Fast search and filters to find anything quickly',
+      'On your organization’s own domain',
+      'Private to your organization',
     ],
     url: 'mail.company.example',
     vignette: <MailVignette />,
   },
   {
-    eyebrow: 'Offboarding',
-    title: 'Exits done properly, end to end',
+    eyebrow: 'Documents & letters',
+    title: 'Document and letter services, on request',
     points: [
-      'Exits require leadership approval before anything proceeds',
-      'Settlement and separation documents with case-specific terms',
-      'An internal clearance checklist across departments',
-      'Relieving and experience letters generated with a preview',
-      'Account deactivation only when HR says so',
-    ],
-    url: 'acme.company.example/offboarding',
-    vignette: <ClearanceVignette />,
-  },
-  {
-    eyebrow: 'Requests & letters',
-    title: 'Requests that route to the right desk',
-    points: [
-      'Employees request payslips and documents in a few taps',
-      'Finance requests route to accountants; letters route to HR',
+      'Employees request payslips, letters, and documents in a few taps',
+      'Requests reach the right team and are actioned',
       'Status tracked end to end, for everyone involved',
+      'Letters issued as finished, audit-ready PDFs',
     ],
     url: 'acme.company.example/requests',
     vignette: <RequestVignette />,
+  },
+  {
+    eyebrow: 'Exits',
+    title: 'Structured exits, handled with care',
+    points: [
+      'Orderly offboarding managed end to end',
+      'Settlement and separation documentation prepared per case',
+      'An internal clearance checklist across teams',
+      'Relieving and experience letters generated with a preview',
+    ],
+    url: 'acme.company.example/exits',
+    vignette: <ClearanceVignette />,
   },
 ];
 
@@ -121,12 +121,12 @@ function FeatureRow({ group, index }: { group: Group; index: number }) {
 
 export function Features() {
   return (
-    <Section id="features" className="border-t border-white/5">
+    <Section id="features" className="border-t border-white/5 bg-white/[0.015]">
       <div className="mx-auto max-w-2xl text-center">
         <Reveal>
-          <Eyebrow>What&apos;s inside</Eyebrow>
+          <Eyebrow>Capabilities</Eyebrow>
           <SectionHeading className="mt-4">
-            Everything the lifecycle needs, <span className="text-gradient">built in</span>.
+            Everything your HR needs, <span className="text-gradient">run for you</span>.
           </SectionHeading>
         </Reveal>
       </div>

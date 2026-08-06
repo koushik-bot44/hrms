@@ -1,27 +1,28 @@
 import * as React from 'react';
 import {
-  Building2,
   EyeOff,
   FileCheck2,
   History,
   Lock,
-  Smartphone,
+  ShieldCheck,
+  UserCheck,
 } from 'lucide-react';
 import { BrowserFrame, Eyebrow, Section, SectionHeading, Lead } from '@/components/marketing/chrome';
 import { Reveal, RevealGroup, RevealItem, Tilt } from '@/components/marketing/motion';
 import { SecurityVignette } from '@/components/marketing/vignettes';
 
 /**
- * §6 — security & trust. Claims EXACTLY the sanctioned set, no more (no SOC2/ISO/GDPR badges, no uptime/SLA).
- * Each maps to a real platform guarantee.
+ * §4 — security & confidentiality, framed as the CLIENT's outcome (their operations and records are isolated,
+ * access-controlled, encrypted where sensitive, and fully audited) — no architecture vocabulary, plus the
+ * confidential-by-design line. Truthful guarantees only.
  */
 const CLAIMS = [
-  { icon: Building2, title: 'Per-company isolation', body: 'Every company is its own tenant; data never crosses the wall.' },
-  { icon: Lock, title: 'Role-scoped access', body: 'Access is enforced by role on every endpoint, not just in the UI.' },
-  { icon: EyeOff, title: 'Sensitive fields protected', body: 'PAN and Aadhaar are encrypted at rest, masked in the UI, and every reveal is audited.' },
-  { icon: History, title: 'Append-only audit trail', body: 'Actions across the platform are recorded and cannot be edited away.' },
-  { icon: Smartphone, title: 'OTP-verified access', body: 'Onboarding access is verified with a one-time code.' },
-  { icon: FileCheck2, title: 'Tamper-evident PDFs', body: 'Signatures are rendered into stored PDFs kept on the record.' },
+  { icon: ShieldCheck, title: 'Isolated operations', body: 'Your HR operations and records stay walled off — yours alone.' },
+  { icon: Lock, title: 'Access-controlled', body: 'Only the right people see the right information, and no more.' },
+  { icon: EyeOff, title: 'Encrypted where sensitive', body: 'Sensitive details are encrypted at rest and shown masked.' },
+  { icon: History, title: 'Audit-ready records', body: 'Every action is recorded, so your records hold up later.' },
+  { icon: UserCheck, title: 'Confirmed access', body: 'Every sign-in is confirmed before anyone gets in.' },
+  { icon: FileCheck2, title: 'Documents kept intact', body: 'Signed documents are stored as tamper-evident PDFs.' },
 ];
 
 export function Security() {
@@ -29,13 +30,13 @@ export function Security() {
     <Section id="security" className="border-t border-white/5">
       <div className="mx-auto max-w-2xl text-center">
         <Reveal>
-          <Eyebrow>Security &amp; trust</Eyebrow>
+          <Eyebrow>Security &amp; confidentiality</Eyebrow>
           <SectionHeading className="mt-4">
-            Built to be <span className="text-gradient">attributable</span> and contained.
+            Secured throughout, <span className="text-gradient">confidential by design</span>.
           </SectionHeading>
           <Lead className="mx-auto mt-4 max-w-xl">
-            Governance isn&apos;t a feature bolted on — it&apos;s how the platform is built: scoped, encrypted,
-            and audited by default.
+            We secure your internal HR operations end to end — which is also why we don&apos;t publish how it
+            works inside. Your operations and data stay protected, and stay yours.
           </Lead>
         </Reveal>
       </div>
@@ -62,7 +63,7 @@ export function Security() {
 
         <Reveal className="[perspective:1200px]" delay={0.1}>
           <Tilt max={6}>
-            <BrowserFrame url="acme.company.example/record">
+            <BrowserFrame url="acme.company.example/records">
               <SecurityVignette />
             </BrowserFrame>
           </Tilt>

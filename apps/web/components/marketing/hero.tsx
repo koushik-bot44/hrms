@@ -7,14 +7,15 @@ import { Reveal, Tilt } from '@/components/marketing/motion';
 import { DashboardVignette } from '@/components/marketing/vignettes';
 
 /**
- * HERO (§1). Server-rendered copy (present in the SSR HTML for SEO), with the interactive constellation as a
- * lazy client backdrop and the flagship dashboard vignette floating in front. Real claims only.
+ * HERO (§1). Server-rendered copy (present in the SSR HTML for SEO), with the interactive scene as a lazy
+ * client backdrop and a flagship vignette floating in front. Positioning: a third party that runs and secures
+ * client organizations' internal HR — outcomes, not internal architecture. Real claims only.
  */
 const TRUST = [
-  'Multi-company isolation',
-  'Role-scoped access',
-  'Append-only audit',
-  'Encrypted at rest',
+  'Confidential by design',
+  'Encrypted where sensitive',
+  'Access-controlled',
+  'Audit-ready records',
 ] as const;
 
 export function Hero() {
@@ -35,23 +36,23 @@ export function Hero() {
         <div className="max-w-xl">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-primary-bright">
             <ShieldCheck className="size-3.5" />
-            Employee lifecycle platform
+            Confidential by design
           </span>
           <h1 className="mt-5 text-balance text-4xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-5xl md:text-6xl">
-            The complete employee lifecycle, in <span className="text-gradient">one governed system</span>.
+            Your internal HR operations, run and <span className="text-gradient">secured end to end</span>.
           </h1>
           <p className="mt-5 text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            IHRMS runs HR end to end for multi-company organizations — offer letters, e-signatures, attendance,
-            leave, internal mail, and audited legal documents. From the first invite to the final relieving
-            letter, every step is tracked, signed, and audited.
+            hrorg.in manages your people operations from onboarding to exit — e-signed employment documents,
+            attendance and leave, internal communications, and audit-ready records. We secure how your HR runs,
+            which is also why we don&apos;t publish how it works inside.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
-              href="#workflow"
+              href="#features"
               className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:-translate-y-0.5"
             >
-              Explore the platform
+              Explore capabilities
               <ArrowRight className="size-4" />
             </a>
             <Link
@@ -60,13 +61,14 @@ export function Hero() {
             >
               Sign in
             </Link>
-            <Link
-              href="/employee/login"
-              className="px-2 py-2.5 text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
-            >
-              Employee sign-in
-            </Link>
           </div>
+
+          <p className="mt-3 text-sm text-muted-foreground">
+            Not subscribed yet?{' '}
+            <a href="#contact" className="font-medium text-primary-bright underline-offset-4 hover:underline">
+              Contact us
+            </a>
+          </p>
 
           <ul className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
             {TRUST.map((t) => (
