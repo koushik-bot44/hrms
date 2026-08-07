@@ -48,13 +48,13 @@ export function Hero() {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <a
-              href="#features"
+            <Link
+              href="/features"
               className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:-translate-y-0.5"
             >
               Explore capabilities
               <ArrowRight className="size-4" />
-            </a>
+            </Link>
             <Link
               href="/login"
               className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-white/10"
@@ -65,9 +65,9 @@ export function Hero() {
 
           <p className="mt-3 text-sm text-muted-foreground">
             Not subscribed yet?{' '}
-            <a href="#contact" className="font-medium text-primary-bright underline-offset-4 hover:underline">
+            <Link href="/contact" className="font-medium text-primary-bright underline-offset-4 hover:underline">
               Contact us
-            </a>
+            </Link>
           </p>
 
           <ul className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">

@@ -62,6 +62,19 @@ class CompanySlugTest {
   }
 
   @Test
+  void generateSuffixesReservedMarketingPaths() {
+    // The marketing paths (live + proactively reserved) may never be minted as a company slug.
+    for (String word :
+        new String[] {
+          "features", "security", "contact", "about", "pricing", "product", "blog", "docs", "careers",
+          "legal", "privacy", "terms"
+        }) {
+      assertThat(CompanySlug.RESERVED).contains(word);
+      assertThat(CompanySlug.generate(word, new HashSet<>(), CompanySlug.RESERVED)).isEqualTo(word + "-2");
+    }
+  }
+
+  @Test
   void generateIsCaseInsensitiveAgainstTakenSlugs() {
     // takenLower holds lower-case; slugify already lower-cases, so a differently-cased name collides.
     Set<String> taken = new HashSet<>(Set.of("acme"));

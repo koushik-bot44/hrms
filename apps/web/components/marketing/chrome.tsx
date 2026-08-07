@@ -39,7 +39,7 @@ export function Eyebrow({ children, className }: { children: React.ReactNode; cl
   );
 }
 
-/** An editorial section heading; `accent` clips a gradient across the accented span. */
+/** An editorial section heading; the accented span clips a gradient. h1/h2 are large; h3 is a sub-size. */
 export function SectionHeading({
   children,
   className,
@@ -53,12 +53,42 @@ export function SectionHeading({
     <Tag
       className={cn(
         'text-balance font-semibold tracking-tight text-foreground',
-        Tag === 'h2' ? 'text-3xl sm:text-4xl md:text-[2.75rem] md:leading-[1.08]' : 'text-2xl sm:text-3xl',
+        Tag === 'h3'
+          ? 'text-2xl sm:text-3xl'
+          : 'text-3xl sm:text-4xl md:text-[2.75rem] md:leading-[1.08]',
         className,
       )}
     >
       {children}
     </Tag>
+  );
+}
+
+/**
+ * The top intro band for a marketing SUB-page (Features / Security / Contact) — carries the page's own H1 and
+ * has extra top padding so the fixed navbar never overlaps it. Server component (Reveal is a client island).
+ */
+export function PageIntro({
+  eyebrow,
+  title,
+  lead,
+}: {
+  eyebrow: React.ReactNode;
+  title: React.ReactNode;
+  lead?: React.ReactNode;
+}) {
+  return (
+    <section className="relative overflow-hidden px-5 pt-28 sm:px-8 sm:pt-36">
+      <div aria-hidden className="pointer-events-none absolute inset-0 m-aurora opacity-50" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 m-grid" />
+      <div className="relative mx-auto max-w-3xl text-center">
+        <Eyebrow>{eyebrow}</Eyebrow>
+        <SectionHeading as="h1" className="mt-4">
+          {title}
+        </SectionHeading>
+        {lead ? <Lead className="mx-auto mt-5 max-w-2xl">{lead}</Lead> : null}
+      </div>
+    </section>
   );
 }
 

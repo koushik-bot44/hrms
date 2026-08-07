@@ -121,17 +121,8 @@ function FeatureRow({ group, index }: { group: Group; index: number }) {
 
 export function Features() {
   return (
-    <Section id="features" className="border-t border-white/5 bg-white/[0.015]">
-      <div className="mx-auto max-w-2xl text-center">
-        <Reveal>
-          <Eyebrow>Capabilities</Eyebrow>
-          <SectionHeading className="mt-4">
-            Everything your HR needs, <span className="text-gradient">run for you</span>.
-          </SectionHeading>
-        </Reveal>
-      </div>
-
-      <div className="mt-16 space-y-20 md:space-y-28">
+    <Section className="pt-12">
+      <div className="space-y-20 md:space-y-28">
         {GROUPS.map((group, i) => (
           <FeatureRow key={group.eyebrow} group={group} index={i} />
         ))}

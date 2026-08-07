@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   UserCheck,
 } from 'lucide-react';
-import { BrowserFrame, Eyebrow, Section, SectionHeading, Lead } from '@/components/marketing/chrome';
+import { BrowserFrame, Section } from '@/components/marketing/chrome';
 import { Reveal, RevealGroup, RevealItem, Tilt } from '@/components/marketing/motion';
 import { SecurityVignette } from '@/components/marketing/vignettes';
 
@@ -27,21 +27,8 @@ const CLAIMS = [
 
 export function Security() {
   return (
-    <Section id="security" className="border-t border-white/5">
-      <div className="mx-auto max-w-2xl text-center">
-        <Reveal>
-          <Eyebrow>Security &amp; confidentiality</Eyebrow>
-          <SectionHeading className="mt-4">
-            Secured throughout, <span className="text-gradient">confidential by design</span>.
-          </SectionHeading>
-          <Lead className="mx-auto mt-4 max-w-xl">
-            We secure your internal HR operations end to end — which is also why we don&apos;t publish how it
-            works inside. Your operations and data stay protected, and stay yours.
-          </Lead>
-        </Reveal>
-      </div>
-
-      <div className="mt-12 grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+    <Section className="pt-12">
+      <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <RevealGroup className="grid gap-3 sm:grid-cols-2" gap={0.06}>
           {CLAIMS.map((c) => {
             const Icon = c.icon;

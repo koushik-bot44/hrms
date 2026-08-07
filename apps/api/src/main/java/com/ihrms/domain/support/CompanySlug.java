@@ -15,10 +15,13 @@ public final class CompanySlug {
 
   /**
    * App top-level route names a generated slug may never equal (a reserved hit is suffixed {@code -2}
-   * exactly like any other collision). Keep in sync with the web app's top-level routes.
+   * exactly like any other collision). Keep in sync with the web app's top-level routes — including the
+   * public marketing paths (some live today, the rest reserved proactively so future marketing pages never
+   * collide with a company slug). Reservation is not retroactive: existing (immutable) slugs are untouched.
    */
   public static final Set<String> RESERVED =
       Set.of(
+          // App top-level routes.
           "super-admin",
           "company-admin",
           "hr",
@@ -33,7 +36,20 @@ public final class CompanySlug {
           "api",
           "requests",
           "push",
-          "provisioning");
+          "provisioning",
+          // Public marketing paths (live + proactively reserved).
+          "features",
+          "security",
+          "contact",
+          "about",
+          "pricing",
+          "product",
+          "blog",
+          "docs",
+          "careers",
+          "legal",
+          "privacy",
+          "terms");
 
   private static final int MAX_LENGTH = 50;
   private static final Pattern NON_SLUG = Pattern.compile("[^a-z0-9]+");

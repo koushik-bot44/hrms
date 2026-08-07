@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
+import { MarketingNav } from '@/components/marketing/marketing-nav';
+import { SiteFooter } from '@/components/marketing/site-footer';
 import '../globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
@@ -42,7 +44,13 @@ export const metadata: Metadata = {
 export default function MarketingRootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`marketing scroll-smooth ${inter.variable}`} suppressHydrationWarning>
-      <body className="min-h-dvh bg-background font-sans text-foreground antialiased">{children}</body>
+      <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
+        <div className="relative flex min-h-dvh flex-col">
+          <MarketingNav />
+          <main className="flex-1">{children}</main>
+          <SiteFooter />
+        </div>
+      </body>
     </html>
   );
 }
