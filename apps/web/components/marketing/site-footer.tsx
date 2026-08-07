@@ -1,6 +1,7 @@
 import * as React from 'react';
 import Link from 'next/link';
-import { Mail, ShieldCheck } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import { BrandMark } from '@/components/brand-mark';
 
 /**
  * Shared slim footer for every marketing page (rendered once in the (marketing) layout). Brand + subtitle,
@@ -20,9 +21,7 @@ export function SiteFooter() {
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <ShieldCheck className="size-4" />
-            </span>
+            <BrandMark size={36} />
             <span className="leading-tight">
               <span className="block text-sm font-semibold text-foreground">hrorg.in</span>
               <span className="block text-[11px] text-muted-foreground/70">Internal HR management services</span>

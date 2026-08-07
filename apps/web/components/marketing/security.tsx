@@ -1,10 +1,10 @@
 import * as React from 'react';
 import {
+  Building2,
   EyeOff,
   FileCheck2,
   History,
   Lock,
-  ShieldCheck,
   UserCheck,
 } from 'lucide-react';
 import { BrowserFrame, Section } from '@/components/marketing/chrome';
@@ -17,7 +17,7 @@ import { SecurityVignette } from '@/components/marketing/vignettes';
  * confidential-by-design line. Truthful guarantees only.
  */
 const CLAIMS = [
-  { icon: ShieldCheck, title: 'Isolated operations', body: 'Your HR operations and records stay walled off — yours alone.' },
+  { icon: Building2, title: 'Isolated operations', body: 'Your HR operations and records stay walled off — yours alone.' },
   { icon: Lock, title: 'Access-controlled', body: 'Only the right people see the right information, and no more.' },
   { icon: EyeOff, title: 'Encrypted where sensitive', body: 'Sensitive details are encrypted at rest and shown masked.' },
   { icon: History, title: 'Audit-ready records', body: 'Every action is recorded, so your records hold up later.' },

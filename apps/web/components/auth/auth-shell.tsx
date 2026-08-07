@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { Lock } from 'lucide-react';
+import { BrandMark } from '@/components/brand-mark';
 import {
   Card,
   CardContent,
@@ -47,9 +48,7 @@ export function AuthShell({
 
         {/* Brand mark (glass tile) + portal sub-label. */}
         <div className="relative flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-inset ring-white/20">
-            <ShieldCheck className="size-5 text-primary-bright" aria-hidden />
-          </div>
+          <BrandMark size={40} rounded="rounded-xl" className="ring-1 ring-inset ring-white/20" />
           <div className="leading-tight">
             <div className="text-sm font-semibold tracking-tight text-sidebar-foreground">hrorg.in</div>
             <div className="text-[11px] text-sidebar-muted">{portalLabel}</div>
@@ -69,7 +68,7 @@ export function AuthShell({
 
         {/* Secure badge — the sidebar's pattern, door-specific label. Desktop only (compact header on mobile). */}
         <div className="relative mt-2 hidden items-start gap-2.5 rounded-xl bg-black/20 p-3 ring-1 ring-inset ring-white/10 md:flex">
-          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary-bright" aria-hidden />
+          <Lock className="mt-0.5 size-4 shrink-0 text-primary-bright" aria-hidden />
           <div className="leading-snug">
             <p className="text-xs font-semibold text-sidebar-foreground">{badgeLabel}</p>
             <p className="mt-0.5 text-[11px] text-sidebar-muted">

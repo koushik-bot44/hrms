@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Lock, LogIn, Mail, ShieldCheck } from 'lucide-react';
+import { Lock, LogIn, Mail } from 'lucide-react';
+import { BrandMark } from '@/components/brand-mark';
 import { StaffLoginSchema, type StaffLoginInput } from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
@@ -33,7 +34,7 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      icon={<ShieldCheck className="size-6" />}
+      icon={<BrandMark size={48} rounded="rounded-2xl" />}
       title="Welcome to hrorg.in"
       description="Sign in to hrorg.in with your email and password."
       portalLabel="Integrated HR Management"

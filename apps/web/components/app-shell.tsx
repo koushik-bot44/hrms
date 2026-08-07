@@ -6,11 +6,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Bell,
   KeyRound,
+  Lock,
   LogOut,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  ShieldCheck,
   UserRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MailButton } from '@/components/mail/mail-button';
 import { BrandWordmark } from '@/components/brand-wordmark';
+import { BrandMark } from '@/components/brand-mark';
 import { SidebarWaves } from '@/components/sidebar-waves';
 
 export interface NavItem {
@@ -117,9 +118,7 @@ function Brand({ roleLabel, collapsed = false }: { roleLabel: string; collapsed?
         collapsed ? 'justify-center px-2' : 'px-4',
       )}
     >
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-        <ShieldCheck className="size-4" />
-      </div>
+      <BrandMark size={32} className="shadow-sm ring-1 ring-inset ring-white/10" />
       {collapsed ? null : (
         <div className="min-w-0 leading-tight">
           <BrandWordmark className="text-sm font-semibold tracking-tight text-sidebar-foreground" />
@@ -134,7 +133,7 @@ function Brand({ roleLabel, collapsed = false }: { roleLabel: string; collapsed?
 function SecurityBadge() {
   return (
     <div className="flex items-start gap-2.5 rounded-xl bg-black/20 p-3 ring-1 ring-inset ring-sidebar-border">
-      <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary-bright" aria-hidden />
+      <Lock className="mt-0.5 size-4 shrink-0 text-primary-bright" aria-hidden />
       <div className="leading-snug">
         <p className="text-xs font-semibold text-sidebar-foreground">Secure &amp; compliant</p>
         <p className="mt-0.5 text-[11px] text-sidebar-muted">

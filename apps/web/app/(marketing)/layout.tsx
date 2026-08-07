@@ -22,22 +22,40 @@ const DESCRIPTION =
   'employment documents, attendance and leave, internal communications, and audit-ready records. Confidential ' +
   'by design.';
 
+const OG_IMAGE = {
+  url: '/brand/og-image.png',
+  width: 1200,
+  height: 630,
+  alt: 'hrorg.in — Internal HR management services',
+};
+
 export const metadata: Metadata = {
   ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
   title: 'hrorg.in — Internal HR management services',
   description: DESCRIPTION,
   applicationName: 'hrorg.in',
   robots: { index: true, follow: true },
+  // Browser-tab + app icons — the hrorg.in mark (served from /public/brand).
+  icons: {
+    icon: [
+      { url: '/brand/icon.png', type: 'image/png', sizes: '512x512' },
+      { url: '/brand/favicon.ico', sizes: 'any' },
+    ],
+    apple: [{ url: '/brand/apple-icon.png', sizes: '180x180' }],
+    shortcut: ['/brand/favicon.ico'],
+  },
   openGraph: {
     type: 'website',
     title: 'hrorg.in — Internal HR management services',
     description: DESCRIPTION,
     siteName: 'hrorg.in',
+    images: [OG_IMAGE],
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image',
     title: 'hrorg.in — Internal HR management services',
     description: DESCRIPTION,
+    images: [OG_IMAGE.url],
   },
 };
 

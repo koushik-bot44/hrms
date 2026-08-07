@@ -1,6 +1,6 @@
 import * as React from 'react';
 import Link from 'next/link';
-import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Lock } from 'lucide-react';
 import { BrowserFrame } from '@/components/marketing/chrome';
 import { HeroSceneMount } from '@/components/marketing/hero-scene-mount';
 import { Reveal, Tilt } from '@/components/marketing/motion';
@@ -35,7 +35,7 @@ export function Hero() {
         {/* copy */}
         <div className="max-w-xl">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-primary-bright">
-            <ShieldCheck className="size-3.5" />
+            <Lock className="size-3.5" />
             Confidential by design
           </span>
           <h1 className="mt-5 text-balance text-4xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-5xl md:text-6xl">

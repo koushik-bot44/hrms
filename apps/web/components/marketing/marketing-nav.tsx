@@ -3,8 +3,9 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, ShieldCheck, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BrandMark } from '@/components/brand-mark';
 
 /**
  * Sticky, glassy navbar shared across the marketing pages (rendered once in the layout). Real <Link>
@@ -25,9 +26,7 @@ function isActive(pathname: string, href: string): boolean {
 function Brand() {
   return (
     <Link href="/" className="flex items-center gap-2.5 pl-1">
-      <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm shadow-primary/40">
-        <ShieldCheck className="size-[1.125rem]" />
-      </span>
+      <BrandMark size={36} className="shadow-sm shadow-primary/40" />
       <span className="leading-tight">
         <span className="block text-[15px] font-semibold tracking-tight text-foreground">hrorg.in</span>
         <span className="block text-[10px] text-muted-foreground/70">Internal HR management services</span>

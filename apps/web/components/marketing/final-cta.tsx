@@ -1,6 +1,6 @@
 import * as React from 'react';
 import Link from 'next/link';
-import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
 import { Reveal } from '@/components/marketing/motion';
 
 /**
@@ -15,7 +15,7 @@ export function FinalCta() {
         <Reveal>
           <div className="m-glass overflow-hidden rounded-3xl p-8 text-center shadow-2xl shadow-black/40 sm:p-12">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-primary-bright">
-              <ShieldCheck className="size-3.5" />
+              <Sparkles className="size-3.5" />
               Ready when you are
             </span>
             <h2 className="mt-5 text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">

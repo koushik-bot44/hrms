@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Cog, Lock, ShieldCheck } from 'lucide-react';
+import { Cog, EyeOff, Lock } from 'lucide-react';
 import { Eyebrow, Section, SectionHeading, Lead } from '@/components/marketing/chrome';
 import { Reveal, RevealGroup, RevealItem } from '@/components/marketing/motion';
 
@@ -15,12 +15,12 @@ const PILLARS = [
     body: 'We operate your HR day to day — onboarding, employment documents, attendance, communications, and exits — so your teams can focus on the business.',
   },
   {
-    icon: ShieldCheck,
+    icon: Lock,
     title: 'We secure it',
     body: 'Access is controlled, sensitive details are encrypted, and everything is recorded — your operations and records stay protected throughout.',
   },
   {
-    icon: Lock,
+    icon: EyeOff,
     title: 'We keep it confidential',
     body: 'Your people data stays yours. We secure how your HR runs — which is also why we don’t publish how it works inside.',
   },
