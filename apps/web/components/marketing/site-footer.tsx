@@ -1,13 +1,13 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Mail } from 'lucide-react';
-import { BRAND_NAME, BRAND_SUBTITLE } from '@/lib/brand';
+import { BRAND_NAME, BRAND_SUBTITLE, SUPPORT_EMAIL } from '@/lib/brand';
 import { BrandMark } from '@/components/brand-mark';
 
 /**
  * Shared slim footer for every marketing page (rendered once in the (marketing) layout). Brand + subtitle,
- * real <Link> navigation matching the navbar, the two sign-in doors, and the contact address. No fake
- * contact/social, no invented company details.
+ * real <Link> navigation matching the navbar, the sign-in door, and the two real addresses — info@ for
+ * enquiries/new access, support@ for help (existing customers). No fake contact/social, no invented details.
  */
 const FOOTER_LINKS = [
   { href: '/', label: 'Product' },
@@ -44,6 +44,13 @@ export function SiteFooter() {
             >
               <Mail className="size-3.5" />
               info@hrorg.in
+            </a>
+            <a
+              href={`mailto:${SUPPORT_EMAIL}`}
+              className="inline-flex items-center gap-1.5 text-primary-bright transition-colors hover:text-foreground"
+            >
+              <Mail className="size-3.5" />
+              {SUPPORT_EMAIL}
             </a>
           </nav>
         </div>

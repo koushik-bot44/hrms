@@ -1,14 +1,16 @@
 import * as React from 'react';
 import Link from 'next/link';
+import { SUPPORT_EMAIL } from '@/lib/brand';
 import { Eyebrow, SectionHeading, Lead } from '@/components/marketing/chrome';
 import { Reveal } from '@/components/marketing/motion';
 import { ContactForm } from '@/components/marketing/contact-form';
 
 /**
  * /contact treatment. Interested organizations request access via the form (submissions are emailed, never
- * stored); info@hrorg.in remains as a mailto for people who prefer their own client. Access is by arrangement —
- * no self-serve sign-up, no fake phone/socials. This is where "Not subscribed yet? Contact us" lands from every
- * page. The section stays server-rendered; only <ContactForm> hydrates.
+ * stored); info@hrorg.in remains as a mailto for people who prefer their own client, and support@ is the help
+ * address for existing customers. Access is by arrangement — no self-serve sign-up, no fake phone/socials. This
+ * is where "Not subscribed yet? Contact us" lands from every page. The section stays server-rendered; only
+ * <ContactForm> hydrates.
  */
 export function Contact() {
   return (
@@ -47,6 +49,14 @@ export function Contact() {
           <Link href="/login" className="font-medium text-primary-bright underline-offset-4 hover:underline">
             Sign in
           </Link>
+          . Need help? Email{' '}
+          <a
+            href={`mailto:${SUPPORT_EMAIL}`}
+            className="font-medium text-primary-bright underline-offset-4 hover:underline"
+          >
+            {SUPPORT_EMAIL}
+          </a>
+          .
         </p>
       </Reveal>
     </section>
