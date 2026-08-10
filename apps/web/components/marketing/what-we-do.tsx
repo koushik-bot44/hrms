@@ -36,8 +36,8 @@ export function WhatWeDo() {
             We run and secure your <span className="text-gradient">internal HR operations</span>.
           </SectionHeading>
           <Lead className="mx-auto mt-4 max-w-xl">
-            hrorg.in is the partner organizations hand their internal HR to — onboarding to exit, operated for
-            you and kept confidential end to end.
+            hrorg.in is the partner you hand your internal HR to — from onboarding to exit, operated for you
+            and kept confidential end to end.
           </Lead>
         </Reveal>
       </div>

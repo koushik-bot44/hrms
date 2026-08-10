@@ -19,10 +19,10 @@ export function FinalCta() {
               Ready when you are
             </span>
             <h2 className="mt-5 text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Hand off your internal HR — <span className="text-gradient">run and secured</span>.
+              Pick up right where you <span className="text-gradient">left off</span>.
             </h2>
             <p className="mx-auto mt-4 max-w-lg text-pretty text-muted-foreground">
-              Sign in to your workspace to continue. Employees have their own door.
+              Sign in to your workspace to carry on. Employees have their own door.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link

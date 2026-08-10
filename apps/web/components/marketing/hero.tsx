@@ -43,8 +43,8 @@ export function Hero() {
           </h1>
           <p className="mt-5 text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
             hrorg.in manages your people operations from onboarding to exit — e-signed employment documents,
-            attendance and leave, internal communications, and audit-ready records. We secure how your HR runs,
-            which is also why we don&apos;t publish how it works inside.
+            attendance and leave, internal communications, and audit-ready records. Everything runs securely
+            and stays confidential, which is why we keep the inner workings private.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
