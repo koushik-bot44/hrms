@@ -184,7 +184,7 @@ public class TeamsService {
         throw conflict("Email \"" + address.email() + "\" is already in use");
       }
       userId = created.getId();
-      mail.sendStaffInvite(address.email(), role.name(), password);
+      mail.sendStaffInvite(address.email(), role.name(), password, companyId);
       devPassword = isProd() ? null : password;
     }
 

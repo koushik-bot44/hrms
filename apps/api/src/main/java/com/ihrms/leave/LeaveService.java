@@ -204,7 +204,7 @@ public class LeaveService {
     // The employee has no notification inbox — email them + they see it in their leave history (§8b).
     Employee employee = employees.findById(leave.getEmployeeId()).orElse(null);
     if (employee != null) {
-      mail.sendLeaveDecision(employee.getEmail(), approve, cleanNote);
+      mail.sendLeaveDecision(employee.getEmail(), approve, cleanNote, employee.getCompanyId());
     }
     audit.record(
         AuditActor.from(manager),

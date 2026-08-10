@@ -4144,6 +4144,36 @@
         }
       }
     },
+    "/public/companies/{slug}": {
+      "get": {
+        "tags": [
+          "public-company-controller"
+        ],
+        "operationId": "bySlug",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicCompanyView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/onboarding": {
       "get": {
         "tags": [
@@ -9533,6 +9563,17 @@
           }
         },
         "description": "The VAPID public key the browser needs to create a PushSubscription."
+      },
+      "PublicCompanyView": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
       },
       "HierarchyStatus": {
         "type": "object",

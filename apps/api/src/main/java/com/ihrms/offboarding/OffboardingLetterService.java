@@ -272,7 +272,7 @@ public class OffboardingLetterService {
       if (employee == null) {
         return;
       }
-      mail.sendOffboardingLetterIssued(employee.getEmail(), employee.getFullName(), title(type));
+      mail.sendOffboardingLetterIssued(employee.getEmail(), employee.getFullName(), title(type), employee.getCompanyId());
       push.sendToPrincipal(
           PrincipalRef.forEmployee(employee.getId(), employee.getCompanyId()),
           "Letter ready",

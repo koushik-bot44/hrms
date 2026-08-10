@@ -44,7 +44,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
     String uri = request.getRequestURI();
-    return !(uri.startsWith("/auth/") || uri.startsWith("/storage/blobs/"));
+    // Also the public company-by-slug lookup (slug routing Stage 3) — blunts slug enumeration/scraping.
+    return !(uri.startsWith("/auth/")
+        || uri.startsWith("/storage/blobs/")
+        || uri.startsWith("/public/companies/"));
   }
 
   @Override

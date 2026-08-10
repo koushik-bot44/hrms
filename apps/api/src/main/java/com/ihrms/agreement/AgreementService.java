@@ -172,7 +172,7 @@ public class AgreementService {
       if (employee == null) {
         return;
       }
-      mail.sendAgreementsAssigned(employee.getEmail(), employee.getFullName());
+      mail.sendAgreementsAssigned(employee.getEmail(), employee.getFullName(), employee.getCompanyId());
       push.sendToPrincipal(
           PrincipalRef.forEmployee(employee.getId(), employee.getCompanyId()),
           "Agreements to sign",
@@ -313,7 +313,7 @@ public class AgreementService {
           "Agreement signed",
           who + " completed the " + title + ".",
           "/hr/employees/" + employee.getId());
-      mail.sendAgreementCompleted(hr.getEmail(), who, title);
+      mail.sendAgreementCompleted(hr.getEmail(), who, title, hr.getCompanyId());
     } catch (RuntimeException e) {
       log.warn("Post-completion HR notice skipped (best-effort): {}", e.getMessage());
     }

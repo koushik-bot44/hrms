@@ -267,7 +267,7 @@ public class ReviewService {
       notifications.save(n);
     }
 
-    mail.sendEmployeeWelcome(employee.getEmail(), employee.getFullName(), employee.getEmployeeCode());
+    mail.sendEmployeeWelcome(employee.getEmail(), employee.getFullName(), employee.getEmployeeCode(), employee.getCompanyId());
 
     audit.record(
         AuditActor.from(actor),

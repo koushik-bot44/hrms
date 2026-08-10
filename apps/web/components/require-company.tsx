@@ -38,7 +38,14 @@ export function RequireCompany({ children }: { children: React.ReactNode }) {
   const sessionSlug = session?.companySlug ?? null;
   const matched = Boolean(sessionSlug) && sessionSlug === urlSlug;
 
+  // CARVE-OUT (Stage 3): the slugged sign-in doors `/{slug}/login` + `/{slug}/employee/login` are PUBLIC —
+  // the slug is a hint, not authorization. They must render for an ANONYMOUS visitor, so the tenancy guard
+  // never runs on them (their own page verifies the slug; a signed-in visitor is bounced home by the screen).
+  const sub = subPathUnderSlug(pathname, urlSlug);
+  const isLoginDoor = sub === '/login' || sub === '/employee/login';
+
   React.useEffect(() => {
+    if (isLoginDoor) return; // public door — no tenancy check
     if (status === 'loading') return;
     if (status === 'unauthenticated' || !session) {
       router.replace('/login');
@@ -52,8 +59,9 @@ export function RequireCompany({ children }: { children: React.ReactNode }) {
     }
     // A company-scoped session on a slug that isn't theirs → their own slug, same sub-path.
     router.replace(buildCompanyPath(sessionSlug, subPathUnderSlug(pathname, urlSlug)));
-  }, [status, session, matched, sessionSlug, urlSlug, pathname, router]);
+  }, [isLoginDoor, status, session, matched, sessionSlug, urlSlug, pathname, router]);
 
+  if (isLoginDoor) return <>{children}</>; // public sign-in door — render for anyone (incl. anonymous)
   if (status !== 'authenticated' || !session || !matched) {
     return (
       <div className="flex min-h-dvh items-center justify-center" role="status" aria-busy="true">

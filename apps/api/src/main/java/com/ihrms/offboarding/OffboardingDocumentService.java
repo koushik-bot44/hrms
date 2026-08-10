@@ -207,7 +207,7 @@ public class OffboardingDocumentService {
       if (employee == null) {
         return;
       }
-      mail.sendOffboardingDocsAssigned(employee.getEmail(), employee.getFullName());
+      mail.sendOffboardingDocsAssigned(employee.getEmail(), employee.getFullName(), employee.getCompanyId());
       push.sendToPrincipal(
           PrincipalRef.forEmployee(employee.getId(), employee.getCompanyId()),
           "Offboarding documents",
@@ -258,7 +258,7 @@ public class OffboardingDocumentService {
       if (employee == null) {
         return;
       }
-      mail.sendOffboardingDocReturned(employee.getEmail(), employee.getFullName(), templates.title(type), note);
+      mail.sendOffboardingDocReturned(employee.getEmail(), employee.getFullName(), templates.title(type), note, employee.getCompanyId());
       push.sendToPrincipal(
           PrincipalRef.forEmployee(employee.getId(), employee.getCompanyId()),
           "Document needs changes",

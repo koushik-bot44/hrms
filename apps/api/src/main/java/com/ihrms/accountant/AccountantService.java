@@ -139,7 +139,7 @@ public class AccountantService {
           HttpStatus.CONFLICT, "Email \"" + address.email() + "\" is already in use");
     }
 
-    mail.sendStaffInvite(address.email(), "ACCOUNTS_ADMIN", input.password());
+    mail.sendStaffInvite(address.email(), "ACCOUNTS_ADMIN", input.password(), null); // platform role — no slug
     // Portal-level event (no companyId) — the Accounts Admin belongs to no company.
     audit.record(
         new AuditActor("USER", actor.userId(), null),

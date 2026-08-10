@@ -136,7 +136,7 @@ public class AuthService {
         && nameMatches(employee.getFullName(), fullName)
         && !authz.isCompanyDeleted(employee.getCompanyId())
         && !employee.isAccountDeactivated()) { // §3.6: withhold the OTP from a deactivated account (enum-safe)
-      String otp = issueOtp(email);
+      String otp = issueOtp(email, employee.getCompanyId());
       employee.setOtpHash(encoder.encode(otp));
       employee.setOtpExpiresAt(Instant.now().plusSeconds(ttl));
       employees.save(employee);
@@ -148,9 +148,9 @@ public class AuthService {
   }
 
   /** Generate + email an OTP; returns the raw code (for the dev-only echo). */
-  private String issueOtp(String email) {
+  private String issueOtp(String email, String companyId) {
     String otp = Principals.generateOtp();
-    mail.sendOtp(email, otp);
+    mail.sendOtp(email, otp, companyId);
     return otp;
   }
 

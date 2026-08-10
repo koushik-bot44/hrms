@@ -6,7 +6,6 @@ import com.ihrms.auth.AccountEmails;
 import com.ihrms.auth.AuthorizationService;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
-import com.ihrms.config.AppProperties;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
@@ -62,7 +61,7 @@ public class EmployeesService {
   private final AccountEmails accountEmails;
   private final AuthorizationService authz;
   private final OfferService offers;
-  private final AppProperties props;
+  private final com.ihrms.web.WebLinks links;
 
   public EmployeesService(
       EmployeeRepository employees,
@@ -74,7 +73,7 @@ public class EmployeesService {
       AccountEmails accountEmails,
       AuthorizationService authz,
       OfferService offers,
-      AppProperties props) {
+      com.ihrms.web.WebLinks links) {
     this.employees = employees;
     this.companies = companies;
     this.teams = teams;
@@ -84,7 +83,7 @@ public class EmployeesService {
     this.accountEmails = accountEmails;
     this.authz = authz;
     this.offers = offers;
-    this.props = props;
+    this.links = links;
   }
 
   /**
@@ -168,8 +167,8 @@ public class EmployeesService {
     // form unlocks. Terms reuse the Form-2 joining date + designation + name; only salary/location are new.
     offers.createOffer(employee, offer, actor, ip);
 
-    String loginUrl = loginUrl(email);
-    mail.sendEmployeeSelection(email, fullName, designation, company.getName(), loginUrl);
+    String loginUrl = loginUrl(email, company.getSlug());
+    mail.sendEmployeeSelection(email, fullName, designation, company.getName(), loginUrl, companyId);
 
     // Partition the audit under the TARGET company (a SUPER_ADMIN actor has no company of its own).
     audit.record(
@@ -237,7 +236,8 @@ public class EmployeesService {
     if (emailChanged) {
       // The personal email IS the login identity — re-invite the new address; the old gets nothing.
       mail.sendEmployeeSelection(
-          newEmail, employee.getFullName(), employee.getDesignation(), company.getName(), loginUrl(newEmail));
+          newEmail, employee.getFullName(), employee.getDesignation(), company.getName(),
+          loginUrl(newEmail, company.getSlug()), employee.getCompanyId());
       audit.record(
           new AuditActor("USER", actor.userId(), employee.getCompanyId()),
           "EMPLOYEE_REINVITED",
@@ -275,10 +275,10 @@ public class EmployeesService {
     return employee;
   }
 
-  private String loginUrl(String email) {
-    return props.webAppUrl().replaceAll("/+$", "")
-        + "/employee/login?email="
-        + URLEncoder.encode(email, StandardCharsets.UTF_8);
+  /** The slugged employee-login link for the invite email: {WEB_APP_URL}/{slug}/employee/login?email=… */
+  private String loginUrl(String email, String slug) {
+    return links.emailLinkForSlug(
+        slug, "/employee/login?email=" + URLEncoder.encode(email, StandardCharsets.UTF_8));
   }
 
   private static String norm(String email) {

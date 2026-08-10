@@ -648,8 +648,28 @@ areas stay top-level:
   company and a non-existent slug are indistinguishable to a company-scoped client — Stage 1), a mismatch
   **redirects** rather than 404-ing, so existence is never leaked.
 - **Old-path redirects** (transition safety): the vacated top-level `/{hr,manager,company-admin,accountant,
-  workspace,employee}[/…]` paths session-redirect to the caller's Stage-2 home so old bookmarks don't 404;
-  external deep-links (email/push/SW) migrate in Stage 3.
+  workspace,employee}[/…]` paths session-redirect to the caller's Stage-2 home so old bookmarks don't 404.
+
+**Stage 3 — company-scoped URLs everywhere a link is built.** Every entry point a company person receives now
+carries their slug; platform roles + legacy links are unchanged.
+- **Slugged sign-in doors.** `/{companySlug}/login` (staff) and `/{companySlug}/employee/login` (OTP, where the
+  invite link lands) mount the SAME shared screens as the top-level doors — thin route mounts, no duplication.
+  They are **UNAUTHENTICATED**: the `[companySlug]` tenancy guard **carves out** the `/login` + `/employee/login`
+  sub-paths (an anonymous visitor must reach them; the slug is a HINT, not authorization). The slug is verified
+  by a **minimal public** `GET /public/companies/{slug}` → `{name}` (a bad/archived slug → 404; name-only — the
+  inherent disclosure of any per-company login URL; the authenticated `/companies/by-slug/*` resolver is
+  untouched). Sign-in still resolves by email and post-login routing is unchanged (`homePathForSession` uses the
+  session's own slug).
+- **The top-level doors `/login` + `/employee/login` are RETAINED indefinitely** — platform roles (no slug) use
+  them, and legacy invite links already in inboxes keep working.
+- **One link-building helper** (`WebLinks`) is the single place URLs are assembled — a company user gets
+  `{WEB_APP_URL}/{slug}/…` (emails) / `/{slug}/…` (push deep-links); a platform user is unchanged. Every site
+  routes through it: the **invite** email (`{WEB_APP_URL}/{slug}/employee/login?email=…`), the **credential**
+  email (`{WEB_APP_URL}/{slug}/login`), and **push click URLs** (e.g. `/{slug}/workspace/agreements` instead of
+  the Stage-2 LegacyRedirect-to-home compromise; absolute URLs + platform users pass through untouched).
+- **Email brand line** is slugged to `hrorg.in/{slug}` for a company-user email (matching the link) and stays
+  `hrorg.in` for a platform user. `public/sw.js` opens whatever `url` the payload carries — the now-slugged
+  relative paths resolve against the web origin with **no change** to the Service Worker.
 
 ### Employee record (the four onboarding forms)
 - **Form1Personal** — Personal Details: `name`, `dob`, `email`, `mobile`, `designation`,

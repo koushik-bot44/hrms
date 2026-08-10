@@ -252,7 +252,7 @@ public class OffboardingService {
       }
       String who = employee.getFullName() == null ? "The employee" : employee.getFullName();
       // Final notice to the (now offboarded) employee — they can no longer sign in, but a push/email still lands.
-      mail.sendOffboardingCompleted(employee.getEmail(), employee.getFullName());
+      mail.sendOffboardingCompleted(employee.getEmail(), employee.getFullName(), employee.getCompanyId());
       push.sendToPrincipal(
           PrincipalRef.forEmployee(employee.getId(), employee.getCompanyId()),
           "Offboarding complete",
@@ -396,7 +396,7 @@ public class OffboardingService {
           "Offboarding " + (approved ? "approved" : "rejected"),
           who + "'s offboarding was " + (approved ? "approved." : "rejected."),
           "/hr/employees/" + employee.getId());
-      mail.sendOffboardingDecision(hr.getEmail(), who, approved, c.getDecisionNote());
+      mail.sendOffboardingDecision(hr.getEmail(), who, approved, c.getDecisionNote(), hr.getCompanyId());
     } catch (RuntimeException e) {
       log.warn("Post-decision HR notice skipped (best-effort): {}", e.getMessage());
     }

@@ -91,7 +91,7 @@ public class HierarchyService {
           HttpStatus.CONFLICT, "Email \"" + address.email() + "\" is already in use");
     }
 
-    mail.sendStaffInvite(address.email(), "HIERARCHY", input.password());
+    mail.sendStaffInvite(address.email(), "HIERARCHY", input.password(), null); // platform role — no slug
     // Portal-level event (no companyId) — the Hierarchy belongs to no company.
     audit.record(
         new AuditActor("USER", actor.userId(), null),

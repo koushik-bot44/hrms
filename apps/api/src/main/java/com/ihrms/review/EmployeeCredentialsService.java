@@ -6,7 +6,6 @@ import com.ihrms.auth.AccountEmails;
 import com.ihrms.auth.AuthorizationService;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
-import com.ihrms.config.AppProperties;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
@@ -45,7 +44,7 @@ public class EmployeeCredentialsService {
   private final PasswordEncoder encoder;
   private final MailService mail;
   private final AuditService audit;
-  private final AppProperties props;
+  private final com.ihrms.web.WebLinks links;
   private final Environment env;
 
   public EmployeeCredentialsService(
@@ -57,7 +56,7 @@ public class EmployeeCredentialsService {
       PasswordEncoder encoder,
       MailService mail,
       AuditService audit,
-      AppProperties props,
+      com.ihrms.web.WebLinks links,
       Environment env) {
     this.employees = employees;
     this.companies = companies;
@@ -67,7 +66,7 @@ public class EmployeeCredentialsService {
     this.encoder = encoder;
     this.mail = mail;
     this.audit = audit;
-    this.props = props;
+    this.links = links;
     this.env = env;
   }
 
@@ -115,8 +114,10 @@ public class EmployeeCredentialsService {
           HttpStatus.CONFLICT, "That mailbox address is already in use");
     }
 
-    String loginUrl = props.webAppUrl() + "/login";
-    mail.sendEmployeeCredentials(employee.getEmail(), address.email(), password, loginUrl);
+    // Company staff sign in at the slugged door: {WEB_APP_URL}/{slug}/login.
+    String loginUrl = links.emailLink(employee.getCompanyId(), "/login");
+    mail.sendEmployeeCredentials(
+        employee.getEmail(), address.email(), password, loginUrl, employee.getCompanyId());
     audit.record(
         AuditActor.from(actor),
         "EMPLOYEE_CREDENTIALS_ASSIGNED",

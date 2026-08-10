@@ -198,7 +198,7 @@ public class OfferService {
       User hr = users.findById(employee.getOnboardingHrId()).orElse(null);
       String who = employee.getFullName() == null ? "An employee" : employee.getFullName();
       if (hr != null) {
-        mail.sendOfferAccepted(hr.getEmail(), who);
+        mail.sendOfferAccepted(hr.getEmail(), who, hr.getCompanyId());
       }
       push.sendToPrincipal(
           PrincipalRef.forUser(employee.getOnboardingHrId(), employee.getCompanyId()),

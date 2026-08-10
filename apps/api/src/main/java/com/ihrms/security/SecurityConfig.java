@@ -58,6 +58,10 @@ public class SecurityConfig {
                     // EXACT path + method; anti-spam + rate limit live in the handler. Nothing else widened.
                     .requestMatchers(HttpMethod.POST, "/public/contact")
                     .permitAll()
+                    // Public company-by-slug lookup (slug routing Stage 3): the slugged sign-in doors read
+                    // {name} to 404 a bad slug + show context. Read-only, name-only; excludes DELETED (404).
+                    .requestMatchers(HttpMethod.GET, "/public/companies/*")
+                    .permitAll()
                     // db-storage blob endpoint: the encrypted path token is the authorization
                     // (a presigned-URL equivalent), so no JWT is required.
                     .requestMatchers("/storage/blobs/**")

@@ -1575,6 +1575,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/companies/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["bySlug"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding": {
         parameters: {
             query?: never;
@@ -3548,6 +3564,10 @@ export interface components {
             publicKey?: string;
             /** @description Whether the server has Web Push configured (VAPID keys present). */
             enabled?: boolean;
+        };
+        PublicCompanyView: {
+            slug?: string;
+            name?: string;
         };
         HierarchyStatus: {
             exists?: boolean;
@@ -7220,6 +7240,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PublicKeyResponse"];
+                };
+            };
+        };
+    };
+    bySlug: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PublicCompanyView"];
                 };
             };
         };

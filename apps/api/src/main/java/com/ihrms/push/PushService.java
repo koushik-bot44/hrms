@@ -45,6 +45,7 @@ public class PushService {
   private final PushSubscriptionRepository subscriptions;
   private final AuditService audit;
   private final ObjectMapper json;
+  private final com.ihrms.web.WebLinks links;
 
   /** The web-push library client — null when VAPID is not configured (push disabled). */
   private nl.martijndwars.webpush.PushService webPush;
@@ -53,11 +54,13 @@ public class PushService {
       AppProperties props,
       PushSubscriptionRepository subscriptions,
       AuditService audit,
-      ObjectMapper json) {
+      ObjectMapper json,
+      com.ihrms.web.WebLinks links) {
     this.props = props;
     this.subscriptions = subscriptions;
     this.audit = audit;
     this.json = json;
+    this.links = links;
   }
 
   @PostConstruct
@@ -159,7 +162,8 @@ public class PushService {
     if (subs.isEmpty()) {
       return;
     }
-    String payload = buildPayload(title, body, url);
+    // Slug the click deep-link for a company recipient (/{slug}{path}); platform + absolute URLs unchanged.
+    String payload = buildPayload(title, body, links.pushPath(ref.companyId(), url));
     for (PushSubscription sub : subs) {
       deliver(sub, payload);
     }

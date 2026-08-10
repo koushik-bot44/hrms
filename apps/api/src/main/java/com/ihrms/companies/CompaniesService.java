@@ -300,7 +300,7 @@ public class CompaniesService {
       throw conflict("Email \"" + address.email() + "\" is already in use");
     }
 
-    mail.sendCompanyAdminInvite(address.email(), company.getName(), password);
+    mail.sendCompanyAdminInvite(address.email(), company.getName(), password, company.getId());
     audit(actor, id, "COMPANY_ADMIN_PROVISIONED", "User", user.getId(),
         Map.of("email", address.email()), ip);
 

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -110,6 +111,20 @@ class CompanySlugApiTest {
     mvc.perform(
             get("/companies/by-slug/does-not-exist").header("Authorization", "Bearer " + superToken))
         .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void publicBySlugIsUnauthenticatedAndNameOnly() throws Exception {
+    String slug = create("Acme Inc", "ACME").get("slug").asText(); // "acme-inc"
+
+    // The slugged sign-in doors read this WITHOUT auth: existing slug -> 200 {name}, name only.
+    mvc.perform(get("/public/companies/" + slug))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.name").value("Acme Inc"))
+        .andExpect(jsonPath("$.slug").value(slug));
+
+    // A bad slug -> 404 (so the door renders Next notFound()); still no auth required.
+    mvc.perform(get("/public/companies/does-not-exist")).andExpect(status().isNotFound());
   }
 
   // --- helpers --------------------------------------------------------------

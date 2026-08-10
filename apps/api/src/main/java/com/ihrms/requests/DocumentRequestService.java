@@ -417,7 +417,7 @@ public class DocumentRequestService {
     }
     // (2) The employee-facing dev-logged email + OS push (kept).
     try {
-      mail.sendDocumentRequestResolved(me.getEmail(), request.getRequestType().name());
+      mail.sendDocumentRequestResolved(me.getEmail(), request.getRequestType().name(), me.getCompanyId());
       push.sendToPrincipal(
           PrincipalRef.forEmployee(me.getId(), request.getCompanyId()),
           "Your document request is ready",
