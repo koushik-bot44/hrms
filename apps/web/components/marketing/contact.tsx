@@ -19,7 +19,7 @@ export function Contact() {
         <div className="m-glass overflow-hidden rounded-3xl p-8 text-center shadow-2xl shadow-black/40 sm:p-14">
           <Eyebrow>Contact</Eyebrow>
           <SectionHeading as="h1" className="mt-4">
-            Bring your internal HR to <span className="text-gradient">hrorg.in</span>.
+            Bring your internal HR to <span className="text-gradient">hrorg.in</span>
           </SectionHeading>
           <Lead className="mx-auto mt-5 max-w-xl">
             Access to hrorg.in is by arrangement. Tell us about your organization and how your HR runs today —
