@@ -2873,6 +2873,7 @@ export interface components {
             name: string;
             email: string;
             organization: string;
+            phone?: string;
             message?: string;
             website?: string;
             /** Format: int64 */

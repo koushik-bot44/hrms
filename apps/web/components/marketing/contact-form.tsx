@@ -15,10 +15,19 @@ import { CheckCircle2, Send } from 'lucide-react';
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type Values = { name: string; email: string; organization: string; message: string; website: string };
+type Values = {
+  name: string;
+  email: string;
+  organization: string;
+  phone: string;
+  message: string;
+  website: string;
+};
 type Errors = Partial<Record<keyof Values, string>>;
 
-const EMPTY: Values = { name: '', email: '', organization: '', message: '', website: '' };
+const EMPTY: Values = { name: '', email: '', organization: '', phone: '', message: '', website: '' };
+// Optional phone: digits + common separators (+, -, ., spaces, parentheses), 6–30 chars.
+const PHONE_RE = /^[+()./\-\s\d]{6,30}$/;
 
 function validate(v: Values): Errors {
   const e: Errors = {};
@@ -33,6 +42,9 @@ function validate(v: Values): Errors {
   const org = v.organization.trim();
   if (!org) e.organization = 'Organization is required';
   else if (org.length < 2 || org.length > 120) e.organization = 'Organization must be 2–120 characters';
+
+  const phone = v.phone.trim();
+  if (phone && (phone.length > 30 || !PHONE_RE.test(phone))) e.phone = 'Enter a valid phone number';
 
   if (v.message.length > 2000) e.message = 'Message is too long (2000 characters max)';
   return e;
@@ -68,6 +80,7 @@ export function ContactForm() {
           name: values.name.trim(),
           email: values.email.trim(),
           organization: values.organization.trim(),
+          phone: values.phone.trim() || undefined,
           message: values.message.trim() || undefined,
           website: values.website, // honeypot — stays empty for real people
           elapsedMs: Date.now() - renderedAt.current,
@@ -113,7 +126,18 @@ export function ContactForm() {
         <Field id="cf-name" label="Name" value={values.name} onChange={set('name')} error={showErrors ? errors.name : undefined} autoComplete="name" required />
         <Field id="cf-email" label="Work email" type="email" value={values.email} onChange={set('email')} error={showErrors ? errors.email : undefined} autoComplete="email" required />
       </div>
-      <Field id="cf-org" label="Organization" value={values.organization} onChange={set('organization')} error={showErrors ? errors.organization : undefined} autoComplete="organization" required />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field id="cf-org" label="Organization" value={values.organization} onChange={set('organization')} error={showErrors ? errors.organization : undefined} autoComplete="organization" required />
+        <Field
+          id="cf-phone"
+          label={<>Phone <span className="font-normal text-muted-foreground">(optional)</span></>}
+          type="tel"
+          value={values.phone}
+          onChange={set('phone')}
+          error={showErrors ? errors.phone : undefined}
+          autoComplete="tel"
+        />
+      </div>
 
       <div>
         <label htmlFor="cf-message" className="mb-1.5 block text-sm font-medium text-foreground">
@@ -171,7 +195,7 @@ function Field({
   required,
 }: {
   id: string;
-  label: string;
+  label: React.ReactNode;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   error?: string;

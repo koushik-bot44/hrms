@@ -75,6 +75,26 @@ class ContactApiTest {
     assertThat(sent.replyTo()).isEqualTo("alex@acme.test"); // reply reaches the prospect, not support@
   }
 
+  // --- optional phone: carried into the email body when provided -------------
+  @Test
+  void phoneWhenProvidedAppearsInTheEmailBody() throws Exception {
+    Map<String, Object> body = valid();
+    body.put("phone", "+91 98765 43210");
+    mvc.perform(submit(body)).andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(true));
+
+    ArgumentCaptor<OutboundEmail> captor = ArgumentCaptor.forClass(OutboundEmail.class);
+    verify(mailer).send(captor.capture());
+    assertThat(captor.getValue().text()).contains("Phone: +91 98765 43210");
+  }
+
+  @Test
+  void badPhoneIsRejected() throws Exception {
+    Map<String, Object> bad = valid();
+    bad.put("phone", "call-me-maybe"); // letters aren't a phone number
+    mvc.perform(submit(bad)).andExpect(status().isBadRequest());
+    verify(mailer, never()).send(any());
+  }
+
   // --- validation ------------------------------------------------------------
   @Test
   void validationRejectsMissingAndBadFields() throws Exception {

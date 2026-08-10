@@ -49,13 +49,19 @@ public class MailService {
    * The dev-log line carries only the org + submitter email — never the message body.
    */
   public void sendContactEnquiry(
-      String toInbox, String name, String submitterEmail, String organization, String message) {
+      String toInbox,
+      String name,
+      String submitterEmail,
+      String organization,
+      String phone,
+      String message) {
     String subject = "New enquiry — " + organization;
     String text =
         "New enquiry from the hrorg.in website.\n\n"
             + "Name: " + name + "\n"
             + "Email: " + submitterEmail + "\n"
             + "Organization: " + organization
+            + (phone == null || phone.isBlank() ? "" : "\nPhone: " + phone)
             + (message == null || message.isBlank() ? "" : "\n\nMessage:\n" + message)
             + "\n\nReply directly to this email to reach them.";
     String devLog =

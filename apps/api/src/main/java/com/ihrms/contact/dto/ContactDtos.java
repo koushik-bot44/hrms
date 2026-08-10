@@ -2,6 +2,7 @@ package com.ihrms.contact.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -24,6 +25,10 @@ public final class ContactDtos {
       @NotBlank(message = "Organization is required")
           @Size(min = 2, max = 120, message = "Organization must be 2–120 characters")
           String organization,
+      /** Optional; if present it must look like a phone number (digits + common separators). */
+      @Size(max = 30, message = "Phone number is too long")
+          @Pattern(regexp = "^$|^[+()./\\-\\s0-9]{6,30}$", message = "Enter a valid phone number")
+          String phone,
       @Size(max = 2000, message = "Message is too long (2000 characters max)") String message,
       /** Honeypot: real people never see this; if non-empty the submission is silently dropped. */
       String website,

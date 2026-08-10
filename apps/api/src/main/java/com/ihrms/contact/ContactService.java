@@ -44,8 +44,10 @@ public class ContactService {
 
     String org = req.organization().trim();
     String email = req.email().trim();
+    String phone = req.phone() == null || req.phone().isBlank() ? null : req.phone().trim();
     mail.sendContactEnquiry(
-        inbox(), req.name().trim(), email, org, req.message() == null ? null : req.message().trim());
+        inbox(), req.name().trim(), email, org, phone,
+        req.message() == null ? null : req.message().trim());
     log.info("Contact enquiry from {} <{}>", org, email); // minimal: org + email only, no message body
     return true;
   }
