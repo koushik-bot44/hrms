@@ -48,6 +48,20 @@ spring:
       pageable:
         default-page-size: 25
         max-page-size: 100
+  # Outbound SMTP for the auto-configured JavaMailSender (§Outbound email). All from SMTP_* env; blank host
+  # in dev/tests => JavaMailSender unused (DevLogMailer selected). 587/STARTTLS by default; 465 => SMTP_SSL=true.
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:true}
+      mail.smtp.ssl.enable: ${SMTP_SSL:false}
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 15000
+      mail.smtp.writetimeout: 15000
 
 management:
   endpoints:
@@ -58,6 +72,11 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    # The /health probe must not dial the SMTP server (would flap on any mail hiccup and slow readiness);
+    # outbound-mail health is handled by the best-effort send path, not the health endpoint (§Outbound email).
+    mail:
+      enabled: false
 
 springdoc:
   api-docs:
@@ -79,12 +98,18 @@ app:
   # AES-256-GCM key for field-level encryption of sensitive PII/financial columns (§6). Any
   # passphrase works (SHA-256 -> 256-bit key); production MUST override with a real secret.
   field-enc-key: ${FIELD_ENC_KEY:dev-insecure-field-enc-key-change-me-please-0001}
+  # Outbound email (§Outbound email). SMTP_HOST present => real SMTP (SmtpMailer); absent => dev-log.
+  # host/port/username/password mirror spring.mail.* below (both read the SMTP_* env); from/reply-to are
+  # the message identity. Example (Zoho): SMTP_HOST=smtp.zoho.in SMTP_PORT=587 SMTP_STARTTLS=true
+  #   SMTP_USERNAME=noreply@hrorg.in SMTP_PASSWORD=<app-password>
+  #   MAIL_FROM="hrorg.in <noreply@hrorg.in>" MAIL_REPLY_TO=support@hrorg.in   (465 => SMTP_SSL=true)
   mail:
-    host: ${MAIL_HOST:}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
     from: ${MAIL_FROM:}
+    reply-to: ${MAIL_REPLY_TO:}
   s3:
     endpoint: ${S3_ENDPOINT:}
     region: ${S3_REGION:us-east-1}

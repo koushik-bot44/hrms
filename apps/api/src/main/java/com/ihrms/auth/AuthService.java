@@ -19,8 +19,6 @@ import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.UserRepository;
 import java.time.Instant;
 import java.util.Map;
-import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -48,7 +46,6 @@ public class AuthService {
   private final TokenService tokens;
   private final MailService mail;
   private final AppProperties props;
-  private final Environment env;
   private final AuthorizationService authz;
   private final AuditService audit;
 
@@ -60,7 +57,6 @@ public class AuthService {
       TokenService tokens,
       MailService mail,
       AppProperties props,
-      Environment env,
       AuthorizationService authz,
       AuditService audit) {
     this.users = users;
@@ -70,7 +66,6 @@ public class AuthService {
     this.tokens = tokens;
     this.mail = mail;
     this.props = props;
-    this.env = env;
     this.authz = authz;
     this.audit = audit;
   }
@@ -145,7 +140,9 @@ public class AuthService {
       employee.setOtpHash(encoder.encode(otp));
       employee.setOtpExpiresAt(Instant.now().plusSeconds(ttl));
       employees.save(employee);
-      devOtp = isProd() ? null : otp;
+      // The OTP is returned to the caller ONLY in dev-log mode; once real SMTP is active it travels by email
+      // alone. Bound to the mail mode (not a separate prod flag) so the two can never drift (§Outbound email).
+      devOtp = mail.isRealDelivery() ? null : otp;
     }
     return new OtpRequestResult(true, ttl, devOtp);
   }
@@ -260,10 +257,6 @@ public class AuthService {
   /** Login methods (carried in the session + refresh token). */
   private static final String PASSWORD = "PASSWORD";
   private static final String OTP = "OTP";
-
-  private boolean isProd() {
-    return env.acceptsProfiles(Profiles.of("prod"));
-  }
 
   private ResponseStatusException unauthorized(String message) {
     return new ResponseStatusException(HttpStatus.UNAUTHORIZED, message);

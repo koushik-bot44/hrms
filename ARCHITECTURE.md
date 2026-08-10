@@ -1398,6 +1398,56 @@ including when the IHRMS tab is minimized or fully closed — and clicking it fo
 
 ---
 
+## 8d. Outbound email (transactional email to real inboxes)
+
+**Not the internal mail client.** This is the platform sending **transactional email to real external
+inboxes** — sign-in codes, invites/credentials, and the HR/employee notifications (agreements, offboarding,
+letters, leave, requests). It is entirely separate from **§8 Internal Mail** (the in-app mail client between
+company users). The two never mix: internal mail is app state; outbound email is SMTP to the outside world.
+
+**Transport is a config-selected seam.** One `Mailer` interface (`com.ihrms.email`), two implementations,
+chosen by **config presence** at startup and reported in one log line:
+- **`DevLogMailer`** — the **default** when SMTP is absent (local dev + **all tests**). It logs the message's
+  `devLog` line verbatim (`[DEV OTP] … -> 123456`, `[DEV INVITE] …`, …) so flows stay walkable from the logs
+  and **no network is touched**. Startup logs `Mail: dev-log`.
+- **`SmtpMailer`** — selected when **`SMTP_HOST`** is set, on the Spring-Boot auto-configured `JavaMailSender`
+  (`spring.mail.*`). Startup logs `Mail: SMTP via <host>`.
+
+The app-facing `MailService` keeps its semantic methods (unchanged what/when at every call site); it builds
+each message and routes it through the one `Mailer`.
+
+**Config (env → Railway).**
+
+| Var | Purpose | Example |
+| --- | --- | --- |
+| `SMTP_HOST` | **presence selects SmtpMailer** | `smtp.zoho.in` |
+| `SMTP_PORT` | port (default 587) | `587` / `465` |
+| `SMTP_USERNAME` | SMTP auth user | `noreply@hrorg.in` |
+| `SMTP_PASSWORD` | SMTP auth secret | *(Zoho app password)* |
+| `SMTP_STARTTLS` | STARTTLS (for 587) | `true` |
+| `SMTP_SSL` | implicit SSL (for 465) | `false` (→ `true` on 465) |
+| `MAIL_FROM` | `From` header (display form) | `hrorg.in <noreply@hrorg.in>` |
+| `MAIL_REPLY_TO` | `Reply-To` header | `support@hrorg.in` |
+
+Both **587/STARTTLS** and **465/SSL** are supported via the standard `spring.mail.properties.mail.smtp.*`.
+Every message sets `From=MAIL_FROM` and `Reply-To=MAIL_REPLY_TO`, and carries a **single branded HTML wrapper**
+(brand name + indigo accent + a `Questions? support@hrorg.in` footer) plus a **text/plain** alternative part;
+the existing per-mail content/links (WEB_APP_URL based) are unchanged inside it.
+
+**Sending semantics — after-commit + async + best-effort** (mirrors the Web-Push convention). A send happens
+**after the business transaction commits** (a rollback emails nothing), **async** on a small daemon pool (slow
+SMTP never blocks the request), and **best-effort**: a failure is logged with **recipient + subject only (never
+the body)** and **never fails or blocks** the business action. **v1 has no queue/retry** — log-and-continue;
+a durable outbox with retry/backoff is a future hardening line.
+
+**devOtp hardening.** The employee sign-in code (`OtpRequestResult.devOtp`, and its login-page hint) is
+returned **only in dev-log mode**; once real SMTP is active the code travels **by email alone**. This is bound
+to the **mail mode** (`mail.isRealDelivery()`), not a separate prod flag, so the two can never drift. *(The
+provisioned-admin/staff/hierarchy password dev-returns remain gated on the `prod` profile — a candidate for the
+same mail-mode binding later.)*
+
+---
+
 ## 9. Deployment Architecture (existing shell — keep as-is)
 
 The project is built into the already-deployed monorepo shell. **Do not change the deployment

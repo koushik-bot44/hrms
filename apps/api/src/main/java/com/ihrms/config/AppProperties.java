@@ -25,7 +25,8 @@ public record AppProperties(
     Storage storage,
     Vapid vapid) {
 
-  public record Mail(String host, int port, String username, String password, String from) {}
+  public record Mail(
+      String host, int port, String username, String password, String from, String replyTo) {}
 
   /**
    * Web Push (VAPID) keys — an EC P-256 keypair (base64url) + a {@code mailto:} subject. SECRETS: set via

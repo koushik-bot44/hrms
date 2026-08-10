@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Lock } from 'lucide-react';
-import { BRAND_SUBTITLE } from '@/lib/brand';
+import { BRAND_SUBTITLE, SUPPORT_EMAIL } from '@/lib/brand';
 import { BrandMark } from '@/components/brand-mark';
 import {
   Card,
@@ -91,6 +91,14 @@ export function AuthShell({
           </CardHeader>
           <CardContent>{children}</CardContent>
           {footer ? <CardFooter className="justify-center pt-2">{footer}</CardFooter> : null}
+          <CardFooter className="justify-center pb-6 pt-0">
+            <p className="text-xs text-muted-foreground">
+              Need help?{' '}
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="text-primary hover:underline">
+                {SUPPORT_EMAIL}
+              </a>
+            </p>
+          </CardFooter>
         </Card>
       </main>
     </div>

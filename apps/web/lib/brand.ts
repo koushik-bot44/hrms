@@ -7,5 +7,7 @@
  */
 export const BRAND_NAME = 'hrorg.in';
 export const BRAND_SUBTITLE = 'Integrated HR Management Services';
+/** Public support address (surfaced on the sign-in doors; the outbound-email Reply-To). */
+export const SUPPORT_EMAIL = 'support@hrorg.in';
 /** The full brand line used in <title>/OG titles + the OG image alt. */
 export const BRAND_TITLE = `${BRAND_NAME} — ${BRAND_SUBTITLE}`;
