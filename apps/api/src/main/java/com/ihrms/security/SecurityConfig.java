@@ -54,6 +54,10 @@ public class SecurityConfig {
                         "/auth/refresh",
                         "/auth/logout")
                     .permitAll()
+                    // Public contact form (§8d): the ONLY unauthenticated write outside /auth. Scoped to this
+                    // EXACT path + method; anti-spam + rate limit live in the handler. Nothing else widened.
+                    .requestMatchers(HttpMethod.POST, "/public/contact")
+                    .permitAll()
                     // db-storage blob endpoint: the encrypted path token is the authorization
                     // (a presigned-URL equivalent), so no JWT is required.
                     .requestMatchers("/storage/blobs/**")

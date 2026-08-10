@@ -49,7 +49,8 @@ class MailerSelectionTest {
   private static AppProperties props(String mailHost) {
     return new AppProperties(
         null, null, null, null, null, null, null, 0, null,
-        new AppProperties.Mail(mailHost, 587, null, null, "hrorg.in <noreply@hrorg.in>", "support@hrorg.in"),
+        new AppProperties.Mail(
+            mailHost, 587, null, null, "hrorg.in <noreply@hrorg.in>", "support@hrorg.in", "info@hrorg.in"),
         null, null, null);
   }
 

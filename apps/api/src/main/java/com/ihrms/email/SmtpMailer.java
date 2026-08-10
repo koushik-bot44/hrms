@@ -35,8 +35,10 @@ public class SmtpMailer implements Mailer {
     if (from != null && !from.isBlank()) {
       helper.setFrom(from);
     }
-    if (replyTo != null && !replyTo.isBlank()) {
-      helper.setReplyTo(replyTo);
+    // Per-message Reply-To wins (contact form → the submitter); otherwise the configured default.
+    String rt = email.replyTo() != null && !email.replyTo().isBlank() ? email.replyTo() : replyTo;
+    if (rt != null && !rt.isBlank()) {
+      helper.setReplyTo(rt);
     }
     // (text, html) → multipart/alternative: the client shows HTML, falls back to text.
     helper.setText(email.text() == null ? "" : email.text(), email.html() == null ? "" : email.html());

@@ -38,6 +38,30 @@ public class MailService {
     return mailer.isReal();
   }
 
+  /**
+   * Public contact-form enquiry (§8d) → the contact inbox. Unlike the notifications above there is NO
+   * transaction and nothing is stored, so this sends SYNCHRONOUSLY and lets the failure propagate (the
+   * controller reports success/failure to the visitor with a generic message). Crucially the Reply-To is the
+   * SUBMITTER's address (not the support@ default) so replying from the inbox reaches the prospect directly.
+   * The dev-log line carries only the org + submitter email — never the message body.
+   */
+  public void sendContactEnquiry(
+      String toInbox, String name, String submitterEmail, String organization, String message) {
+    String subject = "New enquiry — " + organization;
+    String text =
+        "New enquiry from the hrorg.in website.\n\n"
+            + "Name: " + name + "\n"
+            + "Email: " + submitterEmail + "\n"
+            + "Organization: " + organization
+            + (message == null || message.isBlank() ? "" : "\n\nMessage:\n" + message)
+            + "\n\nReply directly to this email to reach them.";
+    String devLog =
+        "[DEV CONTACT] " + toInbox + " <- " + organization + " (" + submitterEmail + ")" + DEV_SUFFIX;
+    OutboundEmail email =
+        new OutboundEmail(toInbox, subject, MailTemplate.render(text), text, devLog, submitterEmail);
+    mailer.send(email); // synchronous — the caller reports success/failure (no tx, nothing stored)
+  }
+
   // --- auth / provisioning ---------------------------------------------------
 
   public void sendOtp(String email, String code) {
@@ -200,7 +224,7 @@ public class MailService {
   // --- dispatch: after-commit + async + best-effort --------------------------
 
   private void dispatch(String to, String subject, String text, String devLog) {
-    OutboundEmail email = new OutboundEmail(to, subject, MailTemplate.render(text), text, devLog);
+    OutboundEmail email = new OutboundEmail(to, subject, MailTemplate.render(text), text, devLog, null);
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.registerSynchronization(
           new TransactionSynchronization() {

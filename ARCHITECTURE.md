@@ -1446,6 +1446,29 @@ to the **mail mode** (`mail.isRealDelivery()`), not a separate prod flag, so the
 provisioned-admin/staff/hierarchy password dev-returns remain gated on the `prod` profile — a candidate for the
 same mail-mode binding later.)*
 
+### Public contact form (`POST /public/contact`)
+
+The one **public, unauthenticated** write on the platform — the marketing `/contact` page lets an interested
+organization request access. It is the ONLY marketing surface that calls the API (a bare `fetch` from the
+otherwise-static page to `${NEXT_PUBLIC_API_URL}/public/contact`).
+
+- **Auth.** A `permitAll` carve-out in `SecurityConfig` scoped to **exactly** `POST /public/contact` (sits with
+  the `/auth/*` public POSTs, before `anyRequest().authenticated()`); nothing else is widened. `CORS_ORIGINS`
+  must include the web origin (already required for sign-in).
+- **Body** (bean-validated → 400 with field errors): `name` (2–80), `email` (valid, ≤120), `organization`
+  (2–120), `message` (optional, ≤2000), plus two anti-spam fields (`website` honeypot, `elapsedMs`).
+- **Send.** Routed through the existing `Mailer`/`MailService` (`sendContactEnquiry`) → To = `CONTACT_INBOX`
+  (env, default `info@hrorg.in`), From = `MAIL_FROM` (noreply@), **Reply-To = the SUBMITTER** (a per-message
+  override on `OutboundEmail`, NOT the support@ default) so replying from the inbox reaches the prospect. Sent
+  **synchronously** (there's no transaction) so success/failure can be reported; a transport failure returns a
+  **generic** error (internals never leaked). Body carries the fields in the branded wrapper + a text/plain part.
+- **Anti-spam + abuse** (public endpoint, required): a **honeypot** (`website`) and a **minimum fill time**
+  (`elapsedMs` < ~3s) each → a **silent `200` with no send** (bots believe they succeeded); a per-IP / global
+  **rate limit** (`ContactRateLimiter`: 5 per IP per hour, 20 global per hour) → **429** with a friendly
+  message. The limiter is **in-memory, per-instance** (fine for single-instance v1; a shared store is the
+  future hardening). Submissions are logged **minimally (org + email only, never the message body)**.
+- **No persistence.** Nothing is stored — no table, no PII at rest, no audit row (nothing internal happened).
+
 ---
 
 ## 9. Deployment Architecture (existing shell — keep as-is)

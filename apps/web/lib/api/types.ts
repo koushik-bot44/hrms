@@ -326,6 +326,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/contact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["submit_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/provisioning/hierarchy": {
         parameters: {
             query?: never;
@@ -367,7 +383,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["submit_1"];
+        post: operations["submit_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -735,7 +751,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["submit_2"];
+        post: operations["submit_3"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2837,6 +2853,18 @@ export interface components {
             /** @description True if this endpoint was already registered and was updated. */
             existing?: boolean;
         };
+        ContactRequest: {
+            name: string;
+            email: string;
+            organization: string;
+            message?: string;
+            website?: string;
+            /** Format: int64 */
+            elapsedMs?: number;
+        };
+        ContactResult: {
+            ok?: boolean;
+        };
         ProvisionHierarchyRequest: {
             name: string;
             localPart: string;
@@ -4897,6 +4925,30 @@ export interface operations {
             };
         };
     };
+    submit_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ContactResult"];
+                };
+            };
+        };
+    };
     status: {
         parameters: {
             query?: never;
@@ -5025,7 +5077,7 @@ export interface operations {
             };
         };
     };
-    submit_1: {
+    submit_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -5659,7 +5711,7 @@ export interface operations {
             };
         };
     };
-    submit_2: {
+    submit_3: {
         parameters: {
             query?: never;
             header?: never;

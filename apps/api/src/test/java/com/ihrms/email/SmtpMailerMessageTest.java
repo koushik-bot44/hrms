@@ -26,7 +26,8 @@ class SmtpMailerMessageTest {
                 "Your hrorg.in sign-in code",
                 "<p>Your code is 123456</p>",
                 "Your code is 123456",
-                "[DEV OTP] employee@example.test -> 123456  (no SMTP configured; logging only)"));
+                "[DEV OTP] employee@example.test -> 123456  (no SMTP configured; logging only)",
+                null));
 
     assertThat(msg.getFrom()[0].toString()).contains("noreply@hrorg.in");
     assertThat(msg.getReplyTo()[0].toString()).contains("support@hrorg.in");
@@ -41,5 +42,20 @@ class SmtpMailerMessageTest {
     assertThat(msg.getContentType()).contains("multipart");
     assertThat(raw).contains("text/plain");
     assertThat(raw).contains("text/html");
+  }
+
+  @Test
+  void perMessageReplyToOverridesTheDefault() throws Exception {
+    SmtpMailer mailer =
+        new SmtpMailer(new JavaMailSenderImpl(), "hrorg.in <noreply@hrorg.in>", "support@hrorg.in");
+
+    MimeMessage msg =
+        mailer.build(
+            new OutboundEmail(
+                "info@hrorg.in", "New enquiry — Acme", "<p>hi</p>", "hi", "[DEV CONTACT] …", "prospect@acme.test"));
+
+    // From stays the sender; Reply-To is the SUBMITTER, not the support@ default.
+    assertThat(msg.getFrom()[0].toString()).contains("noreply@hrorg.in");
+    assertThat(msg.getReplyTo()[0].toString()).contains("prospect@acme.test");
   }
 }

@@ -110,6 +110,8 @@ app:
     password: ${SMTP_PASSWORD:}
     from: ${MAIL_FROM:}
     reply-to: ${MAIL_REPLY_TO:}
+    # Where public contact-form enquiries are sent (§8d). Reply-To on those is the SUBMITTER, not support@.
+    contact-inbox: ${CONTACT_INBOX:info@hrorg.in}
   s3:
     endpoint: ${S3_ENDPOINT:}
     region: ${S3_REGION:us-east-1}
