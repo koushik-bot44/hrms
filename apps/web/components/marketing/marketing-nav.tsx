@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BRAND_SUBTITLE } from '@/lib/brand';
 import { BrandMark } from '@/components/brand-mark';
 
 /**
@@ -29,7 +30,7 @@ function Brand() {
       <BrandMark size={36} className="shadow-sm shadow-primary/40" />
       <span className="leading-tight">
         <span className="block text-[15px] font-semibold tracking-tight text-foreground">hrorg.in</span>
-        <span className="block text-[10px] text-muted-foreground/70">Internal HR management services</span>
+        <span className="block text-[10px] text-muted-foreground/70">{BRAND_SUBTITLE}</span>
       </span>
     </Link>
   );

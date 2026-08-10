@@ -39,7 +39,6 @@ export default function EmployeeLoginPage() {
       icon={<UserRound className="size-6" />}
       title="Welcome to hrorg.in"
       description="Enter your full name and email and we'll send you a one-time code."
-      portalLabel="Integrated HR Management"
       badgeLabel="Secure employee access"
       footer={
         <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">

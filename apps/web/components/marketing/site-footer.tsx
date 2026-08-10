@@ -1,6 +1,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Mail } from 'lucide-react';
+import { BRAND_NAME, BRAND_SUBTITLE } from '@/lib/brand';
 import { BrandMark } from '@/components/brand-mark';
 
 /**
@@ -24,7 +25,7 @@ export function SiteFooter() {
             <BrandMark size={36} />
             <span className="leading-tight">
               <span className="block text-sm font-semibold text-foreground">hrorg.in</span>
-              <span className="block text-[11px] text-muted-foreground/70">Internal HR management services</span>
+              <span className="block text-[11px] text-muted-foreground/70">{BRAND_SUBTITLE}</span>
             </span>
           </Link>
 
@@ -48,7 +49,7 @@ export function SiteFooter() {
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground/70">
-          © hrorg.in · Internal HR management services.
+          © {BRAND_NAME} · {BRAND_SUBTITLE}.
         </p>
       </div>
     </footer>

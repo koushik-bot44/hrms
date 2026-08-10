@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Lock } from 'lucide-react';
+import { BRAND_SUBTITLE } from '@/lib/brand';
 import { BrandMark } from '@/components/brand-mark';
 import {
   Card,
@@ -26,7 +27,7 @@ export function AuthShell({
   description,
   children,
   footer,
-  portalLabel = 'Integrated HR Management',
+  portalLabel = BRAND_SUBTITLE,
   badgeLabel = 'Secure access',
 }: {
   icon: React.ReactNode;
@@ -34,7 +35,7 @@ export function AuthShell({
   description: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  /** Left-panel sub-label under hrorg.in (defaults to the "Integrated HR Management" tagline). */
+  /** Left-panel sub-label under hrorg.in (defaults to the shared {@link BRAND_SUBTITLE}). */
   portalLabel?: string;
   /** Secure-badge heading (e.g. "Secure employee access" / "Secure staff access"). */
   badgeLabel?: string;

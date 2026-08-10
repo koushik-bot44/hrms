@@ -37,7 +37,6 @@ export default function LoginPage() {
       icon={<BrandMark size={48} rounded="rounded-2xl" />}
       title="Welcome to hrorg.in"
       description="Sign in to hrorg.in with your email and password."
-      portalLabel="Integrated HR Management"
       badgeLabel="Secure staff access"
       footer={
         <Link href="/employee/login" className="text-sm text-muted-foreground hover:text-foreground">
