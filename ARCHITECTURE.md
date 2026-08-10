@@ -1489,6 +1489,22 @@ otherwise-static page to `${NEXT_PUBLIC_API_URL}/public/contact`).
   future hardening). Submissions are logged **minimally (org + email only, never the message body)**.
 - **No persistence.** Nothing is stored — no table, no PII at rest, no audit row (nothing internal happened).
 
+### Public support page (`/support`)
+
+A **static, provider-free** marketing route (no API call — unlike `/contact`) that carries a practical FAQ for
+people already USING hrorg.in: **For employees**, **For HR and administrators**, and **Access, security &
+privacy**, plus **support@hrorg.in** as the help channel. The **confidentiality law is the hard constraint** —
+answers solve real problems (invite/OTP email delivery, device/browser, signing, uploads, seeing a completed
+PDF) and **never** describe internal workflow, roles, status names, or how documents are generated/stored; when
+an honest answer would need that detail, the answer **redirects** ("your HR contact can do this" / "write to
+support@"). The accordion is native `<details>/<summary>` (**no client JS**; only the shared `<Reveal>` entrance
+hydrates, like the other sub-pages), so the route stays `○ Static`. `/support` joins `/features`, `/security`,
+`/contact` in the nav + footer (between Security and Contact) and in the **marketing middleware matcher** (now
+the five routes `'/', '/features', '/security', '/support', '/contact'` — a logged-in visitor skips it too).
+`CompanySlug.RESERVED` gains `support, help, faq, status` (proactive cover — a generated slug that would hit one
+is suffixed `-2`, same as the earlier marketing reservations). `info@hrorg.in` remains **Contact's** only
+address; `/support` uses **support@** exclusively and cross-links to `/contact` for access enquiries.
+
 ---
 
 ## 9. Deployment Architecture (existing shell — keep as-is)

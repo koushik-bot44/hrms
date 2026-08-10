@@ -11,8 +11,8 @@ import { WEB_SESSION_HINT } from '@/lib/auth/web-session-hint';
  * session or shows the sign-in form: exactly the behaviour as before. Without the marker (e.g. incognito),
  * the request falls through and the static marketing page is served unchanged.
  *
- * The matcher lists the marketing routes EXACTLY ('/', '/features', '/security', '/contact'), so this
- * middleware runs on those four and nothing else — every app URL is untouched.
+ * The matcher lists the marketing routes EXACTLY ('/', '/features', '/security', '/support', '/contact'), so
+ * this middleware runs on those five and nothing else — every app URL is untouched.
  */
 export function middleware(request: NextRequest) {
   if (request.cookies.has(WEB_SESSION_HINT)) {
@@ -22,5 +22,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/features', '/security', '/contact'],
+  matcher: ['/', '/features', '/security', '/support', '/contact'],
 };
