@@ -114,8 +114,8 @@ public class EmployeeCredentialsService {
           HttpStatus.CONFLICT, "That mailbox address is already in use");
     }
 
-    // Company staff sign in at the slugged door: {WEB_APP_URL}/{slug}/login.
-    String loginUrl = links.emailLink(employee.getCompanyId(), "/login");
+    // A credentialed employee signs in at their WORKSPACE door: {WEB_APP_URL}/{slug}/workspace/login (§6).
+    String loginUrl = links.emailLink(employee.getCompanyId(), "/workspace/login");
     mail.sendEmployeeCredentials(
         employee.getEmail(), address.email(), password, loginUrl, employee.getCompanyId());
     audit.record(

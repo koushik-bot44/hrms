@@ -19,10 +19,22 @@ public final class AuthDtos {
 
   private AuthDtos() {}
 
-  /** Staff sign-in: email + password → session (resolves a User only). */
+  /**
+   * Credential sign-in: email + password → session. Resolves a staff {@link
+   * com.ihrms.auth.IhrmsPrincipal.User} OR a credentialed {@link com.ihrms.auth.IhrmsPrincipal.Employee}.
+   * {@code audience} names the door it was submitted at (§6) — the API refuses a mismatched principal AFTER
+   * authentication; {@code null} is the general top-level door (no audience restriction).
+   */
   public record StaffLoginRequest(
       @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
-      @NotBlank(message = "Password is required") String password) {}
+      @NotBlank(message = "Password is required") String password,
+      com.ihrms.auth.LoginAudience audience) {
+
+    /** The general (top-level) door — no audience restriction. */
+    public StaffLoginRequest(String email, String password) {
+      this(email, password, null);
+    }
+  }
 
   /** Staff self-service password change (authenticated). */
   public record ChangePasswordRequest(

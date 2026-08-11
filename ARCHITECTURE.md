@@ -671,6 +671,42 @@ carries their slug; platform roles + legacy links are unchanged.
   `hrorg.in` for a platform user. `public/sw.js` opens whatever `url` the payload carries — the now-slugged
   relative paths resolve against the web origin with **no change** to the Service Worker.
 
+### Three sign-in doors, strictly enforced (§6)
+
+Sign-in is split into three audience-specific slugged doors plus one general top-level door:
+
+| Door | URL | Audience | Method |
+| --- | --- | --- | --- |
+| STAFF | `/{slug}/login` | company staff (`User`: HR, Manager, Company Admin) | email + password |
+| WORKSPACE | `/{slug}/workspace/login` | approved, credentialed employees | workspace credentials (password) |
+| ONBOARDING | `/{slug}/employee/login?token=…` | invited candidates | OTP, invite-link-only (below) |
+| _general_ | `/login` (top-level) | **anyone** — platform roles + a legacy fallback | email + password |
+
+- **The doors are thin mounts over shared screens** (no duplication): STAFF, WORKSPACE and the general
+  top-level door all render the SAME `StaffLoginScreen` (email + password) with door-specific framing +
+  cross-link via an `audience` prop; ONBOARDING renders the OTP `EmployeeLoginScreen`. A bad/archived slug 404s
+  (the Stage-3 `SluggedDoor`). Each slugged door carries a muted cross-link to the OTHER credential door; the
+  ONBOARDING door carries **none** (link-only, it must not advertise itself), and nothing on the **public
+  marketing site** links to it (one general "Sign in" → `/login`).
+- **Strict enforcement is at the API, AFTER authentication** (`AuthService.loginStaff`). `POST /auth/login` still
+  resolves a staff `User` (by email) OR a credentialed `Employee` (by mailbox) and verifies the password; the
+  request now carries the door's `audience`. If it authenticated successfully but at the wrong door — a `User`
+  at WORKSPACE, or an `Employee` at STAFF — it is refused with **`403` + `code:"PORTAL_MISMATCH"`** and a
+  door-appropriate message, which the UI shows inline with a cross-link. **Tradeoff:** the refusal fires only on
+  a SUCCESSFUL auth, so it reveals nothing an attacker couldn't learn by signing in at the correct door (a wrong
+  password is still the same generic `401`). The frontend guards are UX only.
+- **The general top-level `/login` sends no `audience`** — it accepts ANY valid credential and routes by
+  `homePathForSession` (a credentialed employee → their `/{slug}/workspace`, staff → their role home). It is the
+  platform-role door AND the working fallback for legacy links: the slugged doors are audience-specific; the
+  top-level door is the general one.
+- **Link map (every door URL is built via `WebLinks`):** the **credential email** for an approved employee →
+  `/{slug}/workspace/login`; **staff invites** (Company Admin / HR / Manager) → `/{slug}/login`, and a **platform**
+  actor (null company) → the top-level `/login`. The onboarding invite → `/{slug}/employee/login?token=…`
+  (below). The public marketing site links only to `/login`.
+- **Route plumbing:** `/{slug}/workspace/login` is public, so it is carved out of BOTH the `[companySlug]`
+  tenancy guard (`RequireCompany`) AND the workspace area's `RequireRole(EMPLOYEE)` layout — mirroring how
+  `/{slug}/login` + `/{slug}/employee/login` already sit outside their role guards.
+
 ### Invite-link-only onboarding (the signed invite token, §3.2/§6)
 
 The employee onboarding door is **invite-link-only**: a candidate can reach the OTP flow ONLY through the link

@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -36,7 +35,7 @@ type InviteState =
  * one). Mounted by BOTH `/employee/login` and the slugged `/{slug}/employee/login`; `slug`/`companyName` are
  * display hints, and the validated context supplies the authoritative prefill email + company name.
  */
-export function EmployeeLoginScreen({ slug, companyName }: { slug?: string; companyName?: string }) {
+export function EmployeeLoginScreen({ companyName }: { slug?: string; companyName?: string }) {
   const auth = useAuth();
   const router = useRouter();
   const [invite, setInvite] = React.useState<InviteState>({ status: 'validating' });
@@ -70,12 +69,8 @@ export function EmployeeLoginScreen({ slug, companyName }: { slug?: string; comp
     };
   }, []);
 
-  const staffDoor = slug ? `/${slug}/login` : '/login';
-  const staffLink = (
-    <Link href={staffDoor} className="text-sm text-muted-foreground hover:text-foreground">
-      Staff member? Sign in here
-    </Link>
-  );
+  // The onboarding door is link-only and audience-specific — it carries NO cross-links to the other doors
+  // (it must not advertise itself, §6). The "invalid" state itself explains how to get a working link.
 
   if (invite.status === 'invalid') {
     return (
@@ -84,7 +79,6 @@ export function EmployeeLoginScreen({ slug, companyName }: { slug?: string; comp
         title="This invite link isn’t valid"
         description="Your onboarding link is invalid or has expired. Please open the most recent link your HR team emailed you — or ask them to resend your invitation."
         badgeLabel="Invite required"
-        footer={staffLink}
       >
         <p className="rounded-md bg-muted px-3.5 py-3 text-sm text-muted-foreground">
           Onboarding sign-in is only available through the secure link in your invitation email. If you need a
@@ -101,7 +95,6 @@ export function EmployeeLoginScreen({ slug, companyName }: { slug?: string; comp
         title="Welcome to hrorg.in"
         description="Checking your invitation…"
         badgeLabel="Secure employee access"
-        footer={staffLink}
       >
         <div className="h-24 animate-pulse rounded-md bg-muted" role="status" aria-label="Validating invite" />
       </AuthShell>
@@ -119,7 +112,6 @@ export function EmployeeLoginScreen({ slug, companyName }: { slug?: string; comp
           : "Enter your full name and email and we'll send you a one-time code."
       }
       badgeLabel="Secure employee access"
-      footer={staffLink}
     >
       <SignInForm token={invite.token} prefillEmail={invite.email} />
     </AuthShell>

@@ -22,7 +22,7 @@ export function FinalCta() {
               Pick up right where you <span className="text-gradient">left off</span>.
             </h2>
             <p className="mx-auto mt-4 max-w-lg text-pretty text-muted-foreground">
-              Sign in to your workspace to carry on. Employees have their own door.
+              Sign in to your workspace to carry on.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link
@@ -31,12 +31,6 @@ export function FinalCta() {
               >
                 Sign in
                 <ArrowRight className="size-4" />
-              </Link>
-              <Link
-                href="/employee/login"
-                className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-white/10"
-              >
-                Employee sign-in
               </Link>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">

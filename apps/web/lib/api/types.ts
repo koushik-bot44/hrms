@@ -3438,6 +3438,8 @@ export interface components {
         StaffLoginRequest: {
             email: string;
             password: string;
+            /** @enum {string} */
+            audience?: "STAFF" | "WORKSPACE";
         };
         ChangePasswordRequest: {
             currentPassword: string;

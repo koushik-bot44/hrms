@@ -6,6 +6,7 @@ import {
   type AuthResult,
   type ChangePasswordInput,
   type InviteContext,
+  type LoginAudience,
   type OtpRequestInput,
   type OtpRequestResult,
   type OtpVerifyInput,
@@ -16,8 +17,11 @@ import { apiFetch } from './client';
 
 /** Auth API calls (§6). `skipAuth` keeps the public ones off the access-token/refresh path. */
 
-/** Staff sign-in: email + password. */
-export function loginStaff(body: StaffLoginInput): Promise<AuthResult> {
+/**
+ * Credential sign-in: email + password (+ optional audience). `audience` names the door (§6) — the API refuses
+ * a mismatched principal AFTER auth (403 `code:PORTAL_MISMATCH`); the general top-level door omits it.
+ */
+export function loginStaff(body: StaffLoginInput & { audience?: LoginAudience }): Promise<AuthResult> {
   return apiFetch('/auth/login', {
     method: 'POST',
     body,

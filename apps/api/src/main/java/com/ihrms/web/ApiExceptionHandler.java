@@ -77,6 +77,19 @@ public class ApiExceptionHandler {
     return build(ex.getStatusCode(), message, req);
   }
 
+  /**
+   * Wrong-door credential login (§6): a valid credential at the wrong audience-specific door. 403 with an
+   * extra machine-readable {@code code} the UI maps to the "use the other door" state (+ cross-link).
+   */
+  @ExceptionHandler(com.ihrms.auth.PortalMismatchException.class)
+  public ResponseEntity<Map<String, Object>> handlePortalMismatch(
+      com.ihrms.auth.PortalMismatchException ex, HttpServletRequest req) {
+    Map<String, Object> body =
+        ApiErrors.body(HttpStatus.FORBIDDEN.value(), ex.getMessage(), req.getRequestURI());
+    body.put("code", "PORTAL_MISMATCH");
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+  }
+
   @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
   public ResponseEntity<Map<String, Object>> handleNotFound(Exception ex, HttpServletRequest req) {
     return build(HttpStatus.NOT_FOUND, "Not found", req);

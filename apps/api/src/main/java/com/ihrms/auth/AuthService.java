@@ -92,6 +92,12 @@ public class AuthService {
           || !encoder.matches(req.password(), user.getPasswordHash())) {
         throw unauthorized("Invalid email or password");
       }
+      // Strict audience (§6): a staff User belongs at the STAFF (or general) door — refuse the WORKSPACE door.
+      // Checked only AFTER a successful auth, so it leaks nothing beyond a normal sign-in.
+      if (req.audience() == LoginAudience.WORKSPACE) {
+        throw new PortalMismatchException(
+            "This is the workspace sign-in. Please use your staff sign-in.");
+      }
       return issue(Principals.of(user), PASSWORD);
     }
 
@@ -106,6 +112,11 @@ public class AuthService {
     // already proved identity, so a clear message is fine (not an enumeration leak).
     if (employee.isAccountDeactivated()) {
       throw deactivated();
+    }
+    // Strict audience (§6): a credentialed Employee belongs at the WORKSPACE (or general) door — refuse STAFF.
+    if (req.audience() == LoginAudience.STAFF) {
+      throw new PortalMismatchException(
+          "This is the staff sign-in. Please use your workspace sign-in.");
     }
     return issue(Principals.of(employee), PASSWORD);
   }

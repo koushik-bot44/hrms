@@ -85,12 +85,8 @@ export function MarketingNav() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Link
-              href="/employee/login"
-              className="hidden rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground lg:inline-block"
-            >
-              Employee
-            </Link>
+            {/* One general "Sign in" (→ /login); the audience-specific doors are reached from the emails
+                that carry the company slug. Nothing on the public site links to the onboarding door (§6). */}
             <Link
               href="/login"
               className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground shadow-sm shadow-primary/40 transition-colors hover:bg-primary/90"
@@ -132,10 +128,10 @@ export function MarketingNav() {
                 );
               })}
               <Link
-                href="/employee/login"
+                href="/login"
                 className="rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
-                Employee sign-in
+                Sign in
               </Link>
             </div>
           </div>

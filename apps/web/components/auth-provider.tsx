@@ -9,6 +9,7 @@ import type {
   OtpVerifyInput,
   Session,
   StaffLoginInput,
+  LoginAudience,
 } from '@/lib/contract';
 import { setAuthHooks } from '@/lib/api/client';
 import { clearWebSession, markWebSession } from '@/lib/auth/web-session-hint';
@@ -28,7 +29,7 @@ interface AuthContextValue {
   session: Session | null;
   status: AuthStatus;
   /** Staff sign-in (email + password). */
-  login: (input: StaffLoginInput) => Promise<Session>;
+  login: (input: StaffLoginInput & { audience?: LoginAudience }) => Promise<Session>;
   /** Staff self-service password change. */
   changePassword: (input: ChangePasswordInput) => Promise<void>;
   /** Employee sign-in start (full name + email + invite token -> OTP). */
@@ -106,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [doRefresh]);
 
   const login = React.useCallback(
-    async (input: StaffLoginInput) => {
+    async (input: StaffLoginInput & { audience?: LoginAudience }) => {
       const result = await apiLoginStaff(input);
       applyAuth(result);
       return result.session;

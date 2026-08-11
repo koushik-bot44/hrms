@@ -32,6 +32,13 @@ export const StaffLoginSchema = z.object({
 });
 export type StaffLoginInput = z.infer<typeof StaffLoginSchema>;
 
+/**
+ * Which audience-specific door a credential login was submitted at (§6). The API refuses a mismatched
+ * principal AFTER authentication (a staff user at WORKSPACE, a credentialed employee at STAFF). The general
+ * top-level door sends none. Threaded onto the login body by the API layer (not a visible form field).
+ */
+export type LoginAudience = 'STAFF' | 'WORKSPACE';
+
 /** Staff self-service password change. */
 export const ChangePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Your current password is required'),

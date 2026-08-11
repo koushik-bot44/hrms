@@ -38,11 +38,13 @@ export function RequireCompany({ children }: { children: React.ReactNode }) {
   const sessionSlug = session?.companySlug ?? null;
   const matched = Boolean(sessionSlug) && sessionSlug === urlSlug;
 
-  // CARVE-OUT (Stage 3): the slugged sign-in doors `/{slug}/login` + `/{slug}/employee/login` are PUBLIC —
+  // CARVE-OUT (Stage 3 / §6): the slugged sign-in doors `/{slug}/login`, `/{slug}/workspace/login` and
+  // `/{slug}/employee/login` are PUBLIC —
   // the slug is a hint, not authorization. They must render for an ANONYMOUS visitor, so the tenancy guard
   // never runs on them (their own page verifies the slug; a signed-in visitor is bounced home by the screen).
   const sub = subPathUnderSlug(pathname, urlSlug);
-  const isLoginDoor = sub === '/login' || sub === '/employee/login';
+  const isLoginDoor =
+    sub === '/login' || sub === '/employee/login' || sub === '/workspace/login';
 
   React.useEffect(() => {
     if (isLoginDoor) return; // public door — no tenancy check

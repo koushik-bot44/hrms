@@ -9142,6 +9142,13 @@
           },
           "password": {
             "type": "string"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "STAFF",
+              "WORKSPACE"
+            ]
           }
         }
       },
