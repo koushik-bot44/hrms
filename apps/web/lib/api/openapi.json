@@ -6160,6 +6160,66 @@
           }
         }
       }
+    },
+    "/public/onboarding/invite/validate": {
+      "post": {
+        "tags": [
+          "public-invite-controller"
+        ],
+        "operationId": "validate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateInviteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteContext"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/invite/resend": {
+      "post": {
+        "tags": [
+          "employees-controller"
+        ],
+        "operationId": "resendInvite",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardEmployeeResult"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8997,7 +9057,8 @@
       "OtpVerifyRequest": {
         "required": [
           "email",
-          "otp"
+          "otp",
+          "token"
         ],
         "type": "object",
         "properties": {
@@ -9006,6 +9067,9 @@
           },
           "otp": {
             "pattern": "\\d{6}",
+            "type": "string"
+          },
+          "token": {
             "type": "string"
           }
         }
@@ -9027,7 +9091,8 @@
       "OtpRequest": {
         "required": [
           "email",
-          "fullName"
+          "fullName",
+          "token"
         ],
         "type": "object",
         "properties": {
@@ -9035,6 +9100,9 @@
             "type": "string"
           },
           "email": {
+            "type": "string"
+          },
+          "token": {
             "type": "string"
           }
         }
@@ -9249,6 +9317,9 @@
           },
           "accountDeactivated": {
             "type": "boolean"
+          },
+          "inviteSentAt": {
+            "type": "string"
           }
         }
       },
@@ -11363,6 +11434,31 @@
             "type": "string"
           },
           "code": {
+            "type": "string"
+          }
+        }
+      },
+      "InviteContext": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "companySlug": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          }
+        }
+      },
+      "ValidateInviteRequest": {
+        "required": [
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
             "type": "string"
           }
         }

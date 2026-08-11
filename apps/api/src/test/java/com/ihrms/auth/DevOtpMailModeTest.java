@@ -41,6 +41,7 @@ class DevOtpMailModeTest {
   @Autowired EmployeeRepository employees;
   @Autowired CompanyRepository companies;
   @Autowired PasswordEncoder encoder;
+  @Autowired com.ihrms.onboarding.InviteTokenService inviteTokens;
   @Autowired JdbcTemplate jdbc;
 
   @BeforeEach
@@ -75,10 +76,11 @@ class DevOtpMailModeTest {
     employee.setCompanyId(company.getId());
     employee.setOnboardingHrId(hr.getId());
     employees.save(employee);
+    String token = inviteTokens.issueFor(employee.getId()); // the invite gate (§6)
 
     assertThat(mail.isRealDelivery()).isTrue();
 
-    OtpRequestResult result = auth.requestOtp(new OtpRequest("Zoe Test", "zoe@personal.test"));
+    OtpRequestResult result = auth.requestOtp(new OtpRequest("Zoe Test", "zoe@personal.test", token));
     assertThat(result.sent()).isTrue();
     assertThat(result.devOtp()).isNull(); // withheld — the code went by email only
   }

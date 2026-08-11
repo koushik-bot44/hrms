@@ -39,7 +39,10 @@ export const ChangePasswordSchema = z.object({
 });
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 
-/** Employee sign-in start: full name + email -> OTP. */
+/**
+ * Employee sign-in start: full name + email -> OTP. The `token` (from the emailed invite link) is the real gate
+ * (§6) — carried alongside the form fields but not part of the visible form; the API layer merges it in.
+ */
 export const OtpRequestSchema = z.object({
   fullName: z.string().trim().min(2, 'Enter your full name').max(120),
   email: z.string().trim().toLowerCase().min(1, 'Email is required').email('Enter a valid email'),
@@ -54,6 +57,14 @@ export const OtpVerifySchema = z.object({
     .regex(/^\d{6}$/, 'Enter the 6-digit code'),
 });
 export type OtpVerifyInput = z.infer<typeof OtpVerifySchema>;
+
+/** Public invite-validation result (§3.2/§6): the door's context for a valid, active invite token. */
+export const InviteContextSchema = z.object({
+  email: z.string(),
+  companySlug: z.string(),
+  companyName: z.string(),
+});
+export type InviteContext = z.infer<typeof InviteContextSchema>;
 
 // ---------------------------------------------------------------------------
 // Responses

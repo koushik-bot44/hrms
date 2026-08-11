@@ -58,6 +58,10 @@ public class SecurityConfig {
                     // EXACT path + method; anti-spam + rate limit live in the handler. Nothing else widened.
                     .requestMatchers(HttpMethod.POST, "/public/contact")
                     .permitAll()
+                    // Public invite-token validation (§3.2/§6): the onboarding door checks the emailed token
+                    // before showing the OTP form. Read-only, generic 410 on any invalid token; rate-limited.
+                    .requestMatchers(HttpMethod.POST, "/public/onboarding/invite/validate")
+                    .permitAll()
                     // Public company-by-slug lookup (slug routing Stage 3): the slugged sign-in doors read
                     // {name} to 404 a bad slug + show context. Read-only, name-only; excludes DELETED (404).
                     .requestMatchers(HttpMethod.GET, "/public/companies/*")

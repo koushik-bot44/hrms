@@ -6,11 +6,12 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { ArrowLeft, KeyRound, Mail, Send, User, UserRound } from 'lucide-react';
+import { ArrowLeft, KeyRound, Link2Off, Mail, Send, User, UserRound } from 'lucide-react';
 import { OtpRequestSchema, OtpVerifySchema, type OtpRequestInput } from '@/lib/contract';
 import { useAuth } from '@/components/auth-provider';
 import { homePathForSession } from '@/lib/auth/routes';
 import { ApiError } from '@/lib/api/client';
+import { validateInvite } from '@/lib/api/auth';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { Button } from '@/components/ui/button';
 import { IconInput } from '@/components/ui/icon-input';
@@ -22,47 +23,110 @@ function errorMessage(error: unknown, fallback: string): string {
 const OtpOnlySchema = OtpVerifySchema.pick({ otp: true });
 type OtpOnlyInput = { otp: string };
 
+type InviteState =
+  | { status: 'validating' }
+  | { status: 'valid'; token: string; email: string; companyName: string }
+  | { status: 'invalid' };
+
 /**
- * The shared employee sign-in screen (full name + email → OTP → session). Mounted by BOTH the top-level
- * `/employee/login` (legacy invite links) and the slugged `/{slug}/employee/login` (where Stage-3 invite links
- * land) — same component, no duplication. `slug`/`companyName` are display + navigation HINTS: the sibling-door
- * link is slugged and the company name is shown when known; the `?email=` invite prefill and post-login routing
- * are unchanged (the OTP resolves by email; `homePathForSession` uses the session's own slug).
+ * The shared employee sign-in screen (§3.2/§6). The onboarding door is now INVITE-LINK-ONLY: on mount it reads
+ * the `token` from the emailed link and validates it against the API — a valid token reveals the OTP form
+ * (full name + email → OTP → session); anything else (missing/expired/revoked/completed) shows an "invalid or
+ * expired" state with NO form. The token is threaded into both OTP calls (the real gate — the UI alone is not
+ * one). Mounted by BOTH `/employee/login` and the slugged `/{slug}/employee/login`; `slug`/`companyName` are
+ * display hints, and the validated context supplies the authoritative prefill email + company name.
  */
 export function EmployeeLoginScreen({ slug, companyName }: { slug?: string; companyName?: string }) {
   const auth = useAuth();
   const router = useRouter();
+  const [invite, setInvite] = React.useState<InviteState>({ status: 'validating' });
 
+  // Already signed in → straight to the role home (no flash of the door).
   React.useEffect(() => {
     if (auth.status === 'authenticated' && auth.session) {
       router.replace(homePathForSession(auth.session));
     }
   }, [auth.status, auth.session, router]);
 
-  const staffDoor = slug ? `/${slug}/login` : '/login';
+  // Validate the invite token from the URL before showing any form.
+  React.useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token) {
+      setInvite({ status: 'invalid' });
+      return;
+    }
+    let cancelled = false;
+    validateInvite(token)
+      .then((ctx) => {
+        if (!cancelled) {
+          setInvite({ status: 'valid', token, email: ctx.email, companyName: ctx.companyName });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setInvite({ status: 'invalid' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
+  const staffDoor = slug ? `/${slug}/login` : '/login';
+  const staffLink = (
+    <Link href={staffDoor} className="text-sm text-muted-foreground hover:text-foreground">
+      Staff member? Sign in here
+    </Link>
+  );
+
+  if (invite.status === 'invalid') {
+    return (
+      <AuthShell
+        icon={<Link2Off className="size-6" />}
+        title="This invite link isn’t valid"
+        description="Your onboarding link is invalid or has expired. Please open the most recent link your HR team emailed you — or ask them to resend your invitation."
+        badgeLabel="Invite required"
+        footer={staffLink}
+      >
+        <p className="rounded-md bg-muted px-3.5 py-3 text-sm text-muted-foreground">
+          Onboarding sign-in is only available through the secure link in your invitation email. If you need a
+          new one, your HR contact can resend it.
+        </p>
+      </AuthShell>
+    );
+  }
+
+  if (invite.status === 'validating') {
+    return (
+      <AuthShell
+        icon={<UserRound className="size-6" />}
+        title="Welcome to hrorg.in"
+        description="Checking your invitation…"
+        badgeLabel="Secure employee access"
+        footer={staffLink}
+      >
+        <div className="h-24 animate-pulse rounded-md bg-muted" role="status" aria-label="Validating invite" />
+      </AuthShell>
+    );
+  }
+
+  const shownCompany = invite.companyName || companyName;
   return (
     <AuthShell
       icon={<UserRound className="size-6" />}
       title="Welcome to hrorg.in"
       description={
-        companyName
-          ? `Enter your full name and email to sign in to ${companyName}.`
+        shownCompany
+          ? `Enter your full name and email to sign in to ${shownCompany}.`
           : "Enter your full name and email and we'll send you a one-time code."
       }
       badgeLabel="Secure employee access"
-      footer={
-        <Link href={staffDoor} className="text-sm text-muted-foreground hover:text-foreground">
-          Staff member? Sign in here
-        </Link>
-      }
+      footer={staffLink}
     >
-      <SignInForm />
+      <SignInForm token={invite.token} prefillEmail={invite.email} />
     </AuthShell>
   );
 }
 
-function SignInForm() {
+function SignInForm({ token, prefillEmail }: { token: string; prefillEmail: string }) {
   const auth = useAuth();
   const router = useRouter();
   const [step, setStep] = React.useState<'request' | 'verify'>('request');
@@ -71,7 +135,7 @@ function SignInForm() {
 
   const requestForm = useForm<OtpRequestInput>({
     resolver: zodResolver(OtpRequestSchema),
-    defaultValues: { fullName: '', email: '' },
+    defaultValues: { fullName: '', email: prefillEmail },
   });
 
   const verifyForm = useForm<OtpOnlyInput>({
@@ -79,16 +143,15 @@ function SignInForm() {
     defaultValues: { otp: '' },
   });
 
-  // The selection/invite email links here with ?email=… — prefill it.
+  // The validated invite supplies the authoritative email — prefill it (locked-in below).
   React.useEffect(() => {
-    const prefill = new URLSearchParams(window.location.search).get('email');
-    if (prefill) requestForm.setValue('email', prefill);
+    if (prefillEmail) requestForm.setValue('email', prefillEmail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [prefillEmail]);
 
   const onRequest = requestForm.handleSubmit(async (values) => {
     try {
-      const result = await auth.requestOtp(values);
+      const result = await auth.requestOtp({ ...values, token });
       setEmail(values.email);
       setDevOtp(result.devOtp);
       setStep('verify');
@@ -100,7 +163,7 @@ function SignInForm() {
 
   const resend = async () => {
     try {
-      const result = await auth.requestOtp(requestForm.getValues());
+      const result = await auth.requestOtp({ ...requestForm.getValues(), token });
       setDevOtp(result.devOtp);
       toast.success('A new code is on its way.');
     } catch (error) {
@@ -110,7 +173,7 @@ function SignInForm() {
 
   const onVerify = verifyForm.handleSubmit(async ({ otp }) => {
     try {
-      const session = await auth.verifyOtp({ email, otp });
+      const session = await auth.verifyOtp({ email, otp, token });
       toast.success('Signed in');
       router.replace(homePathForSession(session));
     } catch (error) {

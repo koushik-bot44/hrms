@@ -18,8 +18,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Per-IP rate limit on the unauthenticated public endpoints — the auth endpoints ({@code /auth/**},
- * including OTP request/verify) and the db-storage blob endpoint ({@code /storage/blobs/**}) — to
- * blunt brute-force / credential-stuffing and file-token abuse (§6 hardening). A fixed window of
+ * including OTP request/verify), the db-storage blob endpoint ({@code /storage/blobs/**}), and the public
+ * onboarding endpoints ({@code /public/onboarding/**}, e.g. invite-token validation) — to blunt brute-force /
+ * credential-stuffing, file-token abuse, and invite-token guessing (§6 hardening). A fixed window of
  * {@value #LIMIT} requests per {@value #WINDOW_MS} ms per client IP; over the limit returns 429 with
  * the error envelope. In-memory + per-instance (sufficient for the single-instance v1 deployment).
  * Runs before the security chain.
@@ -47,7 +48,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     // Also the public company-by-slug lookup (slug routing Stage 3) — blunts slug enumeration/scraping.
     return !(uri.startsWith("/auth/")
         || uri.startsWith("/storage/blobs/")
-        || uri.startsWith("/public/companies/"));
+        || uri.startsWith("/public/companies/")
+        || uri.startsWith("/public/onboarding/"));
   }
 
   @Override

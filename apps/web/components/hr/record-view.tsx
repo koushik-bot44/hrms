@@ -24,6 +24,7 @@ import { surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
 import { ApproveDecisionActions } from '@/components/hr/approve-decision';
 import { AssignCredentialsDialog } from '@/components/hr/assign-credentials-dialog';
+import { ResendInviteButton } from '@/components/hr/resend-invite-button';
 import { SendAgreementsDialog } from '@/components/hr/send-agreements-dialog';
 import { OffboardingPanel } from '@/components/hr/offboarding-panel';
 import { AGREEMENT_TITLES } from '@/lib/contract';
@@ -90,6 +91,9 @@ export function RecordView({
   const viewerCanManageMailbox =
     session?.type === 'USER' &&
     (session.role === UserRole.HR || session.role === UserRole.COMPANY_ADMIN);
+  // Resend invite (§3.2/§6) is the onboarding HR's action (the API is HR-only) and only makes sense while the
+  // employee is still INVITED — a fresh link revokes the previous one.
+  const viewerIsHr = session?.type === 'USER' && session.role === UserRole.HR;
   // The Offer Letter PDF (§3.2) carries the salary — HR/COMPANY_ADMIN/SUPER_ADMIN only (the same audience
   // as the record read). Manager/Accountant share this record view; the API 403s them, and this hides the
   // download button so it never even appears (the offer STATUS below is harmless and shown to everyone).
@@ -138,6 +142,9 @@ export function RecordView({
             ) : null}
             <StatusBadge status={record.status} />
             {record.accountDeactivated ? <Badge variant="danger">Deactivated</Badge> : null}
+            {viewerIsHr && record.status === 'INVITED' ? (
+              <ResendInviteButton employeeId={record.id} sentAt={record.inviteSentAt} />
+            ) : null}
             {editable && onDecided ? (
               <ApproveDecisionActions
                 employeeId={record.id}

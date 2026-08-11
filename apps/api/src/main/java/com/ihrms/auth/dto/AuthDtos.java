@@ -31,15 +31,21 @@ public final class AuthDtos {
           @Size(min = MIN_PASSWORD_LENGTH, message = "Use at least 8 characters")
           String newPassword) {}
 
-  /** Employee sign-in start: full name + email → OTP to the email (the security factor). */
+  /**
+   * Employee sign-in start: full name + email + the invite {@code token} → OTP to the email. The token
+   * (from the emailed link) is the real gate — an unauthenticated caller cannot request an OTP for an
+   * arbitrary email without it (§6).
+   */
   public record OtpRequest(
       @NotBlank(message = "Full name is required") String fullName,
-      @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email) {}
+      @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
+      @NotBlank(message = "This sign-in must be opened from your invite link") String token) {}
 
-  /** Employee verify: email + the 6-digit OTP → session. */
+  /** Employee verify: email + the 6-digit OTP + the invite {@code token} → session. */
   public record OtpVerifyRequest(
       @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,
-      @NotBlank @Pattern(regexp = "\\d{6}", message = "Enter the 6-digit code") String otp) {}
+      @NotBlank @Pattern(regexp = "\\d{6}", message = "Enter the 6-digit code") String otp,
+      @NotBlank(message = "This sign-in must be opened from your invite link") String token) {}
 
   /** {@code AuthResult = { accessToken, session }}. */
   public record AuthResult(String accessToken, SessionView session) {}

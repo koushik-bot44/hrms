@@ -79,5 +79,15 @@ export function editEmployeeForm2(id: string, body: Form2Values): Promise<Form2V
   });
 }
 
+/**
+ * HR resends the onboarding invite (§3.2/§6): issues a FRESH invite token — which revokes the previous link
+ * — and re-emails it. INVITED-only (the API 409s otherwise) and scoped to the actor's own onboarded employees.
+ */
+export function resendInvite(id: string): Promise<OnboardEmployeeResult> {
+  return apiFetch<OnboardEmployeeResult>(`/employees/${encodeURIComponent(id)}/invite/resend`, {
+    method: 'POST',
+  });
+}
+
 /** Re-exported for the Super Admin's `{ teamId, form2 }` onboard body. */
 export type { SuperAdminOnboardInput };

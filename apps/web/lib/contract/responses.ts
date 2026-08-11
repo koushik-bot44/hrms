@@ -197,6 +197,7 @@ export type EmployeeRecord = Omit<
   | 'aadhaarNumber'
   | 'agreements'
   | 'offer'
+  | 'inviteSentAt'
 > & {
   // employeeCode is null until approval (§5); dateOfJoining may be absent on legacy rows.
   employeeCode: string | null;
@@ -217,6 +218,9 @@ export type EmployeeRecord = Omit<
   // The Offer Letter (§3.2): status + dates only; null when there is no offer. The PDF (with the salary) is
   // fetched via GET /employees/{id}/offer/pdf (role-gated), not embedded here.
   offer: OfferRecordView | null;
+  // When the active onboarding invite was last sent (§3.2/§6) — drives the HR "Resend invite" surface; null
+  // once there is no active token (e.g. after onboarding completes).
+  inviteSentAt: string | null;
 };
 
 /** Plaintext sensitive values returned by the explicit, audited reveal action (§6). */

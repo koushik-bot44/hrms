@@ -53,6 +53,7 @@ class AuthFlowTest {
   @Autowired CompanyRepository companies;
   @Autowired PasswordEncoder encoder;
   @Autowired AccountEmails accountEmails;
+  @Autowired com.ihrms.onboarding.InviteTokenService inviteTokens;
   @Autowired JdbcTemplate jdbc;
 
   @BeforeEach
@@ -156,48 +157,67 @@ class AuthFlowTest {
   // --- Employee OTP: name-matched, enumeration-safe, single-use -------------
 
   @Test
-  void employeeOtpIsNameMatchedEnumerationSafeAndSingleUse() throws Exception {
+  void employeeOtpRequiresInviteTokenNameMatchedAndIsSingleUse() throws Exception {
     Employee employee = employeeFixture("ACME", "Alex Doe", "alex@personal.test");
+    String token = inviteTokens.issueFor(employee.getId()); // the emailed invite gate (§6)
 
-    // Unknown email: generic shape, no devOtp leaked.
-    assertThat(requestOtpRaw("Nobody At All", "nobody@x.test").has("devOtp")).isFalse();
-    // Right email, WRONG name: same generic shape, NO otp issued.
-    assertThat(requestOtpRaw("Someone Else", "alex@personal.test").has("devOtp")).isFalse();
+    // No token at all -> 400 (the door must be opened from the invite link).
+    mvc.perform(
+            post("/auth/request-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("fullName", "Alex Doe", "email", "alex@personal.test"))))
+        .andExpect(status().isBadRequest());
+    // Valid token but WRONG email (it is bound to Alex) -> rejected.
+    requestOtp("Alex Doe", "nobody@x.test", token).andExpect(status().isUnauthorized());
+    // Valid token but WRONG name -> rejected.
+    requestOtp("Someone Else", "alex@personal.test", token).andExpect(status().isUnauthorized());
+    // Tampered token -> rejected.
+    requestOtp("Alex Doe", "alex@personal.test", token + "x").andExpect(status().isUnauthorized());
 
-    // Correct name + email (case-insensitive, trimmed): devOtp surfaced in non-prod.
-    JsonNode ok = requestOtpRaw("  alex doe ", "Alex@Personal.test");
+    // Correct name + email + token (case-insensitive, trimmed): devOtp surfaced in non-prod.
+    JsonNode ok = requestOtpOk("  alex doe ", "Alex@Personal.test", token);
     assertThat(ok.get("sent").asBoolean()).isTrue();
     assertThat(ok.get("expiresInSeconds").asInt()).isPositive();
     String otp = ok.get("devOtp").asText();
     assertThat(otp).hasSize(6);
 
-    MvcResult verified = verifyOtp("alex@personal.test", otp).andExpect(status().isCreated()).andReturn();
+    // Verify needs the token too: a valid OTP with no / a tampered token is rejected.
+    mvc.perform(
+            post("/auth/verify-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("email", "alex@personal.test", "otp", otp))))
+        .andExpect(status().isBadRequest());
+    verifyOtp("alex@personal.test", otp, token + "x").andExpect(status().isUnauthorized());
+
+    MvcResult verified =
+        verifyOtp("alex@personal.test", otp, token).andExpect(status().isCreated()).andReturn();
     JsonNode session = json.readTree(verified.getResponse().getContentAsString()).get("session");
     assertThat(session.get("type").asText()).isEqualTo("EMPLOYEE");
     assertThat(session.get("employeeId").asText()).isEqualTo(employee.getId());
     assertThat(session.get("employeeCode").isNull()).isTrue(); // no ID until approval (§5)
 
-    // Single-use: the same OTP cannot be replayed.
-    verifyOtp("alex@personal.test", otp).andExpect(status().isUnauthorized());
+    // Single-use OTP: the same code cannot be replayed (the invite token stays valid, the OTP does not).
+    verifyOtp("alex@personal.test", otp, token).andExpect(status().isUnauthorized());
   }
 
   @Test
   void staffCannotUseEmployeeOtp() throws Exception {
     staff("Real Name", "staff@acme.test", UserRole.HR, null);
-    // A staff email at the employee endpoint resolves no Employee -> no code (generic response).
-    assertThat(requestOtpRaw("Real Name", "staff@acme.test").has("devOtp")).isFalse();
-    // And a guessed code cannot verify.
-    verifyOtp("staff@acme.test", "000000").andExpect(status().isUnauthorized());
+    // Staff have no invite token; a fabricated token resolves to nothing -> rejected on both endpoints.
+    requestOtp("Real Name", "staff@acme.test", "not-a-real-token").andExpect(status().isUnauthorized());
+    verifyOtp("staff@acme.test", "000000", "not-a-real-token").andExpect(status().isUnauthorized());
   }
 
   @Test
   void verifyRejectsExpiredCode() throws Exception {
     Employee employee = employeeFixture("BETA", "Sam Roe", "sam@personal.test");
+    String token = inviteTokens.issueFor(employee.getId());
     employee.setOtpHash(encoder.encode("123456"));
     employee.setOtpExpiresAt(Instant.now().minusSeconds(5));
     employees.save(employee);
 
-    verifyOtp("sam@personal.test", "123456").andExpect(status().isUnauthorized());
+    // The token is valid, but the OTP has expired -> still rejected.
+    verifyOtp("sam@personal.test", "123456", token).andExpect(status().isUnauthorized());
   }
 
   // --- Refresh / me / logout ------------------------------------------------
@@ -283,22 +303,24 @@ class AuthFlowTest {
             .content(json.writeValueAsString(Map.of("currentPassword", current, "newPassword", next))));
   }
 
-  private JsonNode requestOtpRaw(String fullName, String email) throws Exception {
-    MvcResult res =
-        mvc.perform(
-                post("/auth/request-otp")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(json.writeValueAsString(Map.of("fullName", fullName, "email", email))))
-            .andExpect(status().isCreated())
-            .andReturn();
+  private ResultActions requestOtp(String fullName, String email, String token) throws Exception {
+    return mvc.perform(
+        post("/auth/request-otp")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                json.writeValueAsString(Map.of("fullName", fullName, "email", email, "token", token))));
+  }
+
+  private JsonNode requestOtpOk(String fullName, String email, String token) throws Exception {
+    MvcResult res = requestOtp(fullName, email, token).andExpect(status().isCreated()).andReturn();
     return json.readTree(res.getResponse().getContentAsString());
   }
 
-  private ResultActions verifyOtp(String email, String otp) throws Exception {
+  private ResultActions verifyOtp(String email, String otp, String token) throws Exception {
     return mvc.perform(
         post("/auth/verify-otp")
             .contentType(MediaType.APPLICATION_JSON)
-            .content(json.writeValueAsString(Map.of("email", email, "otp", otp))));
+            .content(json.writeValueAsString(Map.of("email", email, "otp", otp, "token", token))));
   }
 
   private Company company(String name, String code) {

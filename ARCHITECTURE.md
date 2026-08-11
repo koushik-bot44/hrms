@@ -671,6 +671,45 @@ carries their slug; platform roles + legacy links are unchanged.
   `hrorg.in` for a platform user. `public/sw.js` opens whatever `url` the payload carries — the now-slugged
   relative paths resolve against the web origin with **no change** to the Service Worker.
 
+### Invite-link-only onboarding (the signed invite token, §3.2/§6)
+
+The employee onboarding door is **invite-link-only**: a candidate can reach the OTP flow ONLY through the link
+HR emailed them. Navigating to `/employee/login` (or `/{slug}/employee/login`) without a valid token shows an
+"invalid or expired" state with **no form**. The door UI is not the gate — **both OTP endpoints enforce the
+token server-side**.
+
+- **The token.** A cryptographically-random opaque value (`SecureRandom`, 256-bit, base64url — NOT a JWT, so
+  it is revocable), stored **only as its SHA-256 hex** in `employee_invite_tokens` (`InviteToken` /
+  `InviteTokenService`). Lookup is BY that hash — BCrypt's per-row salt can't be looked up by value, so a
+  deterministic hash is used (safe: the token is high-entropy, no brute-force surface like a password). Columns:
+  `employeeId`, `tokenHash` (unique), `expiresAt` (now + 7 days), `usedAt`, `revokedAt`, `createdAt`.
+- **One ACTIVE token per employee.** Issuing a new one revokes any prior un-revoked token — so **a resend (or an
+  email-change re-invite) invalidates the old link**. Issued in the one place the invite is built
+  (`EmployeesService` → `InviteTokenService.issueFor`).
+- **The link** carries the raw token: `{WEB_APP_URL}/{slug}/employee/login?token={token}&email=…` (via
+  `WebLinks`; the `?email=` stays as prefill, the **token** is what authorizes the door).
+- **Validation** — `POST /public/onboarding/invite/validate {token}` (permitAll; token in the body, never
+  logged; rate-limited by `RateLimitFilter` over `/public/onboarding/**`). A valid, active invite → `200`
+  `{email, companySlug, companyName}` (the door's minimal context — company info is already public via
+  `/public/companies/{slug}`); everything else — unknown / expired / revoked / past-onboarding / archived
+  company — is **one generic `410 Gone`** (never distinguishing the reason: anti-enumeration). It is a pure read
+  (the token is not consumed here).
+- **OTP enforcement (the real gate).** `POST /auth/{request-otp,verify-otp}` now require a `token` alongside the
+  identity fields. Both **resolve the employee FROM the token** (authoritative), then require the submitted
+  email to match; a missing token → `400`, an invalid/expired/revoked/past-onboarding token → `401`. `verify`
+  stamps `usedAt` on first success but the OTP itself stays single-use (the token does not).
+- **End-of-life** — a token stops authorizing the door when ANY holds: (a) **expired** (7-day TTL); (b)
+  **revoked** (a newer token was issued — resend / re-invite); (c) the employee is **no longer onboarding-active**
+  (`status ∈ {APPROVED, REJECTED, OFFBOARDED}` — onboarding complete, they move to workspace credentials and use
+  the `/login` password door). `usedAt` never ends validity — a candidate signs in repeatedly over days.
+- **HR resend** — `POST /employees/{id}/invite/resend` (HR-only; own-onboarded; INVITED-only → `409`) revokes the
+  old token, issues a fresh one, re-sends the invite via the existing path, and audits `INVITE_RESENT`. The HR
+  record view surfaces a **Resend invite** action for INVITED employees with the "invite last sent" time
+  (`EmployeeRecordView.inviteSentAt` = the active token's `createdAt`).
+- **Existing INVITED at deploy** — V37 **silently** backfills a token row per currently-INVITED employee (no
+  mass email); the raw value is unrecoverable, so those placeholders are not usable — HR **resends** to deliver a
+  fresh, working link (which revokes the placeholder). Count affected = the current INVITED population.
+
 ### Employee record (the four onboarding forms)
 - **Form1Personal** — Personal Details: `name`, `dob`, `email`, `mobile`, `designation`,
   `offeredCtc` [SENSITIVE], `currentAddress`, `permanentAddress`, `maritalStatus`, `bloodGroup`,

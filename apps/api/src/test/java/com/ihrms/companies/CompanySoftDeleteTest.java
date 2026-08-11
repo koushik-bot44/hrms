@@ -56,6 +56,7 @@ class CompanySoftDeleteTest {
   @Autowired AuditLogRepository auditLogs;
   @Autowired AccountEmails accountEmails;
   @Autowired org.springframework.security.crypto.password.PasswordEncoder encoder;
+  @Autowired com.ihrms.onboarding.InviteTokenService inviteTokens;
   @Autowired JdbcTemplate jdbc;
 
   private String superToken;
@@ -65,6 +66,7 @@ class CompanySoftDeleteTest {
   private Employee employee;
   private String adminToken;
   private String employeeToken;
+  private String inviteToken;
 
   @BeforeEach
   void setup() {
@@ -98,6 +100,7 @@ class CompanySoftDeleteTest {
         tokens.issueAccess(
             new IhrmsPrincipal.Employee(
                 employee.getId(), null, employee.getEmail(), company.getId()));
+    inviteToken = inviteTokens.issueFor(employee.getId()); // the invite gate for the OTP door (§6)
   }
 
   @Test
@@ -131,11 +134,11 @@ class CompanySoftDeleteTest {
   void principalsOfDeletedCompanyAreDeniedLoginAndExistingTokensRejected() throws Exception {
     archive();
 
-    // Staff password login is denied (generic) for an archived company; employee OTP is denied too
-    // (generic response, no devOtp).
+    // Staff password login is denied (generic) for an archived company; employee OTP — even WITH a valid
+    // invite token — is denied because the company is archived.
     login("ca@acme.test", STAFF_PW).andExpect(status().isUnauthorized());
     login("hr@acme.test", STAFF_PW).andExpect(status().isUnauthorized());
-    assertThat(requestOtp("Eve Employee", "eve@personal.test").has("devOtp")).isFalse();
+    requestOtp("Eve Employee", "eve@personal.test", inviteToken).andExpect(status().isUnauthorized());
 
     // Already-issued access tokens stop working on the very next request.
     mvc.perform(get("/auth/me").header("Authorization", "Bearer " + adminToken))
@@ -215,15 +218,13 @@ class CompanySoftDeleteTest {
         .andExpect(status().isOk());
   }
 
-  private JsonNode requestOtp(String fullName, String email) throws Exception {
-    MvcResult res =
-        mvc.perform(
-                post("/auth/request-otp")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(json.writeValueAsString(Map.of("fullName", fullName, "email", email))))
-            .andExpect(status().isCreated())
-            .andReturn();
-    return json.readTree(res.getResponse().getContentAsString());
+  private org.springframework.test.web.servlet.ResultActions requestOtp(
+      String fullName, String email, String token) throws Exception {
+    return mvc.perform(
+        post("/auth/request-otp")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                json.writeValueAsString(Map.of("fullName", fullName, "email", email, "token", token))));
   }
 
   private java.util.List<String> activeCompanyIds() throws Exception {

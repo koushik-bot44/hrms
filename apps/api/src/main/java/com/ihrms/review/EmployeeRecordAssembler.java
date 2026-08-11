@@ -50,6 +50,7 @@ public class EmployeeRecordAssembler {
   private final StorageService storage;
   private final AgreementService agreementService;
   private final OfferService offerService;
+  private final com.ihrms.onboarding.InviteTokenService inviteTokens;
 
   public EmployeeRecordAssembler(
       Form1PersonalRepository form1s,
@@ -60,7 +61,8 @@ public class EmployeeRecordAssembler {
       CompanyRepository companies,
       StorageService storage,
       AgreementService agreementService,
-      OfferService offerService) {
+      OfferService offerService,
+      com.ihrms.onboarding.InviteTokenService inviteTokens) {
     this.form1s = form1s;
     this.form2s = form2s;
     this.form3s = form3s;
@@ -70,6 +72,7 @@ public class EmployeeRecordAssembler {
     this.storage = storage;
     this.agreementService = agreementService;
     this.offerService = offerService;
+    this.inviteTokens = inviteTokens;
   }
 
   public EmployeeRecordView build(Employee employee) {
@@ -111,7 +114,13 @@ public class EmployeeRecordAssembler {
         // Offer status only (§3.2) — the PDF with the salary is fetched via the role-gated endpoint, so this
         // is safe even though the shared record view reaches manager/accountant too.
         offerService.recordOffer(employee.getId()),
-        employee.isAccountDeactivated());
+        employee.isAccountDeactivated(),
+        // "Invite last sent" — the active invite token's createdAt; drives the HR resend surface (§3.2/§6).
+        toIso(inviteTokens.sentAt(employee.getId())));
+  }
+
+  private static String toIso(java.time.Instant instant) {
+    return instant == null ? null : instant.toString();
   }
 
   /** Plaintext sensitive values (PLAIN mode) — the caller audits this as a reveal. */

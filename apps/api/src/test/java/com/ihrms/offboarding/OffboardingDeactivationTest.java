@@ -16,8 +16,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ihrms.auth.AuthService;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.TokenService;
-import com.ihrms.auth.dto.AuthDtos.OtpRequest;
-import com.ihrms.auth.dto.AuthDtos.OtpVerifyRequest;
 import com.ihrms.auth.dto.AuthDtos.StaffLoginRequest;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.OffboardingDocStatus;
@@ -125,41 +123,33 @@ class OffboardingDeactivationTest {
   // --- completion no longer blocks either door ------------------------------
 
   @Test
-  void completionDoesNotBlockEitherDoorNorRefresh() {
+  void completionDoesNotBlockCredentialedLoginNorRefresh() {
     // Complete: OFFBOARDED but NOT deactivated.
     empA.setStatus(EmployeeStatus.OFFBOARDED);
     employees.save(empA);
 
-    // Credentialed workspace login still works.
+    // Credentialed workspace login still works (§3.6 — completion alone no longer blocks login). The OTP
+    // door is the ONBOARDING door now (invite-token-gated, §6): a completed employee uses their credentials,
+    // not OTP — that end-of-life is covered in InviteTokenApiTest.
     assertThatCode(() -> auth.loginStaff(new StaffLoginRequest(MAILBOX, PASSWORD))).doesNotThrowAnyException();
 
-    // OTP door: a code is still issued, and verify still yields a session.
-    String otp = auth.requestOtp(new OtpRequest(FULLNAME, PERSONAL)).devOtp();
-    assertThat(otp).isNotNull();
-    assertThat(auth.verifyOtp(new OtpVerifyRequest(PERSONAL, otp))).isNotNull();
-
-    // Refresh still works.
+    // Refresh still works (both employee session types).
     String refresh =
-        tokens.issueRefresh(new IhrmsPrincipal.Employee(empA.getId(), empA.getEmployeeCode(), empA.getEmail(), companyA), "OTP");
+        tokens.issueRefresh(new IhrmsPrincipal.Employee(empA.getId(), empA.getEmployeeCode(), empA.getEmail(), companyA), "PASSWORD");
     assertThat(auth.refresh(refresh)).isNotNull();
   }
 
   // --- deactivation blocks both doors + both refresh paths ------------------
 
   @Test
-  void deactivationBlocksBothDoorsAndRefresh() {
+  void deactivationBlocksCredentialedLoginAndRefresh() {
     empA.setStatus(EmployeeStatus.OFFBOARDED);
     empA.setAccountDeactivated(true);
     employees.save(empA);
 
-    // Credential login -> 403 deactivated.
+    // Credential login -> 403 deactivated. (The OTP onboarding door is unreachable for a completed employee
+    // regardless of deactivation — it is invite-token-gated to active onboardings, §6.)
     assertThatThrownBy(() -> auth.loginStaff(new StaffLoginRequest(MAILBOX, PASSWORD)))
-        .isInstanceOf(ResponseStatusException.class)
-        .satisfies(e -> assertThat(statusOf(e)).isEqualTo(403));
-
-    // OTP request withholds the code (enumeration-safe); verify -> 403 deactivated.
-    assertThat(auth.requestOtp(new OtpRequest(FULLNAME, PERSONAL)).devOtp()).isNull();
-    assertThatThrownBy(() -> auth.verifyOtp(new OtpVerifyRequest(PERSONAL, "000000")))
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(e -> assertThat(statusOf(e)).isEqualTo(403));
 

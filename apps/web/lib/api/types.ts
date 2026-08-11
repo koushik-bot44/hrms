@@ -2559,6 +2559,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/onboarding/invite/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/invite/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resendInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3382,6 +3414,7 @@ export interface components {
         OtpVerifyRequest: {
             email: string;
             otp: string;
+            token: string;
         };
         AuthResult: {
             accessToken?: string;
@@ -3391,6 +3424,7 @@ export interface components {
         OtpRequest: {
             fullName: string;
             email: string;
+            token: string;
         };
         OtpRequestResult: {
             sent?: boolean;
@@ -3460,6 +3494,7 @@ export interface components {
             agreements?: components["schemas"]["AgreementSummary"][];
             offer?: components["schemas"]["OfferRecordView"];
             accountDeactivated?: boolean;
+            inviteSentAt?: string;
         };
         OfferRecordView: {
             /** @enum {string} */
@@ -4335,6 +4370,14 @@ export interface components {
             id?: string;
             name?: string;
             code?: string;
+        };
+        InviteContext: {
+            email?: string;
+            companySlug?: string;
+            companyName?: string;
+        };
+        ValidateInviteRequest: {
+            token: string;
         };
     };
     responses: never;
@@ -8611,6 +8654,52 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PurgeCompanyResult"];
+                };
+            };
+        };
+    };
+    validate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateInviteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InviteContext"];
+                };
+            };
+        };
+    };
+    resendInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OnboardEmployeeResult"];
                 };
             };
         };

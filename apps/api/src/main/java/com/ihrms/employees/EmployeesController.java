@@ -62,6 +62,19 @@ public class EmployeesController {
   }
 
   /**
+   * Resend the onboarding invite (§3.2/§6). HR-only (class rule), own onboarded, INVITED-only (409
+   * otherwise): issues a FRESH invite token — revoking the previous link — and re-sends the invite email.
+   */
+  @PostMapping("/{id}/invite/resend")
+  @ResponseStatus(HttpStatus.CREATED)
+  public OnboardEmployeeResult resendInvite(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return employees.resendInvite(id, actor, request.getRemoteAddr());
+  }
+
+  /**
    * The employee list: for HR their own onboarded queue; for a COMPANY_ADMIN the whole company (§6) —
    * so the admin can find any approved employee to manage their mailbox. Search (name/email/ID) +
    * status, paginated. Overrides the class-level HR-only rule.

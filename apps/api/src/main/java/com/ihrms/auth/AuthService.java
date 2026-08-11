@@ -48,6 +48,7 @@ public class AuthService {
   private final AppProperties props;
   private final AuthorizationService authz;
   private final AuditService audit;
+  private final com.ihrms.onboarding.InviteTokenService inviteTokens;
 
   public AuthService(
       UserRepository users,
@@ -58,7 +59,8 @@ public class AuthService {
       MailService mail,
       AppProperties props,
       AuthorizationService authz,
-      AuditService audit) {
+      AuditService audit,
+      com.ihrms.onboarding.InviteTokenService inviteTokens) {
     this.users = users;
     this.employees = employees;
     this.companies = companies;
@@ -68,6 +70,7 @@ public class AuthService {
     this.props = props;
     this.authz = authz;
     this.audit = audit;
+    this.inviteTokens = inviteTokens;
   }
 
   // --- Staff: email + password (User only) ----------------------------------
@@ -126,24 +129,33 @@ public class AuthService {
     int ttl = props.otpTtl();
     String email = req.email().trim().toLowerCase();
     String fullName = req.fullName().trim();
-    String devOtp = null;
 
-    // Resolve an Employee by email (staff use email+password, not OTP). Issue only when the
-    // HR-entered full name matches and the company is not archived; otherwise fall through to the
-    // same generic response so neither email nor name can be enumerated (§6).
-    Employee employee = employees.findByEmail(email).orElse(null);
-    if (employee != null
-        && nameMatches(employee.getFullName(), fullName)
-        && !authz.isCompanyDeleted(employee.getCompanyId())
-        && !employee.isAccountDeactivated()) { // §3.6: withhold the OTP from a deactivated account (enum-safe)
-      String otp = issueOtp(email, employee.getCompanyId());
-      employee.setOtpHash(encoder.encode(otp));
-      employee.setOtpExpiresAt(Instant.now().plusSeconds(ttl));
-      employees.save(employee);
-      // The OTP is returned to the caller ONLY in dev-log mode; once real SMTP is active it travels by email
-      // alone. Bound to the mail mode (not a separate prod flag) so the two can never drift (§Outbound email).
-      devOtp = mail.isRealDelivery() ? null : otp;
+    // The invite token is the real gate (§6): resolve the employee FROM the token (authoritative), not by
+    // email — an unauthenticated caller cannot request an OTP for an arbitrary email without a valid link.
+    // A missing/invalid/expired/revoked token, or an employee past onboarding, is a single generic denial.
+    Employee employee =
+        inviteTokens
+            .resolve(req.token())
+            .map(com.ihrms.onboarding.InviteTokenService.ResolvedInvite::employee)
+            .orElseThrow(() -> unauthorized("This invite link is invalid or has expired"));
+
+    // Cross-check the submitted identity against the token's employee, then apply the standing gates.
+    if (!email.equalsIgnoreCase(employee.getEmail())
+        || !nameMatches(employee.getFullName(), fullName)
+        || authz.isCompanyDeleted(employee.getCompanyId())) {
+      throw unauthorized("The name or email doesn't match this invitation");
     }
+    if (employee.isAccountDeactivated()) { // §3.6: withhold the OTP from a deactivated account
+      throw deactivated();
+    }
+
+    String otp = issueOtp(employee.getEmail(), employee.getCompanyId());
+    employee.setOtpHash(encoder.encode(otp));
+    employee.setOtpExpiresAt(Instant.now().plusSeconds(ttl));
+    employees.save(employee);
+    // The OTP is returned to the caller ONLY in dev-log mode; once real SMTP is active it travels by email
+    // alone. Bound to the mail mode (not a separate prod flag) so the two can never drift (§Outbound email).
+    String devOtp = mail.isRealDelivery() ? null : otp;
     return new OtpRequestResult(true, ttl, devOtp);
   }
 
@@ -159,9 +171,14 @@ public class AuthService {
   public IssuedSession verifyOtp(OtpVerifyRequest req) {
     String email = req.email().trim().toLowerCase();
 
-    // Employee only — a staff email resolves nothing here (generic denial).
-    Employee employee = employees.findByEmail(email).orElse(null);
-    if (employee == null || authz.isCompanyDeleted(employee.getCompanyId())) {
+    // Same token gate as request-otp (§6): resolve the employee FROM the invite token; a missing/invalid/
+    // expired/revoked token or a past-onboarding employee is a single generic denial.
+    com.ihrms.onboarding.InviteTokenService.ResolvedInvite invite =
+        inviteTokens
+            .resolve(req.token())
+            .orElseThrow(() -> unauthorized("Invalid or expired code"));
+    Employee employee = invite.employee();
+    if (!email.equalsIgnoreCase(employee.getEmail()) || authz.isCompanyDeleted(employee.getCompanyId())) {
       throw unauthorized("Invalid or expired code");
     }
     // §3.6: a DEACTIVATED account gets no new session (a clear message — the OTP flow proved identity).
@@ -170,9 +187,10 @@ public class AuthService {
       throw deactivated();
     }
     assertOtpValid(employee.getOtpHash(), employee.getOtpExpiresAt(), req.otp());
-    employee.setOtpHash(null); // single-use
+    employee.setOtpHash(null); // single-use OTP (the invite token stays valid for repeat sign-in)
     employee.setOtpExpiresAt(null);
     employees.save(employee);
+    inviteTokens.markUsed(invite.token()); // stamp first use (informational; does not end validity)
     return issue(Principals.of(employee), OTP);
   }
 

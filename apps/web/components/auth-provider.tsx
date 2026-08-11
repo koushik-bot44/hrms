@@ -31,9 +31,9 @@ interface AuthContextValue {
   login: (input: StaffLoginInput) => Promise<Session>;
   /** Staff self-service password change. */
   changePassword: (input: ChangePasswordInput) => Promise<void>;
-  /** Employee sign-in start (full name + email -> OTP). */
-  requestOtp: (input: OtpRequestInput) => Promise<OtpRequestResult>;
-  verifyOtp: (input: OtpVerifyInput) => Promise<Session>;
+  /** Employee sign-in start (full name + email + invite token -> OTP). */
+  requestOtp: (input: OtpRequestInput & { token: string }) => Promise<OtpRequestResult>;
+  verifyOtp: (input: OtpVerifyInput & { token: string }) => Promise<Session>;
   logout: () => Promise<void>;
 }
 
@@ -120,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const verifyOtp = React.useCallback(
-    async (input: OtpVerifyInput) => {
+    async (input: OtpVerifyInput & { token: string }) => {
       const result = await apiVerifyOtp(input);
       applyAuth(result);
       return result.session;
@@ -128,7 +128,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuth],
   );
 
-  const requestOtp = React.useCallback((input: OtpRequestInput) => apiRequestOtp(input), []);
+  const requestOtp = React.useCallback(
+    (input: OtpRequestInput & { token: string }) => apiRequestOtp(input),
+    [],
+  );
 
   const logout = React.useCallback(async () => {
     try {

@@ -109,7 +109,10 @@ public final class ReviewDtos {
       // The PDF (which carries the salary) is fetched via GET /employees/{id}/offer/pdf (role-gated), NOT here.
       OfferRecordView offer,
       // Whether HR has deactivated the account (§3.6) — the "Deactivated" chip shown alongside OFFBOARDED.
-      boolean accountDeactivated) {}
+      boolean accountDeactivated,
+      // When the active onboarding invite was last sent (§3.2/§6) — drives the HR "Resend invite" surface for
+      // INVITED employees. Null once there is no active token (e.g. after onboarding completes).
+      String inviteSentAt) {}
 
   /** The plaintext sensitive values returned by the explicit, audited reveal action (§6). */
   public record RevealedSensitive(

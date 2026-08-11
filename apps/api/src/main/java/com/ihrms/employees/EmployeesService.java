@@ -61,6 +61,7 @@ public class EmployeesService {
   private final AccountEmails accountEmails;
   private final AuthorizationService authz;
   private final OfferService offers;
+  private final com.ihrms.onboarding.InviteTokenService inviteTokens;
   private final com.ihrms.web.WebLinks links;
 
   public EmployeesService(
@@ -73,6 +74,7 @@ public class EmployeesService {
       AccountEmails accountEmails,
       AuthorizationService authz,
       OfferService offers,
+      com.ihrms.onboarding.InviteTokenService inviteTokens,
       com.ihrms.web.WebLinks links) {
     this.employees = employees;
     this.companies = companies;
@@ -83,6 +85,7 @@ public class EmployeesService {
     this.accountEmails = accountEmails;
     this.authz = authz;
     this.offers = offers;
+    this.inviteTokens = inviteTokens;
     this.links = links;
   }
 
@@ -167,7 +170,9 @@ public class EmployeesService {
     // form unlocks. Terms reuse the Form-2 joining date + designation + name; only salary/location are new.
     offers.createOffer(employee, offer, actor, ip);
 
-    String loginUrl = loginUrl(email, company.getSlug());
+    // Issue the invite token that authorizes the onboarding door (§6) and carry it in the login link.
+    String token = inviteTokens.issueFor(employee.getId());
+    String loginUrl = loginUrl(email, company.getSlug(), token);
     mail.sendEmployeeSelection(email, fullName, designation, company.getName(), loginUrl, companyId);
 
     // Partition the audit under the TARGET company (a SUPER_ADMIN actor has no company of its own).
@@ -234,10 +239,12 @@ public class EmployeesService {
     form2s.save(f2);
 
     if (emailChanged) {
-      // The personal email IS the login identity — re-invite the new address; the old gets nothing.
+      // The personal email IS the login identity — re-invite the new address (a fresh token that revokes the
+      // prior link) to the new address; the old gets nothing.
+      String token = inviteTokens.issueFor(employee.getId());
       mail.sendEmployeeSelection(
           newEmail, employee.getFullName(), employee.getDesignation(), company.getName(),
-          loginUrl(newEmail, company.getSlug()), employee.getCompanyId());
+          loginUrl(newEmail, company.getSlug(), token), employee.getCompanyId());
       audit.record(
           new AuditActor("USER", actor.userId(), employee.getCompanyId()),
           "EMPLOYEE_REINVITED",
@@ -275,10 +282,50 @@ public class EmployeesService {
     return employee;
   }
 
-  /** The slugged employee-login link for the invite email: {WEB_APP_URL}/{slug}/employee/login?email=… */
-  private String loginUrl(String email, String slug) {
+  /**
+   * HR resends the invite (§3.2/§6): INVITED-only (409 otherwise), scoped to the actor's own onboarded
+   * employees (SUPER_ADMIN never reaches this HR-only route). Issues a FRESH token — which revokes the prior,
+   * so the old link stops working — and re-sends the selection email through the existing path. Audited
+   * INVITE_RESENT. Returns the summary; the record view surfaces the new "invite last sent" time.
+   */
+  public OnboardEmployeeResult resendInvite(String employeeId, IhrmsPrincipal.User actor, String ip) {
+    Employee employee = loadAccessible(actor, employeeId);
+    if (employee.getStatus() != EmployeeStatus.INVITED) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "The invite can only be resent while the employee is still invited");
+    }
+    Company company =
+        companies
+            .findById(employee.getCompanyId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
+
+    String token = inviteTokens.issueFor(employee.getId()); // revokes the prior link
+    String loginUrl = loginUrl(employee.getEmail(), company.getSlug(), token);
+    mail.sendEmployeeSelection(
+        employee.getEmail(),
+        employee.getFullName(),
+        employee.getDesignation(),
+        company.getName(),
+        loginUrl,
+        employee.getCompanyId());
+    audit.record(
+        new AuditActor("USER", actor.userId(), employee.getCompanyId()),
+        "INVITE_RESENT",
+        "Employee",
+        employeeId,
+        Map.of("email", employee.getEmail()),
+        ip);
+    return new OnboardEmployeeResult(summary(employee), loginUrl);
+  }
+
+  /** The slugged employee-login link for the invite email: {WEB_APP_URL}/{slug}/employee/login?token=…&email=… */
+  private String loginUrl(String email, String slug, String token) {
     return links.emailLinkForSlug(
-        slug, "/employee/login?email=" + URLEncoder.encode(email, StandardCharsets.UTF_8));
+        slug,
+        "/employee/login?token="
+            + URLEncoder.encode(token, StandardCharsets.UTF_8)
+            + "&email="
+            + URLEncoder.encode(email, StandardCharsets.UTF_8));
   }
 
   private static String norm(String email) {
