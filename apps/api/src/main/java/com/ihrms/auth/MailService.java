@@ -82,8 +82,9 @@ public class MailService {
 
   /** Initial credentials for a newly provisioned Company Admin. */
   public void sendCompanyAdminInvite(String email, String companyName, String tempPassword, String companyId) {
-    // Company staff sign in at the STAFF door: {WEB_APP_URL}/{slug}/login (top-level for a platform actor).
-    String loginUrl = links.emailLink(companyId, "/login");
+    // All staff (company + platform) sign in at the top-level STAFF door {WEB_APP_URL}/login (§6, two doors);
+    // the slug is applied only after sign-in.
+    String loginUrl = links.topDoor("/login");
     String text =
         "You've been set up as the administrator for " + companyName + " on hrorg.in.\n\n"
             + "Sign in at " + loginUrl + " with:\nEmail: " + email + "\nTemporary password: " + tempPassword
@@ -98,8 +99,8 @@ public class MailService {
 
   /** Initial credentials for a newly created HR/Manager staff user. */
   public void sendStaffInvite(String email, String role, String tempPassword, String companyId) {
-    // Company staff sign in at the STAFF door; a platform actor (null companyId) at the top-level door.
-    String loginUrl = links.emailLink(companyId, "/login");
+    // All staff sign in at the top-level STAFF door {WEB_APP_URL}/login (§6, two doors).
+    String loginUrl = links.topDoor("/login");
     String text =
         "You've been added to hrorg.in as " + role + ".\n\n"
             + "Sign in at " + loginUrl + " with:\nEmail: " + email + "\nTemporary password: " + tempPassword

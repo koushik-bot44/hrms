@@ -37,11 +37,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * Three distinct sign-in doors, STRICTLY enforced at the API (§6): STAFF ({@code /{slug}/login}), WORKSPACE
- * ({@code /{slug}/workspace/login}), ONBOARDING ({@code /{slug}/employee/login}, P1). A credential valid at the
- * WRONG audience-specific door is refused AFTER authentication with {@code 403 code:PORTAL_MISMATCH} + a
- * door-appropriate message; each at its OWN door succeeds; the general top-level door accepts BOTH. Also asserts
- * the credential/invite emails carry the audience-correct slugged URL.
+ * Two TOP-LEVEL sign-in doors, STRICTLY enforced at the API (§6, two-door consolidation): the STAFF door
+ * ({@code /login}, audience {@code STAFF}: all staff + platform roles) and the WORKSPACE door
+ * ({@code /employee/login}, audience {@code WORKSPACE}: approved, credentialed employees); onboarding stays a
+ * separate slugged, token-gated OTP door. A credential valid at the WRONG door is refused AFTER authentication
+ * with {@code 403 code:PORTAL_MISMATCH} + a door-appropriate message; each at its OWN door succeeds; a platform
+ * role signs in at STAFF; the audience-less API path still accepts both (backward-compat). Also asserts the
+ * credential/invite emails carry the TOP-LEVEL door URLs (no slug — the slug is applied only after sign-in).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -107,22 +109,33 @@ class SignInDoorsTest {
     assertThat(wsSession.get("mailAddress").asText()).isEqualTo("arjun@acme");
   }
 
-  // --- the general top-level door accepts BOTH (platform + legacy) ------------
+  // --- a platform role signs in at the STAFF door -----------------------------
 
   @Test
-  void topLevelDoorAcceptsBothAudiences() throws Exception {
+  void platformRoleAtTheStaffDoorSucceeds() throws Exception {
+    platformStaff(UserRole.ACCOUNTS_ADMIN, "root.accounts@platform.test");
+    JsonNode s =
+        sessionOf(login("root.accounts@platform.test", PW, "STAFF").andExpect(status().isCreated()));
+    assertThat(s.get("type").asText()).isEqualTo("USER");
+    assertThat(s.get("role").asText()).isEqualTo("ACCOUNTS_ADMIN");
+  }
+
+  // --- the audience-less API path still accepts both (backward-compat) --------
+
+  @Test
+  void audienceLessLoginAcceptsBoth() throws Exception {
     credentialedEmployee("arjun@acme");
-    // No audience -> no restriction.
+    // No audience -> no restriction (legacy /auth/login callers; no UI door sends this now).
     assertThat(sessionOf(login("hana.hr@acme.test", PW, null).andExpect(status().isCreated())).get("type").asText())
         .isEqualTo("USER");
     assertThat(sessionOf(login("arjun@acme", PW, null).andExpect(status().isCreated())).get("type").asText())
         .isEqualTo("EMPLOYEE");
   }
 
-  // --- audience-correct slugged URLs in the emails ----------------------------
+  // --- emails carry the TOP-LEVEL door URLs (no slug) -------------------------
 
   @Test
-  void credentialEmailForAnEmployeePointsAtTheWorkspaceDoor() throws Exception {
+  void credentialEmailForAnEmployeePointsAtTheTopLevelWorkspaceDoor() throws Exception {
     Employee emp = approvedNoCreds();
     String hrToken =
         tokens.issueAccess(
@@ -135,17 +148,22 @@ class SignInDoorsTest {
 
     ArgumentCaptor<OutboundEmail> captor = ArgumentCaptor.forClass(OutboundEmail.class);
     verify(mailer, timeout(3000)).send(captor.capture());
-    assertThat(captor.getValue().text()).contains("/acme/workspace/login");
+    String text = captor.getValue().text();
+    assertThat(text).contains("/employee/login"); // the top-level workspace door
+    assertThat(text).doesNotContain("/acme"); // NO slug — applied only after sign-in
+    assertThat(text).doesNotContain("/workspace/login");
   }
 
   @Test
-  void staffInviteEmailPointsAtTheStaffDoor() throws Exception {
+  void staffInviteEmailPointsAtTheTopLevelStaffDoor() throws Exception {
     mailService.sendCompanyAdminInvite("new.admin@ext.test", "Acme Inc", "TempPw@1", acme.getId());
 
     ArgumentCaptor<OutboundEmail> captor = ArgumentCaptor.forClass(OutboundEmail.class);
     verify(mailer, timeout(3000)).send(captor.capture());
     String text = captor.getValue().text();
-    assertThat(text).contains("/acme/login");
+    assertThat(text).contains("/login"); // the top-level staff door
+    assertThat(text).doesNotContain("/acme"); // NO slug
+    assertThat(text).doesNotContain("/employee/login");
     assertThat(text).doesNotContain("/workspace/login");
   }
 
@@ -179,6 +197,18 @@ class SignInDoorsTest {
     u.setName(role.name());
     u.setRole(role);
     u.setCompanyId(acme.getId());
+    u.setPasswordHash(encoder.encode(PW));
+    u.setStatus("ACTIVE");
+    return users.save(u);
+  }
+
+  /** A PLATFORM staff user (no company) — e.g. Accounts Admin / Super Admin / Hierarchy — signs in at STAFF. */
+  private User platformStaff(UserRole role, String email) {
+    User u = new User();
+    u.setEmail(email);
+    u.setName(role.name());
+    u.setRole(role);
+    u.setCompanyId(null);
     u.setPasswordHash(encoder.encode(PW));
     u.setStatus("ACTIVE");
     return users.save(u);

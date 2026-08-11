@@ -660,52 +660,56 @@ carries their slug; platform roles + legacy links are unchanged.
   inherent disclosure of any per-company login URL; the authenticated `/companies/by-slug/*` resolver is
   untouched). Sign-in still resolves by email and post-login routing is unchanged (`homePathForSession` uses the
   session's own slug).
-- **The top-level doors `/login` + `/employee/login` are RETAINED indefinitely** — platform roles (no slug) use
-  them, and legacy invite links already in inboxes keep working.
+- **The top-level doors `/login` + `/employee/login` are now the PRIMARY (and only) credential doors** (see
+  "Two sign-in doors" below) — the earlier slugged staff/workspace doors REDIRECT to them; only the onboarding
+  invite stays slugged.
 - **One link-building helper** (`WebLinks`) is the single place URLs are assembled — a company user gets
   `{WEB_APP_URL}/{slug}/…` (emails) / `/{slug}/…` (push deep-links); a platform user is unchanged. Every site
-  routes through it: the **invite** email (`{WEB_APP_URL}/{slug}/employee/login?email=…`), the **credential**
-  email (`{WEB_APP_URL}/{slug}/login`), and **push click URLs** (e.g. `/{slug}/workspace/agreements` instead of
-  the Stage-2 LegacyRedirect-to-home compromise; absolute URLs + platform users pass through untouched).
+  routes through it: the **onboarding invite** email (`{WEB_APP_URL}/{slug}/employee/login?token=…&email=…`, the
+  only slugged door link) and **push click URLs** (e.g. `/{slug}/workspace/agreements`; absolute URLs + platform
+  users pass through untouched). The staff/employee **credential** emails now use the TOP-LEVEL doors
+  (`WebLinks.topDoor` → `{WEB_APP_URL}/login` and `/employee/login`) — see "Two sign-in doors" (§6).
 - **Email brand line** is slugged to `hrorg.in/{slug}` for a company-user email (matching the link) and stays
   `hrorg.in` for a platform user. `public/sw.js` opens whatever `url` the payload carries — the now-slugged
   relative paths resolve against the web origin with **no change** to the Service Worker.
 
-### Three sign-in doors, strictly enforced (§6)
+### Two sign-in doors, strictly enforced (§6)
 
-Sign-in is split into three audience-specific slugged doors plus one general top-level door:
+Sign-in is **two TOP-LEVEL doors** — the company slug appears only AFTER sign-in (post-login routing builds the
+slugged home; the user never types a slug). A third, invite-link-only ONBOARDING door stays slugged + token-gated:
 
 | Door | URL | Audience | Method |
 | --- | --- | --- | --- |
-| STAFF | `/{slug}/login` | company staff (`User`: HR, Manager, Company Admin) | email + password |
-| WORKSPACE | `/{slug}/workspace/login` | approved, credentialed employees | workspace credentials (password) |
+| STAFF | `/login` (top-level) | ALL staff — company (HR, Company Admin, Manager, Accountant) **and** platform (Super Admin, Hierarchy, Accounts Admin) | email + password, `audience="STAFF"` |
+| WORKSPACE | `/employee/login` (top-level) | approved, credentialed employees | workspace password, `audience="WORKSPACE"` |
 | ONBOARDING | `/{slug}/employee/login?token=…` | invited candidates | OTP, invite-link-only (below) |
-| _general_ | `/login` (top-level) | **anyone** — platform roles + a legacy fallback | email + password |
 
-- **The doors are thin mounts over shared screens** (no duplication): STAFF, WORKSPACE and the general
-  top-level door all render the SAME `StaffLoginScreen` (email + password) with door-specific framing +
-  cross-link via an `audience` prop; ONBOARDING renders the OTP `EmployeeLoginScreen`. A bad/archived slug 404s
-  (the Stage-3 `SluggedDoor`). Each slugged door carries a muted cross-link to the OTHER credential door; the
-  ONBOARDING door carries **none** (link-only, it must not advertise itself), and nothing on the **public
-  marketing site** links to it (one general "Sign in" → `/login`).
-- **Strict enforcement is at the API, AFTER authentication** (`AuthService.loginStaff`). `POST /auth/login` still
-  resolves a staff `User` (by email) OR a credentialed `Employee` (by mailbox) and verifies the password; the
-  request now carries the door's `audience`. If it authenticated successfully but at the wrong door — a `User`
-  at WORKSPACE, or an `Employee` at STAFF — it is refused with **`403` + `code:"PORTAL_MISMATCH"`** and a
-  door-appropriate message, which the UI shows inline with a cross-link. **Tradeoff:** the refusal fires only on
-  a SUCCESSFUL auth, so it reveals nothing an attacker couldn't learn by signing in at the correct door (a wrong
-  password is still the same generic `401`). The frontend guards are UX only.
-- **The general top-level `/login` sends no `audience`** — it accepts ANY valid credential and routes by
-  `homePathForSession` (a credentialed employee → their `/{slug}/workspace`, staff → their role home). It is the
-  platform-role door AND the working fallback for legacy links: the slugged doors are audience-specific; the
-  top-level door is the general one.
-- **Link map (every door URL is built via `WebLinks`):** the **credential email** for an approved employee →
-  `/{slug}/workspace/login`; **staff invites** (Company Admin / HR / Manager) → `/{slug}/login`, and a **platform**
-  actor (null company) → the top-level `/login`. The onboarding invite → `/{slug}/employee/login?token=…`
-  (below). The public marketing site links only to `/login`.
-- **Route plumbing:** `/{slug}/workspace/login` is public, so it is carved out of BOTH the `[companySlug]`
-  tenancy guard (`RequireCompany`) AND the workspace area's `RequireRole(EMPLOYEE)` layout — mirroring how
-  `/{slug}/login` + `/{slug}/employee/login` already sit outside their role guards.
+- **Both credential doors are thin mounts over the SAME shared `StaffLoginScreen`** (email + password), with
+  door-specific framing + a muted cross-link to the OTHER door: STAFF → "Are you an employee? Sign in here"
+  (`/employee/login`); WORKSPACE → "Are you staff? Sign in here" (`/login`). ONBOARDING renders the OTP
+  `EmployeeLoginScreen` and carries **no** cross-links (link-only — it must not advertise itself); the public
+  marketing site links only to `/login`.
+- **Strict enforcement is at the API, AFTER authentication** (`AuthService.loginStaff`, UNCHANGED). `POST
+  /auth/login` resolves a staff `User` (by email) OR a credentialed `Employee` (by mailbox), verifies the
+  password, then applies the door's `audience`: a `User` at WORKSPACE, or an `Employee` at STAFF, is refused with
+  **`403` + `code:"PORTAL_MISMATCH"`** + a door-appropriate message that the UI shows inline WITH a working link
+  to the correct door. The refusal fires only on a SUCCESSFUL auth (a wrong password is still a generic `401`),
+  so it leaks nothing. (The audience-less `/auth/login` path still accepts either principal — backward-compat for
+  legacy callers; no UI door sends it now.)
+- **Post-login routing is unchanged** (`homePathForSession`): a platform role → its top-level home
+  (`/super-admin`, `/accounts`, `/hierarchy`); company staff → `/{slug}/{hr,manager,company-admin,accountant}`; a
+  credentialed employee → `/{slug}/workspace`, an onboarding one → `/{slug}/employee`.
+- **Legacy slugged doors REDIRECT** (links already in inboxes keep working): `/{slug}/login` → `/login`,
+  `/{slug}/workspace/login` → `/employee/login` — SERVER-side redirects that preserve any `?email=`, firing
+  before the client tenancy/role guards. `/{slug}/employee/login` is **NOT** a redirect — it remains the
+  ONBOARDING door.
+- **Link map (every door URL built via `WebLinks`, one place):** staff invites/credentials (Company Admin / HR /
+  Manager) → the top-level `/login` (`WebLinks.topDoor`); the approved-employee credential email → the top-level
+  `/employee/login`; the onboarding invite → `/{slug}/employee/login?token=…` (still slugged + token-carrying,
+  below). Only the onboarding invite carries a slug.
+- **Route plumbing:** the two redirect pages + the onboarding door are carved out of the `[companySlug]` tenancy
+  guard (`RequireCompany`), and `/{slug}/workspace/login` also out of the workspace `RequireRole(EMPLOYEE)`
+  layout, so they render for an anonymous visitor; the server redirect then fires before any client guard runs.
 
 ### Invite-link-only onboarding (the signed invite token, §3.2/§6)
 

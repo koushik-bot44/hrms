@@ -1,21 +1,15 @@
-'use client';
-
-import { useParams } from 'next/navigation';
-import { SluggedDoor } from '@/components/auth/slugged-door';
-import { StaffLoginScreen } from '@/components/auth/staff-login-screen';
+import { redirect } from 'next/navigation';
 
 /**
- * Slugged WORKSPACE sign-in `/{companySlug}/workspace/login` (§6) — where an APPROVED, credentialed employee
- * signs in with their workspace credentials (the credential email links here). UNAUTHENTICATED: the
- * `[companySlug]` tenancy guard AND the workspace `RequireRole` both carve this sub-path out. {@link SluggedDoor}
- * 404s a bad/archived slug; the SHARED {@link StaffLoginScreen} renders with `audience="WORKSPACE"` (the API
- * refuses a staff user here and points them to the staff door).
+ * Legacy slugged WORKSPACE door `/{companySlug}/workspace/login` (§6). Consolidated to the top-level workspace
+ * door (`/employee/login`), so this now permanently REDIRECTS there — keeping credential-email links already in
+ * inboxes working. Any `?email=` is preserved. Server-side redirect (fires before the tenancy + role guards).
  */
-export default function SluggedWorkspaceLoginPage() {
-  const slug = String(useParams().companySlug ?? '');
-  return (
-    <SluggedDoor slug={slug}>
-      {(companyName) => <StaffLoginScreen slug={slug} companyName={companyName} audience="WORKSPACE" />}
-    </SluggedDoor>
-  );
+export default function SluggedWorkspaceLoginPage({
+  searchParams,
+}: {
+  searchParams: { email?: string | string[] };
+}) {
+  const email = typeof searchParams.email === 'string' ? searchParams.email : undefined;
+  redirect(email ? `/employee/login?email=${encodeURIComponent(email)}` : '/employee/login');
 }

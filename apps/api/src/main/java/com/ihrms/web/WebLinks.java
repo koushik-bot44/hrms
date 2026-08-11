@@ -46,6 +46,16 @@ public class WebLinks {
   }
 
   /**
+   * A TOP-LEVEL sign-in door link, {@code {WEB_APP_URL}{path}} — NO slug (§6, two-door consolidation). The
+   * company slug is applied only AFTER sign-in by {@code homePathForSession}, so the staff door ({@code /login})
+   * and the workspace-employee door ({@code /employee/login}) are slug-free for everyone. (The onboarding
+   * invite is the one exception — it stays slugged + token-carrying via {@link #emailLinkForSlug}.)
+   */
+  public String topDoor(String path) {
+    return base() + path;
+  }
+
+  /**
    * Push click deep-link (relative, resolved by the Service Worker against the web origin):
    * {@code [/{slug}]{path}} for a company user, {@code path} unchanged for a platform user. An ABSOLUTE
    * {@code path} (e.g. the test notification's {WEB_APP_URL}) is returned untouched.

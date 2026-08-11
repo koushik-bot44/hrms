@@ -1,10 +1,13 @@
-import { EmployeeLoginScreen } from '@/components/auth/employee-login-screen';
+import { StaffLoginScreen } from '@/components/auth/staff-login-screen';
 
 /**
- * Top-level employee sign-in (§6) — RETAINED indefinitely so legacy invite links (`/employee/login?email=…`)
- * already in inboxes keep working. Stage-3 invites now land at `/{slug}/employee/login?email=…` (same screen).
- * Thin mount over the shared screen.
+ * Door 2 — the workspace sign-in for APPROVED, credentialed EMPLOYEES (§6, two-door consolidation): email +
+ * workspace password. Sends `audience="WORKSPACE"`, so a staff USER is refused (PORTAL_MISMATCH) and
+ * cross-linked to the staff door. Thin mount over the SAME shared credential screen as door 1.
+ *
+ * NOTE: this path previously hosted the onboarding OTP door; that door is invite-link-only and now lives
+ * solely at the slugged `/{slug}/employee/login?token=…` (the invite links already point there, unchanged).
  */
 export default function EmployeeLoginPage() {
-  return <EmployeeLoginScreen />;
+  return <StaffLoginScreen audience="WORKSPACE" />;
 }

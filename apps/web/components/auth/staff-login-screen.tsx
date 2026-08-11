@@ -30,31 +30,23 @@ function isPortalMismatch(error: unknown): boolean {
   );
 }
 
-/** The other-audience door to cross-link to (slugged). Null on the general top-level door. */
-function otherDoor(audience: LoginAudience | undefined, slug?: string) {
-  if (!slug) return null;
-  if (audience === 'STAFF') return { href: `/${slug}/workspace/login`, label: 'Workspace employee? Sign in here' };
-  if (audience === 'WORKSPACE') return { href: `/${slug}/login`, label: 'Staff member? Sign in here' };
+/** The OTHER top-level door to cross-link to (§6, two doors). Null on a general (audience-less) mount. */
+function otherDoor(audience: LoginAudience | undefined) {
+  if (audience === 'STAFF') return { href: '/employee/login', label: 'Are you an employee? Sign in here' };
+  if (audience === 'WORKSPACE') return { href: '/login', label: 'Are you staff? Sign in here' };
   return null;
 }
 
 /**
- * The shared CREDENTIAL sign-in screen (email + password → session, routed by role/mailbox). Mounted by all
- * three credential doors — the general top-level `/login` (audience `undefined`; platform + legacy, no
- * restriction), the slugged STAFF door `/{slug}/login` (audience `STAFF`), and the slugged WORKSPACE door
- * `/{slug}/workspace/login` (audience `WORKSPACE`) — same component, no duplication. The audience is sent to the
- * API, which refuses a mismatched principal AFTER auth (§6); a mismatch surfaces here as an inline "wrong door"
- * notice with a cross-link to the correct door. The ONBOARDING door has its own OTP screen and no cross-links.
+ * The shared CREDENTIAL sign-in screen (email + password → session, routed by role/mailbox). Mounted by BOTH
+ * top-level doors (§6, two-door consolidation) — the STAFF door `/login` (audience `STAFF`: all staff + platform
+ * roles) and the WORKSPACE door `/employee/login` (audience `WORKSPACE`: approved, credentialed employees) —
+ * same component, no duplication. The audience is sent to the API, which refuses a mismatched principal AFTER
+ * auth (§6); a mismatch surfaces here as an inline "wrong door" notice with a working link to the correct door,
+ * and each door carries a muted cross-link to the other. The company slug is applied only after sign-in
+ * (homePathForSession). The onboarding door has its own OTP screen (slugged, token-gated) and no cross-links.
  */
-export function StaffLoginScreen({
-  slug,
-  companyName,
-  audience,
-}: {
-  slug?: string;
-  companyName?: string;
-  audience?: LoginAudience;
-}) {
+export function StaffLoginScreen({ audience }: { audience?: LoginAudience }) {
   const auth = useAuth();
   const router = useRouter();
 
@@ -65,7 +57,7 @@ export function StaffLoginScreen({
     }
   }, [auth.status, auth.session, router]);
 
-  const cross = otherDoor(audience, slug);
+  const cross = otherDoor(audience);
 
   const framing =
     audience === 'WORKSPACE'
@@ -73,18 +65,14 @@ export function StaffLoginScreen({
           icon: <Briefcase className="size-6" />,
           title: 'Workspace sign-in',
           badge: 'Secure workspace access',
-          description: companyName
-            ? `Sign in to your ${companyName} workspace with your credentials.`
-            : 'Sign in to your workspace with your credentials.',
+          description: 'Sign in to your workspace with your employee credentials.',
         }
       : audience === 'STAFF'
         ? {
             icon: <UserRound className="size-6" />,
             title: 'Staff sign-in',
             badge: 'Secure staff access',
-            description: companyName
-              ? `Sign in to ${companyName} with your staff email and password.`
-              : 'Sign in with your staff email and password.',
+            description: 'Sign in with your staff email and password.',
           }
         : {
             icon: <BrandMark size={48} rounded="rounded-2xl" />,
@@ -156,7 +144,7 @@ function StaffSignInForm({
               href={cross.href}
               className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
             >
-              {audience === 'STAFF' ? 'Go to workspace sign-in' : 'Go to staff sign-in'}
+              {audience === 'STAFF' ? 'Go to employee sign-in' : 'Go to staff sign-in'}
               <ArrowRight className="size-3.5" />
             </Link>
           ) : null}

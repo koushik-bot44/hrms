@@ -32,8 +32,9 @@ type InviteState =
  * the `token` from the emailed link and validates it against the API — a valid token reveals the OTP form
  * (full name + email → OTP → session); anything else (missing/expired/revoked/completed) shows an "invalid or
  * expired" state with NO form. The token is threaded into both OTP calls (the real gate — the UI alone is not
- * one). Mounted by BOTH `/employee/login` and the slugged `/{slug}/employee/login`; `slug`/`companyName` are
- * display hints, and the validated context supplies the authoritative prefill email + company name.
+ * one). This ONBOARDING door lives solely at the slugged `/{slug}/employee/login?token=…` (the top-level
+ * `/employee/login` is now the workspace-employee credential door, §6 two-door consolidation); `slug`/
+ * `companyName` are display hints, and the validated context supplies the authoritative prefill email + name.
  */
 export function EmployeeLoginScreen({ companyName }: { slug?: string; companyName?: string }) {
   const auth = useAuth();

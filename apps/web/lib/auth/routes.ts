@@ -1,5 +1,5 @@
-import { UserRole, type Session } from '@/lib/contract';
-import { buildCompanyPath } from '@/lib/company-url';
+import { UserRole, type Session } from '../contract';
+import { buildCompanyPath } from '../company-url';
 
 /**
  * The landing path for a session (Stage 2 — tenant-scoped URLs). Company-scoped areas live under the
