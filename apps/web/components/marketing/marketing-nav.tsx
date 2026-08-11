@@ -9,9 +9,10 @@ import { BRAND_SUBTITLE } from '@/lib/brand';
 import { BrandMark } from '@/components/brand-mark';
 
 /**
- * Sticky, glassy navbar shared across the marketing pages (rendered once in the layout). Real <Link>
- * navigation with a visible ACTIVE state per route; the glass deepens once the page is scrolled, and a mobile
- * menu holds the same links. No data, no auth — it never reads session state.
+ * Sticky, glassy navbar shared across the marketing pages (rendered once in the layout). A FULL-WIDTH bar
+ * (spans the whole page, not a centered pill) whose inner content aligns to the same max-w-6xl envelope as
+ * the page below. Real <Link> navigation with a visible ACTIVE state per route; the glass deepens once the
+ * page is scrolled, and a mobile menu holds the same links. No data, no auth — it never reads session state.
  */
 const LINKS = [
   { href: '/', label: 'Product' },
@@ -53,14 +54,14 @@ export function MarketingNav() {
   React.useEffect(() => setOpen(false), [pathname]);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-3 sm:pt-4">
+    <header className="fixed inset-x-0 top-0 z-50">
       <nav
         className={cn(
-          'w-full max-w-6xl rounded-2xl border transition-all duration-300',
+          'w-full border-b transition-all duration-300',
           scrolled || open ? 'm-glass border-white/10 shadow-lg shadow-black/30' : 'border-transparent bg-transparent',
         )}
       >
-        <div className="flex items-center justify-between px-3 py-2 sm:px-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5 sm:px-6">
           <Brand />
 
           <div className="hidden items-center gap-1 md:flex">
@@ -107,8 +108,8 @@ export function MarketingNav() {
 
         {/* Mobile menu */}
         {open ? (
-          <div className="border-t border-white/10 px-2 py-2 md:hidden">
-            <div className="flex flex-col">
+          <div className="border-t border-white/10 md:hidden">
+            <div className="mx-auto flex max-w-6xl flex-col px-3 py-2">
               {LINKS.map((l) => {
                 const active = isActive(pathname, l.href);
                 return (
