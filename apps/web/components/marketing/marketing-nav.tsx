@@ -28,11 +28,11 @@ function isActive(pathname: string, href: string): boolean {
 
 function Brand() {
   return (
-    <Link href="/" className="flex items-center gap-2.5 pl-1">
-      <BrandMark size={36} className="shadow-sm shadow-primary/40" />
+    <Link href="/" className="flex items-center gap-3 pl-1">
+      <BrandMark size={44} className="shadow-sm shadow-primary/40" />
       <span className="leading-tight">
-        <span className="block text-[15px] font-semibold tracking-tight text-foreground">hrorg.in</span>
-        <span className="block text-[10px] text-muted-foreground/70">{BRAND_SUBTITLE}</span>
+        <span className="block text-lg font-semibold tracking-tight text-foreground">hrorg.in</span>
+        <span className="block text-[11px] text-muted-foreground/70">{BRAND_SUBTITLE}</span>
       </span>
     </Link>
   );
@@ -61,10 +61,10 @@ export function MarketingNav() {
           scrolled || open ? 'm-glass border-white/10 shadow-lg shadow-black/30' : 'border-transparent bg-transparent',
         )}
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
           <Brand />
 
-          <div className="hidden items-center gap-1 md:flex">
+          <div className="hidden items-center gap-1.5 md:flex">
             {LINKS.map((l) => {
               const active = isActive(pathname, l.href);
               return (
@@ -73,7 +73,7 @@ export function MarketingNav() {
                   href={l.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'rounded-full px-3 py-1.5 text-sm transition-colors',
+                    'rounded-full px-4 py-2 text-[15px] transition-colors',
                     active
                       ? 'bg-primary/15 font-medium text-primary-bright'
                       : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
@@ -85,12 +85,12 @@ export function MarketingNav() {
             })}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {/* One general "Sign in" (→ /login); the audience-specific doors are reached from the emails
                 that carry the company slug. Nothing on the public site links to the onboarding door (§6). */}
             <Link
               href="/login"
-              className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground shadow-sm shadow-primary/40 transition-colors hover:bg-primary/90"
+              className="rounded-full bg-primary px-5 py-2.5 text-[15px] font-medium text-primary-foreground shadow-sm shadow-primary/40 transition-colors hover:bg-primary/90"
             >
               Sign in
             </Link>
@@ -99,9 +99,9 @@ export function MarketingNav() {
               aria-label={open ? 'Close menu' : 'Open menu'}
               aria-expanded={open}
               onClick={() => setOpen((v) => !v)}
-              className="flex size-9 items-center justify-center rounded-full border border-white/10 text-foreground transition-colors hover:bg-white/5 md:hidden"
+              className="flex size-11 items-center justify-center rounded-full border border-white/10 text-foreground transition-colors hover:bg-white/5 md:hidden"
             >
-              {open ? <X className="size-4" /> : <Menu className="size-4" />}
+              {open ? <X className="size-5" /> : <Menu className="size-5" />}
             </button>
           </div>
         </div>
@@ -118,7 +118,7 @@ export function MarketingNav() {
                     href={l.href}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'rounded-lg px-3 py-2.5 text-sm transition-colors',
+                      'rounded-lg px-3 py-3 text-[15px] transition-colors',
                       active
                         ? 'bg-primary/15 font-medium text-primary-bright'
                         : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
@@ -130,7 +130,7 @@ export function MarketingNav() {
               })}
               <Link
                 href="/login"
-                className="rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                className="rounded-lg px-3 py-3 text-[15px] text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
                 Sign in
               </Link>
