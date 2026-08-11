@@ -1,8 +1,9 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
 import { Providers } from '../providers';
 import { Toaster } from '@/components/ui/sonner';
+import { PwaRuntime } from '@/components/pwa/pwa-runtime';
 import { SIGNATURE_FONT_VARS } from '../fonts';
 import '../globals.css';
 
@@ -21,6 +22,17 @@ export const metadata: Metadata = {
     apple: [{ url: '/apple-icon.png', sizes: '180x180' }],
     shortcut: ['/favicon.ico'],
   },
+  // Installed-app (Add to Home Screen) behaviour on iOS Safari; the manifest (app/manifest.ts) covers Android.
+  appleWebApp: { capable: true, title: 'hrorg.in', statusBarStyle: 'default' },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  // Let content extend into the safe areas of the installed app (notch/home indicator); the shells pad with
+  // env(safe-area-inset-*). No effect in a normal browser tab.
+  viewportFit: 'cover',
+  themeColor: '#0a1224',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -28,6 +40,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={`${inter.variable} ${SIGNATURE_FONT_VARS}`} suppressHydrationWarning>
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
         <Providers>
+          <PwaRuntime />
           {children}
           <Toaster />
         </Providers>

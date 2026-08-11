@@ -18,6 +18,12 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// A pass-through 'fetch' handler (no caching — hrorg.in stays online-only). Its presence lets the app meet
+// the installability criteria ("Add to Home Screen") across browsers without becoming an offline/PWA cache.
+self.addEventListener('fetch', () => {
+  // Intentionally empty: let the network handle every request as normal.
+});
+
 self.addEventListener('push', (event) => {
   let data = { title: 'hrorg.in', body: 'You have a new notification.', url: '/' };
   try {

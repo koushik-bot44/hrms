@@ -43,7 +43,7 @@ export function AuthShell({
   return (
     <div className="flex min-h-dvh flex-col bg-background md:flex-row">
       {/* LEFT — dark indigo marketing panel; a compact brand header on mobile. */}
-      <aside className="relative flex flex-col overflow-hidden border-b border-sidebar-border bg-sidebar px-6 py-6 text-sidebar-foreground md:w-[46%] md:border-b-0 md:border-r md:px-10 md:py-10 lg:px-14">
+      <aside className="relative flex flex-col overflow-hidden border-b border-sidebar-border bg-sidebar px-6 pb-6 pt-[calc(1.5rem+env(safe-area-inset-top))] text-sidebar-foreground md:w-[46%] md:border-b-0 md:border-r md:px-10 md:py-10 lg:px-14">
         {/* Decorative wave depth at the foot (reused shared component). */}
         <SidebarWaves />
 

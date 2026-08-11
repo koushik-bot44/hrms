@@ -45,6 +45,7 @@ import { MailButton } from '@/components/mail/mail-button';
 import { BrandWordmark } from '@/components/brand-wordmark';
 import { BrandMark } from '@/components/brand-mark';
 import { SidebarWaves } from '@/components/sidebar-waves';
+import { AppPrompts } from '@/components/pwa/app-prompts';
 
 export interface NavItem {
   label: string;
@@ -372,8 +373,9 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Topbar — welcome cluster on the light page surface. */}
-        <header className="flex h-14 items-center justify-between gap-3 border-b bg-background px-4 md:px-6">
+        {/* Topbar — welcome cluster on the light page surface. `pt` respects the notch/status bar when the
+            app is installed to the home screen (env() is 0 otherwise, so no change in a normal browser tab). */}
+        <header className="flex min-h-14 items-center justify-between gap-3 border-b bg-background px-4 pt-[env(safe-area-inset-top)] md:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
               <DialogTrigger asChild>
@@ -401,13 +403,20 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto">
-          {/* Keyed on the route so the subtle page-enter replays on navigation. */}
-          <div key={pathname} className="mx-auto max-w-6xl animate-page-enter p-4 md:p-8">
+        <main className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+          {/* Keyed on the route so the subtle page-enter replays on navigation. Roomier vertical rhythm on
+              mobile ("spacious"), scaling up on larger screens. */}
+          <div
+            key={pathname}
+            className="mx-auto max-w-6xl animate-page-enter px-4 py-6 sm:px-6 sm:py-8 md:p-8"
+          >
             {children}
           </div>
         </main>
       </div>
+
+      {/* Post-sign-in nudge: turn on notifications + add to home screen (once, dismissible). */}
+      <AppPrompts />
     </div>
   );
 }
