@@ -33,7 +33,7 @@ export function WhatWeDo() {
         <Reveal>
           <Eyebrow>What we do</Eyebrow>
           <SectionHeading className="mt-4">
-            We run and secure your <span className="text-gradient">internal HR operations</span>.
+            We run and secure your <span className="text-gradient">Human Resource operations</span>.
           </SectionHeading>
           <Lead className="mx-auto mt-4 max-w-xl">
             hrorg.in is the partner you hand your internal HR to — from onboarding to exit, operated for you

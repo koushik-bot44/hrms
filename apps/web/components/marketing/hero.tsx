@@ -39,7 +39,8 @@ export function Hero() {
             Confidential by design
           </span>
           <h1 className="mt-5 text-balance text-4xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-5xl md:text-6xl">
-            Your internal HR operations, run and <span className="text-gradient">secured end to end</span>.
+            Integrated Human Resource management — run and{' '}
+            <span className="text-gradient">secured end to end</span>.
           </h1>
           <p className="mt-5 text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
             hrorg.in manages your people operations from onboarding to exit — e-signed employment documents,
