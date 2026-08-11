@@ -1,6 +1,7 @@
 package com.ihrms.domain.repository;
 
 import com.ihrms.domain.model.AttendanceBreak;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -14,4 +15,10 @@ public interface AttendanceBreakRepository extends JpaRepository<AttendanceBreak
 
   /** All breaks for a set of sessions (history/roster) — oldest first for display. */
   List<AttendanceBreak> findBySessionIdInOrderByBreakStartAtAsc(Collection<String> sessionIds);
+
+  /**
+   * The scheduled long-break scan (§8a): breaks that are STILL OPEN, not yet alerted, and started before
+   * {@code cutoff} (now − threshold). One row per un-alerted long break; {@code alertSentAt} dedupes.
+   */
+  List<AttendanceBreak> findByBreakEndAtIsNullAndAlertSentAtIsNullAndBreakStartAtBefore(Instant cutoff);
 }

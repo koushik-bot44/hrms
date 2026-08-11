@@ -5,21 +5,18 @@ import { Mail } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { useApiQuery } from '@/lib/api/hooks';
 import { getUnreadCount, mailKeys } from '@/lib/api/mail';
+import { canUseMail } from '@/lib/auth/mail-capability';
 import { cn } from '@/lib/utils';
 
 /**
- * The internal-mail entry point in the staff topbar (§8). Visible to every staff role, never to
- * employees (they are not in mail this stage). Shows a live unread badge from `/mail/unread-count`
- * (refetched on focus + invalidated after send/open) and opens the full mailbox at `/mail` in-session
- * (a Link, so ⌘/Ctrl-click naturally pops it into a new tab).
+ * The internal-mail entry point in the staff topbar (§8). Shown only to principals who can actually use mail
+ * ({@link canUseMail}) — every staff role EXCEPT HIERARCHY (no mail edge), plus a credentialed employee.
+ * Shows a live unread badge from `/mail/unread-count` (refetched on focus + invalidated after send/open) and
+ * opens the full mailbox at `/mail` in-session (a Link, so ⌘/Ctrl-click naturally pops it into a new tab).
  */
 export function MailButton() {
   const { session } = useAuth();
-  // Every staff account has a mailbox; a credentialed EMPLOYEE does too (§8, Stage 5) — but not one
-  // without assigned credentials.
-  const canMail =
-    session?.type === 'USER' ||
-    (session?.type === 'EMPLOYEE' && Boolean(session.mailAddress));
+  const canMail = canUseMail(session);
 
   const unread = useApiQuery(mailKeys.unread, getUnreadCount, {
     enabled: canMail,

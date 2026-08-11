@@ -1,6 +1,7 @@
 package com.ihrms.push;
 
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.push.dto.PushDtos.PruneResult;
 import com.ihrms.push.dto.PushDtos.PublicKeyResponse;
 import com.ihrms.push.dto.PushDtos.SubscribeRequest;
 import com.ihrms.push.dto.PushDtos.SubscribeResult;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -64,5 +66,18 @@ public class PushController {
   @PostMapping("/test")
   public TestResult test(@AuthenticationPrincipal IhrmsPrincipal actor) {
     return push.sendTest(actor);
+  }
+
+  @Operation(
+      summary =
+          "SUPER_ADMIN one-off: prune push subscriptions older than N days (e.g. clear pre-migration,"
+              + " old-origin subscriptions after a web-origin change). Users re-enable via the opt-in.")
+  @PostMapping("/admin/prune-stale")
+  public PruneResult pruneStale(
+      @RequestParam(defaultValue = "1") int olderThanDays,
+      @AuthenticationPrincipal IhrmsPrincipal actor,
+      HttpServletRequest request) {
+    int removed = push.pruneStale(actor, olderThanDays, request.getRemoteAddr());
+    return new PruneResult(removed, "Pruned " + removed + " subscription(s).");
   }
 }

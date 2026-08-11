@@ -5,6 +5,7 @@ import { formatDuration } from '@/lib/date';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Donut } from '@/components/dashboard/donut';
 import { StatTile, MeterRow } from '@/components/dashboard/stat-tile';
+import { EmptyState } from '@/components/empty-state';
 
 // Theme-aware chart colours from the hrorg.in design tokens (work each look via CSS vars).
 const WORKED = 'hsl(var(--primary))';
@@ -64,7 +65,7 @@ export function AttendanceComposition({
         </CardHeader>
         <CardContent>
           {gross === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No clocked time in this window.</p>
+            <EmptyState icon={Clock} title="No clocked time" description="Nothing was recorded in this window." />
           ) : (
             <>
               <Donut

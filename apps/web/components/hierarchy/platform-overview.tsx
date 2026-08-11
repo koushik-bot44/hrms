@@ -150,6 +150,7 @@ function OverviewBody({ data }: { data: Overview }) {
 
 function FunnelCard({ funnel }: { funnel: OnboardingFunnel }) {
   const max = Math.max(1, ...MAIN_PATH.map((k) => funnel[k]));
+  const empty = funnelTotal(funnel) === 0;
   return (
     <Card>
       <CardHeader>
@@ -159,6 +160,14 @@ function FunnelCard({ funnel }: { funnel: OnboardingFunnel }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {empty ? (
+          <EmptyState
+            icon={Filter}
+            title="No onboardings yet"
+            description="The funnel fills in as employees move through onboarding."
+          />
+        ) : (
+        <>
         <div className="space-y-2.5">
           {MAIN_PATH.map((k) => (
             <div key={k} className="space-y-1">
@@ -189,6 +198,8 @@ function FunnelCard({ funnel }: { funnel: OnboardingFunnel }) {
             </span>
           ))}
         </div>
+        </>
+        )}
       </CardContent>
     </Card>
   );

@@ -159,6 +159,20 @@ public class MailService {
     dispatch(hrEmail, "Offer accepted", text, "[DEV OFFER ACCEPTED] " + hrEmail + " -> " + text + DEV_SUFFIX, companyId);
   }
 
+  /** Long-open-break alert to the employee's onboarding HR (§8a). Named + elapsed minutes; fired once per break. */
+  public void sendLongBreakAlert(String hrEmail, String employeeName, long minutes, String companyId) {
+    String who = employeeName == null ? "An employee" : employeeName;
+    String text =
+        who + " has been on break for over " + minutes + " minutes and has not resumed working. Please"
+            + " check in with them.";
+    dispatch(
+        hrEmail,
+        "Long break — " + who,
+        text,
+        "[DEV LONG BREAK] " + hrEmail + " -> " + who + " (" + minutes + "m)" + DEV_SUFFIX,
+        companyId);
+  }
+
   /** Leave decision notice to the employee (§8b) — the employee has no notification bell. */
   public void sendLeaveDecision(String email, boolean approved, String note, String companyId) {
     String outcome = approved ? "approved" : "rejected";

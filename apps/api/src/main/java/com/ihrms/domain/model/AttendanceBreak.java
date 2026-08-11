@@ -46,6 +46,11 @@ public class AttendanceBreak {
   @Column(name = "breakEndAt")
   private Instant breakEndAt;
 
+  /** When the "long open break" alert to HR was sent (§8a) — set once, dedupes the scan so it never re-alerts. */
+  @JdbcTypeCode(SqlTypes.TIMESTAMP_WITH_TIMEZONE)
+  @Column(name = "alertSentAt")
+  private Instant alertSentAt;
+
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP_WITH_TIMEZONE)
   @Column(name = "createdAt", nullable = false, updatable = false)

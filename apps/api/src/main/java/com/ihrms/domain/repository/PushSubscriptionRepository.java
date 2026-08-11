@@ -1,6 +1,7 @@
 package com.ihrms.domain.repository;
 
 import com.ihrms.domain.model.PushSubscription;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,4 +18,14 @@ public interface PushSubscriptionRepository extends JpaRepository<PushSubscripti
   List<PushSubscription> findByUserId(String userId);
 
   List<PushSubscription> findByEmployeeId(String employeeId);
+
+  /**
+   * One-off stale cleanup (§ Web Push): the subscriptions created before {@code cutoff}. Origin is not
+   * stored (the endpoint is a push-service host), so pre-migration (e.g. old-origin) subscriptions are
+   * identified by age; genuinely-dead endpoints are pruned automatically on the next 410/404 send. Loaded as
+   * entities (not a derived bulk delete) so the caller removes them via {@code deleteAll} in the same
+   * transaction as its audit write — a bulk JPQL delete mixed with a same-tx entity insert forces a spurious
+   * post-flush UPDATE that the append-only {@code audit_logs} trigger rejects.
+   */
+  List<PushSubscription> findByCreatedAtBefore(Instant cutoff);
 }

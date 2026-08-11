@@ -41,6 +41,8 @@ export function HierarchyTrends() {
     joined: p.joined,
     approved: p.approved,
   }));
+  // A successful-but-empty (or all-zero) series would draw a blank grid — show a calm empty state instead.
+  const hasActivity = data.some((d) => d.joined > 0 || d.approved > 0);
 
   return (
     <Card>
@@ -75,6 +77,12 @@ export function HierarchyTrends() {
           <LoadingSkeleton lines={5} />
         ) : query.isError ? (
           <EmptyState icon={TrendingUp} title="Couldn't load trends" description={query.error?.message ?? 'Please try again.'} />
+        ) : !hasActivity ? (
+          <EmptyState
+            icon={TrendingUp}
+            title="No onboarding activity"
+            description="No employees were onboarded or approved in this period."
+          />
         ) : (
           <>
             <div className="h-64">

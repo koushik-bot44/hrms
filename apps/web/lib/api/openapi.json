@@ -6220,6 +6220,39 @@
           }
         }
       }
+    },
+    "/push/admin/prune-stale": {
+      "post": {
+        "tags": [
+          "push-controller"
+        ],
+        "summary": "SUPER_ADMIN one-off: prune push subscriptions older than N days (e.g. clear pre-migration, old-origin subscriptions after a web-origin change). Users re-enable via the opt-in.",
+        "operationId": "pruneStale",
+        "parameters": [
+          {
+            "name": "olderThanDays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PruneResult"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11469,6 +11502,21 @@
             "type": "string"
           }
         }
+      },
+      "PruneResult": {
+        "type": "object",
+        "properties": {
+          "pruned": {
+            "type": "integer",
+            "description": "How many subscriptions were removed.",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable status."
+          }
+        },
+        "description": "Result of a one-off stale-subscription prune (SUPER_ADMIN)."
       }
     },
     "securitySchemes": {

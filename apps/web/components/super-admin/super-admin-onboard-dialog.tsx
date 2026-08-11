@@ -35,7 +35,7 @@ const EMPTY: SuperAdminOnboardInput = {
   designation: '',
   dateOfJoining: '',
   officialEmail: '',
-  salary: 'X,XX,XXX Per Annum',
+  salary: '', // no pre-fill — salary is required (zod min(1) + server @NotBlank); the field shows a placeholder
   location: 'Hyderabad',
 };
 

@@ -14,6 +14,7 @@ import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.Security;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -147,6 +148,32 @@ public class PushService {
         ip);
   }
 
+  /**
+   * One-off stale cleanup (SUPER_ADMIN): drop subscriptions created more than {@code olderThanDays} days ago.
+   * The subscription's origin is NOT stored (its {@code endpoint} is a push-service host), so pre-migration
+   * (e.g. old-origin) rows can only be identified by age; genuinely-dead endpoints are pruned automatically on
+   * the next 410/404 send. Fresh rows are kept (min 1 day), and users re-enable via the normal opt-in. Audited.
+   */
+  @Transactional
+  public int pruneStale(IhrmsPrincipal actor, int olderThanDays, String ip) {
+    int days = Math.max(1, olderThanDays); // never touch subscriptions created today
+    // Delete the aged rows AS ENTITIES (like unsubscribe), not via a derived bulk delete — a bulk JPQL delete
+    // in the same transaction as the audit insert triggers a spurious post-flush UPDATE on the just-inserted
+    // audit row, which the append-only audit_logs trigger rejects.
+    List<PushSubscription> stale =
+        subscriptions.findByCreatedAtBefore(Instant.now().minus(Duration.ofDays(days)));
+    subscriptions.deleteAll(stale);
+    int removed = stale.size();
+    audit.record(
+        AuditActor.from(actor),
+        "PUSH_SUBSCRIPTIONS_PRUNED",
+        "PushSubscription",
+        null,
+        Map.of("olderThanDays", days, "removed", removed),
+        ip);
+    return removed;
+  }
+
   // --- Delivery -------------------------------------------------------------
 
   /**
@@ -181,9 +208,11 @@ public class PushService {
     }
     sendToPrincipal(
         ref,
-        "IHRMS test notification",
+        "hrorg.in test notification",
         "If you can see this, Web Push is working end to end 🎉",
-        props.webAppUrl());
+        // A RELATIVE click target (slugged by sendToPrincipal) — the Service Worker resolves it against the
+        // current origin, so the test never carries an absolute host (no stale *.vercel.app link).
+        "/login");
     return new TestResult(subs.size(), "Sent to " + subs.size() + " subscription(s).");
   }
 
@@ -235,7 +264,8 @@ public class PushService {
     Map<String, String> data = new LinkedHashMap<>();
     data.put("title", title);
     data.put("body", body);
-    data.put("url", url == null ? props.webAppUrl() : url);
+    // Relative fallback — never an absolute host; the Service Worker resolves it against the current origin.
+    data.put("url", url == null ? "/" : url);
     try {
       return json.writeValueAsString(data);
     } catch (Exception e) {

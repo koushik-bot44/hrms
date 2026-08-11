@@ -172,8 +172,12 @@ public class SecurityConfig {
                     .hasRole("ACCOUNTANT")
                     .requestMatchers("/requests/**")
                     .authenticated()
-                    // Web Push (§ Web Push): any authenticated principal may register their own browser
+                    // Web Push (§ Web Push): the one-off stale-subscription prune is a platform op —
+                    // SUPER_ADMIN only (must precede the general /push gate; first match wins). Every other
+                    // /push endpoint is open to any authenticated principal to register its own browser
                     // subscription + self-test; the service refuses an uncredentialed employee (403).
+                    .requestMatchers("/push/admin/**")
+                    .hasRole("SUPER_ADMIN")
                     .requestMatchers("/push/**")
                     .authenticated()
                     .anyRequest()

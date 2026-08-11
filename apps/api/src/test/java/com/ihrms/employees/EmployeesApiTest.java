@@ -242,7 +242,29 @@ class EmployeesApiTest {
         .andExpect(status().isForbidden());
   }
 
+  @Test
+  void onboardRejectsBlankSalary() throws Exception {
+    // Item 6: salary is REQUIRED server-side (@NotBlank on OfferTermsRequest). Empty and whitespace-only 400.
+    mvc.perform(onboardWithSalary("Nora Blank", "nora@personal.test", ""))
+        .andExpect(status().isBadRequest());
+    mvc.perform(onboardWithSalary("Wade Space", "wade@personal.test", "   "))
+        .andExpect(status().isBadRequest());
+    // Sanity: a real salary still onboards.
+    mvc.perform(onboardWithSalary("Ok Salary", "ok@personal.test", "6,00,000 Per Annum"))
+        .andExpect(status().isCreated());
+  }
+
   // --- fixtures -------------------------------------------------------------
+
+  private MockHttpServletRequestBuilder onboardWithSalary(String fullName, String email, String salary)
+      throws Exception {
+    return post("/employees")
+        .header("Authorization", "Bearer " + hrToken)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(
+            json.writeValueAsString(
+                Map.of("form2", form2Body(fullName, email), "offer", Map.of("salary", salary))));
+  }
 
   private MockHttpServletRequestBuilder asHr(String fullName, String email) throws Exception {
     // Onboard = HR fills Form 2 (§3.2); the personal email is the login identity.

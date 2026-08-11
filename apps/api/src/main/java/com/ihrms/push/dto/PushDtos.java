@@ -47,4 +47,9 @@ public final class PushDtos {
   public record TestResult(
       @Schema(description = "How many of the caller's subscriptions were targeted.") int targeted,
       @Schema(description = "Human-readable status (e.g. push disabled, or sent).") String message) {}
+
+  @Schema(description = "Result of a one-off stale-subscription prune (SUPER_ADMIN).")
+  public record PruneResult(
+      @Schema(description = "How many subscriptions were removed.") int pruned,
+      @Schema(description = "Human-readable status.") String message) {}
 }

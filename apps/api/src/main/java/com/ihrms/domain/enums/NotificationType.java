@@ -19,5 +19,7 @@ public enum NotificationType {
   OFFBOARDING_APPROVED,
   OFFBOARDING_REJECTED,
   // §3.6 stage 2 — a durable trail for the SENDING HR when the employee submits an offboarding document.
-  OFFBOARDING_DOC_SUBMITTED
+  OFFBOARDING_DOC_SUBMITTED,
+  // §8a — a durable trail for the onboarding HR when an employee's break stays OPEN past the alert threshold.
+  EMPLOYEE_LONG_BREAK
 }

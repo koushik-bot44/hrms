@@ -175,7 +175,61 @@ class PushApiTest {
     assertThat(subscriptions.findByEndpoint("https://push.example.com/ep/GONE")).isEmpty();
   }
 
+  @Test
+  void staleSubscriptionsArePrunedByAge() throws Exception {
+    // The origin isn't stored, so old rows (e.g. a pre-migration *.vercel.app origin) can only be cleared by
+    // age. Seed one old (10 days) + one fresh, then prune anything older than 7 days.
+    seedSub("https://push.example.com/ep/OLD");
+    seedSub("https://push.example.com/ep/NEW");
+    jdbc.update(
+        "UPDATE \"push_subscriptions\" SET \"createdAt\" = now() - interval '10 days' WHERE \"endpoint\" = ?",
+        "https://push.example.com/ep/OLD");
+    assertThat(subscriptions.count()).isEqualTo(2);
+
+    User superAdmin = superAdmin();
+    JsonNode res =
+        json.readTree(
+            mvc.perform(
+                    post("/push/admin/prune-stale?olderThanDays=7")
+                        .header("Authorization", "Bearer " + token(superAdmin)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(res.get("pruned").asInt()).isEqualTo(1);
+
+    assertThat(subscriptions.findByEndpoint("https://push.example.com/ep/OLD")).isEmpty();
+    assertThat(subscriptions.findByEndpoint("https://push.example.com/ep/NEW")).isPresent();
+    assertThat(auditLogs.findByAction("PUSH_SUBSCRIPTIONS_PRUNED")).hasSize(1);
+  }
+
+  @Test
+  void pruneStaleIsSuperAdminOnly() throws Exception {
+    // A company HR must not be able to run the platform-wide prune.
+    mvc.perform(post("/push/admin/prune-stale").header("Authorization", "Bearer " + token(hr)))
+        .andExpect(status().isForbidden());
+  }
+
   // --- helpers --------------------------------------------------------------
+
+  private void seedSub(String endpoint) {
+    PushSubscription s = new PushSubscription();
+    s.setUserId(hr.getId());
+    s.setCompanyId(acme);
+    s.setEndpoint(endpoint);
+    s.setP256dh("k");
+    s.setAuth("a");
+    subscriptions.save(s);
+  }
+
+  private User superAdmin() {
+    User u = new User();
+    u.setEmail("root@platform");
+    u.setName("Root");
+    u.setRole(UserRole.SUPER_ADMIN);
+    u.setStatus("ACTIVE");
+    return users.save(u);
+  }
 
   private JsonNode subscribe(String token, String endpoint, String p256dh, String auth, String ua)
       throws Exception {

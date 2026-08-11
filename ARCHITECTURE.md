@@ -1240,6 +1240,18 @@ arrivals and break time. Past punches are **view-only** (no editing/correction).
   none open, is a **409** (enforced in the service AND by a partial unique index `(session_id) WHERE
   break_end_at IS NULL`). **Clocking out requires ending an open break first** (else 409). Break time is
   **excluded** from worked hours.
+- **Long-open-break HR alert (scheduled).** A background scan (`BreakAlertScanner`, `@Scheduled` every
+  `BREAK_ALERT_SCAN_MS`, default 5 min — the app's first scheduled job, enabled by `@EnableScheduling` on
+  `ApiApplication`) finds breaks that are **still open** and started more than `BREAK_ALERT_MINUTES` (default
+  35) ago, and alerts each employee's **onboarding HR once per break**: a durable `EMPLOYEE_LONG_BREAK`
+  notification **plus** best-effort push + email. **Dedupe** is an additive `attendance_breaks."alertSentAt"`
+  column (V38) — the finder excludes already-stamped rows, so an employee who never ends a break is alerted
+  exactly once, and a push/email failure never re-alerts. The stamp + durable notification run in their own tx
+  (`BreakAlertService`, a separate bean so the proxy applies) and push/email fire **after** it commits (the
+  after-commit convention). Candidates are batch-resolved break→session→employee→HR (no N+1); overnight breaks
+  need no special handling (aging is `breakStartAt` vs now); an employee with no resolvable HR is stamped +
+  skipped (logged, never an error). **Single-instance only** — under a multi-instance deployment two schedulers
+  would double-scan; that would need a shared lock (ShedLock or a Postgres advisory lock) as a future hardening.
 - **Workspace entry prompts (server-state-driven).** Employee machines sleep, so the two prompts are evaluated
   from **server state** (`/attendance/me/status`) on `/workspace` **entry and on window focus/visibility** —
   never a live page timer. If the employee is **not clocked in**, a **clock-in dialog** appears ("Clock in to
@@ -1478,7 +1490,18 @@ including when the IHRMS tab is minimized or fully closed — and clicking it fo
     `PUSH_UNSUBSCRIBED`.
   - `POST /push/test` — sends a test notification to the CALLER's own subscriptions (the "Send test"
     button). Kept for debugging alongside the real N3 new-mail trigger; it never notifies anyone but the
-    caller.
+    caller. Its click target is a **relative** `/login` (slugged for company principals) — never an absolute
+    host, so the notification never carries a stale `*.vercel.app` link.
+  - `POST /push/admin/prune-stale?olderThanDays=N` (**SUPER_ADMIN only**, default N=1, min 1) — one-off
+    cleanup that drops subscriptions **older than N days**. A subscription's `endpoint` is a push-service host,
+    so its **origin is not stored** and pre-migration rows (e.g. created against an old `*.vercel.app` origin)
+    can only be identified by **age**; genuinely-dead endpoints still prune automatically on the next `404/410`.
+    Users simply re-enable via the normal opt-in. Audited `PUSH_SUBSCRIPTIONS_PRUNED`.
+- **Click-through URLs are origin-relative.** Every deep-link handed to a notification is a **relative**
+  `pushPath` (`/{slug}{path}` for a company recipient, a bare path otherwise) — the Service Worker resolves it
+  against the **current** web origin, so links always follow wherever the web app is served (`hrorg.in`) and
+  never hard-code a build-time host. **Operator note:** set `WEB_APP_URL=https://hrorg.in` in Railway — it is
+  the base for **email** links (§8d); push links are already origin-relative and need no host.
 - **Sending is best-effort.** `PushService.sendToPrincipal(ref, title, body, url)` loads that principal's
   subscriptions and POSTs an encrypted, VAPID-signed payload to each via the `nl.martijndwars:web-push`
   library (BouncyCastle crypto). Failures are **logged, never thrown** to callers; a `404/410` from the

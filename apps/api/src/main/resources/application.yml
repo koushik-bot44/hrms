@@ -95,6 +95,10 @@ app:
   refresh-token-ttl: ${REFRESH_TOKEN_TTL:7d}
   refresh-cookie-name: ${REFRESH_COOKIE_NAME:ihrms_refresh}
   otp-ttl: ${OTP_TTL:300}
+  # Long-open-break HR alert (§8a): notify HR when a break stays OPEN longer than this many minutes; the scan
+  # runs every break-alert-scan-ms. Single-instance job (multi-instance would need a shared lock).
+  break-alert-minutes: ${BREAK_ALERT_MINUTES:35}
+  break-alert-scan-ms: ${BREAK_ALERT_SCAN_MS:300000}
   # AES-256-GCM key for field-level encryption of sensitive PII/financial columns (§6). Any
   # passphrase works (SHA-256 -> 256-bit key); production MUST override with a real secret.
   field-enc-key: ${FIELD_ENC_KEY:dev-insecure-field-enc-key-change-me-please-0001}

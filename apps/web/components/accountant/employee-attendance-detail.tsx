@@ -238,7 +238,7 @@ function MonthlyReport({
         {loading ? (
           <LoadingSkeleton lines={4} />
         ) : months.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No history yet.</p>
+          <EmptyState icon={CalendarClock} title="No monthly history yet" description="Worked hours appear here once there are recorded sessions." />
         ) : (
           <>
             <div className="h-40">

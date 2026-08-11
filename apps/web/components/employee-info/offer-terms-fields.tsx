@@ -40,7 +40,7 @@ export function OfferTermsFields<T extends FieldValues>({
           </label>
           <Input
             id={id('salary')}
-            placeholder="X,XX,XXX Per Annum"
+            placeholder="e.g. 5,40,000 Per Annum"
             aria-invalid={Boolean(err('salary'))}
             {...reg('salary')}
           />

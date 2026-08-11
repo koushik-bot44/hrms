@@ -275,7 +275,9 @@ function DeactivateButton({ employeeId }: { employeeId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="destructive" size="sm">
+        {/* Neutral tone — deactivation is a lifecycle action, not a destructive delete. The confirm dialog
+            below stays as-is. (Initiate offboarding is already `outline`.) */}
+        <Button type="button" variant="outline" size="sm">
           <Ban className="size-4" />
           Deactivate account
         </Button>

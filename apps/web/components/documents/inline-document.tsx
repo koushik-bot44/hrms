@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { CheckCircle2, ExternalLink, PenLine, RotateCcw } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Maximize2, Minimize2, PenLine, RotateCcw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { SignatureCapture } from '@/components/signature/signature-capture';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -191,6 +192,7 @@ export function InlineDocument({
   const [scrolledEnd, setScrolledEnd] = React.useState(false);
   const [showErrors, setShowErrors] = React.useState(false);
   const [capturing, setCapturing] = React.useState(false);
+  const [expanded, setExpanded] = React.useState(false); // full-screen document reader
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => setMounted(true), []);
@@ -288,6 +290,24 @@ export function InlineDocument({
     clearSignature: () => setSignatureDataUrl(null),
   };
 
+  // The document body pane — rendered in EXACTLY ONE place at a time (compact card OR the full-screen dialog),
+  // never both, so its inline fields + signature are never duplicated. All fill state (values, signature,
+  // scrolledEnd) lives in this component's state and the controlled inputs re-hydrate from it on any remount,
+  // so toggling full-screen never loses entered values or the scroll-to-consent gate.
+  const bodyPane = (paneClassName: string) => (
+    <div
+      ref={scrollRef}
+      onScroll={checkScrollEnd}
+      className={cn('agreement-body overflow-y-auto rounded-md border bg-background p-5', paneClassName)}
+    >
+      {mounted ? (
+        <Ctx.Provider value={ctx}>{parsed}</Ctx.Provider>
+      ) : (
+        <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <style dangerouslySetInnerHTML={{ __html: DOCUMENT_BODY_CSS + INLINE_FIELD_CSS }} />
@@ -302,28 +322,52 @@ export function InlineDocument({
       ) : null}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
           <CardTitle className="text-base">
             Read the full document — fill the blanks and sign inside it
           </CardTitle>
+          <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(true)}>
+            <Maximize2 className="size-4" />
+            View full document
+          </Button>
         </CardHeader>
         <CardContent>
-          <div
-            ref={scrollRef}
-            onScroll={checkScrollEnd}
-            className="agreement-body max-h-[65vh] overflow-y-auto rounded-md border bg-background p-5"
-          >
-            {mounted ? (
-              <Ctx.Provider value={ctx}>{parsed}</Ctx.Provider>
-            ) : (
-              <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
-            )}
-          </div>
+          {expanded ? (
+            // The body is open in the full-screen reader below — keep the compact pane out of the DOM so the
+            // fields aren't duplicated. (This placeholder sits behind the full-screen overlay.)
+            <div className="flex flex-col items-center gap-2 rounded-md border border-dashed bg-muted/30 py-10 text-center text-sm text-muted-foreground">
+              <Maximize2 className="size-5" />
+              Open in full screen.
+            </div>
+          ) : (
+            bodyPane('max-h-[65vh]')
+          )}
           {!scrolledEnd ? (
             <p className="mt-2 text-xs text-muted-foreground">Scroll to the end of the document to continue.</p>
           ) : null}
         </CardContent>
       </Card>
+
+      {/* Full-screen reader — the SAME body pane (fields + signature functional); genuinely full-screen on
+          mobile, a large sheet on desktop. Closing returns to the compact view with all values + the
+          scroll-to-consent state intact (state lives in this component). */}
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-[100vw] flex-col gap-3 rounded-none p-4 sm:h-[92dvh] sm:max-h-[92dvh] sm:w-[94vw] sm:max-w-5xl sm:rounded-lg sm:p-6">
+          <DialogHeader className="space-y-0 pr-8 text-left">
+            <DialogTitle className="text-base">Full document — fill the blanks and sign inside it</DialogTitle>
+            {!scrolledEnd ? (
+              <DialogDescription>Scroll to the end of the document to continue.</DialogDescription>
+            ) : null}
+          </DialogHeader>
+          {bodyPane('min-h-0 flex-1')}
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(false)}>
+              <Minimize2 className="size-4" />
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>

@@ -2591,6 +2591,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/push/admin/prune-stale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** SUPER_ADMIN one-off: prune push subscriptions older than N days (e.g. clear pre-migration, old-origin subscriptions after a web-origin change). Users re-enable via the opt-in. */
+        post: operations["pruneStale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4380,6 +4397,16 @@ export interface components {
         };
         ValidateInviteRequest: {
             token: string;
+        };
+        /** @description Result of a one-off stale-subscription prune (SUPER_ADMIN). */
+        PruneResult: {
+            /**
+             * Format: int32
+             * @description How many subscriptions were removed.
+             */
+            pruned?: number;
+            /** @description Human-readable status. */
+            message?: string;
         };
     };
     responses: never;
@@ -8702,6 +8729,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["OnboardEmployeeResult"];
+                };
+            };
+        };
+    };
+    pruneStale: {
+        parameters: {
+            query?: {
+                olderThanDays?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PruneResult"];
                 };
             };
         };
