@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { ArrowLeft, CalendarClock, Download } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { ArrowLeft, CalendarClock, CheckCircle2, Download } from 'lucide-react';
 import type { EmployeeMonthSummary } from '@/lib/contract';
 import {
   getEmployeeAttendanceMonthly,
@@ -213,12 +213,16 @@ function MonthlyReport({
   activeMonth: string | null;
   onPickMonth: (m: string) => void;
 }) {
-  // The series is inherently monthly, so every item's `month` is a real YYYY-MM (never the range null).
+  // The series is inherently monthly, so every item's `month` is a real YYYY-MM (never the range null). The
+  // chart now tracks the signals that actually VARY and matter — unapproved absences + late logins per month
+  // (worked hours were near-flat for a full-timer, and the table below already carries them).
   const chart = months.map((m) => ({
     month: monthLabel(m.month ?? '').replace(/ \d{4}$/, ''),
     key: m.month ?? '',
-    workedHours: Math.round((m.workedSeconds / 3600) * 10) / 10,
+    absences: m.unapprovedAbsences,
+    late: m.lateLogins,
   }));
+  const hasProblems = months.some((m) => m.unapprovedAbsences > 0 || m.lateLogins > 0);
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -238,35 +242,39 @@ function MonthlyReport({
         {loading ? (
           <LoadingSkeleton lines={4} />
         ) : months.length === 0 ? (
-          <EmptyState icon={CalendarClock} title="No monthly history yet" description="Worked hours appear here once there are recorded sessions." />
+          <EmptyState icon={CalendarClock} title="No monthly history yet" description="Months appear here once there are recorded sessions." />
         ) : (
           <>
-            <div className="h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chart} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-                  <defs>
-                    {/* Soft indigo gradient fill, token-derived. */}
-                    <linearGradient id="workedArea" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
-                  <Tooltip
-                    formatter={(v) => [`${Number(v)}h`, 'Worked']}
-                    contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="workedHours"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    fill="url(#workedArea)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            {/* A clean record would draw an all-zero chart that reads as "no data" — say it plainly instead. */}
+            {!hasProblems ? (
+              <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm text-muted-foreground">
+                <CheckCircle2 className="size-4 shrink-0 text-success" />
+                Clean record — no unapproved absences or late logins in this period.
+              </div>
+            ) : (
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chart} margin={{ top: 4, right: 8, left: -16, bottom: 0 }} barGap={2}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
+                    <Tooltip
+                      cursor={{ fill: 'hsl(var(--accent))', opacity: 0.4 }}
+                      formatter={(v, n) => [String(v), n === 'absences' ? 'Unapproved absences' : 'Late logins']}
+                      contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
+                    />
+                    <Legend
+                      verticalAlign="top"
+                      height={24}
+                      formatter={(value) => (value === 'absences' ? 'Unapproved absences' : 'Late logins')}
+                      wrapperStyle={{ fontSize: 12 }}
+                    />
+                    <Bar dataKey="absences" name="absences" fill="hsl(var(--destructive))" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="late" name="late" fill="hsl(var(--warning))" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
             <div className="overflow-x-auto rounded-xl border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-left text-xs text-muted-foreground">

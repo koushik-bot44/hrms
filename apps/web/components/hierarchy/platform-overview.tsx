@@ -14,16 +14,15 @@ import {
 import type { OnboardingFunnel, OpsMetrics, PlatformOverview as Overview } from '@/lib/contract';
 import { getHierarchyOverview } from '@/lib/api/hierarchy';
 import { useApiQuery } from '@/lib/api/hooks';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { StatTile } from '@/components/dashboard/stat-tile';
-import { Donut } from '@/components/dashboard/donut';
 import { LiveIndicator } from '@/components/dashboard/live-indicator';
 import { TodayChip } from '@/components/accountant/today-chip';
 import { cn } from '@/lib/utils';
-import { ALL_STATUSES, funnelTotal, MAIN_PATH, OFF_PATH, STATUS_META } from '@/components/hierarchy/status-meta';
+import { funnelTotal, MAIN_PATH, OFF_PATH, STATUS_META } from '@/components/hierarchy/status-meta';
 import { HierarchyTrends } from '@/components/hierarchy/hierarchy-trends';
 import { CompanyBreakdownPanel } from '@/components/hierarchy/company-breakdown';
 
@@ -32,10 +31,10 @@ const n = (v: number) => v.toLocaleString();
 
 /**
  * The HIERARCHY "Platform Overview" (§2): a single-glance, read-only, cross-platform dashboard — headline
- * totals, the onboarding funnel + status-distribution donut (both from the same counts), monthly trends,
- * employees-per-company + org drill-down, and ops metric cards. Live-on-load + ~45s polling + on-focus
- * refetch. Every figure is bound to the server's aggregates — the UI only formats and computes % (never
- * recomputes a metric). No employee identities appear anywhere.
+ * totals, a by-status breakdown (the current onboarding snapshot), monthly trends, employees-per-company +
+ * org drill-down, and ops metric cards. Live-on-load + ~45s polling + on-focus refetch. Every figure is
+ * bound to the server's aggregates — the UI only formats and computes % (never recomputes a metric). No
+ * employee identities appear anywhere.
  */
 export function PlatformOverview() {
   const query = useApiQuery(['hierarchy-overview'], (signal) => getHierarchyOverview(signal), {
@@ -137,122 +136,81 @@ function OverviewBody({ data }: { data: Overview }) {
         <StuckCard ops={ops} />
       </div>
 
-      {/* 3 — Onboarding pipeline: funnel + distribution, from the same counts. */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <FunnelCard funnel={funnel} />
-        <DistributionCard funnel={funnel} />
-      </div>
+      {/* 3 — Onboarding pipeline: a single by-status breakdown (current snapshot). */}
+      <ByStatusCard funnel={funnel} />
     </>
   );
 }
 
-// --- Onboarding funnel -----------------------------------------------------
+// --- By-status breakdown ---------------------------------------------------
 
-function FunnelCard({ funnel }: { funnel: OnboardingFunnel }) {
+/**
+ * The current-status snapshot of every employee (§2). Was two visuals of the SAME counts (a "funnel" that
+ * never tapered + a donut); collapsed to one honest bar breakdown — main path in order, off-path shown
+ * distinctly, each row carrying the count AND its share of the total (the % the donut's legend used to give).
+ */
+function ByStatusCard({ funnel }: { funnel: OnboardingFunnel }) {
   const max = Math.max(1, ...MAIN_PATH.map((k) => funnel[k]));
-  const empty = funnelTotal(funnel) === 0;
+  const total = funnelTotal(funnel);
+  const empty = total === 0;
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Filter className="size-4 text-muted-foreground" />
-          Onboarding funnel
+          By status
         </CardTitle>
+        <CardDescription>
+          Every employee&rsquo;s current onboarding status — a live snapshot, not a cumulative funnel.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {empty ? (
           <EmptyState
             icon={Filter}
             title="No onboardings yet"
-            description="The funnel fills in as employees move through onboarding."
+            description="Statuses fill in as employees move through onboarding."
           />
         ) : (
-        <>
-        <div className="space-y-2.5">
-          {MAIN_PATH.map((k) => (
-            <div key={k} className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{STATUS_META[k].label}</span>
-                <span className="font-semibold tabular-nums">{n(funnel[k])}</span>
-              </div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${(funnel[k] / max) * 100}%`, background: STATUS_META[k].color }}
-                />
+          <>
+            <div className="space-y-2.5">
+              {MAIN_PATH.map((k) => (
+                <div key={k} className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{STATUS_META[k].label}</span>
+                    <span className="tabular-nums">
+                      <span className="font-semibold">{n(funnel[k])}</span>
+                      <span className="ml-1 text-xs text-muted-foreground">{pct(funnel[k], total)}%</span>
+                    </span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${(funnel[k] / max) * 100}%`, background: STATUS_META[k].color }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Off the main path — labeled + shown distinctly (not part of the linear flow). */}
+            <div className="space-y-2 border-t pt-3">
+              <p className="text-xs font-medium text-muted-foreground">Off the main path</p>
+              <div className="flex flex-wrap gap-2">
+                {OFF_PATH.map((k) => (
+                  <span
+                    key={k}
+                    className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
+                    title="Off the main onboarding path"
+                  >
+                    <span className="size-2 rounded-full" style={{ background: STATUS_META[k].color }} />
+                    {STATUS_META[k].label}
+                    <span className="font-semibold tabular-nums">{n(funnel[k])}</span>
+                    <span className="text-muted-foreground">· {pct(funnel[k], total)}%</span>
+                  </span>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
-        {/* Off the main path — shown distinctly. */}
-        <div className="flex flex-wrap gap-2 border-t pt-3">
-          {OFF_PATH.map((k) => (
-            <span
-              key={k}
-              className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
-              title="Off the main onboarding path"
-            >
-              <span className="size-2 rounded-full" style={{ background: STATUS_META[k].color }} />
-              {STATUS_META[k].label}
-              <span className="font-semibold tabular-nums">{n(funnel[k])}</span>
-            </span>
-          ))}
-        </div>
-        </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// --- Status distribution donut ---------------------------------------------
-
-function DistributionCard({ funnel }: { funnel: OnboardingFunnel }) {
-  const total = funnelTotal(funnel);
-  const slices = ALL_STATUSES.map((k) => ({
-    key: k,
-    label: STATUS_META[k].label,
-    color: STATUS_META[k].color,
-    value: funnel[k],
-  })).filter((s) => s.value > 0);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <PieIcon className="size-4 text-muted-foreground" />
-          Status distribution
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {total === 0 ? (
-          <EmptyState icon={PieIcon} title="No employees yet" description="The distribution appears once employees are onboarded." />
-        ) : (
-          <div className="grid items-center gap-4 sm:grid-cols-[minmax(0,11rem)_1fr]">
-            <Donut
-              data={slices.map((s) => ({ name: s.label, value: s.value, color: s.color }))}
-              centerValue={n(total)}
-              centerLabel="Total"
-              innerRadius={48}
-              outerRadius={72}
-              tooltipFormatter={(v, name) => [`${n(v)} · ${pct(v, total)}%`, name]}
-              className="w-full"
-            />
-            <ul className="space-y-1.5 text-sm">
-              {slices.map((s) => (
-                <li key={s.key} className="flex items-center justify-between gap-3">
-                  <span className="flex items-center gap-2 text-muted-foreground">
-                    <span className="size-2.5 rounded-full" style={{ background: s.color }} />
-                    {s.label}
-                  </span>
-                  <span className="tabular-nums">
-                    <span className="font-medium">{n(s.value)}</span>
-                    <span className="ml-1 text-xs text-muted-foreground">{pct(s.value, total)}%</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          </>
         )}
       </CardContent>
     </Card>

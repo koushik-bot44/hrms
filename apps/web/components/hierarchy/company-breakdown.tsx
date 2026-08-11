@@ -72,6 +72,8 @@ export function CompanyBreakdownPanel() {
           <EmptyState icon={Building2} title="No companies yet" description="Companies will appear here as they're created." />
         ) : (
           <>
+            {/* With only a company or two, a bar chart adds nothing the drill list below doesn't — skip it. */}
+            {rows.length > 2 ? (
             <div style={{ height: Math.max(120, chartData.length * 30 + 20) }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart layout="vertical" data={chartData} margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
@@ -91,6 +93,7 @@ export function CompanyBreakdownPanel() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            ) : null}
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_1fr]">
               {/* The full company list — the drill selector. */}

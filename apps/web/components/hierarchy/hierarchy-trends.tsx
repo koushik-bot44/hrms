@@ -25,8 +25,16 @@ const RANGES = [6, 12, 24] as const;
 
 const JOINED = 'hsl(var(--primary))';
 const APPROVED = 'hsl(var(--success))';
+const OFFBOARDED = 'hsl(var(--muted-foreground))';
 
-/** Monthly onboarding trends (§2): joined + approved per IST month; offboarding is a labeled placeholder. */
+/** Human label for a raw series key (drives both the legend and the tooltip so they never drift). */
+function seriesLabel(key: string): string {
+  if (key === 'joined') return 'Onboarded';
+  if (key === 'approved') return 'Approved';
+  return 'Offboarded';
+}
+
+/** Monthly onboarding trends (§2): onboarded (area) + approved + offboarded (lines) per IST month, all real. */
 export function HierarchyTrends() {
   const [months, setMonths] = React.useState<number>(12);
   const query = useApiQuery(
@@ -40,9 +48,10 @@ export function HierarchyTrends() {
     key: p.month,
     joined: p.joined,
     approved: p.approved,
+    offboarded: p.offboarded,
   }));
   // A successful-but-empty (or all-zero) series would draw a blank grid — show a calm empty state instead.
-  const hasActivity = data.some((d) => d.joined > 0 || d.approved > 0);
+  const hasActivity = data.some((d) => d.joined > 0 || d.approved > 0 || d.offboarded > 0);
 
   return (
     <Card>
@@ -53,7 +62,7 @@ export function HierarchyTrends() {
             Onboarding trends
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Employees onboarded vs approved, per month (Asia/Kolkata).
+            Onboarded, approved and offboarded per month (Asia/Kolkata).
           </p>
         </div>
         <div className="flex items-center gap-1 rounded-md border p-0.5">
@@ -94,35 +103,29 @@ export function HierarchyTrends() {
                       <stop offset="0%" stopColor={JOINED} stopOpacity={0.35} />
                       <stop offset="100%" stopColor={JOINED} stopOpacity={0} />
                     </linearGradient>
-                    <linearGradient id="areaApproved" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={APPROVED} stopOpacity={0.3} />
-                      <stop offset="100%" stopColor={APPROVED} stopOpacity={0} />
-                    </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
                   <Tooltip
                     cursor={{ stroke: 'hsl(var(--border))' }}
-                    formatter={(v, n) => [String(v), n === 'joined' ? 'Onboarded' : 'Approved']}
+                    formatter={(v, n) => [String(v), seriesLabel(String(n))]}
                     labelFormatter={(_l, p) => (p?.[0]?.payload ? monthLabel(p[0].payload.key) : '')}
                     contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
                   />
                   <Legend
                     verticalAlign="top"
                     height={28}
-                    formatter={(value) => (value === 'joined' ? 'Onboarded' : 'Approved')}
+                    formatter={(value) => seriesLabel(String(value))}
                     wrapperStyle={{ fontSize: 12 }}
                   />
+                  {/* Onboarded is the volume baseline (filled); approved + offboarded ride on top as LINES
+                      (no second fill) so the three series never occlude each other. */}
                   <Area type="monotone" dataKey="joined" name="joined" stroke={JOINED} strokeWidth={2} fill="url(#areaJoined)" />
-                  <Area type="monotone" dataKey="approved" name="approved" stroke={APPROVED} strokeWidth={2} fill="url(#areaApproved)" />
+                  <Area type="monotone" dataKey="approved" name="approved" stroke={APPROVED} strokeWidth={2} fill="none" fillOpacity={0} />
+                  <Area type="monotone" dataKey="offboarded" name="offboarded" stroke={OFFBOARDED} strokeWidth={2} strokeDasharray="4 3" fill="none" fillOpacity={0} />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
-            {/* Offboarding series exists in the payload but is a labeled placeholder — no faked data. */}
-            <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="size-2.5 rounded-full bg-muted-foreground/40" />
-              Offboarding — coming soon (all zero; offboarding isn’t built yet).
             </div>
           </>
         )}
