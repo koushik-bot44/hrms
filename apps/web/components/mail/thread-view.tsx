@@ -210,7 +210,8 @@ export function ThreadView({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-start justify-between gap-3 border-b p-4 md:p-6">
+      {/* Stacks on mobile so the subject gets a full-width row above the actions (not crushed behind them). */}
+      <header className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-start sm:justify-between md:p-6">
         <div className="min-w-0">
           {onBack ? (
             <Button variant="ghost" size="sm" className="mb-3 md:hidden" onClick={onBack}>

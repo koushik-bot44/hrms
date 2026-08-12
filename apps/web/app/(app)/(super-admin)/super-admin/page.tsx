@@ -235,7 +235,7 @@ function ViewTab({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors',
+        'flex min-h-11 items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors',
         active ? 'border-primary bg-primary text-primary-foreground' : 'border-border hover:border-primary/50',
       )}
     >

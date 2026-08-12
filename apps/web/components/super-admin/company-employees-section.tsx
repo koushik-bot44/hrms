@@ -137,7 +137,7 @@ export function CompanyEmployeesSection({ companyId, companySlug }: { companyId:
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <Link
                         href={`/super-admin/companies/${companyParam(companySlug, companyId)}/employees/${e.id}`}
-                        className="text-sm font-medium text-primary hover:underline"
+                        className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-primary hover:underline"
                       >
                         Open
                       </Link>

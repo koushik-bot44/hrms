@@ -192,9 +192,9 @@ export function RecordView({
         ) : null}
         {record.aadhaarNumber ? (
           <CardContent className="pt-0">
-            <div className="grid grid-cols-3 gap-2 text-sm">
+            <div className="grid grid-cols-1 gap-0.5 text-sm sm:grid-cols-3 sm:gap-2">
               <span className="text-muted-foreground">Aadhaar No.</span>
-              <span className="col-span-2 break-words font-mono">
+              <span className="break-words font-mono sm:col-span-2">
                 {revealed?.aadhaarNumber ?? record.aadhaarNumber}
               </span>
             </div>
@@ -606,9 +606,9 @@ function Dl({ entries }: { entries: Array<[string, string | null | undefined]> }
   return (
     <dl className="divide-y divide-border">
       {shown.map(([label, v]) => (
-        <div key={label} className="grid grid-cols-3 gap-2 py-1.5 text-sm">
+        <div key={label} className="grid grid-cols-1 gap-0.5 py-1.5 text-sm sm:grid-cols-3 sm:gap-2">
           <dt className="text-muted-foreground">{label}</dt>
-          <dd className="col-span-2 break-words">{v}</dd>
+          <dd className="break-words sm:col-span-2">{v}</dd>
         </div>
       ))}
     </dl>
@@ -630,7 +630,7 @@ function MiniTable({
     <div className="space-y-1.5">
       <h5 className="text-xs font-semibold text-muted-foreground">{title}</h5>
       <div className="overflow-x-auto rounded-md border">
-        <table className="w-full text-xs">
+        <table className="w-full text-[13px]">
           <thead className="bg-muted/50">
             <tr>
               {cols.map((c) => (

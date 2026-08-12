@@ -124,7 +124,7 @@ export function OffboardingClearanceDialog({ employeeId }: { employeeId: string 
                         )}
                       </div>
                       <Input
-                        className="h-8 w-full sm:w-40"
+                        className="h-11 w-full sm:w-40"
                         placeholder="Remarks"
                         value={st.remarks ?? ''}
                         onChange={(e) => setItem(it.key, { remarks: e.target.value })}

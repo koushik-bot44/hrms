@@ -17,7 +17,7 @@ import { useApiQuery } from '@/lib/api/hooks';
 import { monthLabel } from '@/lib/date';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
-import { LoadingSkeleton } from '@/components/loading-skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 const REFRESH_MS = 60_000;
@@ -65,14 +65,15 @@ export function HierarchyTrends() {
             Onboarded, approved and offboarded per month (Asia/Kolkata).
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-md border p-0.5">
+        <div className="flex items-center gap-1 rounded-md border p-1">
           {RANGES.map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setMonths(r)}
               className={cn(
-                'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                // Matches the period picker: a >=44px tap target on mobile, compact on desktop.
+                'inline-flex min-h-11 items-center justify-center rounded px-3.5 text-sm font-medium transition-colors sm:min-h-0 sm:px-3 sm:py-1.5 sm:text-xs',
                 months === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
               )}
             >
@@ -83,7 +84,7 @@ export function HierarchyTrends() {
       </CardHeader>
       <CardContent className="space-y-3">
         {query.isLoading ? (
-          <LoadingSkeleton lines={5} />
+          <Skeleton className="h-64 w-full rounded-md" />
         ) : query.isError ? (
           <EmptyState icon={TrendingUp} title="Couldn't load trends" description={query.error?.message ?? 'Please try again.'} />
         ) : !hasActivity ? (

@@ -395,7 +395,7 @@ export function Mailbox() {
                 type="button"
                 onClick={clearSearch}
                 aria-label="Clear search"
-                className="hover:text-sidebar-foreground"
+                className="-m-1 rounded p-2 hover:text-sidebar-foreground"
               >
                 <X className="size-3.5" />
               </button>
@@ -1280,7 +1280,7 @@ function FilterChips({
             type="button"
             onClick={() => onRemove(c.clear)}
             aria-label={`Remove filter ${c.label}`}
-            className="hover:text-foreground"
+            className="-my-1 -mr-1.5 rounded-full p-2 hover:text-foreground"
           >
             <X className="size-3" />
           </button>

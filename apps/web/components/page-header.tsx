@@ -36,7 +36,9 @@ export function PageHeader({ title, description, actions, editorial = false, cla
           </p>
         ) : null}
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      {/* Wrap on a phone so a wide action cluster (e.g. a chip + a primary button) never overflows the row;
+          stays a non-shrinking right-aligned group on desktop. */}
+      {actions ? <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{actions}</div> : null}
     </div>
   );
 }

@@ -89,7 +89,7 @@ function Stepper({
           type="button"
           onClick={() => onStep(i)}
           className={cn(
-            'flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors',
+            'flex min-h-11 items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors',
             i === step
               ? 'border-primary/40 bg-surface-tint text-primary'
               : done[i]

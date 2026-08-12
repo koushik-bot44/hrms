@@ -69,7 +69,7 @@ export function AttendanceHistory({ fetchPage, queryKey, title = 'History' }: Pr
               value={from}
               max={to}
               onChange={(e) => onRange({ from: e.target.value })}
-              className="h-8 w-auto"
+              className="h-11 w-auto"
             />
           </label>
           <label className="flex items-center gap-1.5">
@@ -80,7 +80,7 @@ export function AttendanceHistory({ fetchPage, queryKey, title = 'History' }: Pr
               min={from}
               max={istTodayIso()}
               onChange={(e) => onRange({ to: e.target.value })}
-              className="h-8 w-auto"
+              className="h-11 w-auto"
             />
           </label>
         </div>

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { surface } from '@/components/ui/surface';
 import { ALL_STATUSES, STATUS_META } from '@/components/hierarchy/status-meta';
@@ -65,7 +66,7 @@ export function CompanyBreakdownPanel() {
       </CardHeader>
       <CardContent className="space-y-5">
         {companies.isLoading ? (
-          <LoadingSkeleton lines={6} />
+          <Skeleton className="h-64 w-full rounded-md" />
         ) : companies.isError ? (
           <EmptyState icon={Building2} title="Couldn't load companies" description={companies.error?.message ?? 'Please try again.'} />
         ) : rows.length === 0 ? (
@@ -78,7 +79,7 @@ export function CompanyBreakdownPanel() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart layout="vertical" data={chartData} margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
                   <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={104} tickFormatter={(v: string) => (v.length > 13 ? `${v.slice(0, 12)}…` : v)} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
                   <Tooltip
                     cursor={{ fill: 'hsl(var(--accent))', opacity: 0.4 }}
                     formatter={(v) => [String(v), 'Employees']}
@@ -96,8 +97,9 @@ export function CompanyBreakdownPanel() {
             ) : null}
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_1fr]">
-              {/* The full company list — the drill selector. */}
-              <div className="max-h-80 space-y-1 overflow-y-auto rounded-md border p-1">
+              {/* The full company list — the drill selector. Flows with the page on mobile (no nested
+                  scroller); capped + independently scrollable only on desktop. */}
+              <div className="space-y-1 rounded-md border p-1 sm:max-h-80 sm:overflow-y-auto">
                 {rows.map((c) => (
                   <CompanyRow key={c.id} company={c} selected={selected === c.id} onSelect={() => setSelected(c.id)} />
                 ))}
@@ -211,7 +213,37 @@ function CompanyDetail({ companyId }: { companyId: string }) {
         <StaffName staff={b.companyAdmin} />
       </div>
 
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
+      {/* Mobile: the 5-column team table is too wide for a phone, so each team is a stacked card. */}
+      <div className="space-y-2 sm:hidden">
+        {b.teams.length === 0 ? (
+          <p className="rounded-xl border px-4 py-3 text-center text-sm text-muted-foreground">
+            No teams in this company.
+          </p>
+        ) : (
+          b.teams.map((t) => (
+            <div key={t.teamId} className="space-y-2 rounded-xl border bg-card p-3 text-sm shadow-card">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">{t.name}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">{t.employeeCount} emp</span>
+              </div>
+              <dl className="space-y-1.5">
+                {([['HR', t.hr], ['Manager', t.manager], ['Accountant', t.accountant]] as const).map(
+                  ([role, staff]) => (
+                    <div key={role} className="grid grid-cols-[5rem_1fr] gap-2">
+                      <dt className="text-muted-foreground">{role}</dt>
+                      <dd className="min-w-0">
+                        <StaffName staff={staff} />
+                      </dd>
+                    </div>
+                  ),
+                )}
+              </dl>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-2xl border bg-card shadow-card sm:block">
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs text-muted-foreground">

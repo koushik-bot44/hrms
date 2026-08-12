@@ -133,7 +133,7 @@ export function EmployeeQueue() {
               {data.content.map((e) => (
                 <tr key={e.id} className="border-t hover:bg-accent/40">
                   <td className="px-4 py-3 font-medium">{e.fullName ?? '—'}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{e.email}</td>
+                  <td className="break-all px-4 py-3 text-muted-foreground">{e.email}</td>
                   <td className="px-4 py-3 text-muted-foreground">{e.designation ?? '—'}</td>
                   <td className="px-4 py-3 text-muted-foreground">{e.dateOfJoining ?? '—'}</td>
                   <td className="px-4 py-3">

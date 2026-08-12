@@ -201,7 +201,9 @@ function IssueLetterDialog({
           <div className="space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">Preview</span>
             <div
-              className="max-h-72 overflow-y-auto rounded-md border bg-background p-4 text-sm [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-semibold [&_p]:my-2"
+              // On mobile the preview grows and the DIALOG scrolls (one scroller, no nested-scroll fight);
+              // only on desktop is it capped to its own scroll region.
+              className="rounded-md border bg-background p-4 text-sm sm:max-h-72 sm:overflow-y-auto [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-semibold [&_p]:my-2"
               // The body is our own template with server-escaped token values (no user HTML).
               dangerouslySetInnerHTML={{ __html: previewHtml }}
             />

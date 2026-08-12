@@ -32,7 +32,7 @@ const COLUMNS: ColumnDef<AuditLogEntry>[] = [
   {
     accessorKey: 'action',
     header: 'Action',
-    cell: ({ row }) => <span className="font-mono text-xs">{row.original.action}</span>,
+    cell: ({ row }) => <span className="font-mono text-[13px]">{row.original.action}</span>,
   },
   {
     accessorKey: 'targetType',

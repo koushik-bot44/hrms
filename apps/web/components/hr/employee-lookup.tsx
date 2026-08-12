@@ -129,7 +129,7 @@ export function EmployeeLookup() {
               {data.content.map((e) => (
                 <tr key={e.id} className="border-t hover:bg-accent/40">
                   <td className="px-3 py-2 font-medium">{e.fullName ?? '—'}</td>
-                  <td className="px-3 py-2 font-mono text-muted-foreground">{e.employeeCode ?? '—'}</td>
+                  <td className="break-words px-3 py-2 font-mono text-muted-foreground">{e.employeeCode ?? '—'}</td>
                   <td className="px-3 py-2 text-muted-foreground">{e.designation ?? '—'}</td>
                   <td className="px-3 py-2">
                     <StatusBadge status={e.status} />
@@ -139,7 +139,7 @@ export function EmployeeLookup() {
                       type="button"
                       variant="link"
                       size="sm"
-                      className="h-auto p-0"
+                      className="px-2"
                       onClick={() => setSelectedId(e.id)}
                     >
                       View record

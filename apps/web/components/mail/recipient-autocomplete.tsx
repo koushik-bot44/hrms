@@ -116,7 +116,7 @@ export function RecipientAutocomplete({
               <button
                 type="button"
                 aria-label={`Remove ${p.name}`}
-                className="text-primary/70 hover:text-primary"
+                className="-my-1 -mr-1 rounded-full p-2 text-primary/70 hover:text-primary"
                 onClick={(e) => {
                   e.stopPropagation();
                   removeAt(p.userId!);

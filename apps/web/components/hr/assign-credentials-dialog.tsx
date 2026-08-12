@@ -115,7 +115,7 @@ export function AssignCredentialsDialog({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+            className="px-3 text-xs text-muted-foreground hover:text-foreground"
           >
             <RotateCcw className="size-3.5" />
             Reset credentials

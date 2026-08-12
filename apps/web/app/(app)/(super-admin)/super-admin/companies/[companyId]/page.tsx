@@ -95,9 +95,9 @@ export default function CompanyDetailPage({ params }: { params: { companyId: str
         <CardContent>
           {data.admin ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-4">
-              <div className="space-y-0.5">
+              <div className="min-w-0 space-y-0.5">
                 <div className="font-medium">{data.admin.name}</div>
-                <div className="text-sm text-muted-foreground">{data.admin.email}</div>
+                <div className="break-all text-sm text-muted-foreground">{data.admin.email}</div>
               </div>
               <Badge variant="success">{data.admin.status}</Badge>
             </div>
