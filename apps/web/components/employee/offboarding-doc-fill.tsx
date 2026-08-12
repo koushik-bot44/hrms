@@ -12,7 +12,7 @@ import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/status-badge';
-import { InlineDocument } from '@/components/documents/inline-document';
+import { LazyInlineDocument } from '@/components/documents/lazy-inline-document';
 import { toOffboardingComplete } from '@/lib/documents/inline-markers';
 
 /**
@@ -79,7 +79,7 @@ export function OffboardingDocFill({ type }: { type: OffboardingDocType }) {
         />
       </div>
 
-      <InlineDocument
+      <LazyInlineDocument
         bodyHtml={data.bodyHtml}
         fields={data.employeeFields}
         consentText="I have read and understood this document and agree to its terms."

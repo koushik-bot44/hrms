@@ -28,7 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { surface } from '@/components/ui/surface';
 import { DocumentUploader } from '@/components/employee/document-uploader';
-import { SignatureCapture } from '@/components/signature/signature-capture';
+import { LazySignatureCapture } from '@/components/signature/lazy-signature-capture';
 
 // Form 2 (Employee Info) is HR/SA-authored at onboard (§3.2) — it is NOT a step the employee fills.
 const STEPS = ['Personal', 'Prev. Employment', 'Documents', 'Review', 'Sign & Submit'];
@@ -689,7 +689,7 @@ function SignStep({
             Sign, generate, or upload one signature — it is stamped onto your generated forms.
           </p>
         )}
-        <SignatureCapture
+        <LazySignatureCapture
           fullName={dashboard.form1?.name ?? ''}
           onAdopt={(blob) => saveSig.mutate(blob)}
           disabled={disabled || saveSig.isPending}

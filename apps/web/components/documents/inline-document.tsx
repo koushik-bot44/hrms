@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { CheckCircle2, ExternalLink, Maximize2, Minimize2, PenLine, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SignatureCapture } from '@/components/signature/signature-capture';
+import { LazySignatureCapture } from '@/components/signature/lazy-signature-capture';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -458,7 +458,7 @@ export function InlineDocument({
               </Button>
             </div>
           ) : null}
-          <SignatureCapture fullName={fullName} onAdopt={(blob) => void adoptSignature(blob)} />
+          <LazySignatureCapture fullName={fullName} onAdopt={(blob) => void adoptSignature(blob)} />
         </DialogContent>
       </Dialog>
     </div>

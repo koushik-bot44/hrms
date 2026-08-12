@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import dynamic from 'next/dynamic';
 import { ArrowLeft, CalendarClock, CheckCircle2, Download } from 'lucide-react';
 import type { EmployeeMonthSummary } from '@/lib/contract';
 import {
@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { PeriodPicker, selectionLabel, lateLabel } from '@/components/accountant/period-picker';
 import { AttendanceComposition } from '@/components/accountant/attendance-composition';
 import { LiveIndicator } from '@/components/dashboard/live-indicator';
@@ -30,6 +31,13 @@ const REFRESH_MS = 45_000;
 const hm = (seconds: number) => formatDuration(seconds);
 /** Decimal hours for spreadsheet-friendly CSV values (2dp). */
 const hours = (seconds: number) => Math.round((seconds / 3600) * 100) / 100;
+
+// recharts (~heavy) is deferred off the accountant + manager/attendance first load — this is the only
+// recharts importer in that tree. Same h-40 skeleton the chart occupies, so there's no layout shift.
+const MonthReportChart = dynamic(() => import('./month-report-chart'), {
+  ssr: false,
+  loading: () => <Skeleton className="h-40 w-full rounded-md" />,
+});
 
 /**
  * One employee's attendance detail (§8a, read-only): a worked-vs-break DONUT (the only same-unit split —
@@ -252,28 +260,7 @@ function MonthlyReport({
                 Clean record — no unapproved absences or late logins in this period.
               </div>
             ) : (
-              <div className="h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chart} margin={{ top: 4, right: 8, left: -16, bottom: 0 }} barGap={2}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
-                    <Tooltip
-                      cursor={{ fill: 'hsl(var(--accent))', opacity: 0.4 }}
-                      formatter={(v, n) => [String(v), n === 'absences' ? 'Unapproved absences' : 'Late logins']}
-                      contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
-                    />
-                    <Legend
-                      verticalAlign="top"
-                      height={24}
-                      formatter={(value) => (value === 'absences' ? 'Unapproved absences' : 'Late logins')}
-                      wrapperStyle={{ fontSize: 12 }}
-                    />
-                    <Bar dataKey="absences" name="absences" fill="hsl(var(--destructive))" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="late" name="late" fill="hsl(var(--warning))" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <MonthReportChart data={chart} />
             )}
             <div className="overflow-x-auto rounded-xl border">
               <table className="w-full text-sm">

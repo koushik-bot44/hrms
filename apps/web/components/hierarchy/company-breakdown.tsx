@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import dynamic from 'next/dynamic';
 import { Building2, ChevronRight, Download, ShieldCheck } from 'lucide-react';
 import type { CompanyBreakdown, CompanySizeRow, StaffRef } from '@/lib/contract';
 import { getHierarchyBreakdown, getHierarchyCompanies } from '@/lib/api/hierarchy';
@@ -21,8 +21,12 @@ import { ALL_STATUSES, STATUS_META } from '@/components/hierarchy/status-meta';
 const REFRESH_MS = 60_000;
 const CHART_TOP = 12;
 
-const ACTIVE = 'hsl(var(--primary))';
-const ARCHIVED = 'hsl(var(--muted-foreground))';
+// recharts (~heavy) is deferred off the /hierarchy first load. The parent keeps the height-reserving
+// wrapper (its height is data-derived), so the fallback fills the exact same box — no layout shift.
+const CompaniesBarChart = dynamic(() => import('./companies-bar-chart'), {
+  ssr: false,
+  loading: () => <Skeleton className="h-full w-full rounded-md" />,
+});
 
 /** Employees-per-company (size distribution) + a per-company org breakdown drill-down (§2). */
 export function CompanyBreakdownPanel() {
@@ -75,25 +79,9 @@ export function CompanyBreakdownPanel() {
           <>
             {/* With only a company or two, a bar chart adds nothing the drill list below doesn't — skip it. */}
             {rows.length > 2 ? (
-            <div style={{ height: Math.max(120, chartData.length * 30 + 20) }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart layout="vertical" data={chartData} margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" width={104} tickFormatter={(v: string) => (v.length > 13 ? `${v.slice(0, 12)}…` : v)} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    cursor={{ fill: 'hsl(var(--accent))', opacity: 0.4 }}
-                    formatter={(v) => [String(v), 'Employees']}
-                    labelFormatter={(l, p) => (p?.[0]?.payload?.archived ? `${l} (archived)` : String(l))}
-                    contentStyle={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }}
-                  />
-                  <Bar dataKey="value" radius={[0, 3, 3, 0]}>
-                    {chartData.map((d) => (
-                      <Cell key={d.key} fill={d.archived ? ARCHIVED : ACTIVE} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+              <div style={{ height: Math.max(120, chartData.length * 30 + 20) }}>
+                <CompaniesBarChart data={chartData} />
+              </div>
             ) : null}
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_1fr]">

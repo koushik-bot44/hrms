@@ -16,28 +16,12 @@ import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { surface } from '@/components/ui/surface';
 import { Button } from '@/components/ui/button';
+import type { StagedAttachment } from '@/components/mail/attachment-helpers';
 
-export interface StagedAttachment {
-  uid: string;
-  name: string;
-  size: number;
-  progress: number;
-  status: 'uploading' | 'done' | 'error';
-  attachmentId?: string;
-  error?: string;
-}
-
-/** The ids of attachments that finished uploading — ready to send with the message. */
-export function stagedAttachmentIds(staged: StagedAttachment[]): string[] {
-  return staged
-    .filter((s) => s.status === 'done' && s.attachmentId)
-    .map((s) => s.attachmentId as string);
-}
-
-/** Whether any staged attachment is still uploading (send should be disabled until they finish). */
-export function attachmentsUploading(staged: StagedAttachment[]): boolean {
-  return staged.some((s) => s.status === 'uploading');
-}
+// Pure helpers (stagedAttachmentIds / attachmentsUploading) + the StagedAttachment type now live in
+// attachment-helpers.ts so the compose window imports them without dragging react-dropzone (this module)
+// onto the /mail first load. This file is the react-dropzone leaf, lazy-loaded by DockedCompose.
+export type { StagedAttachment };
 
 /**
  * Attach files to a mail message (§8, Stage 4): a paperclip button + drag-drop, client-side

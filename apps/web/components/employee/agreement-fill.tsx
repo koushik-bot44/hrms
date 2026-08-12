@@ -12,7 +12,7 @@ import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { InlineDocument } from '@/components/documents/inline-document';
+import { LazyInlineDocument } from '@/components/documents/lazy-inline-document';
 import { toAgreementComplete } from '@/lib/documents/inline-markers';
 
 /**
@@ -80,7 +80,7 @@ export function AgreementFill({ type }: { type: AgreementType }) {
         />
       </div>
 
-      <InlineDocument
+      <LazyInlineDocument
         bodyHtml={data.bodyHtml}
         fields={data.fields}
         fullName={data.prefill.fullName}

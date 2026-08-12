@@ -7,7 +7,7 @@ import { useApiQuery, useApiMutation } from '@/lib/api/hooks';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { Card, CardContent } from '@/components/ui/card';
-import { InlineDocument } from '@/components/documents/inline-document';
+import { LazyInlineDocument } from '@/components/documents/lazy-inline-document';
 import { toOfferAccept } from '@/lib/documents/inline-markers';
 
 /**
@@ -64,7 +64,7 @@ export function OfferScreen() {
         </CardContent>
       </Card>
 
-      <InlineDocument
+      <LazyInlineDocument
         bodyHtml={data.bodyHtml}
         fields={[]}
         fullName={data.employeeName}

@@ -1,8 +1,9 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { useQueryClient } from '@tanstack/react-query';
-import { Maximize2, Minimize2, Minus, Save, Send, X } from 'lucide-react';
+import { Maximize2, Minimize2, Minus, Paperclip, Save, Send, X } from 'lucide-react';
 import type { MailParty, SaveDraftInput } from '@/lib/contract';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import {
@@ -22,11 +23,28 @@ import { cn } from '@/lib/utils';
 import { surface } from '@/components/ui/surface';
 import { RecipientAutocomplete } from '@/components/mail/recipient-autocomplete';
 import {
-  AttachmentPicker,
   attachmentsUploading,
   stagedAttachmentIds,
   type StagedAttachment,
-} from '@/components/mail/attachment-picker';
+} from '@/components/mail/attachment-helpers';
+
+// react-dropzone lives ONLY in AttachmentPicker; the compose window is itself open-on-demand, so the picker
+// is lazy-loaded to keep react-dropzone off the /mail first load. The placeholder is the picker's own
+// collapsed footprint (the ghost "Attach" button) so the compose footer doesn't jump when the chunk lands.
+const AttachmentPicker = dynamic(
+  () => import('@/components/mail/attachment-picker').then((m) => m.AttachmentPicker),
+  {
+    ssr: false,
+    loading: () => (
+      <div>
+        <Button type="button" variant="ghost" size="sm" disabled>
+          <Paperclip />
+          Attach
+        </Button>
+      </div>
+    ),
+  },
+);
 
 export type ComposeState = {
   mode: 'new' | 'reply' | 'replyAll';
