@@ -28,11 +28,14 @@ function isActive(pathname: string, href: string): boolean {
 
 function Brand() {
   return (
-    <Link href="/" className="flex items-center gap-3 pl-1">
+    // min-w-0 lets the brand SHRINK (and its text truncate) instead of pushing the actions — so the Sign-in
+    // pill + hamburger keep their natural size. The 45-char subtitle is hidden on phones (it wrapped to two
+    // lines and ate the row at 360px) and returns from sm: up, where there's room for it on one line.
+    <Link href="/" className="flex min-w-0 items-center gap-3 pl-1">
       <BrandMark size={44} className="shadow-sm shadow-primary/40" />
-      <span className="leading-tight">
-        <span className="block text-lg font-semibold tracking-tight text-foreground">hrorg.in</span>
-        <span className="block text-[11px] text-muted-foreground/70">{BRAND_SUBTITLE}</span>
+      <span className="min-w-0 leading-tight">
+        <span className="block truncate text-lg font-semibold tracking-tight text-foreground">hrorg.in</span>
+        <span className="hidden truncate text-[11px] text-muted-foreground/70 sm:block">{BRAND_SUBTITLE}</span>
       </span>
     </Link>
   );
@@ -85,12 +88,14 @@ export function MarketingNav() {
             })}
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex shrink-0 items-center gap-2.5">
             {/* One general "Sign in" (→ /login); the audience-specific doors are reached from the emails
                 that carry the company slug. Nothing on the public site links to the onboarding door (§6). */}
+            {/* shrink-0 + whitespace-nowrap = the label can NEVER wrap to two lines; a compact 44px-tall pill
+                on mobile that steps up (padding + text) at sm:. */}
             <Link
               href="/login"
-              className="rounded-full bg-primary px-5 py-2.5 text-[15px] font-medium text-primary-foreground shadow-sm shadow-primary/40 transition-colors hover:bg-primary/90"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm shadow-primary/40 transition-colors hover:bg-primary/90 sm:px-5 sm:text-[15px]"
             >
               Sign in
             </Link>
