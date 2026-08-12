@@ -29,7 +29,7 @@ export function FeaturesTeaser() {
         <Reveal delay={0.1}>
           <Link
             href="/features"
-            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-white/10"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-white/10"
           >
             See all capabilities
             <ArrowRight className="size-4" />

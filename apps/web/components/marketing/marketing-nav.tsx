@@ -76,7 +76,9 @@ export function MarketingNav() {
                   href={l.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'rounded-full px-4 py-2 text-[15px] transition-colors',
+                    // min-h-11 aligns each link to the 44px sign-in pill beside it (bar height is unchanged —
+                    // it's set by the brand mark + py-4), so desktop/tablet taps meet the 44px standard.
+                    'inline-flex min-h-11 items-center rounded-full px-4 py-2 text-[15px] transition-colors',
                     active
                       ? 'bg-primary/15 font-medium text-primary-bright'
                       : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
