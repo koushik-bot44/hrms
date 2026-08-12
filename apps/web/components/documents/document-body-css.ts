@@ -6,7 +6,7 @@
  * filled form — underline-style inputs that flow WITH the prose, never block-level boxes that break paragraphs.
  */
 export const DOCUMENT_BODY_CSS = `
-.agreement-body { font-size: 13px; line-height: 1.6; color: inherit; }
+.agreement-body { font-size: 14px; line-height: 1.6; color: inherit; }
 .agreement-body h1.title { text-align:center; font-size:18px; font-weight:700; margin:0 0 16px; text-transform:uppercase; }
 .agreement-body h2 { font-size:15px; font-weight:700; margin:18px 0 6px; }
 .agreement-body h2.ack-head, .agreement-body h2.dd-head { text-align:center; margin-top:22px; }
@@ -31,7 +31,7 @@ export const DOCUMENT_BODY_CSS = `
 .agreement-body .sigval { min-height:16px; }
 .agreement-body .sigblank { min-height:40px; }
 .agreement-body table.dosdonts { width:100%; border-collapse:collapse; margin-top:10px; }
-.agreement-body table.dosdonts th, .agreement-body table.dosdonts td { border:1px solid currentColor; padding:6px 8px; font-size:12px; vertical-align:top; text-align:left; width:50%; }
+.agreement-body table.dosdonts th, .agreement-body table.dosdonts td { border:1px solid currentColor; padding:6px 8px; font-size:13px; vertical-align:top; text-align:left; width:50%; }
 .agreement-body table.dosdonts th { font-weight:700; text-align:center; }
 .agreement-body p.note { margin-top:14px; font-style:italic; }
 `;
@@ -62,9 +62,10 @@ export const INLINE_FIELD_CSS = `
 .agreement-body .inline-resign {
   font-size:11px; color:hsl(var(--muted-foreground)); cursor:pointer; text-decoration:underline; background:none; border:0; padding:0;
 }
-/* A slightly larger tap target on phones so mid-sentence blanks stay easy to hit. */
+/* On phones: a larger tap target for mid-sentence blanks, and font-size:16px so tapping one never triggers
+   iOS Safari's zoom-on-focus (any focused input under 16px zooms the page). */
 @media (max-width: 640px) {
-  .agreement-body input.inline-input { padding:2px 5px; min-width:3ch; }
-  .agreement-body .inline-sign-btn { padding:4px 10px; }
+  .agreement-body input.inline-input { padding:3px 5px; min-width:3ch; font-size:16px; }
+  .agreement-body .inline-sign-btn { padding:6px 12px; font-size:13px; }
 }
 `;

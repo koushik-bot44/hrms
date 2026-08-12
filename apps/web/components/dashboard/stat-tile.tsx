@@ -48,13 +48,14 @@ export function StatTile({
 }: StatTileProps) {
   const body = (
     <Card variant={href ? 'interactive' : 'default'} className={cn('h-full', className)} title={title}>
-      <CardContent className="flex items-start gap-4 p-5">
-        <div className={cn('flex size-12 shrink-0 items-center justify-center rounded-xl', TILE_TONES[tone])}>
-          <Icon className="size-6" />
+      <CardContent className="flex items-start gap-3 p-4 sm:gap-4 sm:p-5">
+        <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-xl sm:size-12', TILE_TONES[tone])}>
+          <Icon className="size-5 sm:size-6" />
         </div>
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="text-xs font-medium text-muted-foreground">{label}</p>
-          <p className={cn('font-semibold tracking-tight tabular-nums', size === 'sm' ? 'text-2xl' : 'text-3xl')}>
+          {/* Step the value down a size on mobile so a 2-up tile doesn't wrap long values ("152h 30m"). */}
+          <p className={cn('font-semibold tracking-tight tabular-nums', size === 'sm' ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl')}>
             {value}
           </p>
           {sub ? <p className="text-xs text-muted-foreground">{sub}</p> : null}

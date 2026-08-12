@@ -23,7 +23,8 @@ const buttonVariants = cva(
       },
       size: {
         default: 'h-11 px-5 py-2',
-        sm: 'h-10 px-4',
+        // Compact but still a 44px one-handed tap target (used for pagination/filter/record/mail actions).
+        sm: 'h-11 px-4',
         lg: 'h-12 px-7 text-base',
         icon: 'h-11 w-11',
       },

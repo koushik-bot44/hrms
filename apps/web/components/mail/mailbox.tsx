@@ -405,7 +405,8 @@ export function Mailbox() {
 
         {/* Mobile controls */}
         <div className="flex w-full flex-col md:hidden">
-          <div className="flex items-center gap-2 border-b p-2">
+          {/* Folders scroll horizontally so all stay reachable; Compose is the FAB below (always visible). */}
+          <div className="flex items-center gap-2 overflow-x-auto border-b p-2 [&>*]:shrink-0">
             <Button
               variant={!searching && !labelView && folder === 'inbox' ? 'secondary' : 'ghost'}
               size="sm"
@@ -445,10 +446,6 @@ export function Mailbox() {
             >
               <FileText />
               Drafts
-            </Button>
-            <Button size="sm" className="ml-auto" onClick={() => openCompose({ mode: 'new' })}>
-              <SquarePen />
-              New
             </Button>
           </div>
           <div className="flex items-center gap-2 border-b p-2">
@@ -521,6 +518,19 @@ export function Mailbox() {
           )}
         </div>
       </div>
+
+      {/* Persistent Compose on mobile — the rail Compose is desktop-only, so this FAB is the phone entry point.
+          Sits above the home-indicator safe area, hidden once a composer is open (it would overlap it). */}
+      {!compose ? (
+        <Button
+          size="icon"
+          onClick={() => openCompose({ mode: 'new' })}
+          aria-label="New message"
+          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 size-14 rounded-full shadow-card-hover md:hidden"
+        >
+          <SquarePen className="size-6" />
+        </Button>
+      ) : null}
 
       {compose ? (
         <DockedCompose
@@ -847,17 +857,18 @@ function ThreadRow({
         aria-label={row.starred ? 'Unstar conversation' : 'Star conversation'}
         title={row.starred ? 'Starred — click to unstar' : 'Star this conversation'}
         className={cn(
-          'absolute right-2 top-2 rounded p-1.5 transition-opacity hover:bg-background',
+          'absolute right-2 top-2 rounded p-2 transition-opacity hover:bg-background',
           row.starred
             ? 'text-amber-500 opacity-100 dark:text-amber-400'
-            : 'text-muted-foreground opacity-0 hover:text-foreground focus:opacity-100 group-hover:opacity-100',
+            // Visible by default on touch/narrow; hover-revealed only on desktop (md+).
+            : 'text-muted-foreground opacity-70 hover:text-foreground focus:opacity-100 md:opacity-0 md:group-hover:opacity-100',
         )}
       >
         <Star className={cn('size-4', row.starred && 'fill-current')} />
       </button>
 
-      {/* Label + read + delete (appear on hover / focus-within; always tappable on touch) */}
-      <div className="absolute bottom-2 right-2 flex gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+      {/* Label + read + delete — always visible on touch/narrow; hover/focus-revealed only on desktop (md+). */}
+      <div className="absolute bottom-2 right-2 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100 [&_button]:p-2">
         <LabelPicker threadId={row.threadId} labels={row.labels}>
           <button
             type="button"

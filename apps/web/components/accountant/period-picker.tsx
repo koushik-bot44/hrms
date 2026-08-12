@@ -57,7 +57,12 @@ export function PeriodPicker({
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
-      <div className="inline-flex rounded-md border border-input p-0.5" role="group" aria-label="Report window">
+      {/* Full-width + wrapping on mobile (a 2×2 grid of ≥44px pills), a single content-width row on desktop. */}
+      <div
+        className="flex w-full flex-wrap gap-1 rounded-md border border-input p-1 sm:w-auto"
+        role="group"
+        aria-label="Report window"
+      >
         {(Object.keys(MODE_LABELS) as Mode[]).map((m) => (
           <button
             key={m}
@@ -65,7 +70,7 @@ export function PeriodPicker({
             aria-pressed={value.mode === m}
             onClick={() => value.mode !== m && onChange(selectionForMode(m))}
             className={cn(
-              'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+              'inline-flex min-h-11 flex-auto items-center justify-center rounded px-3 text-sm font-medium transition-colors sm:min-h-0 sm:flex-none sm:px-3.5 sm:py-1.5',
               value.mode === m
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground',

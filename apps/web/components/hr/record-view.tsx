@@ -126,7 +126,9 @@ export function RecordView({
               ) : null}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          {/* Wraps onto multiple rows on a phone (Reveal + status + Reject/Approve/Assign/Send agreements) so
+              the actionable record never forces a page-level horizontal scroll. */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {record.sensitiveRevealable && onReveal ? (
               <Button
                 type="button"
@@ -682,7 +684,9 @@ function ItemActions({
 }) {
   const needsPreview = Boolean(viewUrl) && !previewed;
   return (
-    <div className="flex items-center gap-1.5">
+    // flex-wrap + a wider gap so Preview / Verify / Send-back stack on narrow screens without page overflow,
+    // and Verify vs Send-back aren't packed tight enough to mis-tap.
+    <div className="flex flex-wrap items-center gap-2">
       {viewUrl ? (
         <a href={viewUrl} target="_blank" rel="noreferrer" onClick={() => onPreview?.()}>
           {/* Emphasised until opened — HR must preview before Verify unlocks. */}

@@ -383,7 +383,7 @@ export function AppShell({
                   <Menu />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="left-0 top-0 flex h-dvh max-h-dvh max-w-[16rem] translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-sidebar-border bg-sidebar p-0 text-sidebar-foreground sm:rounded-none">
+              <DialogContent className="left-0 top-0 flex h-dvh max-h-dvh w-[16rem] max-w-[16rem] translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-sidebar-border bg-sidebar p-0 pt-[env(safe-area-inset-top)] text-sidebar-foreground sm:rounded-none">
                 <DialogTitle className="sr-only">Navigation</DialogTitle>
                 <Brand roleLabel={roleLabel} />
                 <div className="flex-1 overflow-y-auto p-3">

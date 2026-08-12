@@ -298,7 +298,7 @@ export function InlineDocument({
     <div
       ref={scrollRef}
       onScroll={checkScrollEnd}
-      className={cn('agreement-body overflow-y-auto rounded-md border bg-background p-5', paneClassName)}
+      className={cn('agreement-body overflow-auto rounded-md border bg-background p-5', paneClassName)}
     >
       {mounted ? (
         <Ctx.Provider value={ctx}>{parsed}</Ctx.Provider>
@@ -340,10 +340,14 @@ export function InlineDocument({
               Open in full screen.
             </div>
           ) : (
-            bodyPane('max-h-[65vh]')
+            // Taller pane on mobile so the scroll-to-consent gate feels less trapping (the full-screen reader
+            // below is the roomier way to read + fill on a phone).
+            bodyPane('max-h-[70dvh] sm:max-h-[65vh]')
           )}
           {!scrolledEnd ? (
-            <p className="mt-2 text-xs text-muted-foreground">Scroll to the end of the document to continue.</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Scroll to the end of the document to continue — or tap <span className="font-medium">View full document</span> to read it full screen.
+            </p>
           ) : null}
         </CardContent>
       </Card>
@@ -352,7 +356,7 @@ export function InlineDocument({
           mobile, a large sheet on desktop. Closing returns to the compact view with all values + the
           scroll-to-consent state intact (state lives in this component). */}
       <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-[100vw] flex-col gap-3 rounded-none p-4 sm:h-[92dvh] sm:max-h-[92dvh] sm:w-[94vw] sm:max-w-5xl sm:rounded-lg sm:p-6">
+        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-[100vw] flex-col gap-3 rounded-none p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:h-[92dvh] sm:max-h-[92dvh] sm:w-[94vw] sm:max-w-5xl sm:rounded-lg sm:p-6 sm:pt-6">
           <DialogHeader className="space-y-0 pr-8 text-left">
             <DialogTitle className="text-base">Full document — fill the blanks and sign inside it</DialogTitle>
             {!scrolledEnd ? (
