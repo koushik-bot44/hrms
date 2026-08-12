@@ -8,6 +8,9 @@ import com.ihrms.companies.dto.CompanyDtos.ProvisionAdminRequest;
 import com.ihrms.companies.dto.CompanyDtos.ProvisionAdminResult;
 import com.ihrms.companies.dto.CompanyDtos.PurgeCompanyResult;
 import com.ihrms.companies.dto.CompanyDtos.UpdateCompanyRequest;
+import com.ihrms.companies.dto.LetterheadDtos.LetterheadUpload;
+import com.ihrms.companies.dto.LetterheadDtos.LetterheadUploadRequest;
+import com.ihrms.companies.dto.LetterheadDtos.LetterheadView;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -32,9 +35,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class CompaniesController {
 
   private final CompaniesService companies;
+  private final LetterheadService letterheads;
 
-  public CompaniesController(CompaniesService companies) {
+  public CompaniesController(CompaniesService companies, LetterheadService letterheads) {
     this.companies = companies;
+    this.letterheads = letterheads;
   }
 
   @PostMapping
@@ -103,5 +108,44 @@ public class CompaniesController {
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     return companies.purge(id, actor, request.getRemoteAddr());
+  }
+
+  // --- Per-company letterhead (§3.5) — SUPER_ADMIN; applies to documents generated from now on -------------
+
+  /** Current letterhead metadata (header/footer parts, null when unset) + short-lived presigned previews. */
+  @GetMapping("/{id}/letterhead")
+  public LetterheadView getLetterhead(@PathVariable String id) {
+    return letterheads.get(id);
+  }
+
+  /** Step 1: validate type/size + get a presigned PUT for the {@code header|footer} part. */
+  @PostMapping("/{id}/letterhead/{part}/begin-upload")
+  public LetterheadUpload beginLetterheadUpload(
+      @PathVariable String id,
+      @PathVariable String part,
+      @RequestBody LetterheadUploadRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return letterheads.beginUpload(actor, id, part, body, request.getRemoteAddr());
+  }
+
+  /** Step 2: finalize — read+validate+decode the uploaded object; stamp the row. Audited LETTERHEAD_UPDATED. */
+  @PostMapping("/{id}/letterhead/{part}/confirm")
+  public LetterheadView confirmLetterheadUpload(
+      @PathVariable String id,
+      @PathVariable String part,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return letterheads.confirmUpload(actor, id, part, request.getRemoteAddr());
+  }
+
+  /** Revert that part to the plain layout (delete the object + clear the row). Audited. */
+  @DeleteMapping("/{id}/letterhead/{part}")
+  public LetterheadView removeLetterhead(
+      @PathVariable String id,
+      @PathVariable String part,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return letterheads.remove(actor, id, part, request.getRemoteAddr());
   }
 }

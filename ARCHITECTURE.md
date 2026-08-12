@@ -369,10 +369,42 @@ free-text documents). Mechanism:
 - **Revision reopen** (offboarding send-back) shows the prior values (they arrive in the manifest prefills),
   editable, above HR's note.
 
-**Letterhead slot.** The agreement PDF reserves an **empty header band** (via the `@page` top margin +
-`#letterhead` running element) and a **footer band** on every page. Both are intentionally empty now; a
-future **per-company letterhead** image/footer mounts into `#letterhead` / `#footer` — populate the running
-element and it flows onto every page (no layout change needed).
+**Per-company letterhead (§3.5).** A SUPER_ADMIN uploads a company's letterhead — a **HEADER** band image
+and/or a **FOOTER** band image (each optional, one per company per part, replaceable) — and **every pipeline
+document generated FROM THAT POINT ON renders on it**: the offer letter, the three agreements, the offboarding
+documents, the clearance form, and the relieving/experience letters (everything that flows through the
+`agreement.html` / `offboarding-clearance.html` → openhtmltopdf pipeline). **The onboarding Forms 1–4 are
+EXCLUDED** — they render through a different path (`PdfService` → `form1/2/3` templates + the OpenPDF Form-4
+manifest), whose templates carry no letterhead slot, so branding can never bleed into them. **Already-generated
+PDFs are never re-rendered** — stored artifacts are immutable, so the letterhead is strictly point-forward.
+
+- **Model + storage.** Header + footer (not a single full-page background — the two bands sit in the page
+  margins and so can never collide with body text). Each image is PNG/JPG, ≤5 MB, ≥1000px wide (print-quality
+  floor); a PDF is rejected (rasterizing a page isn't worth it). Bytes live in the existing storage backend
+  under a **stable, ext-less key** `companies/{cid}/branding/letterhead-{header|footer}` — a replacement PUTs
+  the **same key (overwrite)**, so there is never a second object to orphan. The `companies` row carries each
+  part's key + content-type + **pixel dimensions** (V39, additive) + `letterheadUpdatedAt/By`; every change is
+  audited `LETTERHEAD_UPDATED`.
+- **Upload handshake** (SUPER_ADMIN, both-layer gated): `POST /companies/{id}/letterhead/{part}/begin-upload`
+  (validate declared type/size → presigned PUT) → client PUTs the bytes → `POST …/{part}/confirm`
+  (`getObjectBytes` → **ImageIO decode**: proves a real PNG/JPG, reads the true dimensions, re-checks
+  min-width/max-bytes → stamps the row). `GET /companies/{id}/letterhead` returns the metadata + short-lived
+  presigned previews; `DELETE …/{part}` reverts that band to plain. The SUPER_ADMIN company screen mounts a
+  **Letterhead** section (per-part preview / upload-replace / remove, client-mirrored validation).
+- **Render geometry (`LetterheadService`).** The `@page` margins + the `#letterhead`/`#footer` running-band CSS
+  are **computed server-side per document** and injected as `${pageCss}` (the templates no longer hard-code
+  them). With a letterhead present the side page-margins go to **0** (so the `@top-center`/`@bottom-center`
+  margin boxes span the full page width → the images are **full-bleed** at `width:100%`) and the body is inset
+  by `padding:0 1.7cm` instead; the **band height is derived from the image's aspect ratio** —
+  `bandHeight = 21cm × (imageHeight ÷ imageWidth)` — and the corresponding `@page` margin is set to
+  `bandHeight + 0.15cm`. Because body content lives strictly between the top and bottom margins, and each margin
+  is ≥ its band height, **body text can never overlap a band on page 1 or any continuation page** (verified by
+  rendering a multi-page document with tall bands and asserting every glyph's Y sits between the header-band
+  bottom and the footer-band top). With **no letterhead** the injected CSS is the exact prior default (empty
+  bands, 2.7/1.7/2.1/1.7cm margins) — the plain layout is unchanged.
+- **Graceful degrade.** The letterhead is resolved at each generation; a missing / unreadable / undecodable
+  object (or even openhtmltopdf choking on the image) **falls back to the plain layout and still returns a PDF**
+  — a document is never failed because branding is missing (logged).
 
 **Token & field map.**
 - `{{COMPANY_NAME}}` → the employee's **joining company** display name at generation. AUP: every

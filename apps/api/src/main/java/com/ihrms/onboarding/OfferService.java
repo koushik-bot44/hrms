@@ -1,5 +1,7 @@
 package com.ihrms.onboarding;
 
+import com.ihrms.companies.LetterheadService;
+
 import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
 import com.ihrms.auth.AuthorizationService;
@@ -62,7 +64,7 @@ public class OfferService {
   private final UserRepository users;
   private final AuthorizationService authz;
   private final StorageService storage;
-  private final HtmlPdfRenderer html;
+  private final LetterheadService letterheads;
   private final OfferTemplates templates;
   private final AuditService audit;
   private final MailService mail;
@@ -75,7 +77,7 @@ public class OfferService {
       UserRepository users,
       AuthorizationService authz,
       StorageService storage,
-      HtmlPdfRenderer html,
+      LetterheadService letterheads,
       OfferTemplates templates,
       AuditService audit,
       MailService mail,
@@ -86,7 +88,7 @@ public class OfferService {
     this.users = users;
     this.authz = authz;
     this.storage = storage;
-    this.html = html;
+    this.letterheads = letterheads;
     this.templates = templates;
     this.audit = audit;
     this.mail = mail;
@@ -169,7 +171,7 @@ public class OfferService {
     Map<String, String> tokens = readTokens(employee, offer);
     tokens.put("ACCEPT_DATE", LocalDate.now().format(OFFER_DATE));
     String sigImg = "<img class=\"sig\" src=\"" + signatureDataUrl + "\" alt=\"signature\"/>";
-    byte[] pdf = html.render("agreement", pdfModel(templates.render(tokens, sigImg)));
+    byte[] pdf = letterheads.renderBranded("agreement", pdfModel(templates.render(tokens, sigImg)), employee.getCompanyId());
     String key =
         storage.buildKey(employee.getCompanyId(), employee.getId(), "offer", "OFFER_LETTER.pdf");
     storage.putObject(key, pdf, "application/pdf");

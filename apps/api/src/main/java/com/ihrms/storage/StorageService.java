@@ -46,6 +46,16 @@ public class StorageService {
         + safe;
   }
 
+  /**
+   * The STABLE, ext-less key for a company's letterhead part (§3.5): {@code companies/{cid}/branding/
+   * letterhead-{header|footer}}. One object per company per part — a replacement PUTs the same key (overwrite),
+   * so there is never more than one header/footer object to orphan. The stored content-type is tracked on the
+   * company row (the object serves it back on the presigned GET). {@code part} is HEADER|FOOTER.
+   */
+  public String buildLetterheadKey(String companyId, String part) {
+    return "companies/" + companyId + "/branding/letterhead-" + part.toLowerCase();
+  }
+
   /** A unique object key for a mail attachment, namespaced under its uploader (never exposed, §8). */
   public String buildMailAttachmentKey(String uploaderUserId, String fileName) {
     String safe = fileName.replaceAll("[^a-zA-Z0-9._-]", "_");

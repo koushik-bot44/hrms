@@ -28,7 +28,7 @@ import com.ihrms.offboarding.dto.OffboardingDocDtos.ClearanceUpdateItem;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.ClearanceUpdateRequest;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.ClearanceView;
 import com.ihrms.onboarding.FormMappers;
-import com.ihrms.onboarding.HtmlPdfRenderer;
+import com.ihrms.companies.LetterheadService;
 import com.ihrms.storage.StorageService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -56,7 +56,7 @@ public class OffboardingClearanceService {
   private final UserRepository users;
   private final Form2InfoRepository form2s;
   private final StorageService storage;
-  private final HtmlPdfRenderer html;
+  private final LetterheadService letterheads;
   private final AuditService audit;
 
   public OffboardingClearanceService(
@@ -68,7 +68,7 @@ public class OffboardingClearanceService {
       UserRepository users,
       Form2InfoRepository form2s,
       StorageService storage,
-      HtmlPdfRenderer html,
+      LetterheadService letterheads,
       AuditService audit) {
     this.employees = employees;
     this.cases = cases;
@@ -78,7 +78,7 @@ public class OffboardingClearanceService {
     this.users = users;
     this.form2s = form2s;
     this.storage = storage;
-    this.html = html;
+    this.letterheads = letterheads;
     this.audit = audit;
   }
 
@@ -106,7 +106,7 @@ public class OffboardingClearanceService {
 
     // Regenerate the PDF from the spec + current values (best-effort within the tx — the storage.putObject
     // is the same server-side path the agreements/docs use).
-    byte[] pdf = html.render("offboarding-clearance", pdfModel(employee, c, cl));
+    byte[] pdf = letterheads.renderBranded("offboarding-clearance", pdfModel(employee, c, cl), employee.getCompanyId());
     String key = storage.buildKey(employee.getCompanyId(), employee.getId(), "offboarding", "clearance.pdf");
     storage.putObject(key, pdf, "application/pdf");
     cl.setStorageKey(key);

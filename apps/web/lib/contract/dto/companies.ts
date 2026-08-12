@@ -50,3 +50,37 @@ export const ProvisionCompanyAdminSchema = z.object({
   password: z.string().min(8, 'Use at least 8 characters'),
 });
 export type ProvisionCompanyAdminInput = z.infer<typeof ProvisionCompanyAdminSchema>;
+
+// --- Per-company letterhead (§3.5) -----------------------------------------
+
+/** One stored letterhead part's metadata + a short-lived presigned preview URL (null when not previewable). */
+export interface LetterheadPart {
+  width: number;
+  height: number;
+  contentType: string | null;
+  previewUrl: string | null;
+}
+
+/** A company's current letterhead: header/footer parts (null when unset) + when it last changed. */
+export interface Letterhead {
+  header: LetterheadPart | null;
+  footer: LetterheadPart | null;
+  updatedAt: string | null;
+}
+
+/** The presigned PUT handshake for a letterhead part (same shape as the mail-attachment upload). */
+export interface LetterheadUpload {
+  uploadUrl: string;
+  method: string;
+  headers: Record<string, string>;
+  expiresInSeconds: number;
+  part: string;
+}
+
+/** Which band a letterhead image is for. */
+export type LetterheadPartName = 'header' | 'footer';
+
+/** Client-side upload rules — mirror LetterheadService (server re-validates authoritatively). */
+export const LETTERHEAD_MAX_BYTES = 5 * 1024 * 1024;
+export const LETTERHEAD_MIN_WIDTH_PX = 1000;
+export const LETTERHEAD_ACCEPT = ['image/png', 'image/jpeg'] as const;

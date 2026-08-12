@@ -6253,6 +6253,160 @@
           }
         }
       }
+    },
+    "/companies/{id}/letterhead/{part}/confirm": {
+      "post": {
+        "tags": [
+          "companies-controller"
+        ],
+        "operationId": "confirmLetterheadUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "part",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterheadView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{id}/letterhead/{part}/begin-upload": {
+      "post": {
+        "tags": [
+          "companies-controller"
+        ],
+        "operationId": "beginLetterheadUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "part",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LetterheadUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterheadUpload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{id}/letterhead": {
+      "get": {
+        "tags": [
+          "companies-controller"
+        ],
+        "operationId": "getLetterhead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterheadView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{id}/letterhead/{part}": {
+      "delete": {
+        "tags": [
+          "companies-controller"
+        ],
+        "operationId": "removeLetterhead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "part",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterheadView"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11517,6 +11671,75 @@
           }
         },
         "description": "Result of a one-off stale-subscription prune (SUPER_ADMIN)."
+      },
+      "LetterheadView": {
+        "type": "object",
+        "properties": {
+          "header": {
+            "$ref": "#/components/schemas/LetterheadPartView"
+          },
+          "footer": {
+            "$ref": "#/components/schemas/LetterheadPartView"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "LetterheadUpload": {
+        "type": "object",
+        "properties": {
+          "uploadUrl": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "part": {
+            "type": "string"
+          }
+        }
+      },
+      "LetterheadPartView": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "previewUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "LetterheadUploadRequest": {
+        "type": "object",
+        "properties": {
+          "contentType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       }
     },
     "securitySchemes": {

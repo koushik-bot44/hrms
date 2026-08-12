@@ -33,7 +33,7 @@ import com.ihrms.domain.repository.Form2InfoRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.onboarding.FormMappers;
-import com.ihrms.onboarding.HtmlPdfRenderer;
+import com.ihrms.companies.LetterheadService;
 import com.ihrms.onboarding.dto.OnboardingDtos;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1View;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
@@ -81,7 +81,7 @@ public class AgreementService {
   private final Form2InfoRepository form2s;
   private final NotificationRepository notifications;
   private final StorageService storage;
-  private final HtmlPdfRenderer html;
+  private final LetterheadService letterheads;
   private final AgreementTemplates templates;
   private final AuditService audit;
   private final MailService mail;
@@ -96,7 +96,7 @@ public class AgreementService {
       Form2InfoRepository form2s,
       NotificationRepository notifications,
       StorageService storage,
-      HtmlPdfRenderer html,
+      LetterheadService letterheads,
       AgreementTemplates templates,
       AuditService audit,
       MailService mail,
@@ -109,7 +109,7 @@ public class AgreementService {
     this.form2s = form2s;
     this.notifications = notifications;
     this.storage = storage;
-    this.html = html;
+    this.letterheads = letterheads;
     this.templates = templates;
     this.audit = audit;
     this.mail = mail;
@@ -258,7 +258,7 @@ public class AgreementService {
     LocalDate today = LocalDate.now();
     String bodyHtml =
         renderPdfBody(type, employee, p, designation, address, mobile, aadhaarDigits, signatureDataUrl, today);
-    byte[] pdf = html.render("agreement", pdfModel(bodyHtml));
+    byte[] pdf = letterheads.renderBranded("agreement", pdfModel(bodyHtml), employee.getCompanyId());
 
     String key =
         storage.buildKey(

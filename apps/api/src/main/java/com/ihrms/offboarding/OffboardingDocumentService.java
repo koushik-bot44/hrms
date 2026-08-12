@@ -38,7 +38,7 @@ import com.ihrms.offboarding.dto.OffboardingDocDtos.SendDocumentsRequest;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.SendDocumentsResult;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.SendableDoc;
 import com.ihrms.onboarding.FormMappers;
-import com.ihrms.onboarding.HtmlPdfRenderer;
+import com.ihrms.companies.LetterheadService;
 import com.ihrms.onboarding.dto.OnboardingDtos;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1View;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
@@ -95,7 +95,7 @@ public class OffboardingDocumentService {
   private final NotificationRepository notifications;
   private final AuthorizationService authz;
   private final StorageService storage;
-  private final HtmlPdfRenderer html;
+  private final LetterheadService letterheads;
   private final OffboardingDocumentTemplates templates;
   private final AuditService audit;
   private final MailService mail;
@@ -112,7 +112,7 @@ public class OffboardingDocumentService {
       NotificationRepository notifications,
       AuthorizationService authz,
       StorageService storage,
-      HtmlPdfRenderer html,
+      LetterheadService letterheads,
       OffboardingDocumentTemplates templates,
       AuditService audit,
       MailService mail,
@@ -127,7 +127,7 @@ public class OffboardingDocumentService {
     this.notifications = notifications;
     this.authz = authz;
     this.storage = storage;
-    this.html = html;
+    this.letterheads = letterheads;
     this.templates = templates;
     this.audit = audit;
     this.mail = mail;
@@ -322,7 +322,7 @@ public class OffboardingDocumentService {
 
     Employee employee = employees.findById(emp.employeeId()).orElseThrow();
     validateFillValues(type, employee, fill);
-    byte[] pdf = html.render("agreement", pdfModel(renderPdfBody(d, employee, fill, signatureDataUrl)));
+    byte[] pdf = letterheads.renderBranded("agreement", pdfModel(renderPdfBody(d, employee, fill, signatureDataUrl)), employee.getCompanyId());
     String key =
         storage.buildKey(
             employee.getCompanyId(), employee.getId(), "offboarding", type.name().toLowerCase() + ".pdf");

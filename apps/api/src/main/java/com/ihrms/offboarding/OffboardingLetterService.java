@@ -36,7 +36,7 @@ import com.ihrms.offboarding.dto.OffboardingDocDtos.LetterIssueSpec;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.LetterPreview;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.LetterView;
 import com.ihrms.offboarding.dto.OffboardingDocDtos.LettersView;
-import com.ihrms.onboarding.HtmlPdfRenderer;
+import com.ihrms.companies.LetterheadService;
 import com.ihrms.push.PushService;
 import com.ihrms.push.PushService.PrincipalRef;
 import com.ihrms.storage.StorageService;
@@ -93,7 +93,7 @@ public class OffboardingLetterService {
   private final UserRepository users;
   private final AuthorizationService authz;
   private final StorageService storage;
-  private final HtmlPdfRenderer html;
+  private final LetterheadService letterheads;
   private final OffboardingLetterTemplates templates;
   private final AuditService audit;
   private final MailService mail;
@@ -110,7 +110,7 @@ public class OffboardingLetterService {
       UserRepository users,
       AuthorizationService authz,
       StorageService storage,
-      HtmlPdfRenderer html,
+      LetterheadService letterheads,
       OffboardingLetterTemplates templates,
       AuditService audit,
       MailService mail,
@@ -125,7 +125,7 @@ public class OffboardingLetterService {
     this.users = users;
     this.authz = authz;
     this.storage = storage;
-    this.html = html;
+    this.letterheads = letterheads;
     this.templates = templates;
     this.audit = audit;
     this.mail = mail;
@@ -237,7 +237,7 @@ public class OffboardingLetterService {
 
     User hr = users.findById(actor.userId()).orElseThrow();
     Map<String, String> tokens = buildTokens(type, employee, hr, hrValues, gender);
-    byte[] pdf = html.render("agreement", pdfModel(templates.render(type, tokens)));
+    byte[] pdf = letterheads.renderBranded("agreement", pdfModel(templates.render(type, tokens)), employee.getCompanyId());
     String key =
         storage.buildKey(
             employee.getCompanyId(), employee.getId(), "offboarding", type.name().toLowerCase() + ".pdf");

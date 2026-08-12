@@ -2608,6 +2608,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{id}/letterhead/{part}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["confirmLetterheadUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{id}/letterhead/{part}/begin-upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["beginLetterheadUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{id}/letterhead": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLetterhead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{id}/letterhead/{part}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeLetterhead"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4407,6 +4471,34 @@ export interface components {
             pruned?: number;
             /** @description Human-readable status. */
             message?: string;
+        };
+        LetterheadView: {
+            header?: components["schemas"]["LetterheadPartView"];
+            footer?: components["schemas"]["LetterheadPartView"];
+            updatedAt?: string;
+        };
+        LetterheadUpload: {
+            uploadUrl?: string;
+            method?: string;
+            headers?: {
+                [key: string]: string;
+            };
+            /** Format: int32 */
+            expiresInSeconds?: number;
+            part?: string;
+        };
+        LetterheadPartView: {
+            /** Format: int32 */
+            width?: number;
+            /** Format: int32 */
+            height?: number;
+            contentType?: string;
+            previewUrl?: string;
+        };
+        LetterheadUploadRequest: {
+            contentType?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
         };
     };
     responses: never;
@@ -8751,6 +8843,101 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PruneResult"];
+                };
+            };
+        };
+    };
+    confirmLetterheadUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                part: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterheadView"];
+                };
+            };
+        };
+    };
+    beginLetterheadUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                part: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LetterheadUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterheadUpload"];
+                };
+            };
+        };
+    };
+    getLetterhead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterheadView"];
+                };
+            };
+        };
+    };
+    removeLetterhead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                part: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterheadView"];
                 };
             };
         };

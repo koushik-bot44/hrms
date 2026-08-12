@@ -61,6 +61,40 @@ public class Company {
   @Column(name = "deletedByUserId")
   private String deletedByUserId;
 
+  // --- Per-company letterhead (§3.5). Each part is unset when its key is NULL → that band renders plain.
+  // Stored storage keys are ext-less + stable (overwrite on replace); pixel dims drive the @page band height.
+
+  @Column(name = "letterheadHeaderKey")
+  private String letterheadHeaderKey;
+
+  @Column(name = "letterheadHeaderType")
+  private String letterheadHeaderType;
+
+  @Column(name = "letterheadHeaderWidth")
+  private Integer letterheadHeaderWidth;
+
+  @Column(name = "letterheadHeaderHeight")
+  private Integer letterheadHeaderHeight;
+
+  @Column(name = "letterheadFooterKey")
+  private String letterheadFooterKey;
+
+  @Column(name = "letterheadFooterType")
+  private String letterheadFooterType;
+
+  @Column(name = "letterheadFooterWidth")
+  private Integer letterheadFooterWidth;
+
+  @Column(name = "letterheadFooterHeight")
+  private Integer letterheadFooterHeight;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "letterheadUpdatedAt")
+  private Instant letterheadUpdatedAt;
+
+  @Column(name = "letterheadUpdatedByUserId")
+  private String letterheadUpdatedByUserId;
+
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "createdAt", nullable = false, updatable = false)

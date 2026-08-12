@@ -7,16 +7,9 @@
    * with CSS boxes (font-glyph-independent): a filled box = checked. All Name and Sign / Date lines render
    * BLANK for wet signing.
    */
-  @page {
-    size: A4;
-    margin: 2.7cm 1.7cm 2.1cm 1.7cm;
-    @top-center { content: element(letterhead); }
-    @bottom-center { content: element(footer); }
-  }
+  /* Page geometry (@page margins + #letterhead/#footer running bands) is injected via ${pageCss} below —
+   * the plain defaults or a per-company letterhead (§3.5), computed by LetterheadService. */
   body { font-family:"Helvetica","Arial",sans-serif; font-size:10px; color:#000; line-height:1.45; }
-  #letterhead { position: running(letterhead); height:1.7cm; width:100%; }
-  #footer { position: running(footer); width:100%; text-align:center; font-size:7.5px; color:#999;
-            border-top:0.5px solid #ddd; padding-top:3px; }
   .brand { text-align:center; font-weight:bold; font-size:12px; }
   .brand .addr { display:block; font-size:7.5px; font-weight:normal; color:#333; margin-top:1px; }
   h1.title { text-align:center; font-size:14px; font-weight:bold; margin:12px 0 2px; text-transform:uppercase; }
@@ -35,10 +28,12 @@
   .signline { margin-top:14px; font-size:10px; }
   .status { margin-top:8px; font-size:10px; }
   .status .opt { margin-right:18px; }
-</style></head>
+</style>
+<!-- Page geometry (§3.5): plain defaults, or per-company letterhead bands. Server-computed, injected raw. -->
+<style th:utext="${pageCss}"></style></head>
 <body>
-<div id="letterhead"><!-- reserved header band --></div>
-<div id="footer" th:text="${footerText}">CONFIDENTIAL</div>
+<div id="letterhead"><img th:if="${letterheadHeader != null}" th:src="${letterheadHeader}" alt=""/></div>
+<div id="footer"><img th:if="${letterheadFooter != null}" th:src="${letterheadFooter}" alt=""/><span th:if="${letterheadFooter == null}" th:text="${footerText}">CONFIDENTIAL</span></div>
 
 <div class="brand"><span th:text="${companyName}">SCREATIVES SOFTWARE SERVICES</span><span class="addr" th:text="${companyAddress}"></span></div>
 
