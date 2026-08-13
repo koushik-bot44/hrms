@@ -11,6 +11,7 @@ import com.ihrms.companies.dto.CompanyDtos.UpdateCompanyRequest;
 import com.ihrms.companies.dto.LetterheadDtos.LetterheadUpload;
 import com.ihrms.companies.dto.LetterheadDtos.LetterheadUploadRequest;
 import com.ihrms.companies.dto.LetterheadDtos.LetterheadView;
+import com.ihrms.companies.dto.LetterheadDtos.MarginsRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -110,42 +112,58 @@ public class CompaniesController {
     return companies.purge(id, actor, request.getRemoteAddr());
   }
 
-  // --- Per-company letterhead (§3.5) — SUPER_ADMIN; applies to documents generated from now on -------------
+  // --- Per-company letterhead (§3.5) — SUPER_ADMIN; document + margin box; applies to docs generated from now -
 
-  /** Current letterhead metadata (header/footer parts, null when unset) + short-lived presigned previews. */
+  /** Current letterhead: present flag, page size + margin box (points), a presigned preview + capability flag. */
   @GetMapping("/{id}/letterhead")
   public LetterheadView getLetterhead(@PathVariable String id) {
     return letterheads.get(id);
   }
 
-  /** Step 1: validate type/size + get a presigned PUT for the {@code header|footer} part. */
-  @PostMapping("/{id}/letterhead/{part}/begin-upload")
+  /** Step 1: validate type (PDF/Word) + size + get a presigned PUT for the letterhead file. */
+  @PostMapping("/{id}/letterhead/begin-upload")
   public LetterheadUpload beginLetterheadUpload(
       @PathVariable String id,
-      @PathVariable String part,
       @RequestBody LetterheadUploadRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return letterheads.beginUpload(actor, id, part, body, request.getRemoteAddr());
+    return letterheads.beginUpload(actor, id, body, request.getRemoteAddr());
   }
 
-  /** Step 2: finalize — read+validate+decode the uploaded object; stamp the row. Audited LETTERHEAD_UPDATED. */
-  @PostMapping("/{id}/letterhead/{part}/confirm")
+  /** Step 2: read → convert (Word) → normalize first page → rasterize preview → seed margins; stamp the row. */
+  @PostMapping("/{id}/letterhead/confirm")
   public LetterheadView confirmLetterheadUpload(
       @PathVariable String id,
-      @PathVariable String part,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return letterheads.confirmUpload(actor, id, part, request.getRemoteAddr());
+    return letterheads.confirmUpload(actor, id, request.getRemoteAddr());
   }
 
-  /** Revert that part to the plain layout (delete the object + clear the row). Audited. */
-  @DeleteMapping("/{id}/letterhead/{part}")
-  public LetterheadView removeLetterhead(
+  /** Save the content margin box (top/bottom/left/right, points) — the Word-like margins. Audited. */
+  @PutMapping("/{id}/letterhead/margins")
+  public LetterheadView saveLetterheadMargins(
       @PathVariable String id,
-      @PathVariable String part,
+      @RequestBody MarginsRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
-    return letterheads.remove(actor, id, part, request.getRemoteAddr());
+    return letterheads.saveMargins(actor, id, body, request.getRemoteAddr());
+  }
+
+  /** Reset the margin box to the sensible defaults for the page. Audited. */
+  @PostMapping("/{id}/letterhead/margins/reset")
+  public LetterheadView resetLetterheadMargins(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return letterheads.resetMargins(actor, id, request.getRemoteAddr());
+  }
+
+  /** Remove the letterhead (delete objects + clear the row). Documents render plain again. Audited. */
+  @DeleteMapping("/{id}/letterhead")
+  public LetterheadView removeLetterhead(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return letterheads.remove(actor, id, request.getRemoteAddr());
   }
 }

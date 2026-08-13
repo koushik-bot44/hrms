@@ -61,8 +61,50 @@ public class Company {
   @Column(name = "deletedByUserId")
   private String deletedByUserId;
 
-  // --- Per-company letterhead (§3.5). Each part is unset when its key is NULL → that band renders plain.
-  // Stored storage keys are ext-less + stable (overwrite on replace); pixel dims drive the @page band height.
+  // --- Per-company letterhead (§3.5). The SUPER_ADMIN uploads ONE letterhead file (PDF, or Word converted to
+  // PDF); its first page is the page background of every generated pipeline document, and the margin box
+  // (points) is where content may sit. letterheadPdfKey IS NULL → no letterhead → documents render plain.
+  // Keys live under companies/{cid}/branding/; geometry is stored in points so the renderer aligns 1:1.
+
+  @Column(name = "letterheadPdfKey")
+  private String letterheadPdfKey;
+
+  @Column(name = "letterheadOriginalKey")
+  private String letterheadOriginalKey;
+
+  @Column(name = "letterheadOriginalType")
+  private String letterheadOriginalType;
+
+  @Column(name = "letterheadPreviewKey")
+  private String letterheadPreviewKey;
+
+  @Column(name = "letterheadPageWidthPt")
+  private Double letterheadPageWidthPt;
+
+  @Column(name = "letterheadPageHeightPt")
+  private Double letterheadPageHeightPt;
+
+  @Column(name = "letterheadMarginTopPt")
+  private Double letterheadMarginTopPt;
+
+  @Column(name = "letterheadMarginBottomPt")
+  private Double letterheadMarginBottomPt;
+
+  @Column(name = "letterheadMarginLeftPt")
+  private Double letterheadMarginLeftPt;
+
+  @Column(name = "letterheadMarginRightPt")
+  private Double letterheadMarginRightPt;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "letterheadUpdatedAt")
+  private Instant letterheadUpdatedAt;
+
+  @Column(name = "letterheadUpdatedByUserId")
+  private String letterheadUpdatedByUserId;
+
+  // --- DEPRECATED (V39 header/footer BAND model, replaced by the document model above). Kept in place for
+  // additive discipline — never dropped, never read/written by the new LetterheadService. ---
 
   @Column(name = "letterheadHeaderKey")
   private String letterheadHeaderKey;
@@ -87,13 +129,6 @@ public class Company {
 
   @Column(name = "letterheadFooterHeight")
   private Integer letterheadFooterHeight;
-
-  @JdbcTypeCode(SqlTypes.TIMESTAMP)
-  @Column(name = "letterheadUpdatedAt")
-  private Instant letterheadUpdatedAt;
-
-  @Column(name = "letterheadUpdatedByUserId")
-  private String letterheadUpdatedByUserId;
 
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP)

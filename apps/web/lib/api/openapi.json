@@ -449,6 +449,46 @@
         }
       }
     },
+    "/companies/{id}/letterhead/margins": {
+      "put": {
+        "tags": [
+          "companies-controller"
+        ],
+        "operationId": "saveLetterheadMargins",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarginsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterheadView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/companies/{companyId}/teams/{id}/manager": {
       "put": {
         "tags": [
@@ -859,6 +899,69 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/SubscribeResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/push/admin/prune-stale": {
+      "post": {
+        "tags": [
+          "push-controller"
+        ],
+        "summary": "SUPER_ADMIN one-off: prune push subscriptions older than N days (e.g. clear pre-migration, old-origin subscriptions after a web-origin change). Users re-enable via the opt-in.",
+        "operationId": "pruneStale",
+        "parameters": [
+          {
+            "name": "olderThanDays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PruneResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/onboarding/invite/validate": {
+      "post": {
+        "tags": [
+          "public-invite-controller"
+        ],
+        "operationId": "validate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateInviteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteContext"
                 }
               }
             }
@@ -2723,6 +2826,36 @@
         }
       }
     },
+    "/employees/{id}/invite/resend": {
+      "post": {
+        "tags": [
+          "employees-controller"
+        ],
+        "operationId": "resendInvite",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardEmployeeResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/employees/{id}/deactivate": {
       "post": {
         "tags": [
@@ -2949,6 +3082,106 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/CompanyDetailView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{id}/letterhead/margins/reset": {
+      "post": {
+        "tags": [
+          "companies-controller"
+        ],
+        "operationId": "resetLetterheadMargins",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterheadView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{id}/letterhead/confirm": {
+      "post": {
+        "tags": [
+          "companies-controller"
+        ],
+        "operationId": "confirmLetterheadUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterheadView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{id}/letterhead/begin-upload": {
+      "post": {
+        "tags": [
+          "companies-controller"
+        ],
+        "operationId": "beginLetterheadUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LetterheadUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterheadUpload"
                 }
               }
             }
@@ -5314,6 +5547,64 @@
         }
       }
     },
+    "/companies/{id}/letterhead": {
+      "get": {
+        "tags": [
+          "companies-controller"
+        ],
+        "operationId": "getLetterhead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterheadView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "companies-controller"
+        ],
+        "operationId": "removeLetterhead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterheadView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/companies/{companyId}/teams/assignable-users": {
       "get": {
         "tags": [
@@ -6160,253 +6451,6 @@
           }
         }
       }
-    },
-    "/public/onboarding/invite/validate": {
-      "post": {
-        "tags": [
-          "public-invite-controller"
-        ],
-        "operationId": "validate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ValidateInviteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/InviteContext"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/employees/{id}/invite/resend": {
-      "post": {
-        "tags": [
-          "employees-controller"
-        ],
-        "operationId": "resendInvite",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/OnboardEmployeeResult"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/push/admin/prune-stale": {
-      "post": {
-        "tags": [
-          "push-controller"
-        ],
-        "summary": "SUPER_ADMIN one-off: prune push subscriptions older than N days (e.g. clear pre-migration, old-origin subscriptions after a web-origin change). Users re-enable via the opt-in.",
-        "operationId": "pruneStale",
-        "parameters": [
-          {
-            "name": "olderThanDays",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 1
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PruneResult"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/companies/{id}/letterhead/{part}/confirm": {
-      "post": {
-        "tags": [
-          "companies-controller"
-        ],
-        "operationId": "confirmLetterheadUpload",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "part",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/LetterheadView"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/companies/{id}/letterhead/{part}/begin-upload": {
-      "post": {
-        "tags": [
-          "companies-controller"
-        ],
-        "operationId": "beginLetterheadUpload",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "part",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LetterheadUploadRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/LetterheadUpload"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/companies/{id}/letterhead": {
-      "get": {
-        "tags": [
-          "companies-controller"
-        ],
-        "operationId": "getLetterhead",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/LetterheadView"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/companies/{id}/letterhead/{part}": {
-      "delete": {
-        "tags": [
-          "companies-controller"
-        ],
-        "operationId": "removeLetterhead",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "part",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/LetterheadView"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -7167,6 +7211,71 @@
           }
         }
       },
+      "MarginsRequest": {
+        "type": "object",
+        "properties": {
+          "topPt": {
+            "type": "number",
+            "format": "double"
+          },
+          "bottomPt": {
+            "type": "number",
+            "format": "double"
+          },
+          "leftPt": {
+            "type": "number",
+            "format": "double"
+          },
+          "rightPt": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "LetterheadView": {
+        "type": "object",
+        "properties": {
+          "present": {
+            "type": "boolean"
+          },
+          "pageWidthPt": {
+            "type": "number",
+            "format": "double"
+          },
+          "pageHeightPt": {
+            "type": "number",
+            "format": "double"
+          },
+          "marginTopPt": {
+            "type": "number",
+            "format": "double"
+          },
+          "marginBottomPt": {
+            "type": "number",
+            "format": "double"
+          },
+          "marginLeftPt": {
+            "type": "number",
+            "format": "double"
+          },
+          "marginRightPt": {
+            "type": "number",
+            "format": "double"
+          },
+          "originalType": {
+            "type": "string"
+          },
+          "previewUrl": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "wordConversionAvailable": {
+            "type": "boolean"
+          }
+        }
+      },
       "CreateTeamRequest": {
         "required": [
           "name"
@@ -7467,6 +7576,46 @@
           }
         },
         "description": "Result of registering a subscription."
+      },
+      "PruneResult": {
+        "type": "object",
+        "properties": {
+          "pruned": {
+            "type": "integer",
+            "description": "How many subscriptions were removed.",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable status."
+          }
+        },
+        "description": "Result of a one-off stale-subscription prune (SUPER_ADMIN)."
+      },
+      "ValidateInviteRequest": {
+        "required": [
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "InviteContext": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "companySlug": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          }
+        }
       },
       "ContactRequest": {
         "required": [
@@ -8062,7 +8211,8 @@
               "OFFBOARDING_INITIATED",
               "OFFBOARDING_APPROVED",
               "OFFBOARDING_REJECTED",
-              "OFFBOARDING_DOC_SUBMITTED"
+              "OFFBOARDING_DOC_SUBMITTED",
+              "EMPLOYEE_LONG_BREAK"
             ]
           },
           "employeeId": {
@@ -9183,6 +9333,39 @@
           },
           "admin": {
             "$ref": "#/components/schemas/CompanyAdminView"
+          }
+        }
+      },
+      "LetterheadUploadRequest": {
+        "type": "object",
+        "properties": {
+          "contentType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "LetterheadUpload": {
+        "type": "object",
+        "properties": {
+          "uploadUrl": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -11629,115 +11812,6 @@
           },
           "code": {
             "type": "string"
-          }
-        }
-      },
-      "InviteContext": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string"
-          },
-          "companySlug": {
-            "type": "string"
-          },
-          "companyName": {
-            "type": "string"
-          }
-        }
-      },
-      "ValidateInviteRequest": {
-        "required": [
-          "token"
-        ],
-        "type": "object",
-        "properties": {
-          "token": {
-            "type": "string"
-          }
-        }
-      },
-      "PruneResult": {
-        "type": "object",
-        "properties": {
-          "pruned": {
-            "type": "integer",
-            "description": "How many subscriptions were removed.",
-            "format": "int32"
-          },
-          "message": {
-            "type": "string",
-            "description": "Human-readable status."
-          }
-        },
-        "description": "Result of a one-off stale-subscription prune (SUPER_ADMIN)."
-      },
-      "LetterheadView": {
-        "type": "object",
-        "properties": {
-          "header": {
-            "$ref": "#/components/schemas/LetterheadPartView"
-          },
-          "footer": {
-            "$ref": "#/components/schemas/LetterheadPartView"
-          },
-          "updatedAt": {
-            "type": "string"
-          }
-        }
-      },
-      "LetterheadUpload": {
-        "type": "object",
-        "properties": {
-          "uploadUrl": {
-            "type": "string"
-          },
-          "method": {
-            "type": "string"
-          },
-          "headers": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "expiresInSeconds": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "part": {
-            "type": "string"
-          }
-        }
-      },
-      "LetterheadPartView": {
-        "type": "object",
-        "properties": {
-          "width": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "height": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "previewUrl": {
-            "type": "string"
-          }
-        }
-      },
-      "LetterheadUploadRequest": {
-        "type": "object",
-        "properties": {
-          "contentType": {
-            "type": "string"
-          },
-          "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
           }
         }
       }

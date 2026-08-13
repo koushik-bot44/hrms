@@ -369,42 +369,61 @@ free-text documents). Mechanism:
 - **Revision reopen** (offboarding send-back) shows the prior values (they arrive in the manifest prefills),
   editable, above HR's note.
 
-**Per-company letterhead (§3.5).** A SUPER_ADMIN uploads a company's letterhead — a **HEADER** band image
-and/or a **FOOTER** band image (each optional, one per company per part, replaceable) — and **every pipeline
-document generated FROM THAT POINT ON renders on it**: the offer letter, the three agreements, the offboarding
-documents, the clearance form, and the relieving/experience letters (everything that flows through the
-`agreement.html` / `offboarding-clearance.html` → openhtmltopdf pipeline). **The onboarding Forms 1–4 are
-EXCLUDED** — they render through a different path (`PdfService` → `form1/2/3` templates + the OpenPDF Form-4
-manifest), whose templates carry no letterhead slot, so branding can never bleed into them. **Already-generated
-PDFs are never re-rendered** — stored artifacts are immutable, so the letterhead is strictly point-forward.
+**Per-company letterhead (§3.5, document model).** A SUPER_ADMIN uploads a company's letterhead as **one file**
+— a **PDF**, or a **Word** document (converted to PDF on upload) — and **every pipeline document generated FROM
+THAT POINT ON is printed onto it**: the offer letter, the three agreements, the offboarding documents, the
+clearance form, and the relieving/experience letters (everything that flows through the `agreement.html` /
+`offboarding-clearance.html` → openhtmltopdf pipeline). The letterhead's **first page** is the page **background**
+of every page of the generated document, and the SUPER_ADMIN sets a **margin box** — top / bottom / left / right,
+like adjusting margins in Word — where the content is allowed to sit. **The onboarding Forms 1–4 are EXCLUDED**
+— they render through a different path (`PdfService` → `form1/2/3` templates + the OpenPDF Form-4 manifest),
+whose templates carry no letterhead slot, so branding can never bleed into them. **Already-generated PDFs are
+never re-rendered** — stored artifacts are immutable, so both the letterhead and the margins are strictly
+point-forward (changing the margins affects only documents generated afterward).
 
-- **Model + storage.** Header + footer (not a single full-page background — the two bands sit in the page
-  margins and so can never collide with body text). Each image is PNG/JPG, ≤5 MB, ≥1000px wide (print-quality
-  floor); a PDF is rejected (rasterizing a page isn't worth it). Bytes live in the existing storage backend
-  under a **stable, ext-less key** `companies/{cid}/branding/letterhead-{header|footer}` — a replacement PUTs
-  the **same key (overwrite)**, so there is never a second object to orphan. The `companies` row carries each
-  part's key + content-type + **pixel dimensions** (V39, additive) + `letterheadUpdatedAt/By`; every change is
-  audited `LETTERHEAD_UPDATED`.
-- **Upload handshake** (SUPER_ADMIN, both-layer gated): `POST /companies/{id}/letterhead/{part}/begin-upload`
-  (validate declared type/size → presigned PUT) → client PUTs the bytes → `POST …/{part}/confirm`
-  (`getObjectBytes` → **ImageIO decode**: proves a real PNG/JPG, reads the true dimensions, re-checks
-  min-width/max-bytes → stamps the row). `GET /companies/{id}/letterhead` returns the metadata + short-lived
-  presigned previews; `DELETE …/{part}` reverts that band to plain. The SUPER_ADMIN company screen mounts a
-  **Letterhead** section (per-part preview / upload-replace / remove, client-mirrored validation).
-- **Render geometry (`LetterheadService`).** The `@page` margins + the `#letterhead`/`#footer` running-band CSS
-  are **computed server-side per document** and injected as `${pageCss}` (the templates no longer hard-code
-  them). With a letterhead present the side page-margins go to **0** (so the `@top-center`/`@bottom-center`
-  margin boxes span the full page width → the images are **full-bleed** at `width:100%`) and the body is inset
-  by `padding:0 1.7cm` instead; the **band height is derived from the image's aspect ratio** —
-  `bandHeight = 21cm × (imageHeight ÷ imageWidth)` — and the corresponding `@page` margin is set to
-  `bandHeight + 0.15cm`. Because body content lives strictly between the top and bottom margins, and each margin
-  is ≥ its band height, **body text can never overlap a band on page 1 or any continuation page** (verified by
-  rendering a multi-page document with tall bands and asserting every glyph's Y sits between the header-band
-  bottom and the footer-band top). With **no letterhead** the injected CSS is the exact prior default (empty
-  bands, 2.7/1.7/2.1/1.7cm margins) — the plain layout is unchanged.
-- **Graceful degrade.** The letterhead is resolved at each generation; a missing / unreadable / undecodable
-  object (or even openhtmltopdf choking on the image) **falls back to the plain layout and still returns a PDF**
-  — a document is never failed because branding is missing (logged).
+- **Model + storage.** One letterhead per company, replaceable. Bytes live in the existing storage backend
+  under **stable keys** `companies/{cid}/branding/` — `letterhead-original` (the uploaded PDF/Word, ext-less,
+  its type on the row), `letterhead.pdf` (the **normalized single-page** PDF stamped behind documents), and
+  `letterhead-preview.png` (the rasterized first page for the editor). A replacement overwrites the same keys,
+  so there is never a second object to orphan. The `companies` row carries the pdf/original/preview keys +
+  original content-type + the page size and the **margin box in points** (V40, additive) + `letterheadUpdatedAt/By`;
+  every change is audited `LETTERHEAD_UPDATED`. **`letterheadPdfKey IS NULL` ⇒ no letterhead ⇒ documents render
+  plain (unchanged).** _The V39 header/footer **band** columns are kept in place, **deprecated and unused**
+  (additive discipline) — there was no band data to migrate (a newly-introduced feature, and the two models are
+  structurally different: two margin strips vs a full-page template)._
+- **Upload + editor** (SUPER_ADMIN, both-layer gated). `POST /companies/{id}/letterhead/begin-upload` (validate
+  declared type PDF/Word + size ≤10 MB → presigned PUT) → client PUTs the file → `POST …/confirm` reads it,
+  **converts Word→PDF** if needed, **takes the first page**, validates a sane page size (A4/Letter; other sizes
+  are accepted and rendered at their own size so the overlay still aligns 1:1), **rasterizes a preview** (PDFBox
+  `PDFRenderer`), stores `letterhead.pdf` + `letterhead-preview.png`, and **seeds a default margin box** (25%
+  from the top, 15% from the bottom, 1.7 cm sides). `PUT …/letterhead/margins {topPt,bottomPt,leftPt,rightPt}`
+  saves the box (validated so content always has room); `POST …/letterhead/margins/reset` restores the defaults;
+  `GET …/letterhead` returns the present flag + page size + margin box + a presigned preview + a
+  `wordConversionAvailable` capability flag; `DELETE …/letterhead` removes it (documents render plain again).
+  The SUPER_ADMIN company screen mounts a **Word-like margin editor** — the page preview with four **draggable
+  guides** and flowing **sample text** inside the box, so the admin sees exactly where content lands relative to
+  the artwork before saving.
+- **Word → PDF.** Faithful `.docx/.doc` reproduction needs LibreOffice; `DocumentConverter` converts via
+  `soffice --headless --convert-to pdf` **when a binary is resolvable** (env `LIBREOFFICE_PATH`, the
+  `ihrms.libreoffice.path` property, or `soffice`/`libreoffice` on PATH). When none is available — as on the
+  slim `eclipse-temurin:21-jre` runtime today — a Word upload is refused with a clear "export to PDF" message,
+  and the `wordConversionAvailable` flag lets the UI offer PDF only. Provisioning LibreOffice later makes Word
+  "just work" with no code change.
+- **Render (`LetterheadService.renderBranded`, PDFBox `Overlay`).** With a letterhead present, the content is
+  rendered by openhtmltopdf at the **letterhead's page size** with `@page` margins set to the **saved box** and
+  a **transparent** page background (the injected `${pageCss}` omits the old running-band boxes, so both the
+  header band and the plain "CONFIDENTIAL" footer are suppressed with no template-body change). The single-page
+  letterhead PDF is then stamped as the **BACKGROUND of every content page** (`Overlay.Position.BACKGROUND`,
+  all pages) — content sits **on top, never scaled or clipped**; if it overflows the box it **flows to more
+  pages**, each carrying the letterhead. Because content lives strictly inside the margin box and the box is
+  chosen to clear the artwork, **body text never overlaps the logo/address/footer on any page** (verified by
+  rendering a long, multi-page document and asserting every glyph's X **and** Y sit inside the saved box on
+  every page, plus a per-page pixel check that the background is present).
+- **No letterhead / graceful degrade.** With no letterhead the injected CSS is the exact prior default
+  (2.7/1.7/2.1/1.7 cm margins, the plain footer line) — the plain layout is unchanged. The letterhead is
+  resolved at each generation; a missing / unreadable object, a conversion failure, or an overlay error **falls
+  back to the plain layout and still returns a PDF** — a document is never failed because branding is missing
+  (logged).
 
 **Token & field map.**
 - `{{COMPANY_NAME}}` → the employee's **joining company** display name at generation. AUP: every

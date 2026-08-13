@@ -3,24 +3,17 @@ package com.ihrms.companies;
 import com.ihrms.audit.AuditActor;
 import com.ihrms.audit.AuditService;
 import com.ihrms.auth.IhrmsPrincipal;
-import com.ihrms.companies.dto.LetterheadDtos.LetterheadPartView;
 import com.ihrms.companies.dto.LetterheadDtos.LetterheadUpload;
 import com.ihrms.companies.dto.LetterheadDtos.LetterheadUploadRequest;
 import com.ihrms.companies.dto.LetterheadDtos.LetterheadView;
+import com.ihrms.companies.dto.LetterheadDtos.MarginsRequest;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.onboarding.HtmlPdfRenderer;
 import com.ihrms.storage.StorageService;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -29,35 +22,43 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Per-company letterhead (§3.5): SUPER_ADMIN uploads a HEADER and/or FOOTER band image (one per company per
- * part, replaceable); every PIPELINE document (agreements, offboarding docs, clearance, relieving/experience
- * letters, offer letter — Forms 1-4 EXCLUDED) generated FROM THEN ON renders on it. Already-generated PDFs are
- * never re-rendered (stored artifacts are immutable).
+ * Per-company letterhead (§3.5, DOCUMENT model). The SUPER_ADMIN uploads ONE letterhead file (PDF, or Word
+ * converted to PDF); its FIRST PAGE becomes the page background of every generated PIPELINE document (offer,
+ * agreements, offboarding documents, clearance, relieving/experience letters — Forms 1-4 EXCLUDED), and a
+ * Word-like MARGIN BOX (top/bottom/left/right, points) sets where content may sit. Documents generated FROM
+ * THEN ON print onto the letterhead within those margins; already-generated PDFs are immutable and untouched.
  *
- * <p>Two responsibilities: (1) the SUPER_ADMIN upload handshake — presigned PUT (begin) → validate+decode
- * (confirm) → the company row carries the stable key + pixel dims; (2) the render-time resolver — {@link
- * #renderBranded} embeds the images into the {@code agreement}/{@code offboarding-clearance} model and derives
- * the {@code @page} band heights from each image's aspect ratio so body text NEVER overlaps a band, on page 1 or
- * any continuation page. A missing/unreadable/undecodable object DEGRADES GRACEFULLY to the plain layout — a
- * document is never failed because branding is missing.
+ * <p>Two responsibilities: (1) the upload handshake — presigned PUT (begin) → read/convert/normalize/rasterize
+ * (confirm) → the company row carries the normalized-PDF key + page size + a default margin box; plus margin
+ * saves. (2) the render seam — {@link #renderBranded} renders the content to PDF at the letterhead's page size
+ * with the saved margins (no bands), then STAMPS the letterhead behind every page via PDFBox. Any failure —
+ * a missing/corrupt object, conversion, or the overlay itself — DEGRADES to the plain layout and still returns
+ * a PDF (a document is never failed because branding is missing).
  */
 @Service
 public class LetterheadService {
 
   private static final Logger log = LoggerFactory.getLogger(LetterheadService.class);
 
-  static final int MAX_BYTES = 5 * 1024 * 1024; // 5 MB
-  static final int MIN_WIDTH_PX = 1000; // print-quality floor across the A4 width
+  static final int MAX_BYTES = 10 * 1024 * 1024; // 10 MB
   static final int UPLOAD_TTL = 300; // 5 min presigned PUT
   static final int PREVIEW_TTL = 300; // 5 min presigned GET
+  static final float PREVIEW_DPI = 150f;
 
-  // Page geometry (A4). A part present ⇒ full-bleed bands (side margins 0, top-center/bottom-center span the
-  // full page width) with the body inset by padding; band height = page width × image aspect + a safety gap.
-  private static final double PAGE_W_CM = 21.0;
-  private static final double SIDE_INSET_CM = 1.7;
-  private static final double SAFETY_CM = 0.15;
-  private static final double DEFAULT_TOP_CM = 2.7;
-  private static final double DEFAULT_BOTTOM_CM = 2.1;
+  private static final double PT_PER_CM = 72.0 / 2.54;
+  // Sane page bounds (points): ~A5 short side up to ~A3 long side. Other sizes are ACCEPTED as-is (rendered at
+  // the letterhead's own size so the overlay still aligns 1:1) — only the absurd is rejected.
+  private static final double MIN_PAGE_PT = 200; // ~7cm
+  private static final double MAX_PAGE_PT = 2000; // ~70cm
+  private static final double MIN_CONTENT_PT = 72; // keep at least 1in of content each way
+  private static final double SIDE_DEFAULT_PT = 1.7 * PT_PER_CM; // 1.7cm side gutter (matches the plain layout)
+  private static final double DEFAULT_TOP_FRACTION = 0.25; // guides seed at 25% from top …
+  private static final double DEFAULT_BOTTOM_FRACTION = 0.15; // … and 15% from the bottom
+
+  private static final String PDF_TYPE = "application/pdf";
+  private static final String DOCX_TYPE =
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  private static final String DOC_TYPE = "application/msword";
 
   /** The exact @page/#letterhead/#footer rules the templates used before letterheads — the plain fallback. */
   static final String PLAIN_PAGE_CSS =
@@ -71,78 +72,170 @@ public class LetterheadService {
   private final StorageService storage;
   private final AuditService audit;
   private final HtmlPdfRenderer html;
+  private final DocumentConverter converter;
 
   public LetterheadService(
-      CompanyRepository companies, StorageService storage, AuditService audit, HtmlPdfRenderer html) {
+      CompanyRepository companies,
+      StorageService storage,
+      AuditService audit,
+      HtmlPdfRenderer html,
+      DocumentConverter converter) {
     this.companies = companies;
     this.storage = storage;
     this.audit = audit;
     this.html = html;
+    this.converter = converter;
   }
 
-  enum Part {
-    HEADER,
-    FOOTER
+  private String originalKey(String cid) {
+    return storage.buildLetterheadKey(cid, "letterhead-original");
+  }
+
+  private String pdfKey(String cid) {
+    return storage.buildLetterheadKey(cid, "letterhead.pdf");
+  }
+
+  private String previewKey(String cid) {
+    return storage.buildLetterheadKey(cid, "letterhead-preview.png");
   }
 
   // --- SUPER_ADMIN upload handshake ------------------------------------------
 
-  /** Validate the declared type/size, then presign a PUT to the STABLE per-part key (replace = overwrite). */
+  /** Validate the declared type/size, then presign a PUT to the STABLE original key (replace = overwrite). */
   public LetterheadUpload beginUpload(
-      IhrmsPrincipal.User actor, String companyId, String partRaw, LetterheadUploadRequest req, String ip) {
+      IhrmsPrincipal.User actor, String companyId, LetterheadUploadRequest req, String ip) {
     requireCompany(companyId);
-    Part part = parsePart(partRaw);
-    String type = normalizeType(req == null ? null : req.contentType());
     if (req == null || req.sizeBytes() <= 0 || req.sizeBytes() > MAX_BYTES) {
-      throw badRequest("Image must be a non-empty file of 5 MB or smaller.");
+      throw badRequest("The letterhead must be a non-empty file of 10 MB or smaller.");
     }
-    String key = storage.buildLetterheadKey(companyId, part.name());
-    String url = storage.presignedPutUrl(key, type, UPLOAD_TTL);
-    return new LetterheadUpload(url, "PUT", Map.of("Content-Type", type), UPLOAD_TTL, part.name());
+    String type = normalizeUploadType(req.contentType());
+    if (isWord(type) && !converter.isAvailable()) {
+      throw badRequest(
+          "Word conversion isn't available on this server. Please export your letterhead to PDF and upload the PDF.");
+    }
+    String url = storage.presignedPutUrl(originalKey(companyId), type, UPLOAD_TTL);
+    return new LetterheadUpload(url, "PUT", Map.of("Content-Type", type), UPLOAD_TTL);
   }
 
-  /** Read the uploaded object, decode+validate it (real PNG/JPG, ≥ min width, ≤ max bytes), stamp the row. */
+  /**
+   * Read the uploaded object; convert Word→PDF if needed; normalize to the first page; validate the page size;
+   * rasterize a preview; store the normalized PDF + preview; seed a default margin box; stamp the row.
+   */
   @Transactional
-  public LetterheadView confirmUpload(
-      IhrmsPrincipal.User actor, String companyId, String partRaw, String ip) {
+  public LetterheadView confirmUpload(IhrmsPrincipal.User actor, String companyId, String ip) {
     Company c = requireCompany(companyId);
-    Part part = parsePart(partRaw);
-    String key = storage.buildLetterheadKey(companyId, part.name());
 
-    byte[] bytes;
+    byte[] original;
     try {
-      bytes = storage.getObjectBytes(key);
+      original = storage.getObjectBytes(originalKey(companyId));
     } catch (RuntimeException e) {
-      throw badRequest("We couldn't read the uploaded image — please try the upload again.");
+      throw badRequest("We couldn't read the uploaded file — please try the upload again.");
     }
-    if (bytes == null || bytes.length == 0) {
-      throw badRequest("We couldn't find the uploaded image — please try the upload again.");
+    if (original == null || original.length == 0) {
+      throw badRequest("We couldn't find the uploaded file — please try the upload again.");
     }
-    if (bytes.length > MAX_BYTES) {
-      storage.delete(key);
-      throw badRequest("Image must be 5 MB or smaller.");
-    }
-    ImageInfo img = decode(bytes);
-    if (img == null) {
-      storage.delete(key);
-      throw badRequest("Upload a PNG or JPG image (PDFs aren't supported).");
-    }
-    if (img.width < MIN_WIDTH_PX) {
-      storage.delete(key);
-      throw badRequest("Image must be at least " + MIN_WIDTH_PX + "px wide for print quality.");
+    if (original.length > MAX_BYTES) {
+      storage.delete(originalKey(companyId));
+      throw badRequest("The letterhead must be 10 MB or smaller.");
     }
 
-    if (part == Part.HEADER) {
-      c.setLetterheadHeaderKey(key);
-      c.setLetterheadHeaderType(img.contentType);
-      c.setLetterheadHeaderWidth(img.width);
-      c.setLetterheadHeaderHeight(img.height);
+    String sniffed = sniffType(original);
+    byte[] pdfBytes;
+    String originalType;
+    if (PDF_TYPE.equals(sniffed)) {
+      pdfBytes = original;
+      originalType = PDF_TYPE;
+    } else if (DOCX_TYPE.equals(sniffed) || DOC_TYPE.equals(sniffed)) {
+      originalType = sniffed;
+      try {
+        pdfBytes = converter.wordToPdf(original, DOCX_TYPE.equals(sniffed) ? "docx" : "doc");
+      } catch (DocumentConverter.ConversionUnavailableException e) {
+        throw badRequest(e.getMessage());
+      } catch (DocumentConverter.ConversionFailedException e) {
+        throw badRequest(e.getMessage());
+      }
     } else {
-      c.setLetterheadFooterKey(key);
-      c.setLetterheadFooterType(img.contentType);
-      c.setLetterheadFooterWidth(img.width);
-      c.setLetterheadFooterHeight(img.height);
+      storage.delete(originalKey(companyId));
+      throw badRequest("Upload a PDF or Word (.docx/.doc) letterhead.");
     }
+
+    byte[] normalized;
+    PdfLetterheadOps.PageSize size;
+    byte[] preview;
+    try {
+      normalized = PdfLetterheadOps.firstPageOnly(pdfBytes); // first page used if multi-page
+      size = PdfLetterheadOps.pageSize(normalized);
+      preview = PdfLetterheadOps.renderPreviewPng(normalized, PREVIEW_DPI);
+    } catch (Exception e) {
+      log.warn("Letterhead PDF unreadable for {}: {}", companyId, e.toString());
+      throw badRequest("We couldn't read that letterhead as a PDF page — please try a different file.");
+    }
+    if (size.widthPt() < MIN_PAGE_PT
+        || size.heightPt() < MIN_PAGE_PT
+        || size.widthPt() > MAX_PAGE_PT
+        || size.heightPt() > MAX_PAGE_PT) {
+      storage.delete(originalKey(companyId));
+      throw badRequest("That page size looks unusual — use a standard A4 or Letter letterhead.");
+    }
+
+    storage.putObject(pdfKey(companyId), normalized, PDF_TYPE);
+    storage.putObject(previewKey(companyId), preview, "image/png");
+
+    c.setLetterheadOriginalKey(originalKey(companyId));
+    c.setLetterheadOriginalType(originalType);
+    c.setLetterheadPdfKey(pdfKey(companyId));
+    c.setLetterheadPreviewKey(previewKey(companyId));
+    c.setLetterheadPageWidthPt(size.widthPt());
+    c.setLetterheadPageHeightPt(size.heightPt());
+    // Fresh artwork → seed a fresh default margin box (an old box could sit over new artwork).
+    c.setLetterheadMarginTopPt(round(size.heightPt() * DEFAULT_TOP_FRACTION));
+    c.setLetterheadMarginBottomPt(round(size.heightPt() * DEFAULT_BOTTOM_FRACTION));
+    c.setLetterheadMarginLeftPt(round(SIDE_DEFAULT_PT));
+    c.setLetterheadMarginRightPt(round(SIDE_DEFAULT_PT));
+    c.setLetterheadUpdatedAt(Instant.now());
+    c.setLetterheadUpdatedByUserId(actor.userId());
+    companies.save(c);
+
+    audit.record(
+        AuditActor.from(actor),
+        "LETTERHEAD_UPDATED",
+        "Company",
+        companyId,
+        // NB: int (not long) — a Long in JSON metadata deserializes back to Integer in Hibernate's dirty-check
+        // snapshot, so Long != Integer flags the append-only audit row dirty → an UPDATE the trigger rejects.
+        Map.of(
+            "action", "uploaded",
+            "originalType", originalType,
+            "pageWidthPt", (int) Math.round(size.widthPt()),
+            "pageHeightPt", (int) Math.round(size.heightPt())),
+        ip);
+    return view(c);
+  }
+
+  /** Save the content margin box (points). Validated against the page so content always has room. */
+  @Transactional
+  public LetterheadView saveMargins(
+      IhrmsPrincipal.User actor, String companyId, MarginsRequest req, String ip) {
+    Company c = requireCompany(companyId);
+    if (c.getLetterheadPdfKey() == null) {
+      throw badRequest("Upload a letterhead before setting its margins.");
+    }
+    double pageW = orDefault(c.getLetterheadPageWidthPt(), 595.276);
+    double pageH = orDefault(c.getLetterheadPageHeightPt(), 841.890);
+    double top = require(req == null ? null : req.topPt(), "top");
+    double bottom = require(req == null ? null : req.bottomPt(), "bottom");
+    double left = require(req == null ? null : req.leftPt(), "left");
+    double right = require(req == null ? null : req.rightPt(), "right");
+    if (top < 0 || bottom < 0 || left < 0 || right < 0) {
+      throw badRequest("Margins can't be negative.");
+    }
+    if (pageH - top - bottom < MIN_CONTENT_PT || pageW - left - right < MIN_CONTENT_PT) {
+      throw badRequest("Those margins leave too little room for content — pull the guides apart.");
+    }
+    c.setLetterheadMarginTopPt(round(top));
+    c.setLetterheadMarginBottomPt(round(bottom));
+    c.setLetterheadMarginLeftPt(round(left));
+    c.setLetterheadMarginRightPt(round(right));
     c.setLetterheadUpdatedAt(Instant.now());
     c.setLetterheadUpdatedByUserId(actor.userId());
     companies.save(c);
@@ -151,86 +244,113 @@ public class LetterheadService {
         "LETTERHEAD_UPDATED",
         "Company",
         companyId,
-        Map.of("part", part.name(), "width", img.width, "height", img.height),
+        Map.of("action", "margins", "topPt", (int) Math.round(top), "bottomPt", (int) Math.round(bottom),
+            "leftPt", (int) Math.round(left), "rightPt", (int) Math.round(right)),
         ip);
     return view(c);
   }
 
-  /** Revert a part to plain: delete the stored object (best-effort) + clear its columns. Audited. */
+  /** Reset the margin box to the sensible defaults (25% top / 15% bottom / 1.7cm sides) for this page. */
   @Transactional
-  public LetterheadView remove(IhrmsPrincipal.User actor, String companyId, String partRaw, String ip) {
+  public LetterheadView resetMargins(IhrmsPrincipal.User actor, String companyId, String ip) {
     Company c = requireCompany(companyId);
-    Part part = parsePart(partRaw);
-    String key = part == Part.HEADER ? c.getLetterheadHeaderKey() : c.getLetterheadFooterKey();
-    if (key != null) {
-      try {
-        storage.delete(key);
-      } catch (RuntimeException e) {
-        log.warn("Letterhead object delete failed ({}): {}", key, e.toString());
+    if (c.getLetterheadPdfKey() == null) {
+      throw badRequest("Upload a letterhead before setting its margins.");
+    }
+    double pageH = orDefault(c.getLetterheadPageHeightPt(), 841.890);
+    c.setLetterheadMarginTopPt(round(pageH * DEFAULT_TOP_FRACTION));
+    c.setLetterheadMarginBottomPt(round(pageH * DEFAULT_BOTTOM_FRACTION));
+    c.setLetterheadMarginLeftPt(round(SIDE_DEFAULT_PT));
+    c.setLetterheadMarginRightPt(round(SIDE_DEFAULT_PT));
+    c.setLetterheadUpdatedAt(Instant.now());
+    c.setLetterheadUpdatedByUserId(actor.userId());
+    companies.save(c);
+    audit.record(
+        AuditActor.from(actor), "LETTERHEAD_UPDATED", "Company", companyId, Map.of("action", "margins-reset"), ip);
+    return view(c);
+  }
+
+  /** Remove the letterhead: delete the objects (best-effort) + clear the row. Documents render plain again. */
+  @Transactional
+  public LetterheadView remove(IhrmsPrincipal.User actor, String companyId, String ip) {
+    Company c = requireCompany(companyId);
+    for (String key : new String[] {c.getLetterheadPdfKey(), c.getLetterheadOriginalKey(), c.getLetterheadPreviewKey()}) {
+      if (key != null) {
+        try {
+          storage.delete(key);
+        } catch (RuntimeException e) {
+          log.warn("Letterhead object delete failed ({}): {}", key, e.toString());
+        }
       }
     }
-    if (part == Part.HEADER) {
-      c.setLetterheadHeaderKey(null);
-      c.setLetterheadHeaderType(null);
-      c.setLetterheadHeaderWidth(null);
-      c.setLetterheadHeaderHeight(null);
-    } else {
-      c.setLetterheadFooterKey(null);
-      c.setLetterheadFooterType(null);
-      c.setLetterheadFooterWidth(null);
-      c.setLetterheadFooterHeight(null);
-    }
+    c.setLetterheadPdfKey(null);
+    c.setLetterheadOriginalKey(null);
+    c.setLetterheadOriginalType(null);
+    c.setLetterheadPreviewKey(null);
+    c.setLetterheadPageWidthPt(null);
+    c.setLetterheadPageHeightPt(null);
+    c.setLetterheadMarginTopPt(null);
+    c.setLetterheadMarginBottomPt(null);
+    c.setLetterheadMarginLeftPt(null);
+    c.setLetterheadMarginRightPt(null);
     c.setLetterheadUpdatedAt(Instant.now());
     c.setLetterheadUpdatedByUserId(actor.userId());
     companies.save(c);
     audit.record(
-        AuditActor.from(actor),
-        "LETTERHEAD_UPDATED",
-        "Company",
-        companyId,
-        Map.of("part", part.name(), "removed", true),
-        ip);
+        AuditActor.from(actor), "LETTERHEAD_UPDATED", "Company", companyId, Map.of("action", "removed"), ip);
     return view(c);
   }
 
-  /** Current letterhead metadata + short-lived presigned preview URLs. */
+  /** Current letterhead metadata + a short-lived presigned preview of the first page. */
   @Transactional(readOnly = true)
   public LetterheadView get(String companyId) {
     return view(requireCompany(companyId));
   }
 
   private LetterheadView view(Company c) {
+    boolean present = c.getLetterheadPdfKey() != null;
+    String previewUrl = null;
+    if (present && c.getLetterheadPreviewKey() != null) {
+      try {
+        previewUrl = storage.presignedGetUrl(c.getLetterheadPreviewKey(), PREVIEW_TTL);
+      } catch (RuntimeException e) {
+        log.warn("Letterhead preview presign failed ({}): {}", c.getLetterheadPreviewKey(), e.toString());
+      }
+    }
     return new LetterheadView(
-        partView(c.getLetterheadHeaderKey(), c.getLetterheadHeaderType(), c.getLetterheadHeaderWidth(), c.getLetterheadHeaderHeight()),
-        partView(c.getLetterheadFooterKey(), c.getLetterheadFooterType(), c.getLetterheadFooterWidth(), c.getLetterheadFooterHeight()),
-        c.getLetterheadUpdatedAt() == null ? null : c.getLetterheadUpdatedAt().toString());
-  }
-
-  private LetterheadPartView partView(String key, String type, Integer w, Integer h) {
-    if (key == null || w == null || h == null) {
-      return null;
-    }
-    String preview = null;
-    try {
-      preview = storage.presignedGetUrl(key, PREVIEW_TTL);
-    } catch (RuntimeException e) {
-      log.warn("Letterhead preview presign failed ({}): {}", key, e.toString());
-    }
-    return new LetterheadPartView(w, h, type, preview);
+        present,
+        c.getLetterheadPageWidthPt(),
+        c.getLetterheadPageHeightPt(),
+        c.getLetterheadMarginTopPt(),
+        c.getLetterheadMarginBottomPt(),
+        c.getLetterheadMarginLeftPt(),
+        c.getLetterheadMarginRightPt(),
+        c.getLetterheadOriginalType(),
+        previewUrl,
+        c.getLetterheadUpdatedAt() == null ? null : c.getLetterheadUpdatedAt().toString(),
+        converter.isAvailable());
   }
 
   // --- Render-time resolution ------------------------------------------------
 
   /**
-   * Render {@code template} ({@code agreement} / {@code offboarding-clearance}) with the company's letterhead
-   * applied to {@code model}. Any failure — resolving, embedding, or even openhtmltopdf choking on the image —
-   * DEGRADES to the plain layout and still returns a PDF (§3.5: branding must never fail a generation).
+   * Render {@code template} with the company's letterhead applied to {@code model}: content is rendered at the
+   * letterhead's page size within the saved margins, then the letterhead is stamped behind every page. Any
+   * failure DEGRADES to the plain layout and still returns a PDF (§3.5: branding must never fail a generation).
    */
   public byte[] renderBranded(String template, Map<String, Object> model, String companyId) {
-    applyTo(model, companyId);
-    try {
+    Resolved r = resolve(companyId);
+    if (r == null) {
+      applyPlain(model);
       return html.render(template, model);
-    } catch (RuntimeException e) {
+    }
+    try {
+      model.put("pageCss", brandedCss(r));
+      model.put("letterheadHeader", null);
+      model.put("letterheadFooter", null);
+      byte[] content = html.render(template, model);
+      return PdfLetterheadOps.overlayBackground(content, r.pdf);
+    } catch (Exception e) {
       log.warn(
           "Branded PDF render failed (company {}, template {}) — retrying plain: {}",
           companyId,
@@ -241,96 +361,64 @@ public class LetterheadService {
     }
   }
 
-  /** Populate {@code pageCss} + optional {@code letterheadHeader}/{@code letterheadFooter} data URIs. */
-  public void applyTo(Map<String, Object> model, String companyId) {
-    Resolved r = null;
-    try {
-      r = resolve(companyId);
-    } catch (RuntimeException e) {
-      log.warn("Letterhead resolve failed for {} — rendering plain: {}", companyId, e.toString());
-    }
-    if (r == null) {
-      applyPlain(model);
-      return;
-    }
-    model.put("pageCss", brandedCss(r));
-    model.put("letterheadHeader", r.header == null ? null : r.header.dataUri);
-    model.put("letterheadFooter", r.footer == null ? null : r.footer.dataUri);
-  }
-
   private static void applyPlain(Map<String, Object> model) {
     model.put("pageCss", PLAIN_PAGE_CSS);
     model.put("letterheadHeader", null);
     model.put("letterheadFooter", null);
   }
 
+  /** Load the letterhead PDF + geometry, or null when unset / unreadable (→ the caller renders plain). */
   private Resolved resolve(String companyId) {
-    Company c = companies.findById(companyId).orElse(null);
-    if (c == null) {
-      return null;
-    }
-    ResolvedPart header =
-        loadPart(c.getLetterheadHeaderKey(), c.getLetterheadHeaderType(), c.getLetterheadHeaderWidth(), c.getLetterheadHeaderHeight());
-    ResolvedPart footer =
-        loadPart(c.getLetterheadFooterKey(), c.getLetterheadFooterType(), c.getLetterheadFooterWidth(), c.getLetterheadFooterHeight());
-    return (header == null && footer == null) ? null : new Resolved(header, footer);
-  }
-
-  private ResolvedPart loadPart(String key, String type, Integer w, Integer h) {
-    if (key == null || w == null || h == null || w <= 0 || h <= 0) {
-      return null;
-    }
     try {
-      byte[] bytes = storage.getObjectBytes(key);
-      if (bytes == null || bytes.length == 0) {
+      Company c = companies.findById(companyId).orElse(null);
+      if (c == null || c.getLetterheadPdfKey() == null) {
         return null;
       }
-      String uri =
-          "data:" + (type == null ? "image/png" : type) + ";base64," + Base64.getEncoder().encodeToString(bytes);
-      return new ResolvedPart(uri, w, h);
+      byte[] pdf = storage.getObjectBytes(c.getLetterheadPdfKey());
+      if (pdf == null || pdf.length == 0) {
+        return null;
+      }
+      double pageW = orDefault(c.getLetterheadPageWidthPt(), 595.276);
+      double pageH = orDefault(c.getLetterheadPageHeightPt(), 841.890);
+      return new Resolved(
+          pdf,
+          pageW,
+          pageH,
+          orDefault(c.getLetterheadMarginTopPt(), pageH * DEFAULT_TOP_FRACTION),
+          orDefault(c.getLetterheadMarginBottomPt(), pageH * DEFAULT_BOTTOM_FRACTION),
+          orDefault(c.getLetterheadMarginLeftPt(), SIDE_DEFAULT_PT),
+          orDefault(c.getLetterheadMarginRightPt(), SIDE_DEFAULT_PT));
     } catch (RuntimeException e) {
-      log.warn("Letterhead object unreadable ({}) — that band renders plain: {}", key, e.toString());
+      log.warn("Letterhead resolve failed for {} — rendering plain: {}", companyId, e.toString());
       return null;
     }
   }
 
-  /** Build the deterministic @page + band CSS. Body text sits between the top/bottom margins (= band heights). */
-  private String brandedCss(Resolved r) {
-    double topCm =
-        r.header == null ? DEFAULT_TOP_CM : PAGE_W_CM * r.header.height / (double) r.header.width + SAFETY_CM;
-    double botCm =
-        r.footer == null ? DEFAULT_BOTTOM_CM : PAGE_W_CM * r.footer.height / (double) r.footer.width + SAFETY_CM;
-
-    StringBuilder sb = new StringBuilder();
-    sb.append("@page{size:A4;margin:")
-        .append(cm(topCm))
-        .append(" 0cm ")
-        .append(cm(botCm))
-        .append(" 0cm;@top-center{content:element(letterhead)}@bottom-center{content:element(footer)}}");
-    // Full-bleed bands ⇒ side margins are 0; inset the body instead so text keeps its 1.7cm side gutter.
-    sb.append("body{padding-left:").append(cm(SIDE_INSET_CM)).append(";padding-right:").append(cm(SIDE_INSET_CM)).append("}");
-
-    if (r.header == null) {
-      sb.append("#letterhead{position:running(letterhead);height:1.7cm;width:100%}");
-    } else {
-      double h = PAGE_W_CM * r.header.height / (double) r.header.width;
-      sb.append("#letterhead{position:running(letterhead);width:100%;height:").append(cm(h)).append("}");
-      sb.append("#letterhead img{width:100%;height:auto;display:block}");
-    }
-    if (r.footer == null) {
-      sb.append(
-          "#footer{position:running(footer);width:100%;text-align:center;font-size:7.5px;color:#999;"
-              + "border-top:0.5px solid #ddd;padding-top:3px}");
-    } else {
-      double h = PAGE_W_CM * r.footer.height / (double) r.footer.width;
-      sb.append("#footer{position:running(footer);width:100%;height:").append(cm(h)).append("}");
-      sb.append("#footer img{width:100%;height:auto;display:block}");
-    }
-    return sb.toString();
+  /**
+   * The branded page CSS: an A-size page matching the letterhead, the saved margin box, transparent background
+   * so the overlay shows through, and the running header/footer pulled from flow but NOT placed in any margin
+   * box → both the header band and the plain "CONFIDENTIAL" footer are suppressed (the letterhead provides all
+   * branding). No template-body edit is needed.
+   */
+  private static String brandedCss(Resolved r) {
+    return "@page{size:"
+        + pt(r.pageWidthPt)
+        + " "
+        + pt(r.pageHeightPt)
+        + ";margin:"
+        + pt(r.marginTopPt)
+        + " "
+        + pt(r.marginRightPt)
+        + " "
+        + pt(r.marginBottomPt)
+        + " "
+        + pt(r.marginLeftPt)
+        + "}html,body{background:transparent}"
+        + "#letterhead{position:running(letterhead)}#footer{position:running(footer)}";
   }
 
-  private static String cm(double v) {
-    return String.format(Locale.ROOT, "%.3fcm", v);
+  private static String pt(double v) {
+    return String.format(Locale.ROOT, "%.3fpt", v);
   }
 
   // --- helpers ---------------------------------------------------------------
@@ -341,69 +429,67 @@ public class LetterheadService {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
   }
 
-  private static Part parsePart(String raw) {
-    if (raw != null) {
-      try {
-        return Part.valueOf(raw.trim().toUpperCase(Locale.ROOT));
-      } catch (IllegalArgumentException ignored) {
-        // fall through
-      }
-    }
-    throw badRequest("Part must be HEADER or FOOTER.");
-  }
-
-  private static String normalizeType(String contentType) {
+  private static String normalizeUploadType(String contentType) {
     String t = contentType == null ? "" : contentType.trim().toLowerCase(Locale.ROOT);
-    if (t.equals("image/png") || t.equals("image/jpeg")) {
-      return t;
+    if (t.equals(PDF_TYPE)) {
+      return PDF_TYPE;
     }
-    if (t.equals("image/jpg")) {
-      return "image/jpeg";
+    if (t.equals(DOCX_TYPE)) {
+      return DOCX_TYPE;
     }
-    throw badRequest("Upload a PNG or JPG image (PDFs aren't supported).");
+    if (t.equals(DOC_TYPE)) {
+      return DOC_TYPE;
+    }
+    throw badRequest("Upload a PDF or Word (.docx/.doc) letterhead.");
   }
 
-  /** Decode with ImageIO — proves it's a real PNG/JPEG and yields the true pixel dimensions + type. */
-  private static ImageInfo decode(byte[] bytes) {
-    try (ImageInputStream iis = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
-      if (iis == null) {
-        return null;
-      }
-      Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
-      if (!readers.hasNext()) {
-        return null;
-      }
-      ImageReader reader = readers.next();
-      try {
-        reader.setInput(iis);
-        int w = reader.getWidth(0);
-        int h = reader.getHeight(0);
-        String fmt = reader.getFormatName();
-        String type =
-            fmt == null
-                ? null
-                : fmt.equalsIgnoreCase("png")
-                    ? "image/png"
-                    : (fmt.equalsIgnoreCase("jpeg") || fmt.equalsIgnoreCase("jpg")) ? "image/jpeg" : null;
-        if (type == null || w <= 0 || h <= 0) {
-          return null;
-        }
-        return new ImageInfo(w, h, type);
-      } finally {
-        reader.dispose();
-      }
-    } catch (IOException | RuntimeException e) {
-      return null;
+  private static boolean isWord(String type) {
+    return DOCX_TYPE.equals(type) || DOC_TYPE.equals(type);
+  }
+
+  /** Sniff the real type from magic bytes so a mislabelled upload can't slip past (PDF / OOXML zip / OLE2). */
+  private static String sniffType(byte[] b) {
+    if (b.length >= 5 && b[0] == '%' && b[1] == 'P' && b[2] == 'D' && b[3] == 'F' && b[4] == '-') {
+      return PDF_TYPE;
     }
+    if (b.length >= 4 && b[0] == 'P' && b[1] == 'K' && b[2] == 0x03 && b[3] == 0x04) {
+      return DOCX_TYPE; // OOXML (docx) is a zip
+    }
+    if (b.length >= 8
+        && (b[0] & 0xFF) == 0xD0
+        && (b[1] & 0xFF) == 0xCF
+        && (b[2] & 0xFF) == 0x11
+        && (b[3] & 0xFF) == 0xE0) {
+      return DOC_TYPE; // legacy OLE2 (.doc)
+    }
+    return "application/octet-stream";
+  }
+
+  private static double require(Double v, String name) {
+    if (v == null || v.isNaN() || v.isInfinite()) {
+      throw badRequest("Missing " + name + " margin.");
+    }
+    return v;
+  }
+
+  private static double orDefault(Double v, double fallback) {
+    return v == null ? fallback : v;
+  }
+
+  private static double round(double v) {
+    return Math.round(v * 1000.0) / 1000.0;
   }
 
   private static ResponseStatusException badRequest(String message) {
     return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
   }
 
-  private record ImageInfo(int width, int height, String contentType) {}
-
-  private record ResolvedPart(String dataUri, int width, int height) {}
-
-  private record Resolved(ResolvedPart header, ResolvedPart footer) {}
+  private record Resolved(
+      byte[] pdf,
+      double pageWidthPt,
+      double pageHeightPt,
+      double marginTopPt,
+      double marginBottomPt,
+      double marginLeftPt,
+      double marginRightPt) {}
 }

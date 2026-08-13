@@ -51,36 +51,52 @@ export const ProvisionCompanyAdminSchema = z.object({
 });
 export type ProvisionCompanyAdminInput = z.infer<typeof ProvisionCompanyAdminSchema>;
 
-// --- Per-company letterhead (§3.5) -----------------------------------------
+// --- Per-company letterhead (§3.5, document model) -------------------------
 
-/** One stored letterhead part's metadata + a short-lived presigned preview URL (null when not previewable). */
-export interface LetterheadPart {
-  width: number;
-  height: number;
-  contentType: string | null;
-  previewUrl: string | null;
-}
-
-/** A company's current letterhead: header/footer parts (null when unset) + when it last changed. */
+/**
+ * A company's current letterhead. When `present` is false, documents render plain and the geometry fields are
+ * null. When true, the first page of the uploaded file (PDF, or Word converted to PDF) is stamped behind every
+ * generated document, with content confined to the margin box (points). `wordConversionAvailable` tells the UI
+ * whether it may offer Word upload on this server.
+ */
 export interface Letterhead {
-  header: LetterheadPart | null;
-  footer: LetterheadPart | null;
+  present: boolean;
+  pageWidthPt: number | null;
+  pageHeightPt: number | null;
+  marginTopPt: number | null;
+  marginBottomPt: number | null;
+  marginLeftPt: number | null;
+  marginRightPt: number | null;
+  originalType: string | null;
+  previewUrl: string | null;
   updatedAt: string | null;
+  wordConversionAvailable: boolean;
 }
 
-/** The presigned PUT handshake for a letterhead part (same shape as the mail-attachment upload). */
+/** The content margin box (points from each page edge) — what the Word-like guides set. */
+export interface LetterheadMargins {
+  topPt: number;
+  bottomPt: number;
+  leftPt: number;
+  rightPt: number;
+}
+
+/** The presigned PUT handshake for the letterhead file (same shape as the mail-attachment upload). */
 export interface LetterheadUpload {
   uploadUrl: string;
   method: string;
   headers: Record<string, string>;
   expiresInSeconds: number;
-  part: string;
 }
 
-/** Which band a letterhead image is for. */
-export type LetterheadPartName = 'header' | 'footer';
-
 /** Client-side upload rules — mirror LetterheadService (server re-validates authoritatively). */
-export const LETTERHEAD_MAX_BYTES = 5 * 1024 * 1024;
-export const LETTERHEAD_MIN_WIDTH_PX = 1000;
-export const LETTERHEAD_ACCEPT = ['image/png', 'image/jpeg'] as const;
+export const LETTERHEAD_MAX_BYTES = 10 * 1024 * 1024;
+export const LETTERHEAD_PDF_TYPE = 'application/pdf';
+export const LETTERHEAD_WORD_TYPES = [
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+] as const;
+/** File-input `accept` fragments (PDF always; Word only offered when the server can convert). */
+export const LETTERHEAD_ACCEPT_PDF = '.pdf,application/pdf';
+export const LETTERHEAD_ACCEPT_WORD =
+  '.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document';

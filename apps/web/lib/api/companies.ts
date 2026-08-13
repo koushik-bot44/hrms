@@ -3,7 +3,7 @@ import type {
   CompanySummary,
   CreateCompanyInput,
   Letterhead,
-  LetterheadPartName,
+  LetterheadMargins,
   LetterheadUpload,
   ProvisionCompanyAdminInput,
   ProvisionCompanyAdminResult,
@@ -11,9 +11,9 @@ import type {
   UpdateCompanyInput,
 } from '@/lib/contract';
 import {
-  LETTERHEAD_ACCEPT,
   LETTERHEAD_MAX_BYTES,
-  LETTERHEAD_MIN_WIDTH_PX,
+  LETTERHEAD_PDF_TYPE,
+  LETTERHEAD_WORD_TYPES,
 } from '@/lib/contract';
 import { apiFetch, ApiError } from './client';
 
@@ -60,64 +60,57 @@ export function provisionCompanyAdmin(
   return apiFetch<ProvisionCompanyAdminResult>(`/companies/${id}/admin`, { method: 'POST', body });
 }
 
-// --- Per-company letterhead (§3.5, SUPER_ADMIN) ----------------------------
+// --- Per-company letterhead (§3.5, SUPER_ADMIN; document + margin box) ------
 
-/** Current letterhead metadata (header/footer, null when unset) + presigned previews. */
+/** Current letterhead: present flag, page size + margin box (points), a presigned preview + capability flag. */
 export function getLetterhead(id: string, signal?: AbortSignal): Promise<Letterhead> {
   return apiFetch<Letterhead>(`/companies/${id}/letterhead`, { signal });
 }
 
-/** Mirror the server rules so bad files fail fast with a clear message (server re-validates authoritatively). */
-export function validateLetterheadFile(file: File): string | null {
-  if (!(LETTERHEAD_ACCEPT as readonly string[]).includes(file.type)) {
-    return 'Upload a PNG or JPG image.';
+/** Mirror the server rules so bad files fail fast (server re-validates authoritatively). */
+export function validateLetterheadFile(file: File, wordAllowed: boolean): string | null {
+  const isPdf = file.type === LETTERHEAD_PDF_TYPE || /\.pdf$/i.test(file.name);
+  const isWord =
+    (LETTERHEAD_WORD_TYPES as readonly string[]).includes(file.type) || /\.docx?$/i.test(file.name);
+  if (!isPdf && !isWord) {
+    return 'Upload a PDF or Word (.docx/.doc) letterhead.';
+  }
+  if (isWord && !wordAllowed) {
+    return 'Word conversion isn’t available on this server. Please export your letterhead to PDF and upload the PDF.';
   }
   if (file.size > LETTERHEAD_MAX_BYTES) {
-    return 'Image must be 5 MB or smaller.';
+    return 'The letterhead must be 10 MB or smaller.';
   }
   return null;
 }
 
-async function imageWidth(file: File): Promise<number> {
-  const url = URL.createObjectURL(file);
-  try {
-    return await new Promise<number>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img.naturalWidth);
-      img.onerror = () => reject(new Error('decode'));
-      img.src = url;
-    });
-  } finally {
-    URL.revokeObjectURL(url);
+/** The declared content type for the presigned PUT: honour the browser's type, else infer from the extension. */
+function letterheadContentType(file: File): string {
+  if (file.type) {
+    return file.type;
   }
+  if (/\.pdf$/i.test(file.name)) {
+    return LETTERHEAD_PDF_TYPE;
+  }
+  if (/\.docx$/i.test(file.name)) {
+    return LETTERHEAD_WORD_TYPES[0];
+  }
+  return 'application/msword';
 }
 
 /**
- * Upload (or replace) a letterhead part via the presigned handshake: validate → presigned PUT → confirm.
- * Returns the updated letterhead. Applies to documents generated from now on; existing PDFs are unchanged.
+ * Upload (or replace) the letterhead via the presigned handshake: validate → presigned PUT → confirm. The
+ * server converts Word→PDF, uses the first page, rasterizes a preview and seeds default margins. Returns the
+ * updated letterhead. Applies to documents generated from now on; existing PDFs are unchanged.
  */
-export async function uploadLetterhead(
-  id: string,
-  part: LetterheadPartName,
-  file: File,
-): Promise<Letterhead> {
-  const err = validateLetterheadFile(file);
+export async function uploadLetterhead(id: string, file: File, wordAllowed: boolean): Promise<Letterhead> {
+  const err = validateLetterheadFile(file, wordAllowed);
   if (err) {
     throw new ApiError(400, err);
   }
-  let width = 0;
-  try {
-    width = await imageWidth(file);
-  } catch {
-    throw new ApiError(400, 'That image could not be read — try a different PNG or JPG.');
-  }
-  if (width < LETTERHEAD_MIN_WIDTH_PX) {
-    throw new ApiError(400, `Image must be at least ${LETTERHEAD_MIN_WIDTH_PX}px wide for print quality.`);
-  }
-
-  const presign = await apiFetch<LetterheadUpload>(`/companies/${id}/letterhead/${part}/begin-upload`, {
+  const presign = await apiFetch<LetterheadUpload>(`/companies/${id}/letterhead/begin-upload`, {
     method: 'POST',
-    body: { contentType: file.type, sizeBytes: file.size },
+    body: { contentType: letterheadContentType(file), sizeBytes: file.size },
   });
   const put = await fetch(presign.uploadUrl, {
     method: presign.method ?? 'PUT',
@@ -127,10 +120,20 @@ export async function uploadLetterhead(
   if (!put.ok) {
     throw new ApiError(put.status, 'The upload failed — please try again.');
   }
-  return apiFetch<Letterhead>(`/companies/${id}/letterhead/${part}/confirm`, { method: 'POST' });
+  return apiFetch<Letterhead>(`/companies/${id}/letterhead/confirm`, { method: 'POST' });
 }
 
-/** Revert a letterhead part to the plain layout. */
-export function removeLetterhead(id: string, part: LetterheadPartName): Promise<Letterhead> {
-  return apiFetch<Letterhead>(`/companies/${id}/letterhead/${part}`, { method: 'DELETE' });
+/** Save the content margin box (points). */
+export function saveLetterheadMargins(id: string, margins: LetterheadMargins): Promise<Letterhead> {
+  return apiFetch<Letterhead>(`/companies/${id}/letterhead/margins`, { method: 'PUT', body: margins });
+}
+
+/** Reset the margin box to the sensible defaults for the page. */
+export function resetLetterheadMargins(id: string): Promise<Letterhead> {
+  return apiFetch<Letterhead>(`/companies/${id}/letterhead/margins/reset`, { method: 'POST' });
+}
+
+/** Remove the letterhead — documents render plain again. */
+export function removeLetterhead(id: string): Promise<Letterhead> {
+  return apiFetch<Letterhead>(`/companies/${id}/letterhead`, { method: 'DELETE' });
 }

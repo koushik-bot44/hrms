@@ -47,13 +47,14 @@ public class StorageService {
   }
 
   /**
-   * The STABLE, ext-less key for a company's letterhead part (§3.5): {@code companies/{cid}/branding/
-   * letterhead-{header|footer}}. One object per company per part — a replacement PUTs the same key (overwrite),
-   * so there is never more than one header/footer object to orphan. The stored content-type is tracked on the
-   * company row (the object serves it back on the presigned GET). {@code part} is HEADER|FOOTER.
+   * The STABLE letterhead keys (§3.5, document model). One letterhead per company under
+   * {@code companies/{cid}/branding/} — a replacement overwrites the SAME keys, so there is never a second
+   * object to orphan. {@code leaf} is {@code "letterhead.pdf"} (the normalized single-page PDF stamped behind
+   * documents), {@code "letterhead-original"} (the uploaded PDF/Word — ext-less, its type tracked on the row),
+   * or {@code "letterhead-preview.png"} (the rasterized first page for the margin editor).
    */
-  public String buildLetterheadKey(String companyId, String part) {
-    return "companies/" + companyId + "/branding/letterhead-" + part.toLowerCase();
+  public String buildLetterheadKey(String companyId, String leaf) {
+    return "companies/" + companyId + "/branding/" + leaf;
   }
 
   /** A unique object key for a mail attachment, namespaced under its uploader (never exposed, §8). */

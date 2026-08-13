@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{id}/letterhead/margins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveLetterheadMargins"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/teams/{id}/manager": {
         parameters: {
             query?: never;
@@ -320,6 +336,39 @@ export interface paths {
         put?: never;
         /** Register (upsert on endpoint) a browser push subscription for the caller. */
         post: operations["subscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push/admin/prune-stale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** SUPER_ADMIN one-off: prune push subscriptions older than N days (e.g. clear pre-migration, old-origin subscriptions after a web-origin change). Users re-enable via the opt-in. */
+        post: operations["pruneStale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/onboarding/invite/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1046,6 +1095,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/{id}/invite/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resendInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees/{id}/deactivate": {
         parameters: {
             query?: never;
@@ -1136,6 +1201,54 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{id}/letterhead/margins/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resetLetterheadMargins"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{id}/letterhead/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["confirmLetterheadUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{id}/letterhead/begin-upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["beginLetterheadUpload"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2199,6 +2312,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{id}/letterhead": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLetterhead"];
+        put?: never;
+        post?: never;
+        delete: operations["removeLetterhead"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/teams/assignable-users": {
         parameters: {
             query?: never;
@@ -2559,119 +2688,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/public/onboarding/invite/validate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["validate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/employees/{id}/invite/resend": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["resendInvite"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/push/admin/prune-stale": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** SUPER_ADMIN one-off: prune push subscriptions older than N days (e.g. clear pre-migration, old-origin subscriptions after a web-origin change). Users re-enable via the opt-in. */
-        post: operations["pruneStale"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/companies/{id}/letterhead/{part}/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["confirmLetterheadUpload"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/companies/{id}/letterhead/{part}/begin-upload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["beginLetterheadUpload"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/companies/{id}/letterhead": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getLetterhead"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/companies/{id}/letterhead/{part}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["removeLetterhead"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2884,6 +2900,35 @@ export interface components {
             finalStatus?: "APPROVED" | "PENDING" | "ON_HOLD";
             downloadUrl?: string;
         };
+        MarginsRequest: {
+            /** Format: double */
+            topPt?: number;
+            /** Format: double */
+            bottomPt?: number;
+            /** Format: double */
+            leftPt?: number;
+            /** Format: double */
+            rightPt?: number;
+        };
+        LetterheadView: {
+            present?: boolean;
+            /** Format: double */
+            pageWidthPt?: number;
+            /** Format: double */
+            pageHeightPt?: number;
+            /** Format: double */
+            marginTopPt?: number;
+            /** Format: double */
+            marginBottomPt?: number;
+            /** Format: double */
+            marginLeftPt?: number;
+            /** Format: double */
+            marginRightPt?: number;
+            originalType?: string;
+            previewUrl?: string;
+            updatedAt?: string;
+            wordConversionAvailable?: boolean;
+        };
         CreateTeamRequest: {
             name: string;
         };
@@ -2981,6 +3026,24 @@ export interface components {
             id?: string;
             /** @description True if this endpoint was already registered and was updated. */
             existing?: boolean;
+        };
+        /** @description Result of a one-off stale-subscription prune (SUPER_ADMIN). */
+        PruneResult: {
+            /**
+             * Format: int32
+             * @description How many subscriptions were removed.
+             */
+            pruned?: number;
+            /** @description Human-readable status. */
+            message?: string;
+        };
+        ValidateInviteRequest: {
+            token: string;
+        };
+        InviteContext: {
+            email?: string;
+            companySlug?: string;
+            companyName?: string;
         };
         ContactRequest: {
             name: string;
@@ -3148,7 +3211,7 @@ export interface components {
         NotificationView: {
             id?: string;
             /** @enum {string} */
-            type?: "EMPLOYEE_ONBOARDED" | "EMPLOYEE_SUBMITTED" | "APPROVAL_REQUESTED" | "EMPLOYEE_APPROVED" | "EMPLOYEE_REJECTED" | "LEAVE_REQUESTED" | "AGREEMENT_COMPLETED" | "OFFBOARDING_INITIATED" | "OFFBOARDING_APPROVED" | "OFFBOARDING_REJECTED" | "OFFBOARDING_DOC_SUBMITTED";
+            type?: "EMPLOYEE_ONBOARDED" | "EMPLOYEE_SUBMITTED" | "APPROVAL_REQUESTED" | "EMPLOYEE_APPROVED" | "EMPLOYEE_REJECTED" | "LEAVE_REQUESTED" | "AGREEMENT_COMPLETED" | "OFFBOARDING_INITIATED" | "OFFBOARDING_APPROVED" | "OFFBOARDING_REJECTED" | "OFFBOARDING_DOC_SUBMITTED" | "EMPLOYEE_LONG_BREAK";
             employeeId?: string;
             employeeCode?: string;
             fullName?: string;
@@ -3477,6 +3540,20 @@ export interface components {
             createdAt?: string;
             deletedAt?: string;
             admin?: components["schemas"]["CompanyAdminView"];
+        };
+        LetterheadUploadRequest: {
+            contentType?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+        };
+        LetterheadUpload: {
+            uploadUrl?: string;
+            method?: string;
+            headers?: {
+                [key: string]: string;
+            };
+            /** Format: int32 */
+            expiresInSeconds?: number;
         };
         ProvisionAdminRequest: {
             name: string;
@@ -4454,52 +4531,6 @@ export interface components {
             name?: string;
             code?: string;
         };
-        InviteContext: {
-            email?: string;
-            companySlug?: string;
-            companyName?: string;
-        };
-        ValidateInviteRequest: {
-            token: string;
-        };
-        /** @description Result of a one-off stale-subscription prune (SUPER_ADMIN). */
-        PruneResult: {
-            /**
-             * Format: int32
-             * @description How many subscriptions were removed.
-             */
-            pruned?: number;
-            /** @description Human-readable status. */
-            message?: string;
-        };
-        LetterheadView: {
-            header?: components["schemas"]["LetterheadPartView"];
-            footer?: components["schemas"]["LetterheadPartView"];
-            updatedAt?: string;
-        };
-        LetterheadUpload: {
-            uploadUrl?: string;
-            method?: string;
-            headers?: {
-                [key: string]: string;
-            };
-            /** Format: int32 */
-            expiresInSeconds?: number;
-            part?: string;
-        };
-        LetterheadPartView: {
-            /** Format: int32 */
-            width?: number;
-            /** Format: int32 */
-            height?: number;
-            contentType?: string;
-            previewUrl?: string;
-        };
-        LetterheadUploadRequest: {
-            contentType?: string;
-            /** Format: int64 */
-            sizeBytes?: number;
-        };
     };
     responses: never;
     parameters: never;
@@ -4821,6 +4852,32 @@ export interface operations {
             };
         };
     };
+    saveLetterheadMargins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarginsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterheadView"];
+                };
+            };
+        };
+    };
     assignManager_1: {
         parameters: {
             query?: never;
@@ -5106,6 +5163,52 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SubscribeResult"];
+                };
+            };
+        };
+    };
+    pruneStale: {
+        parameters: {
+            query?: {
+                olderThanDays?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PruneResult"];
+                };
+            };
+        };
+    };
+    validate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateInviteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InviteContext"];
                 };
             };
         };
@@ -6404,6 +6507,28 @@ export interface operations {
             };
         };
     };
+    resendInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OnboardEmployeeResult"];
+                };
+            };
+        };
+    };
     deactivate: {
         parameters: {
             query?: never;
@@ -6566,6 +6691,76 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["CompanyDetailView"];
+                };
+            };
+        };
+    };
+    resetLetterheadMargins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterheadView"];
+                };
+            };
+        };
+    };
+    confirmLetterheadUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterheadView"];
+                };
+            };
+        };
+    };
+    beginLetterheadUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LetterheadUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterheadUpload"];
                 };
             };
         };
@@ -8272,6 +8467,50 @@ export interface operations {
             };
         };
     };
+    getLetterhead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterheadView"];
+                };
+            };
+        };
+    };
+    removeLetterhead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LetterheadView"];
+                };
+            };
+        };
+    };
     assignable_1: {
         parameters: {
             query?: {
@@ -8775,169 +9014,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PurgeCompanyResult"];
-                };
-            };
-        };
-    };
-    validate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ValidateInviteRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["InviteContext"];
-                };
-            };
-        };
-    };
-    resendInvite: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["OnboardEmployeeResult"];
-                };
-            };
-        };
-    };
-    pruneStale: {
-        parameters: {
-            query?: {
-                olderThanDays?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["PruneResult"];
-                };
-            };
-        };
-    };
-    confirmLetterheadUpload: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                part: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LetterheadView"];
-                };
-            };
-        };
-    };
-    beginLetterheadUpload: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                part: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LetterheadUploadRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LetterheadUpload"];
-                };
-            };
-        };
-    };
-    getLetterhead: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LetterheadView"];
-                };
-            };
-        };
-    };
-    removeLetterhead: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                part: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LetterheadView"];
                 };
             };
         };

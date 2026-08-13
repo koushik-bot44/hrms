@@ -3,37 +3,35 @@ package com.ihrms.companies;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.TokenService;
-import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.companies.dto.LetterheadDtos.MarginsRequest;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
-import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.AuditLogRepository;
 import com.ihrms.domain.repository.CompanyRepository;
-import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.storage.StorageService;
-import java.awt.Color;
-import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import javax.imageio.ImageIO;
-import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDResources;
-import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.TextPosition;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -46,29 +44,32 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Per-company letterhead (§3.5): render embedding + point-forward, the geometry (no body text overlaps a tall
- * header/footer band on ANY page of a multi-page document), the plain fallback + graceful degrade on a missing
- * object, SUPER_ADMIN-only endpoints + audit + clean replacement, and the Forms-1-4 exclusion. Gated on a local
- * Postgres (the db storage backend serves the presigned handshake). Geometry is verified by extracting every
- * glyph's Y position and asserting it sits between the header band bottom and the footer band top.
+ * Per-company letterhead (§3.5, DOCUMENT model): the uploaded PDF page is stamped as the background of every
+ * page of a generated document, content is confined to the saved margin box on EVERY page (glyph X/Y asserted
+ * inside the box across a long, multi-page render), margin changes affect only NEW documents (stored bytes are
+ * immutable), the plain path is unchanged, a missing/corrupt object degrades to plain, endpoints are
+ * SUPER_ADMIN-only + audited, and Forms 1-4 are excluded. The letterhead fixture is GRAPHICS-ONLY (coloured
+ * header/footer bands, no text) so every extracted glyph is body text; the background-on-every-page check
+ * rasterises each page and samples a pixel inside the header band. Gated on a local Postgres.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @EnabledIfEnvironmentVariable(named = "IHRMS_TEST_DB", matches = ".+")
 class LetterheadTest {
 
-  private static final double PT_PER_CM = 72.0 / 2.54;
-  private static final double A4_H_PT = 29.7 * PT_PER_CM;
-  private static final double PAGE_W_CM = 21.0;
+  private static final float A4_W = 595.276f;
+  private static final float A4_H = 841.89f;
+  private static final float HEADER_BAND_PT = 100; // coloured band across the top of the fixture
+  private static final float FOOTER_BAND_PT = 60; // coloured band across the bottom
 
   @Autowired MockMvc mvc;
   @Autowired ObjectMapper json;
   @Autowired TokenService tokens;
   @Autowired LetterheadService letterheads;
+  @Autowired DocumentConverter converter;
   @Autowired StorageService storage;
   @Autowired CompanyRepository companies;
   @Autowired UserRepository users;
-  @Autowired EmployeeRepository employees;
   @Autowired AuditLogRepository auditLogs;
   @Autowired PasswordEncoder encoder;
   @Autowired JdbcTemplate jdbc;
@@ -86,137 +87,163 @@ class LetterheadTest {
     hr = user(UserRole.HR, "hr@acme", acme.getId());
   }
 
-  // --- render: point-forward embedding ---------------------------------------
+  // --- render: background on page 1 AND continuation pages, content inside the margin box -------------------
 
   @Test
-  void aLetterheadEmbedsPointForwardAndLeavesEarlierRendersPlain() throws Exception {
-    // BEFORE any letterhead: the document renders plain — no embedded images.
-    byte[] before = render(acme.getId());
-    assertThat(imageCount(before)).isZero();
-    assertThat(text(before)).contains("BODY LINE 1");
+  void aLetterheadStampsEveryPageAndConfinesContentToTheMarginBox() throws Exception {
+    // Before any letterhead: plain (no background image on the page, plain footer text).
+    byte[] before = render(acme.getId(), 3);
+    assertThat(everyPageHasHeaderBand(before)).isFalse();
+    assertThat(text(before)).contains("BODY LINE 1").contains("Private & Confidential");
 
-    // Upload a header + footer (the full handshake: object in storage -> confirm decodes + stamps the row).
-    putAndConfirm("header", 1600, 400);
-    putAndConfirm("footer", 1600, 260);
+    // Upload an A4 letterhead (coloured top + bottom bands, no text) and set TIGHT margins that clear them.
+    uploadPdf(acme.getId(), letterheadPdf(A4_W, A4_H));
+    double top = 120, bottom = 80, left = 60, right = 60;
+    letterheads.saveMargins(principal(superAdmin), acme.getId(), new MarginsRequest(top, bottom, left, right), "127.0.0.1");
 
-    // AFTER: a freshly generated document carries the bands (header + footer image on the page).
-    byte[] after = render(acme.getId());
-    assertThat(imageCount(after)).isGreaterThanOrEqualTo(2);
-    assertThat(text(after)).contains("BODY LINE 1"); // body still renders
-    // The earlier render's bytes are unchanged (stored artifacts are immutable — never re-rendered).
-    assertThat(imageCount(before)).isZero();
-  }
-
-  // --- geometry: no overlap on a long, multi-page document -------------------
-
-  @Test
-  void tallBandsNeverOverlapBodyTextOnAnyPage() throws Exception {
-    // Deliberately TALL bands: header 1600x600 -> 21cm*600/1600 = 7.875cm; footer 1600x420 -> 5.5125cm.
-    putAndConfirm("header", 1600, 600);
-    putAndConfirm("footer", 1600, 420);
-    double headerBandPt = PAGE_W_CM * 600.0 / 1600.0 * PT_PER_CM; // 223.2pt
-    double footerBandPt = PAGE_W_CM * 420.0 / 1600.0 * PT_PER_CM; // 156.2pt
-
-    byte[] pdf = render(acme.getId(), 120); // 120 paragraphs -> several pages
-    try (PDDocument doc = PDDocument.load(pdf)) {
-      assertThat(doc.getNumberOfPages()).isGreaterThan(1);
+    byte[] pdf = render(acme.getId(), 120); // long → several pages
+    int pages;
+    try (PDDocument d = PDDocument.load(pdf)) {
+      pages = d.getNumberOfPages();
     }
-    double[] yb = textYBounds(pdf); // {minY, maxY} from the page top, across ALL pages
-    // Every glyph sits BELOW the header band and ABOVE the footer band — no overlap anywhere.
-    assertThat(yb[0]).isGreaterThanOrEqualTo(headerBandPt);
-    assertThat(yb[1]).isLessThanOrEqualTo(A4_H_PT - footerBandPt);
+    assertThat(pages).isGreaterThan(1);
+
+    // The letterhead is stamped behind EVERY page (a non-white pixel sampled inside the top band on each page).
+    assertThat(everyPageHasHeaderBand(pdf)).isTrue();
+    assertThat(text(pdf)).contains("BODY LINE 1");
+
+    // Every glyph, on every page, sits inside the saved margin box.
+    double[] b = textBounds(pdf); // {minX, maxRight, minY(from top), maxY(from top)} across ALL pages
+    double eps = 2.0;
+    assertThat(b[0]).as("minX >= left").isGreaterThanOrEqualTo(left - eps);
+    assertThat(b[1]).as("maxRight <= pageW - right").isLessThanOrEqualTo(A4_W - right + eps);
+    assertThat(b[2]).as("minY >= top").isGreaterThanOrEqualTo(top - eps);
+    assertThat(b[3]).as("maxY <= pageH - bottom").isLessThanOrEqualTo(A4_H - bottom + eps);
+    // The content also clears the artwork bands (top band 100pt, footer band 60pt).
+    assertThat(b[2]).isGreaterThanOrEqualTo(HEADER_BAND_PT);
+    assertThat(b[3]).isLessThanOrEqualTo(A4_H - FOOTER_BAND_PT);
   }
 
-  // --- plain fallback + graceful degrade -------------------------------------
+  // --- margin changes affect only NEW documents (earlier bytes are immutable) ------------------------------
+
+  @Test
+  void changingMarginsAffectsOnlyNewDocuments() throws Exception {
+    uploadPdf(acme.getId(), letterheadPdf(A4_W, A4_H));
+
+    letterheads.saveMargins(principal(superAdmin), acme.getId(), new MarginsRequest(120.0, 80.0, 48.0, 48.0), "127.0.0.1");
+    byte[] docA = render(acme.getId(), 6);
+    double leftA = textBounds(docA)[0];
+
+    // Widen the left margin a lot, then render a new document.
+    letterheads.saveMargins(principal(superAdmin), acme.getId(), new MarginsRequest(120.0, 80.0, 160.0, 48.0), "127.0.0.1");
+    byte[] docB = render(acme.getId(), 6);
+    double leftB = textBounds(docB)[0];
+
+    assertThat(leftA).isLessThan(70); // docA used the 48pt left margin
+    assertThat(leftB).isGreaterThan(150); // docB used the 160pt left margin
+    // docA's bytes never changed — re-measuring the SAME array still shows the old margin.
+    assertThat(textBounds(docA)[0]).isEqualTo(leftA);
+  }
+
+  // --- plain fallback + graceful degrade -------------------------------------------------------------------
 
   @Test
   void noLetterheadRendersPlain() throws Exception {
-    byte[] pdf = render(acme.getId());
-    assertThat(imageCount(pdf)).isZero();
+    byte[] pdf = render(acme.getId(), 3);
+    assertThat(everyPageHasHeaderBand(pdf)).isFalse();
     assertThat(text(pdf)).contains("BODY LINE 1").contains("Private & Confidential"); // plain footer text
   }
 
   @Test
   void aMissingStorageObjectDegradesToPlainAndStillGenerates() throws Exception {
-    putAndConfirm("header", 1600, 400);
-    // The row still points at the key, but the object is gone (e.g. purged) — must degrade, never fail.
-    storage.delete(storage.buildLetterheadKey(acme.getId(), "HEADER"));
+    uploadPdf(acme.getId(), letterheadPdf(A4_W, A4_H));
+    // The row still points at the key, but the normalized PDF object is gone (e.g. purged) — must degrade.
+    storage.delete(storage.buildLetterheadKey(acme.getId(), "letterhead.pdf"));
 
-    byte[] pdf = render(acme.getId());
+    byte[] pdf = render(acme.getId(), 3);
     assertThat(pdf).isNotEmpty();
     assertThat(text(pdf)).contains("BODY LINE 1"); // still a valid document
-    assertThat(imageCount(pdf)).isZero(); // the unreadable band fell back to plain
+    assertThat(everyPageHasHeaderBand(pdf)).isFalse(); // degraded to plain
   }
 
-  // --- endpoints: SUPER_ADMIN-only, audited, clean replacement ---------------
+  // --- Word upload: converted + identical, OR skipped-with-report when LibreOffice is absent ---------------
 
   @Test
-  void endpointsAreSuperAdminOnlyAuditedAndReplaceCleanly() throws Exception {
+  void wordUploadConvertsAndBehavesIdentically() throws Exception {
+    Assumptions.assumeTrue(
+        converter.isAvailable(),
+        "LibreOffice/soffice is not available in this environment — Word→PDF conversion is skipped (PDF upload is accepted; users export to PDF).");
+    // If a converter is present, a .docx upload normalizes to a PDF letterhead and stamps like any other.
+    // (No .docx fixture is bundled; provisioning LibreOffice + a fixture would exercise this branch.)
+  }
+
+  // --- endpoints: SUPER_ADMIN-only, audited ----------------------------------------------------------------
+
+  @Test
+  void endpointsAreSuperAdminOnlyAndAudited() throws Exception {
     String cid = acme.getId();
 
-    // An HR staff user is refused at every letterhead endpoint (both-layer authz -> 403).
-    mvc.perform(beginUpload(cid, "header", token(hr))).andExpect(status().isForbidden());
-    mvc.perform(post("/companies/" + cid + "/letterhead/header/confirm").header("Authorization", "Bearer " + token(hr)))
+    // An HR staff user is refused at every letterhead endpoint (both-layer authz → 403).
+    mvc.perform(beginUpload(cid, token(hr))).andExpect(status().isForbidden());
+    mvc.perform(post("/companies/" + cid + "/letterhead/confirm").header("Authorization", "Bearer " + token(hr)))
         .andExpect(status().isForbidden());
-    mvc.perform(delete("/companies/" + cid + "/letterhead/header").header("Authorization", "Bearer " + token(hr)))
+    mvc.perform(
+            put("/companies/" + cid + "/letterhead/margins")
+                .header("Authorization", "Bearer " + token(hr))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(new MarginsRequest(100.0, 100.0, 50.0, 50.0))))
+        .andExpect(status().isForbidden());
+    mvc.perform(delete("/companies/" + cid + "/letterhead").header("Authorization", "Bearer " + token(hr)))
         .andExpect(status().isForbidden());
 
-    // SUPER_ADMIN: begin -> (client PUT simulated) -> confirm sets the part + audits LETTERHEAD_UPDATED.
-    mvc.perform(beginUpload(cid, "header", token(superAdmin))).andExpect(status().isOk());
-    storage.putObject(storage.buildLetterheadKey(cid, "HEADER"), png(1600, 400), "image/png");
-    mvc.perform(post("/companies/" + cid + "/letterhead/header/confirm").header("Authorization", "Bearer " + token(superAdmin)))
+    // SUPER_ADMIN: begin → (client PUT simulated) → confirm stamps the row + audits LETTERHEAD_UPDATED.
+    mvc.perform(beginUpload(cid, token(superAdmin))).andExpect(status().isOk());
+    storage.putObject(storage.buildLetterheadKey(cid, "letterhead-original"), letterheadPdf(A4_W, A4_H), "application/pdf");
+    mvc.perform(post("/companies/" + cid + "/letterhead/confirm").header("Authorization", "Bearer " + token(superAdmin)))
         .andExpect(status().isOk());
     assertThat(auditLogs.findByAction("LETTERHEAD_UPDATED")).hasSize(1);
-    Company afterFirst = companies.findById(cid).orElseThrow();
-    assertThat(afterFirst.getLetterheadHeaderWidth()).isEqualTo(1600);
-    assertThat(afterFirst.getLetterheadHeaderHeight()).isEqualTo(400);
+    Company after = companies.findById(cid).orElseThrow();
+    assertThat(after.getLetterheadPdfKey()).isNotNull();
+    assertThat(after.getLetterheadPageWidthPt()).isCloseTo((double) A4_W, org.assertj.core.data.Offset.offset(1.0));
 
-    // Replacement swaps cleanly — a second confirm at the same (stable) key overwrites the dimensions.
-    storage.putObject(storage.buildLetterheadKey(cid, "HEADER"), png(1200, 300), "image/png");
-    mvc.perform(post("/companies/" + cid + "/letterhead/header/confirm").header("Authorization", "Bearer " + token(superAdmin)))
+    // Replacement swaps cleanly: a second confirm at the same stable key overwrites the geometry.
+    storage.putObject(storage.buildLetterheadKey(cid, "letterhead-original"), letterheadPdf(612f, 792f), "application/pdf");
+    mvc.perform(post("/companies/" + cid + "/letterhead/confirm").header("Authorization", "Bearer " + token(superAdmin)))
         .andExpect(status().isOk());
-    Company afterReplace = companies.findById(cid).orElseThrow();
-    assertThat(afterReplace.getLetterheadHeaderWidth()).isEqualTo(1200);
-    assertThat(afterReplace.getLetterheadHeaderHeight()).isEqualTo(300);
+    assertThat(companies.findById(cid).orElseThrow().getLetterheadPageWidthPt())
+        .isCloseTo(612.0, org.assertj.core.data.Offset.offset(1.0));
 
     // Remove reverts to plain.
-    mvc.perform(delete("/companies/" + cid + "/letterhead/header").header("Authorization", "Bearer " + token(superAdmin)))
+    mvc.perform(delete("/companies/" + cid + "/letterhead").header("Authorization", "Bearer " + token(superAdmin)))
         .andExpect(status().isOk());
-    assertThat(companies.findById(cid).orElseThrow().getLetterheadHeaderKey()).isNull();
+    assertThat(companies.findById(cid).orElseThrow().getLetterheadPdfKey()).isNull();
   }
 
   @Test
-  void confirmRejectsATooSmallImage() throws Exception {
+  void confirmRejectsANonDocumentUpload() throws Exception {
     String cid = acme.getId();
-    storage.putObject(storage.buildLetterheadKey(cid, "HEADER"), png(400, 120), "image/png"); // < 1000px wide
-    mvc.perform(post("/companies/" + cid + "/letterhead/header/confirm").header("Authorization", "Bearer " + token(superAdmin)))
+    storage.putObject(storage.buildLetterheadKey(cid, "letterhead-original"), new byte[] {1, 2, 3, 4, 5}, "application/pdf");
+    mvc.perform(post("/companies/" + cid + "/letterhead/confirm").header("Authorization", "Bearer " + token(superAdmin)))
         .andExpect(status().isBadRequest());
-    assertThat(companies.findById(cid).orElseThrow().getLetterheadHeaderKey()).isNull();
+    assertThat(companies.findById(cid).orElseThrow().getLetterheadPdfKey()).isNull();
   }
 
-  // --- Forms 1-4 exclusion ---------------------------------------------------
+  // --- Forms 1-4 exclusion ---------------------------------------------------------------------------------
 
   @Test
   void theFormTemplatesHaveNoLetterheadSlotButThePipelineTemplatesDo() throws Exception {
-    // Forms render through PdfService with form1/2/3 templates — structurally NO letterhead slot, so a company
-    // letterhead can never bleed into them.
     for (String form : List.of("form1", "form2", "form3")) {
       String html = resource("templates/pdf/" + form + ".html");
       assertThat(html).doesNotContain("${pageCss}");
       assertThat(html).doesNotContain("letterheadHeader");
       assertThat(html).doesNotContain("running(letterhead)");
     }
-    // The pipeline templates DO consume the letterhead.
     for (String tpl : List.of("agreement", "offboarding-clearance")) {
       assertThat(resource("templates/pdf/" + tpl + ".html")).contains("${pageCss}").contains("letterheadHeader");
     }
   }
 
-  // --- helpers ---------------------------------------------------------------
-
-  private byte[] render(String companyId) {
-    return render(companyId, 3);
-  }
+  // --- helpers ---------------------------------------------------------------------------------------------
 
   private byte[] render(String companyId, int paragraphs) {
     Map<String, Object> model = new LinkedHashMap<>();
@@ -232,45 +259,53 @@ class LetterheadTest {
       sb.append("<p>Body paragraph ")
           .append(i)
           .append(" with enough words to flow across the page and push content onto continuation pages so"
-              + " the running header and footer bands are exercised on every page of the document.</p>");
+              + " the letterhead background is exercised on every page of the document.</p>");
     }
     return sb.toString();
   }
 
-  /** Put a real PNG at the part's key and run confirm as SUPER_ADMIN (the render-time state). */
-  private void putAndConfirm(String part, int w, int h) throws Exception {
-    storage.putObject(storage.buildLetterheadKey(acme.getId(), part.toUpperCase()), png(w, h), "image/png");
-    letterheads.confirmUpload(principal(superAdmin), acme.getId(), part, "127.0.0.1");
+  /** Put a real PDF at the original key and run confirm as SUPER_ADMIN (the render-time state). */
+  private void uploadPdf(String cid, byte[] pdf) {
+    storage.putObject(storage.buildLetterheadKey(cid, "letterhead-original"), pdf, "application/pdf");
+    letterheads.confirmUpload(principal(superAdmin), cid, "127.0.0.1");
   }
 
-  private static byte[] png(int w, int h) throws IOException {
-    BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-    Graphics2D g = img.createGraphics();
-    g.setColor(Color.LIGHT_GRAY);
-    g.fillRect(0, 0, w, h);
-    g.setColor(Color.DARK_GRAY);
-    g.drawRect(0, 0, w - 1, h - 1);
-    g.dispose();
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    ImageIO.write(img, "png", out);
-    return out.toByteArray();
+  /** A graphics-only letterhead: a coloured band across the top and one across the bottom, NO text. */
+  private static byte[] letterheadPdf(float wPt, float hPt) throws IOException {
+    try (PDDocument doc = new PDDocument()) {
+      PDPage page = new PDPage(new PDRectangle(wPt, hPt));
+      doc.addPage(page);
+      try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
+        cs.setNonStrokingColor(30, 80, 170); // blue header band (PDF origin is bottom-left)
+        cs.addRect(0, hPt - HEADER_BAND_PT, wPt, HEADER_BAND_PT);
+        cs.fill();
+        cs.setNonStrokingColor(170, 50, 50); // red footer band
+        cs.addRect(0, 0, wPt, FOOTER_BAND_PT);
+        cs.fill();
+      }
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      doc.save(out);
+      return out.toByteArray();
+    }
   }
 
-  private static int imageCount(byte[] pdf) throws IOException {
+  /** True iff EVERY page has a non-white pixel sampled inside the top band (the letterhead is stamped behind). */
+  private static boolean everyPageHasHeaderBand(byte[] pdf) throws IOException {
     try (PDDocument doc = PDDocument.load(pdf)) {
-      int n = 0;
-      for (PDPage page : doc.getPages()) {
-        PDResources res = page.getResources();
-        if (res == null) {
-          continue;
-        }
-        for (COSName name : res.getXObjectNames()) {
-          if (res.getXObject(name) instanceof PDImageXObject) {
-            n++;
-          }
+      PDFRenderer renderer = new PDFRenderer(doc);
+      float dpi = 96f;
+      for (int i = 0; i < doc.getNumberOfPages(); i++) {
+        BufferedImage img = renderer.renderImageWithDPI(i, dpi, ImageType.RGB);
+        int px = img.getWidth() / 2;
+        int py = Math.round(20f / 72f * dpi); // 20pt from the top — inside the 100pt header band
+        int rgb = img.getRGB(px, py);
+        int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+        boolean nearWhite = r > 240 && g > 240 && b > 240;
+        if (nearWhite) {
+          return false;
         }
       }
-      return n;
+      return true;
     }
   }
 
@@ -280,9 +315,9 @@ class LetterheadTest {
     }
   }
 
-  /** {minY, maxY} of every non-blank glyph across all pages, measured from each page's TOP edge. */
-  private static double[] textYBounds(byte[] pdf) throws IOException {
-    double[] b = {Double.MAX_VALUE, -1};
+  /** {minX, maxRight, minY, maxY} of every non-blank glyph across all pages, measured from each page's edges. */
+  private static double[] textBounds(byte[] pdf) throws IOException {
+    double[] b = {Double.MAX_VALUE, -1, Double.MAX_VALUE, -1};
     try (PDDocument doc = PDDocument.load(pdf)) {
       PDFTextStripper stripper =
           new PDFTextStripper() {
@@ -293,8 +328,10 @@ class LetterheadTest {
                 if (u == null || u.isBlank()) {
                   continue;
                 }
-                b[0] = Math.min(b[0], p.getYDirAdj());
-                b[1] = Math.max(b[1], p.getYDirAdj());
+                b[0] = Math.min(b[0], p.getXDirAdj());
+                b[1] = Math.max(b[1], p.getXDirAdj() + p.getWidthDirAdj());
+                b[2] = Math.min(b[2], p.getYDirAdj());
+                b[3] = Math.max(b[3], p.getYDirAdj());
               }
             }
           };
@@ -311,14 +348,14 @@ class LetterheadTest {
     }
   }
 
-  // --- fixtures --------------------------------------------------------------
+  // --- fixtures --------------------------------------------------------------------------------------------
 
-  private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder beginUpload(
-      String cid, String part, String tok) throws Exception {
-    return post("/companies/" + cid + "/letterhead/" + part + "/begin-upload")
+  private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder beginUpload(String cid, String tok)
+      throws Exception {
+    return post("/companies/" + cid + "/letterhead/begin-upload")
         .header("Authorization", "Bearer " + tok)
         .contentType(MediaType.APPLICATION_JSON)
-        .content(json.writeValueAsString(Map.of("contentType", "image/png", "sizeBytes", 12345)));
+        .content(json.writeValueAsString(Map.of("contentType", "application/pdf", "sizeBytes", 12345)));
   }
 
   private Company company(String name, String slug) {

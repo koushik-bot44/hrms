@@ -2,7 +2,11 @@ package com.ihrms.companies.dto;
 
 import java.util.Map;
 
-/** Per-company letterhead DTOs (§3.5). SUPER_ADMIN uploads a HEADER and/or FOOTER band image per company. */
+/**
+ * Per-company letterhead DTOs (§3.5, document model). The SUPER_ADMIN uploads ONE letterhead file (PDF, or
+ * Word converted to PDF); its first page becomes the page background of every generated pipeline document, and
+ * a margin box (points) sets where content may sit.
+ */
 public final class LetterheadDtos {
   private LetterheadDtos() {}
 
@@ -11,11 +15,26 @@ public final class LetterheadDtos {
 
   /** The presigned PUT handshake (same shape as the mail-attachment upload). */
   public record LetterheadUpload(
-      String uploadUrl, String method, Map<String, String> headers, int expiresInSeconds, String part) {}
+      String uploadUrl, String method, Map<String, String> headers, int expiresInSeconds) {}
 
-  /** One stored part's metadata + a short-lived presigned preview URL (null when storage can't presign). */
-  public record LetterheadPartView(int width, int height, String contentType, String previewUrl) {}
+  /** Save the content margin box (points from each page edge). All four are draggable in the editor. */
+  public record MarginsRequest(Double topPt, Double bottomPt, Double leftPt, Double rightPt) {}
 
-  /** The company's current letterhead: header/footer parts (null when unset) + when it last changed. */
-  public record LetterheadView(LetterheadPartView header, LetterheadPartView footer, String updatedAt) {}
+  /**
+   * The company's current letterhead. {@code present} is false when unset (documents render plain); when true,
+   * the page size + margin box (points) + a short-lived presigned preview of the first page drive the editor.
+   * {@code wordConversionAvailable} tells the UI whether it may offer Word upload on this server.
+   */
+  public record LetterheadView(
+      boolean present,
+      Double pageWidthPt,
+      Double pageHeightPt,
+      Double marginTopPt,
+      Double marginBottomPt,
+      Double marginLeftPt,
+      Double marginRightPt,
+      String originalType,
+      String previewUrl,
+      String updatedAt,
+      boolean wordConversionAvailable) {}
 }
