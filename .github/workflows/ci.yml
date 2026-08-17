@@ -1,0 +1,75 @@
+name: CI
+
+# Runs the REAL test suite on every push and PR. Without a Postgres service + IHRMS_TEST_DB, a plain build
+# executes only the ~11 pure-unit classes and no-ops the 45 @SpringBootTest classes (audit finding: the suite
+# was effectively off in any automated build). This workflow makes the authz/PII/immutability tests actually run.
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Spring Boot + Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ihrms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Enable the 45 DB-gated @SpringBootTest classes (they self-skip when IHRMS_TEST_DB is unset).
+      IHRMS_TEST_DB: "1"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ihrms
+      # PDFBox rasterization (LetterheadTest) must run headless in the forked test JVM.
+      JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      # Flyway applies the schema to the fresh service DB, then the full suite runs; any failure fails the build.
+      # (The 2 IHRMS_TEST_S3-gated classes stay skipped — a MinIO service would enable them in a follow-up.)
+      - name: Build + full backend test suite
+        run: ./mvnw -B -ntp package
+
+  web:
+    name: Web (Next build + tsc + vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck (tsc --noEmit)
+        run: pnpm run lint
+      - name: Unit tests (vitest)
+        run: pnpm run test
+      - name: Production build (next build)
+        run: pnpm run build

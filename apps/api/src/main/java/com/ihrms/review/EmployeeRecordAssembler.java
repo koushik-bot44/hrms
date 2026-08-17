@@ -10,6 +10,7 @@ import com.ihrms.domain.model.Form1Personal;
 import com.ihrms.domain.model.Form2Info;
 import com.ihrms.domain.model.Form3PrevEmployment;
 import com.ihrms.domain.model.Company;
+import com.ihrms.domain.enums.GeneratedDocumentKind;
 import com.ihrms.domain.model.GeneratedDocument;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.DocumentRepository;
@@ -183,12 +184,14 @@ public class EmployeeRecordAssembler {
   }
 
   private RecordGeneratedDocument generatedView(GeneratedDocument d) {
+    // Form 2 is the HR/SA-only standalone PDF (§3.2). This record view is SHARED with manager/accountant, so
+    // its URL is NOT embedded here (that would leak an HR-only artifact past a frontend label); HR/CA/SA fetch
+    // it on demand from the role-gated GET /employees/{id}/form2/pdf. The other kinds keep their view URL.
+    String url =
+        d.getKind() == GeneratedDocumentKind.FORM2
+            ? null
+            : storage.presignedGetUrl(d.getStorageKey(), VIEW_TTL_SECONDS);
     return new RecordGeneratedDocument(
-        d.getId(),
-        d.getKind(),
-        d.getFileName(),
-        d.getSha256(),
-        d.getGeneratedAt().toString(),
-        storage.presignedGetUrl(d.getStorageKey(), VIEW_TTL_SECONDS));
+        d.getId(), d.getKind(), d.getFileName(), d.getSha256(), d.getGeneratedAt().toString(), url);
   }
 }

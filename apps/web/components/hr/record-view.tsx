@@ -13,7 +13,7 @@ import type {
   SectionStatus,
 } from '@/lib/contract';
 import { DOCUMENT_TYPE_LABELS, GeneratedDocumentKind, UserRole } from '@/lib/contract';
-import { getOfferPdfUrl } from '@/lib/api/review';
+import { getForm2PdfUrl, getOfferPdfUrl } from '@/lib/api/review';
 import { useApiMutation } from '@/lib/api/hooks';
 import { useAuth } from '@/components/auth-provider';
 import { Button } from '@/components/ui/button';
@@ -329,12 +329,18 @@ export function RecordView({
                     </Badge>
                   ) : null}
                 </div>
-                <a href={g.viewUrl} target="_blank" rel="noreferrer">
-                  <Button type="button" variant="outline" size="sm">
-                    <ExternalLink />
-                    Open
-                  </Button>
-                </a>
+                {g.kind === GeneratedDocumentKind.FORM2 ? (
+                  // HR/SA-only (§3.2): its URL is never in this shared view — fetch on demand from the
+                  // role-gated endpoint, and only for viewers allowed to download (manager/accountant get none).
+                  viewerCanDownloadOffer ? <Form2OpenButton employeeId={record.id} /> : null
+                ) : g.viewUrl ? (
+                  <a href={g.viewUrl} target="_blank" rel="noreferrer">
+                    <Button type="button" variant="outline" size="sm">
+                      <ExternalLink />
+                      Open
+                    </Button>
+                  </a>
+                ) : null}
               </div>
             ))}
           </div>
@@ -417,6 +423,31 @@ function OfferRecordSection({
         ) : null}
       </div>
     </section>
+  );
+}
+
+/**
+ * The Form-2 (Employee Info) PDF is HR/SA-only (§3.2): its URL is never embedded in the shared record view.
+ * This fetches the presigned URL on demand from the role-gated endpoint and opens it — rendered only for
+ * viewers who may download (HR/COMPANY_ADMIN/SUPER_ADMIN); manager/accountant never see it and get a 403.
+ */
+function Form2OpenButton({ employeeId }: { employeeId: string }) {
+  const openPdf = useApiMutation(() => getForm2PdfUrl(employeeId), {
+    onSuccess: (r) => {
+      window.open(r.url, '_blank', 'noopener');
+    },
+  });
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={openPdf.isPending}
+      onClick={() => openPdf.mutate()}
+    >
+      <ExternalLink />
+      {openPdf.isPending ? 'Opening…' : 'Open'}
+    </Button>
   );
 }
 

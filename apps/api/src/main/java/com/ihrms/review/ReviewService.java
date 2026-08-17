@@ -8,6 +8,7 @@ import com.ihrms.auth.MailService;
 import com.ihrms.domain.enums.ApprovalStatus;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.domain.enums.GeneratedDocumentKind;
 import com.ihrms.domain.enums.NotificationType;
 import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.model.ApprovalRequest;
@@ -16,6 +17,7 @@ import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Form1Personal;
 import com.ihrms.domain.model.Form3PrevEmployment;
+import com.ihrms.domain.model.GeneratedDocument;
 import com.ihrms.domain.model.Notification;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
@@ -25,12 +27,14 @@ import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.Form1PersonalRepository;
 import com.ihrms.domain.repository.Form3PrevEmploymentRepository;
+import com.ihrms.domain.repository.GeneratedDocumentRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.EmployeeCodeService;
 import com.ihrms.domain.support.EmployeeCodes;
 import com.ihrms.onboarding.PdfService;
+import com.ihrms.onboarding.dto.OnboardingDtos.PresignedView;
 import com.ihrms.push.PushService;
 import com.ihrms.push.PushService.PrincipalRef;
 import com.ihrms.review.dto.ReviewDtos.ApproveRequest;
@@ -39,6 +43,7 @@ import com.ihrms.review.dto.ReviewDtos.EmployeeRecordView;
 import com.ihrms.review.dto.ReviewDtos.RejectRequest;
 import com.ihrms.review.dto.ReviewDtos.RevealedSensitive;
 import com.ihrms.review.dto.ReviewDtos.ReviewRequest;
+import com.ihrms.storage.StorageService;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,6 +67,9 @@ public class ReviewService {
 
   private static final Logger log = LoggerFactory.getLogger(ReviewService.class);
 
+  /** Short-lived presigned-view TTL for the Form-2 PDF (matches the record assembler + offer PDF). */
+  private static final int VIEW_TTL_SECONDS = 60;
+
   private final EmployeeRepository employees;
   private final Form1PersonalRepository form1s;
   private final Form3PrevEmploymentRepository form3s;
@@ -78,6 +86,8 @@ public class ReviewService {
   private final AuthorizationService authz;
   private final AuditService audit;
   private final EmployeeRecordAssembler assembler;
+  private final GeneratedDocumentRepository generated;
+  private final StorageService storage;
 
   public ReviewService(
       EmployeeRepository employees,
@@ -95,7 +105,9 @@ public class ReviewService {
       PushService push,
       AuthorizationService authz,
       AuditService audit,
-      EmployeeRecordAssembler assembler) {
+      EmployeeRecordAssembler assembler,
+      GeneratedDocumentRepository generated,
+      StorageService storage) {
     this.employees = employees;
     this.form1s = form1s;
     this.form3s = form3s;
@@ -112,6 +124,27 @@ public class ReviewService {
     this.authz = authz;
     this.audit = audit;
     this.assembler = assembler;
+    this.generated = generated;
+    this.storage = storage;
+  }
+
+  /**
+   * A short-lived presigned URL to the standalone Form-2 (Employee Info) PDF — the HR/SA-only artifact (§3.2).
+   * Role-gated at the controller + URL rule to HR/COMPANY_ADMIN/SUPER_ADMIN (manager/accountant get 403); the
+   * service additionally scopes access with {@code canAccessEmployee} and audits every view. The URL is NOT in
+   * the shared record view (it reaches manager/accountant), so this is the only way to fetch it.
+   */
+  @Transactional(readOnly = true)
+  public PresignedView form2PdfUrl(IhrmsPrincipal.User actor, String employeeId, String ip) {
+    authz.assertCanAccessEmployee(actor, employeeId);
+    GeneratedDocument doc =
+        generated.findByEmployeeId(employeeId).stream()
+            .filter(d -> d.getKind() == GeneratedDocumentKind.FORM2)
+            .findFirst()
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No Form 2 PDF yet"));
+    audit.record(
+        AuditActor.from(actor), "FORM2_PDF_VIEWED", "Employee", employeeId, Map.of("employeeId", employeeId), ip);
+    return new PresignedView(storage.presignedGetUrl(doc.getStorageKey(), VIEW_TTL_SECONDS), VIEW_TTL_SECONDS);
   }
 
   /** Open a record by INTERNAL id — the verification entry (pre-approval employees have no code). */

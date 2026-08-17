@@ -25,6 +25,15 @@ export function getOfferPdfUrl(id: string): Promise<PresignedView> {
 }
 
 /**
+ * A short-lived presigned URL to the standalone Form-2 (Employee Info) PDF (§3.2) — role-gated (HR/
+ * COMPANY_ADMIN/SUPER_ADMIN); it is the HR/SA-only artifact and its URL is not in the shared record view, so
+ * manager/accountant get a 403. Fetched on demand only when the viewer may download it.
+ */
+export function getForm2PdfUrl(id: string): Promise<PresignedView> {
+  return apiFetch<PresignedView>(`/employees/${encodeURIComponent(id)}/form2/pdf`);
+}
+
+/**
  * HR deactivates an offboarded employee's account (§3.6) — disables BOTH sign-in doors. One-way; 409 if
  * already deactivated. Allowed only once the employee is OFFBOARDED (the record's Offboarding panel gates it).
  */

@@ -16,6 +16,7 @@ import com.ihrms.auth.TokenService;
 import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.DocumentType;
 import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.domain.enums.GeneratedDocumentKind;
 import com.ihrms.domain.enums.SectionStatus;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
@@ -23,6 +24,7 @@ import com.ihrms.domain.model.Document;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Form1Personal;
 import com.ihrms.domain.model.Form2Info;
+import com.ihrms.domain.model.GeneratedDocument;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
@@ -32,12 +34,14 @@ import com.ihrms.domain.repository.DocumentRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.Form1PersonalRepository;
 import com.ihrms.domain.repository.Form2InfoRepository;
+import com.ihrms.domain.repository.GeneratedDocumentRepository;
 import com.ihrms.domain.repository.NotificationRepository;
 import com.ihrms.domain.repository.TeamRepository;
 import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.domain.support.EmployeeCodes;
 import com.ihrms.review.dto.ReviewDtos.ApproveRequest;
 import com.ihrms.storage.StorageService;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -83,6 +87,7 @@ class ReviewApiTest {
   @Autowired NotificationRepository notifications;
   @Autowired AuditLogRepository auditLogs;
   @Autowired ReviewService reviewService;
+  @Autowired GeneratedDocumentRepository generated;
   @Autowired JdbcTemplate jdbc;
 
   @MockBean StorageService storage;
@@ -412,6 +417,67 @@ class ReviewApiTest {
   }
 
   /** Verify Form 1 + the single document so the employee auto-transitions to HR_VERIFIED. */
+  @Test
+  void form2PdfUrlIsAbsentFromTheSharedRecordAndGatedToHrCompanyAdminSuperAdmin() throws Exception {
+    generated.save(generatedDoc(GeneratedDocumentKind.FORM2, "form2.pdf"));
+    generated.save(generatedDoc(GeneratedDocumentKind.MERGED, "complete.pdf"));
+
+    // Shared record view (HR): the FORM2 entry has NO viewUrl; the MERGED one keeps its URL.
+    JsonNode record =
+        json.readTree(
+            mvc.perform(
+                    get("/employees/" + emp.getId() + "/record").header("Authorization", "Bearer " + hr1Token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(generatedByKind(record, "FORM2").get("viewUrl").isNull()).isTrue();
+    assertThat(generatedByKind(record, "MERGED").get("viewUrl").asText()).isNotBlank();
+
+    // The gated endpoint: HR gets a presigned URL.
+    JsonNode ok =
+        json.readTree(
+            mvc.perform(
+                    get("/employees/" + emp.getId() + "/form2/pdf")
+                        .header("Authorization", "Bearer " + hr1Token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(ok.get("url").asText()).isNotBlank();
+
+    // Manager + Accountant are refused at the URL rule (403) — they never reach the Form-2 PDF.
+    String managerToken = tokenFor(manager1);
+    String accountantToken = tokenFor(user(companyA, UserRole.ACCOUNTANT, "acc1@acme.test"));
+    mvc.perform(
+            get("/employees/" + emp.getId() + "/form2/pdf").header("Authorization", "Bearer " + managerToken))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            get("/employees/" + emp.getId() + "/form2/pdf")
+                .header("Authorization", "Bearer " + accountantToken))
+        .andExpect(status().isForbidden());
+  }
+
+  private GeneratedDocument generatedDoc(GeneratedDocumentKind kind, String fileName) {
+    GeneratedDocument g = new GeneratedDocument();
+    g.setEmployeeId(emp.getId());
+    g.setKind(kind);
+    g.setFileName(fileName);
+    g.setStorageKey("companies/x/employees/" + emp.getId() + "/generated/" + fileName);
+    g.setSha256("sha-" + kind);
+    g.setGeneratedAt(Instant.now());
+    return g;
+  }
+
+  private static JsonNode generatedByKind(JsonNode record, String kind) {
+    for (JsonNode g : record.get("generatedDocuments")) {
+      if (kind.equals(g.get("kind").asText())) {
+        return g;
+      }
+    }
+    throw new AssertionError("no generated doc of kind " + kind);
+  }
+
   private void verifyEverything() throws Exception {
     String docId = documents.findByEmployeeId(emp.getId()).get(0).getId();
     reviewForm("FORM1", "VERIFIED", null);

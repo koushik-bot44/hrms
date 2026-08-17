@@ -95,6 +95,10 @@ public class SecurityConfig {
                     // manager/accountant never reach it (the /employees/** catch-all is HR-only). Service scopes.
                     .requestMatchers(HttpMethod.GET, "/employees/*/offer/pdf")
                     .hasAnyRole("HR", "COMPANY_ADMIN", "SUPER_ADMIN")
+                    // The standalone Form-2 PDF (§3.2) is HR/SA-only — same audience as the offer PDF; its URL
+                    // is NOT embedded in the shared record view (which reaches manager/accountant). Service scopes.
+                    .requestMatchers(HttpMethod.GET, "/employees/*/form2/pdf")
+                    .hasAnyRole("HR", "COMPANY_ADMIN", "SUPER_ADMIN")
                     // Offboarding case READ (§Offboarding) mirrors the record read's gating — the onboarding
                     // HR + the employee's COMPANY_ADMIN + SUPER_ADMIN; the service scopes each. Initiate /
                     // cancel (POST, below) stay HR-only under the /employees/** catch-all.

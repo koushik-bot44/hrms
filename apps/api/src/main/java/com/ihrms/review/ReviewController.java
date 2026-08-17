@@ -78,6 +78,20 @@ public class ReviewController {
     return offers.recordPdfUrl(actor, id, request.getRemoteAddr());
   }
 
+  /**
+   * The standalone Form-2 (Employee Info) PDF (§3.2) — HR/SA-only. Same audience + gating as the offer PDF
+   * (HR/COMPANY_ADMIN/SUPER_ADMIN + canAccessEmployee); manager/accountant get 403 and the employee never sees
+   * Form 2. Its URL is deliberately absent from the shared record view, so this is the only fetch path.
+   */
+  @GetMapping("/{id}/form2/pdf")
+  @PreAuthorize("hasAnyRole('HR','COMPANY_ADMIN','SUPER_ADMIN')")
+  public PresignedView form2Pdf(
+      @PathVariable String id,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return review.form2PdfUrl(actor, id, request.getRemoteAddr());
+  }
+
   @GetMapping("/lookup/{employeeCode}")
   public EmployeeRecordView lookup(
       @PathVariable String employeeCode,
