@@ -33,8 +33,9 @@ jobs:
       # Enable the 45 DB-gated @SpringBootTest classes (they self-skip when IHRMS_TEST_DB is unset).
       IHRMS_TEST_DB: "1"
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ihrms
-      # PDFBox rasterization (LetterheadTest) must run headless in the forked test JVM.
-      JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
+      # PDFBox rasterization (LetterheadTest) must run headless; pin the JVM zone to UTC so pgjdbc doesn't send
+      # a legacy tz alias the Postgres image may not know (both apply to the forked test JVM).
+      JAVA_TOOL_OPTIONS: -Djava.awt.headless=true -Duser.timezone=UTC
     defaults:
       run:
         working-directory: apps/api

@@ -137,6 +137,14 @@ app:
     private-key: ${VAPID_PRIVATE_KEY:}
     subject: ${VAPID_SUBJECT:}
 
+# One-time field-encryption re-key (§6) — see FieldKeyReencryptor. Enable for a SINGLE deploy AFTER rotating
+# FIELD_ENC_KEY to re-encrypt existing sensitive values from the previous key onto the new one, then unset it.
+ihrms:
+  reencrypt-field-keys: ${REENCRYPT_FIELD_KEYS:false}
+  # The previous passphrase used to decrypt existing values; blank = the old committed dev default — the case
+  # the prod boot guard caught (FIELD_ENC_KEY unset, so data was written under the dev key).
+  reencrypt-from-key: ${REENCRYPT_FROM_KEY:}
+
 ---
 # Local/dev profile: refresh cookie relaxes to insecure + SameSite=Lax (set in auth phase).
 spring:
