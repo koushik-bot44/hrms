@@ -174,6 +174,90 @@ class OffboardingApiTest {
         .doesNotContain("aadhaar");
   }
 
+  @Test
+  void hierarchyCaseHistoryIsMinimalPiiPlusOutcomeAndHierarchyOnly() throws Exception {
+    String caseId = initiateAndGetId("Restructuring", "2026-09-30");
+    mvc.perform(post("/hierarchy/offboarding/" + caseId + "/approve")
+            .header("Authorization", "Bearer " + hierarchyToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"note\":null}"))
+        .andExpect(status().isOk());
+
+    // Same both-layer gate as the inbox.
+    mvc.perform(get("/hierarchy/offboarding/cases").header("Authorization", "Bearer " + hr1Token))
+        .andExpect(status().isForbidden());
+
+    String raw =
+        mvc.perform(get("/hierarchy/offboarding/cases").header("Authorization", "Bearer " + hierarchyToken))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    JsonNode rows = json.readTree(raw);
+    assertThat(rows).hasSize(1);
+    JsonNode row = rows.get(0);
+
+    // The nine inbox fields...
+    assertThat(row.get("employeeName").asText()).isEqualTo("Meera Nair");
+    assertThat(row.get("employeeCode").asText()).isEqualTo("GLBX-EMP-000001");
+    assertThat(row.get("companyName").asText()).isEqualTo("Globex Corporation");
+    assertThat(row.get("teamName").asText()).isEqualTo("Engineering");
+    assertThat(row.get("reason").asText()).isEqualTo("Restructuring");
+    assertThat(row.get("lastWorkingDay").asText()).isEqualTo("2026-09-30");
+    assertThat(row.get("initiatedByName").asText()).isEqualTo("Asha Rao");
+    assertThat(row.has("caseId")).isTrue();
+    assertThat(row.has("initiatedAt")).isTrue();
+    // ...plus exactly the four outcome fields the charter extension allows.
+    assertThat(row.get("status").asText()).isEqualTo("APPROVED");
+    assertThat(row.has("decidedByName")).isTrue();
+    assertThat(row.has("decidedAt")).isTrue();
+    assertThat(row.has("completedAt")).isTrue();
+    // Exactly thirteen — nothing else leaks.
+    assertThat(row.size()).isEqualTo(13);
+
+    // The notes are deliberately NOT exposed, nor is anything employee-shaped beyond name/code.
+    assertThat(raw)
+        .doesNotContain("decisionNote")
+        .doesNotContain("cancelNote")
+        .doesNotContain("completionNote")
+        .doesNotContain("meera@personal.test")
+        .doesNotContain("panNumber")
+        .doesNotContain("form1")
+        .doesNotContain("currentAddress")
+        .doesNotContain("aadhaar")
+        .doesNotContain("settlement")
+        .doesNotContain("salary");
+  }
+
+  @Test
+  void hierarchyCaseHistoryFiltersCombine() throws Exception {
+    initiateAndGetId("Restructuring", "2026-09-30");
+
+    // status: a PENDING_APPROVAL case is not APPROVED.
+    assertThat(json.readTree(casesJson("?status=APPROVED"))).isEmpty();
+    assertThat(json.readTree(casesJson("?status=PENDING_APPROVAL"))).hasSize(1);
+
+    // initiated-date window (inclusive, IST calendar days): today matches, a past window does not.
+    String today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).toString();
+    assertThat(json.readTree(casesJson("?from=" + today + "&to=" + today))).hasSize(1);
+    assertThat(json.readTree(casesJson("?from=2020-01-01&to=2020-12-31"))).isEmpty();
+
+    // company: an unknown company yields nothing; combining a matching status keeps the row.
+    assertThat(json.readTree(casesJson("?companyId=does-not-exist"))).isEmpty();
+    assertThat(json.readTree(casesJson("?status=PENDING_APPROVAL&from=" + today + "&to=" + today)))
+        .hasSize(1);
+  }
+
+  private String casesJson(String query) throws Exception {
+    return mvc.perform(
+            get("/hierarchy/offboarding/cases" + query)
+                .header("Authorization", "Bearer " + hierarchyToken))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+  }
+
   // --- approve / reject -----------------------------------------------------
 
   @Test

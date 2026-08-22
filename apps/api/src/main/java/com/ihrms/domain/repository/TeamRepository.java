@@ -1,6 +1,7 @@
 package com.ihrms.domain.repository;
 
 import com.ihrms.domain.model.Team;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,6 +9,9 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface TeamRepository extends JpaRepository<Team, String> {
   List<Team> findByCompanyId(String companyId);
+
+  /** Batched team lookup for a set of companies — used by the hierarchy offboarding history. */
+  List<Team> findByCompanyIdIn(Collection<String> companyIds);
 
   List<Team> findByCompanyIdOrderByCreatedAtDesc(String companyId);
 

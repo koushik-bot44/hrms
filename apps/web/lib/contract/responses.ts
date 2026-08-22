@@ -310,6 +310,30 @@ export type HierarchyPendingRow = Omit<
   teamName: string | null;
 };
 
+/**
+ * A case in the HIERARCHY Offboarding history — the nine minimal-PII fields plus the four outcome
+ * fields the charter extension allows (§3.6). Everything is nullable in practice: a case can predate
+ * a decision, and a deleted employee leaves the joined names empty.
+ */
+export type HierarchyCaseRow = Omit<
+  Required<Schemas['HierarchyCaseRow']>,
+  | 'employeeName'
+  | 'employeeCode'
+  | 'companyName'
+  | 'teamName'
+  | 'decidedByName'
+  | 'decidedAt'
+  | 'completedAt'
+> & {
+  employeeName: string | null;
+  employeeCode: string | null;
+  companyName: string | null;
+  teamName: string | null;
+  decidedByName: string | null;
+  decidedAt: string | null;
+  completedAt: string | null;
+};
+
 export type OffboardingDecisionResult = Required<Schemas['OffboardingDecisionResult']>;
 
 // --- Offboarding documents (§3.6 stage 2) ----------------------------------

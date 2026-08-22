@@ -1,4 +1,5 @@
 import type {
+  HierarchyCaseRow,
   HierarchyPendingRow,
   OffboardingCaseResponse,
   OffboardingCaseView,
@@ -45,6 +46,29 @@ export function cancelOffboarding(
 /** HIERARCHY: all companies' pending cases (minimal-PII). */
 export function getPendingOffboarding(signal?: AbortSignal): Promise<HierarchyPendingRow[]> {
   return apiFetch<HierarchyPendingRow[]>('/hierarchy/offboarding/pending', { signal });
+}
+
+/** The Offboarding tab's history filters — all optional, combined with AND by the server. */
+export type OffboardingCaseFilters = {
+  companyId?: string | null;
+  /** Inclusive INITIATED-date bounds, ISO yyyy-MM-dd, Asia/Kolkata calendar days. */
+  from?: string | null;
+  to?: string | null;
+  status?: string | null;
+};
+
+/** HIERARCHY: every case, newest first, narrowed by the filters (minimal-PII + outcome). */
+export function getOffboardingCases(
+  filters: OffboardingCaseFilters = {},
+  signal?: AbortSignal,
+): Promise<HierarchyCaseRow[]> {
+  const q = new URLSearchParams();
+  if (filters.companyId) q.set('companyId', filters.companyId);
+  if (filters.from) q.set('from', filters.from);
+  if (filters.to) q.set('to', filters.to);
+  if (filters.status) q.set('status', filters.status);
+  const qs = q.toString();
+  return apiFetch<HierarchyCaseRow[]>(`/hierarchy/offboarding/cases${qs ? `?${qs}` : ''}`, { signal });
 }
 
 /** HIERARCHY: approve a pending case (note optional). */

@@ -23,6 +23,7 @@ import com.ihrms.domain.repository.UserRepository;
 import com.ihrms.auth.AuthorizationService;
 import com.ihrms.offboarding.dto.OffboardingDtos.CancelRequest;
 import com.ihrms.offboarding.dto.OffboardingDtos.DecisionRequest;
+import com.ihrms.offboarding.dto.OffboardingDtos.HierarchyCaseRow;
 import com.ihrms.offboarding.dto.OffboardingDtos.HierarchyPendingRow;
 import com.ihrms.offboarding.dto.OffboardingDtos.InitiateRequest;
 import com.ihrms.offboarding.dto.OffboardingDtos.OffboardingCaseView;
@@ -30,8 +31,13 @@ import com.ihrms.offboarding.dto.OffboardingDtos.OffboardingDecisionResult;
 import com.ihrms.push.PushService;
 import com.ihrms.push.PushService.PrincipalRef;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -51,6 +57,12 @@ public class OffboardingService {
   private static final Logger log = LoggerFactory.getLogger(OffboardingService.class);
   private static final List<OffboardingStatus> ACTIVE =
       List.of(OffboardingStatus.PENDING_APPROVAL, OffboardingStatus.APPROVED);
+
+  /** Business dates are Asia/Kolkata; a from/to filter means those calendar days, not UTC's. */
+  private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
+
+  /** Open upper bound: a null timestamp parameter cannot be typed by Postgres, so we never send one. */
+  private static final Instant FAR_FUTURE = Instant.parse("9999-12-31T23:59:59Z");
 
   private final EmployeeRepository employees;
   private final OffboardingCaseRepository cases;
@@ -445,6 +457,116 @@ public class OffboardingService {
   }
 
   /** The MINIMAL-PII pending row — resolves ONLY name/code/company/team/reason/dates/initiator. */
+  /**
+   * The HIERARCHY Offboarding tab's history (§3.6): every case, newest first, narrowed by company /
+   * initiated-date window / status. Read-only, and deliberately BATCHED — unlike {@link #pendingRow}
+   * (a short inbox), a full history resolved row-by-row would be four queries per case.
+   *
+   * <p>Query count is constant, not proportional to the result: at most one company→employee lookup,
+   * one case query, then one findAllById each for employees, companies, teams and users. Six.
+   *
+   * <p>Not paginated. A case is one departure, the three filters exist to narrow, and a silently
+   * truncated "history" would be worse than a long one — revisit if a deployment's total grows past
+   * a few thousand.
+   */
+  @Transactional(readOnly = true)
+  public List<HierarchyCaseRow> hierarchyCases(
+      String companyId, LocalDate from, LocalDate to, OffboardingStatus status) {
+
+    // A company filter is expressed as the set of that company's employees; null means every company.
+    Collection<String> employeeIds = null;
+    if (companyId != null && !companyId.isBlank()) {
+      employeeIds =
+          employees.findByCompanyId(companyId).stream().map(Employee::getId).toList();
+      if (employeeIds.isEmpty()) {
+        return List.of(); // no employees, so no cases — and an empty IN () would be invalid SQL
+      }
+    }
+
+    // Open-ended bounds rather than nulls: Postgres cannot type a null timestamp parameter here.
+    Instant fromAt = from == null ? Instant.EPOCH : from.atStartOfDay(IST).toInstant();
+    Instant toAt =
+        to == null ? FAR_FUTURE : to.plusDays(1).atStartOfDay(IST).toInstant().minusMillis(1);
+
+    // "All statuses" is the full set, never a null parameter (see the repository note).
+    Collection<OffboardingStatus> statuses =
+        status == null ? List.of(OffboardingStatus.values()) : List.of(status);
+
+    List<OffboardingCase> rows =
+        employeeIds == null
+            ? cases.searchForHierarchy(fromAt, toAt, statuses)
+            : cases.searchForHierarchyInEmployees(employeeIds, fromAt, toAt, statuses);
+    if (rows.isEmpty()) {
+      return List.of();
+    }
+
+    Map<String, Employee> employeeById =
+        employees.findAllById(rows.stream().map(OffboardingCase::getEmployeeId).distinct().toList())
+            .stream()
+            .collect(Collectors.toMap(Employee::getId, e -> e));
+
+    Map<String, Company> companyById =
+        companies
+            .findAllById(
+                employeeById.values().stream().map(Employee::getCompanyId).distinct().toList())
+            .stream()
+            .collect(Collectors.toMap(Company::getId, c -> c));
+
+    // A team is resolved by (companyId, hrUserId) — the same mapping the inbox uses, batched and
+    // scoped to the companies actually on screen. findAll() would drag in every team on the platform
+    // to answer a page that can only ever reference a handful of them.
+    Map<String, Team> teamByCompanyAndHr =
+        companyById.isEmpty()
+            ? Map.of()
+            : teams.findByCompanyIdIn(companyById.keySet()).stream()
+                .filter(t -> t.getHrUserId() != null)
+                .collect(
+                    Collectors.toMap(
+                        t -> t.getCompanyId() + "|" + t.getHrUserId(), t -> t, (a, b) -> a));
+
+    List<String> userIds =
+        rows.stream()
+            .flatMap(c -> Stream.of(c.getInitiatedByUserId(), c.getDecidedByUserId()))
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+    Map<String, User> userById =
+        userIds.isEmpty()
+            ? Map.of()
+            : users.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, u -> u));
+
+    return rows.stream()
+        .map(
+            c -> {
+              Employee e = employeeById.get(c.getEmployeeId());
+              Company company = e == null ? null : companyById.get(e.getCompanyId());
+              Team team =
+                  e == null
+                      ? null
+                      : teamByCompanyAndHr.get(e.getCompanyId() + "|" + e.getOnboardingHrId());
+              User decidedBy =
+                  c.getDecidedByUserId() == null ? null : userById.get(c.getDecidedByUserId());
+              User initiatedBy =
+                  c.getInitiatedByUserId() == null ? null : userById.get(c.getInitiatedByUserId());
+
+              return new HierarchyCaseRow(
+                  c.getId(),
+                  e == null ? null : e.getFullName(),
+                  e == null ? null : e.getEmployeeCode(),
+                  company == null ? null : company.getName(),
+                  team == null ? null : team.getName(),
+                  c.getReason(),
+                  c.getLastWorkingDay() == null ? null : c.getLastWorkingDay().toString(),
+                  initiatedBy == null ? null : initiatedBy.getName(),
+                  c.getInitiatedAt() == null ? null : c.getInitiatedAt().toString(),
+                  c.getStatus() == null ? null : c.getStatus().name(),
+                  decidedBy == null ? null : decidedBy.getName(),
+                  c.getDecidedAt() == null ? null : c.getDecidedAt().toString(),
+                  c.getCompletedAt() == null ? null : c.getCompletedAt().toString());
+            })
+        .toList();
+  }
+
   private HierarchyPendingRow pendingRow(OffboardingCase c) {
     Employee e = employees.findById(c.getEmployeeId()).orElse(null);
     String companyName =

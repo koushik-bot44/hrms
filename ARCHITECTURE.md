@@ -37,7 +37,7 @@ Super Admin
 |------|-------|--------|
 | **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **provision the single Accounts Admin**; **archive (soft-delete) a company and restore it**; **manage teams in any company** (create / rename / reassign HR + Manager + Accountant) and **onboard employees into any company** (selecting company → team → HR); view **all** companies' audit logs (separated per company), including archived companies'. |
 | **Accounts Admin** | Entire portal — **read-only** | A central, cross-company **viewer** (`companyId = null`, like Super Admin but never writes). Sees **approved** employees across **all** companies and their **full records** (the four forms + documents/PDFs) with sensitive fields **masked by default** and an **audited reveal** — the exact HR mechanism; and an **approval-only** audit trail across companies. **No onboarding / verify / approve / edit / archive / delete / provisioning — GET-only.** In-flight (non-approved) employees are **not** visible. **Exactly one** may exist; provisioned by Super Admin. |
-| **Hierarchy** | Entire platform — **read-only, aggregates-only** | A top-level, cross-platform **overview** role (`companyId = null`, like Super Admin/Accounts Admin but never writes). Sees only **platform-wide aggregates / counts / summaries** — **never** individual employee records or PII, **never** attendance or leave, with **two bounded exceptions**: (a) the offboarding minimal-PII inbox below, and (b) the Organisation team view (§2), which exposes a team's members' **name / code / designation / role only**. Its **one** write surface is **offboarding approval** (§3.6): a pending inbox with a deliberate **minimal-PII** contract (name/code/company/team/reason/last-day/initiator only) where it approves or rejects HR's offboarding requests — nothing else about the employee is reachable. Otherwise no writes and no onboarding / verification / provisioning / company-management involvement. **Exactly one** may exist; provisioned by Super Admin; signs in with staff **email + password**. |
+| **Hierarchy** | Entire platform — **read-only, aggregates-only** | A top-level, cross-platform **overview** role (`companyId = null`, like Super Admin/Accounts Admin but never writes). Sees only **platform-wide aggregates / counts / summaries** — **never** individual employee records or PII, **never** attendance or leave, with **two bounded exceptions**: (a) the offboarding minimal-PII tab below (the pending inbox and the case history), and (b) the Organisation team view (§2), which exposes a team's members' **name / code / designation / role only**. Its **one** write surface is **offboarding approval** (§3.6): a pending inbox with a deliberate **minimal-PII** contract (name/code/company/team/reason/last-day/initiator only) where it approves or rejects HR's offboarding requests — nothing else about the employee is reachable. Otherwise no writes and no onboarding / verification / provisioning / company-management involvement. **Exactly one** may exist; provisioned by Super Admin; signs in with staff **email + password**. |
 | **Company Admin** | One company | Create teams and assign the team's HR, Manager and Accountant (one each); **assign/reset the mailbox credentials of any APPROVED employee in the company** (§6, alongside the onboarding HR); view **own company's** audit logs. |
 | **HR** | Own team / own onboarded employees | Onboard by **filling Form 2** (which creates the record + sends the invite); **edit Form 2 while the employee is `INVITED`** (locked once they start, 409; a personal-email change re-invites); look up an employee by ID and see all their forms/documents; verify **Forms 1/3/4 + documents** (Form 2 is not verified); once every item is verified, **approve** the employee onto a **team** (minting the ID) **or terminally reject** the application. |
 | **Manager** | Own team | Workspace **notifications** (who was onboarded, who was verified, who was **approved onto their team**) + a **read-only team-onboarding history** (approval authority sits with HR — no approve/reject/inbox); **read-only attendance analytics for their own team** (§8a — the same live per-employee / per-team metrics the Accountant sees, own team only). |
@@ -152,8 +152,8 @@ Company scoping does **not** restrict the Hierarchy (it is the platform role), b
 efficient GROUP BY / COUNT (a constant number per endpoint — no N+1 over companies/teams/employees).
 
 **The Hierarchy area is organised into TABS** — top-level navigation reflected in the URL so a level can be
-linked and refreshed: **Overview**, **Organisation**, and **Offboarding approvals** (§3.6, its one write
-surface).
+linked and refreshed: **Overview**, **Organisation**, and **Offboarding** (§3.6, its one write surface — the
+approval queue plus a read-only case history).
 - **Overview** (`/hierarchy`) — the single-glance, read-only dashboard. It **leads with what needs attention**
   (pending offboarding approvals, linking into the inbox; and stuck onboardings), then the headline totals
   (Companies / Teams / Employees — **each a link into the Organisation browser**), the staff-by-role counts,
@@ -166,6 +166,18 @@ surface).
   Every level has loading skeletons and empty states; rows stack on mobile. Two **client-side CSV exports**
   (from the already-loaded data — no refetch): the companies roll-up (Level 1) and a company's per-team org
   breakdown (Level 2), staff names only.
+- **Offboarding** (`/hierarchy/offboarding`) — the single home for offboarding, three sections on one page:
+  **(1) the approval queue** — the actionable pending cases, first, with the approve/reject dialogs (the role's
+  **only** write surface — a relocation of the former "Offboarding approvals" inbox, not a rewrite); **(2)
+  summary tiles** — pending / approved-in-progress / completed / rejected-or-cancelled counts over the filtered
+  set (the by-status tiles double as a status filter); **(3) history** — every case, newest first, as a
+  scannable table (stacked cards on mobile). Three **filters combine (AND) and are reflected in the URL** so a
+  view is linkable and survives refresh: **company** (all companies by default), an **initiated-date window**
+  (from/to), and **status**. A **single query** (company + date, every status) drives the page — the status
+  filter narrows history client-side so the tiles always show real counts — and the approval queue respects
+  company + date but ignores the status filter (a "completed" view never hides work still needing a decision).
+  Loading skeletons, an empty state that names the active filters, and a **client-side CSV export** of the
+  filtered history. The layout's nav badge keeps its own global pending count.
 
 **Charter widening — the Organisation team view (bounded, deliberate).** Levels 1–2 remain aggregates + **staff**
 org data (never employee identity). **Level 3 — a team's people — is a bounded exception** to the "never
@@ -494,11 +506,17 @@ case is terminal and frees the employee for a fresh case.
    the record read (onboarding HR + the employee's COMPANY_ADMIN + SUPER_ADMIN; the service scopes each).
 
 **Hierarchy charter — the one loosening.** The HIERARCHY role is otherwise **read-only, aggregates-only, no
-individual PII** (§2/§6). Offboarding approval is its **single write surface**, and its pending inbox is the
-**only** place it sees anything employee-shaped — under a deliberate **MINIMAL-PII contract**: each pending
-row exposes **only** `employeeName, employeeCode, companyName, teamName, reason, lastWorkingDay,
-initiatedByName, initiatedAt` — no forms, no documents, no contact data, nothing else. `canAccessEmployee`
-stays **false** for the role everywhere else; the minimal shape is asserted in a test.
+individual PII** (§2/§6). Offboarding approval is its **single write surface**, and the **Offboarding tab** is
+the **only** place it sees anything employee-shaped — under a deliberate **MINIMAL-PII contract**: each pending
+row exposes **only** `caseId, employeeName, employeeCode, companyName, teamName, reason, lastWorkingDay,
+initiatedByName, initiatedAt` (**nine fields**) — no forms, no documents, no contact data, nothing else.
+
+The **case history** on the same tab (`GET /hierarchy/offboarding/cases`) may expose that same shape **plus the
+four outcome fields** — `status, decidedByName, decidedAt, completedAt` — and **nothing more**: **thirteen
+fields**. The decision, cancellation and completion **notes are deliberately excluded** even though the row
+carries them, as are letters, documents, clearance, and any salary or settlement value. `canAccessEmployee`
+stays **false** for the role everywhere else; **both** shapes are asserted in tests (exact field count +
+forbidden fields absent), the same discipline as the §2 team-members widening.
 
 **Notification channels.** Neither the HIERARCHY user nor HR has a bell **feed** (the Manager inbox is the
 only `Notification` consumer). So the durable `Notification` rows (`OFFBOARDING_INITIATED` → hierarchy;
@@ -508,8 +526,24 @@ live nudge. All notifications fire **controller-after-commit, best-effort** (a f
 back), matching the approve/agreements pattern.
 
 **UI.** HR gets an **Offboarding** panel on the record view (initiate → status → cancel; the stage-2 document
-controls mount inside it). The HIERARCHY area gains an **Offboarding approvals** nav item (badged with the
-pending count) → the minimal-PII inbox → approve/reject dialogs — its only non-read-only screen.
+controls mount inside it). The HIERARCHY area has a single **Offboarding** tab (badged with the pending count)
+— **one home for offboarding**, in three parts:
+
+1. **Awaiting approval** — the actionable queue with the approve/reject dialogs, the role's only
+   non-read-only screen. Deliberately **not** narrowed by the status filter: a work queue that a forgotten
+   filter can hide is how a request sits for a week.
+2. **Summary tiles** — pending / approved-in-progress / completed / rejected-or-cancelled: the by-status
+   census of the company+date-filtered set. **One query** feeds both the tiles and the table below (never a
+   separate count), so they cannot disagree; each status tile also **is** the status filter for the history —
+   clicking it narrows the list (the tiles keep their full census so the breakdown stays visible).
+3. **History** — every case, newest first, with company, team, status, initiated date, last working day, who
+   decided and when, and completion date; CSV export of exactly those columns.
+
+Filters — **company**, an **initiated-date** window (the filter names the date it acts on, and that column is
+in the table), and **status** — combine with AND, live in the URL so a view is linkable and survives a
+refresh, and clear from one control. The status filter narrows the **history** list client-side (so the tiles
+keep every status's count); company + date bound the whole page — including the approval queue. The list is **not paginated**: a case is one departure and the filters
+are the narrowing tool — revisit if a deployment's total case count reaches the low thousands.
 
 #### Stage 2 — the documents
 Once a case is **APPROVED**, HR sends employee-facing **documents** with per-case values; the employee

@@ -2168,6 +2168,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hierarchy/offboarding/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["cases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hierarchy/companies": {
         parameters: {
             query?: never;
@@ -4125,6 +4141,21 @@ export interface components {
             lastWorkingDay?: string;
             initiatedByName?: string;
             initiatedAt?: string;
+        };
+        HierarchyCaseRow: {
+            caseId?: string;
+            employeeName?: string;
+            employeeCode?: string;
+            companyName?: string;
+            teamName?: string;
+            reason?: string;
+            lastWorkingDay?: string;
+            initiatedByName?: string;
+            initiatedAt?: string;
+            status?: string;
+            decidedByName?: string;
+            decidedAt?: string;
+            completedAt?: string;
         };
         CompaniesResponse: {
             companies?: components["schemas"]["CompanySizeRow"][];
@@ -8328,6 +8359,31 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["HierarchyPendingRow"][];
+                };
+            };
+        };
+    };
+    cases: {
+        parameters: {
+            query?: {
+                companyId?: string;
+                from?: string;
+                to?: string;
+                status?: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED" | "COMPLETED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HierarchyCaseRow"][];
                 };
             };
         };

@@ -51,6 +51,29 @@ public final class OffboardingDtos {
    * A pending case in the HIERARCHY inbox — the MINIMAL-PII contract (§Offboarding charter loosening). ONLY
    * these fields are exposed: no forms, no documents, no contact data, nothing else about the employee.
    */
+  /**
+   * A single offboarding case for the HIERARCHY Offboarding tab's history (§3.6 charter).
+   *
+   * <p>The nine {@link HierarchyPendingRow} fields plus the four OUTCOME fields the charter extension
+   * allows: {@code status, decidedByName, decidedAt, completedAt}. Nothing more — the decision, cancel
+   * and completion NOTES are deliberately absent even though the row carries them, as are documents,
+   * letters, contact data and any settlement value. Thirteen fields, asserted in a test.
+   */
+  public record HierarchyCaseRow(
+      String caseId,
+      String employeeName,
+      String employeeCode,
+      String companyName,
+      String teamName,
+      String reason,
+      String lastWorkingDay,
+      String initiatedByName,
+      String initiatedAt,
+      String status,
+      String decidedByName,
+      String decidedAt,
+      String completedAt) {}
+
   public record HierarchyPendingRow(
       String caseId,
       String employeeName,

@@ -10,14 +10,15 @@ import { getPendingOffboarding } from '@/lib/api/offboarding';
 
 // Cross-platform, read-only overview area (§2/§6): OVERVIEW (aggregates) + ORGANISATION (the company → team →
 // people browser; §2 charter widening — names/codes/designations/roles only), plus the ONE write surface it is
-// granted: OFFBOARDING approvals — a minimal-PII inbox, badged with the live pending count.
+// granted: OFFBOARDING — one home for the approvals inbox (its only write surface), the summary tiles and
+// the full case history, badged with the live pending count.
 export default function HierarchyLayout({ children }: { children: ReactNode }) {
   const { data: pending } = useApiQuery(['offboarding-pending'], getPendingOffboarding);
   const nav: NavItem[] = [
     { label: 'Overview', href: '/hierarchy', icon: LayoutDashboard },
     { label: 'Organisation', href: '/hierarchy/organisation', icon: Network },
     {
-      label: 'Offboarding approvals',
+      label: 'Offboarding',
       href: '/hierarchy/offboarding',
       icon: LogOut,
       badge: pending?.length || undefined,

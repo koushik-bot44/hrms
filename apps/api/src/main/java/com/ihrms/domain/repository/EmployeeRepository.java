@@ -25,6 +25,9 @@ public interface EmployeeRepository
   List<Employee> findByOnboardingHrIdAndMailAddressIsNotNull(String onboardingHrId);
 
   /** All CREDENTIALED employees in a company — the Company Admin's employee mail contacts (§8). */
+  /** Every employee of a company — used to resolve a company filter to its cases (§3.6 history). */
+  List<Employee> findByCompanyId(String companyId);
+
   List<Employee> findByCompanyIdAndMailAddressIsNotNull(String companyId);
 
   List<Employee> findByCompanyIdAndOnboardingHrId(String companyId, String onboardingHrId);

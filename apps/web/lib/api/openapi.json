@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:8090",
+      "url": "http://localhost:8095",
       "description": "Generated server url"
     }
   ],
@@ -5296,6 +5296,72 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/HierarchyPendingRow"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hierarchy/offboarding/cases": {
+      "get": {
+        "tags": [
+          "hierarchy-offboarding-controller"
+        ],
+        "operationId": "cases",
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING_APPROVAL",
+                "APPROVED",
+                "REJECTED",
+                "CANCELLED",
+                "COMPLETED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HierarchyCaseRow"
                   }
                 }
               }
@@ -10971,6 +11037,50 @@
             "type": "string"
           },
           "initiatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "HierarchyCaseRow": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "employeeName": {
+            "type": "string"
+          },
+          "employeeCode": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "teamName": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "lastWorkingDay": {
+            "type": "string"
+          },
+          "initiatedByName": {
+            "type": "string"
+          },
+          "initiatedAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "decidedByName": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "completedAt": {
             "type": "string"
           }
         }

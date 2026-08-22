@@ -1,11 +1,14 @@
 package com.ihrms.offboarding;
 
 import com.ihrms.auth.IhrmsPrincipal;
+import com.ihrms.domain.enums.OffboardingStatus;
 import com.ihrms.offboarding.dto.OffboardingDtos.DecisionRequest;
+import com.ihrms.offboarding.dto.OffboardingDtos.HierarchyCaseRow;
 import com.ihrms.offboarding.dto.OffboardingDtos.HierarchyPendingRow;
 import com.ihrms.offboarding.dto.OffboardingDtos.OffboardingDecisionResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -13,7 +16,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -37,6 +42,22 @@ public class HierarchyOffboardingController {
   @GetMapping("/pending")
   public List<HierarchyPendingRow> pending() {
     return offboarding.pending();
+  }
+
+  /**
+   * Every case, newest first, for the Offboarding tab's history and its summary tiles. Read-only.
+   *
+   * <p>Filters combine with AND and are all optional: {@code companyId}, an INITIATED-date window
+   * ({@code from}/{@code to}, inclusive, Asia/Kolkata calendar days) and {@code status}. The row is the
+   * inbox's nine minimal-PII fields plus the four outcome fields the charter extension allows.
+   */
+  @GetMapping("/cases")
+  public List<HierarchyCaseRow> cases(
+      @RequestParam(required = false) String companyId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+      @RequestParam(required = false) OffboardingStatus status) {
+    return offboarding.hierarchyCases(companyId, from, to, status);
   }
 
   @PostMapping("/{caseId}/approve")
