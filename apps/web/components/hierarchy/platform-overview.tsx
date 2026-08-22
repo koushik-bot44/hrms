@@ -1,30 +1,43 @@
 'use client';
 
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
   Building2,
   CheckCircle2,
   Clock,
   Filter,
   Layers,
+  LogOut,
+  Network,
   PieChart as PieIcon,
   ShieldAlert,
   UserRound,
   Users,
 } from 'lucide-react';
 import type { OnboardingFunnel, OpsMetrics, PlatformOverview as Overview } from '@/lib/contract';
-import { getHierarchyOverview } from '@/lib/api/hierarchy';
+import { getHierarchyCompanies, getHierarchyOverview } from '@/lib/api/hierarchy';
+import { getPendingOffboarding } from '@/lib/api/offboarding';
 import { useApiQuery } from '@/lib/api/hooks';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { StatTile } from '@/components/dashboard/stat-tile';
 import { LiveIndicator } from '@/components/dashboard/live-indicator';
 import { TodayChip } from '@/components/accountant/today-chip';
 import { cn } from '@/lib/utils';
 import { funnelTotal, MAIN_PATH, OFF_PATH, STATUS_META } from '@/components/hierarchy/status-meta';
 import { HierarchyTrends } from '@/components/hierarchy/hierarchy-trends';
-import { CompanyBreakdownPanel } from '@/components/hierarchy/company-breakdown';
+
+const CHART_TOP = 12;
+// recharts stays off the overview first-load; the companies chart mounts once there's data (h-64 reserved).
+const CompaniesBarChart = dynamic(() => import('./companies-bar-chart'), {
+  ssr: false,
+  loading: () => <Skeleton className="h-64 w-full rounded-md" />,
+});
 
 const REFRESH_MS = 45_000;
 const n = (v: number) => v.toLocaleString();
@@ -75,7 +88,7 @@ export function PlatformOverview() {
 
       {/* These sections poll on their own so each stays current. */}
       <HierarchyTrends />
-      <CompanyBreakdownPanel />
+      <CompaniesOverviewChart />
     </div>
   );
 }
@@ -84,7 +97,10 @@ function OverviewBody({ data }: { data: Overview }) {
   const { totals, funnel, ops } = data;
   return (
     <>
-      {/* 1 — Headline totals. */}
+      {/* 1 — What needs attention: the only things Hierarchy acts on / must watch. */}
+      <AttentionSection ops={ops} />
+
+      {/* 2 — Headline totals — each drills into the Organisation browser. */}
       <div className="grid gap-4 sm:grid-cols-3">
         <StatTile
           icon={Building2}
@@ -92,9 +108,16 @@ function OverviewBody({ data }: { data: Overview }) {
           label="Companies"
           value={n(totals.companies.total)}
           sub={`${n(totals.companies.active)} active · ${n(totals.companies.archived)} archived`}
+          href="/hierarchy/organisation"
         />
-        <StatTile icon={Layers} tone="primary" label="Teams" value={n(totals.teams)} />
-        <StatTile icon={Users} tone="primary" label="Employees" value={n(totals.employees)} />
+        <StatTile icon={Layers} tone="primary" label="Teams" value={n(totals.teams)} href="/hierarchy/organisation" />
+        <StatTile
+          icon={Users}
+          tone="primary"
+          label="Employees"
+          value={n(totals.employees)}
+          href="/hierarchy/organisation"
+        />
       </div>
 
       <Card>
@@ -115,8 +138,8 @@ function OverviewBody({ data }: { data: Overview }) {
         </CardContent>
       </Card>
 
-      {/* 2 — Ops health. */}
-      <div className="grid items-start gap-4 sm:grid-cols-3">
+      {/* 3 — Ops health. */}
+      <div className="grid items-start gap-4 sm:grid-cols-2">
         <StatTile
           icon={CheckCircle2}
           tone="success"
@@ -133,12 +156,85 @@ function OverviewBody({ data }: { data: Overview }) {
           value={ops.averageTimeToApprovalDays == null ? '—' : `${ops.averageTimeToApprovalDays} days`}
           sub="Onboard → approval"
         />
-        <StuckCard ops={ops} />
       </div>
 
-      {/* 3 — Onboarding pipeline: a single by-status breakdown (current snapshot). */}
+      {/* 4 — Onboarding pipeline: a single by-status breakdown (current snapshot). */}
       <ByStatusCard funnel={funnel} />
     </>
+  );
+}
+
+/**
+ * Lead-with-attention (§2): the two things a platform overseer must watch — pending offboarding approvals
+ * (Hierarchy's ONE action; links into the inbox) and stuck onboardings (a platform-wide warning signal).
+ */
+function AttentionSection({ ops }: { ops: OpsMetrics }) {
+  const { data: pending } = useApiQuery(['offboarding-pending'], getPendingOffboarding);
+  const pendingCount = pending?.length ?? 0;
+  return (
+    <div className="grid items-start gap-4 sm:grid-cols-2">
+      <StatTile
+        icon={LogOut}
+        tone={pendingCount > 0 ? 'warning' : 'neutral'}
+        size="sm"
+        label="Offboarding approvals"
+        value={n(pendingCount)}
+        sub={pendingCount > 0 ? 'Awaiting your decision' : 'Nothing pending'}
+        href="/hierarchy/offboarding"
+      />
+      <StuckCard ops={ops} />
+    </div>
+  );
+}
+
+/**
+ * The employees-per-company bar chart on the Overview (§2). The full company → team → people drill lives in the
+ * Organisation tab now — this stays a read-only chart with a link across.
+ */
+function CompaniesOverviewChart() {
+  const query = useApiQuery(['hierarchy-companies'], (signal) => getHierarchyCompanies(signal), {
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchInterval: REFRESH_MS,
+    placeholderData: (p) => p,
+  });
+  const rows = query.data?.companies ?? [];
+  const chartData = [...rows]
+    .sort((a, b) => b.employeeCount - a.employeeCount)
+    .slice(0, CHART_TOP)
+    .map((c) => ({ name: c.name, key: c.id, value: c.employeeCount, archived: c.archived }));
+
+  return (
+    <Card>
+      <CardHeader className="flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Building2 className="size-4 text-muted-foreground" />
+            Companies
+          </CardTitle>
+          <CardDescription>Employees per company (top {CHART_TOP} by size). No employee details.</CardDescription>
+        </div>
+        <Link href="/hierarchy/organisation">
+          <Button type="button" variant="outline" size="sm">
+            <Network className="size-4" />
+            Browse organisation
+          </Button>
+        </Link>
+      </CardHeader>
+      <CardContent>
+        {query.isLoading ? (
+          <Skeleton className="h-64 w-full rounded-md" />
+        ) : query.isError ? (
+          <EmptyState icon={Building2} title="Couldn't load companies" description={query.error?.message ?? 'Please try again.'} />
+        ) : rows.length === 0 ? (
+          <EmptyState icon={Building2} title="No companies yet" description="Companies will appear here as they're created." />
+        ) : (
+          <div style={{ height: Math.max(160, chartData.length * 30 + 20) }}>
+            <CompaniesBarChart data={chartData} />
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

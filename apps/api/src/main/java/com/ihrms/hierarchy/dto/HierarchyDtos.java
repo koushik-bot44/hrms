@@ -101,9 +101,15 @@ public final class HierarchyDtos {
 
   public record TrendsResponse(int months, List<TrendPoint> series) {}
 
-  // --- Companies (size distribution + drill list) ---------------------------
+  // --- Companies (size distribution + drill list + staff coverage) ----------
 
-  @Schema(description = "One company's size row: name, archived flag, team + employee counts.")
+  @Schema(
+      description =
+          "Staff-slot coverage across a company's teams: how many of its teams have each slot filled"
+              + " (an unfilled slot is the actionable gap). Counts only — never a people list.")
+  public record StaffCoverage(long teams, long hrFilled, long managersFilled, long accountantsFilled) {}
+
+  @Schema(description = "One company's size row: name, archived flag, team + employee counts + staff coverage.")
   public record CompanySizeRow(
       String id,
       String name,
@@ -111,9 +117,33 @@ public final class HierarchyDtos {
       String slug,
       boolean archived,
       long teamCount,
-      long employeeCount) {}
+      long employeeCount,
+      StaffCoverage coverage) {}
 
   public record CompaniesResponse(List<CompanySizeRow> companies) {}
+
+  // --- Team members (§2 charter widening — bounded minimal-PII) --------------
+
+  /**
+   * One member of a team under the WIDENED Hierarchy charter (ARCHITECTURE.md §2). ONLY these four fields
+   * are ever exposed — full name, employee code (null for staff / pre-approval), designation (null for
+   * staff), and role (HR / MANAGER / ACCOUNTANT / EMPLOYEE). NOTHING else: no email, phone, address,
+   * PAN/Aadhaar, salary, documents, forms, attendance or leave. Nulls are serialized (not omitted) so the
+   * exact 4-field contract is assertable.
+   */
+  public record TeamMember(String fullName, String employeeCode, String designation, String role) {}
+
+  @Schema(
+      description =
+          "A team's people for the Hierarchy org browser (§2 charter widening): its assigned staff and its"
+              + " employees, names/codes/designations/roles ONLY — no other PII.")
+  public record TeamMembersResponse(
+      String teamId,
+      String companyId,
+      String companyName,
+      String teamName,
+      List<TeamMember> staff,
+      List<TeamMember> members) {}
 
   // --- Per-company org breakdown (names STAFF — org data — never employee PII) ---
 

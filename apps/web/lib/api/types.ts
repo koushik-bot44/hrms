@@ -2120,6 +2120,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hierarchy/teams/{teamId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["teamMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hierarchy/overview": {
         parameters: {
             query?: never;
@@ -2272,6 +2288,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["recordDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/form2/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["form2Pdf"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3969,6 +4001,21 @@ export interface components {
             months?: number;
             series?: components["schemas"]["TrendPoint"][];
         };
+        TeamMember: {
+            fullName?: string;
+            employeeCode?: string;
+            designation?: string;
+            role?: string;
+        };
+        /** @description A team's people for the Hierarchy org browser (§2 charter widening): its assigned staff and its employees, names/codes/designations/roles ONLY — no other PII. */
+        TeamMembersResponse: {
+            teamId?: string;
+            companyId?: string;
+            companyName?: string;
+            teamName?: string;
+            staff?: components["schemas"]["TeamMember"][];
+            members?: components["schemas"]["TeamMember"][];
+        };
         /** @description Companies on the platform: total, active and archived (status = DELETED). */
         CompanyTotals: {
             /** Format: int64 */
@@ -4082,7 +4129,7 @@ export interface components {
         CompaniesResponse: {
             companies?: components["schemas"]["CompanySizeRow"][];
         };
-        /** @description One company's size row: name, archived flag, team + employee counts. */
+        /** @description One company's size row: name, archived flag, team + employee counts + staff coverage. */
         CompanySizeRow: {
             id?: string;
             name?: string;
@@ -4093,6 +4140,18 @@ export interface components {
             teamCount?: number;
             /** Format: int64 */
             employeeCount?: number;
+            coverage?: components["schemas"]["StaffCoverage"];
+        };
+        /** @description Staff-slot coverage across a company's teams: how many of its teams have each slot filled (an unfilled slot is the actionable gap). Counts only — never a people list. */
+        StaffCoverage: {
+            /** Format: int64 */
+            teams?: number;
+            /** Format: int64 */
+            hrFilled?: number;
+            /** Format: int64 */
+            managersFilled?: number;
+            /** Format: int64 */
+            accountantsFilled?: number;
         };
         /** @description One company's org structure: counts + by-status + the assigned Company Admin + its teams' assigned staff. Names STAFF only — no employee identity/PII. */
         CompanyBreakdown: {
@@ -8211,6 +8270,28 @@ export interface operations {
             };
         };
     };
+    teamMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TeamMembersResponse"];
+                };
+            };
+        };
+    };
     overview: {
         parameters: {
             query?: never;
@@ -8421,6 +8502,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RecordDocuments"];
+                };
+            };
+        };
+    };
+    form2Pdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedView"];
                 };
             };
         };

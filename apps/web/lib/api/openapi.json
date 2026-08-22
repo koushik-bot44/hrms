@@ -5231,6 +5231,36 @@
         }
       }
     },
+    "/hierarchy/teams/{teamId}/members": {
+      "get": {
+        "tags": [
+          "hierarchy-controller"
+        ],
+        "operationId": "teamMembers",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamMembersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/hierarchy/overview": {
       "get": {
         "tags": [
@@ -5490,6 +5520,36 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/RecordDocuments"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/form2/pdf": {
+      "get": {
+        "tags": [
+          "review-controller"
+        ],
+        "operationId": "form2Pdf",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedView"
                 }
               }
             }
@@ -10650,6 +10710,53 @@
           }
         }
       },
+      "TeamMember": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string"
+          },
+          "employeeCode": {
+            "type": "string"
+          },
+          "designation": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamMembersResponse": {
+        "type": "object",
+        "properties": {
+          "teamId": {
+            "type": "string"
+          },
+          "companyId": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "teamName": {
+            "type": "string"
+          },
+          "staff": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamMember"
+            }
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamMember"
+            }
+          }
+        },
+        "description": "A team's people for the Hierarchy org browser (§2 charter widening): its assigned staff and its employees, names/codes/designations/roles ONLY — no other PII."
+      },
       "CompanyTotals": {
         "type": "object",
         "properties": {
@@ -10904,9 +11011,34 @@
           "employeeCount": {
             "type": "integer",
             "format": "int64"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/StaffCoverage"
           }
         },
-        "description": "One company's size row: name, archived flag, team + employee counts."
+        "description": "One company's size row: name, archived flag, team + employee counts + staff coverage."
+      },
+      "StaffCoverage": {
+        "type": "object",
+        "properties": {
+          "teams": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hrFilled": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "managersFilled": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "accountantsFilled": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Staff-slot coverage across a company's teams: how many of its teams have each slot filled (an unfilled slot is the actionable gap). Counts only — never a people list."
       },
       "CompanyBreakdown": {
         "type": "object",

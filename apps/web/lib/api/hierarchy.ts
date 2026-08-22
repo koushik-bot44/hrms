@@ -5,6 +5,7 @@ import type {
   PlatformOverview,
   ProvisionHierarchyInput,
   ProvisionHierarchyResult,
+  TeamMembersResponse,
   TrendsResponse,
 } from '@/lib/contract';
 import { apiFetch } from './client';
@@ -49,6 +50,20 @@ export function getHierarchyBreakdown(
 ): Promise<CompanyBreakdown> {
   return apiFetch<CompanyBreakdown>(
     `/hierarchy/companies/${encodeURIComponent(companyId)}/breakdown`,
+    { signal },
+  );
+}
+
+/**
+ * A team's people (§2 charter widening): assigned staff + employees — full name, employee code, designation
+ * and role ONLY (no other PII). Opaque ids in the URL (platform-level area; slug is never used here).
+ */
+export function getHierarchyTeamMembers(
+  teamId: string,
+  signal?: AbortSignal,
+): Promise<TeamMembersResponse> {
+  return apiFetch<TeamMembersResponse>(
+    `/hierarchy/teams/${encodeURIComponent(teamId)}/members`,
     { signal },
   );
 }

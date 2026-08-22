@@ -3,7 +3,7 @@
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 /**
- * The recharts horizontal bar chart for CompanyBreakdownPanel, split out so recharts stays OUT of the
+ * The recharts horizontal bar chart for the Hierarchy overview's Companies card, split out so recharts stays OUT of the
  * /hierarchy first-load bundle. The parent keeps the height-reserving wrapper (its height is data-derived),
  * so the lazy fallback fills the exact same box — no layout shift, no visual change.
  */

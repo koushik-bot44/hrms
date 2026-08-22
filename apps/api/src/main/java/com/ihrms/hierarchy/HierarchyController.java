@@ -3,6 +3,7 @@ package com.ihrms.hierarchy;
 import com.ihrms.hierarchy.dto.HierarchyDtos.CompaniesResponse;
 import com.ihrms.hierarchy.dto.HierarchyDtos.CompanyBreakdown;
 import com.ihrms.hierarchy.dto.HierarchyDtos.PlatformOverview;
+import com.ihrms.hierarchy.dto.HierarchyDtos.TeamMembersResponse;
 import com.ihrms.hierarchy.dto.HierarchyDtos.TrendsResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,5 +50,14 @@ public class HierarchyController {
   @GetMapping("/companies/{companyId}/breakdown")
   public CompanyBreakdown breakdown(@PathVariable String companyId) {
     return analytics.breakdown(companyId);
+  }
+
+  /**
+   * A team's people (§2 charter widening — bounded): its assigned staff (HR/Manager/Accountant, named) and
+   * its employees (name, code, designation, role). Names/codes/designations/roles ONLY — no other PII.
+   */
+  @GetMapping("/teams/{teamId}/members")
+  public TeamMembersResponse teamMembers(@PathVariable String teamId) {
+    return analytics.teamMembers(teamId);
   }
 }

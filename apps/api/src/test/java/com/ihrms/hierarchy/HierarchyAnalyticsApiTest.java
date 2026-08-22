@@ -219,6 +219,21 @@ class HierarchyAnalyticsApiTest {
     assertThat(z.get("archived").asBoolean()).isTrue();
     assertThat(z.get("employeeCount").asLong()).isZero();
     assertThat(z.get("teamCount").asLong()).isZero();
+
+    // Staff-slot coverage across each company's teams (§2 org browser — a gap is the actionable signal).
+    JsonNode aCov = a.get("coverage");
+    assertThat(aCov.get("teams").asLong()).isEqualTo(1);
+    assertThat(aCov.get("hrFilled").asLong()).isEqualTo(1);
+    assertThat(aCov.get("managersFilled").asLong()).isEqualTo(1);
+    assertThat(aCov.get("accountantsFilled").asLong()).isEqualTo(1);
+    JsonNode bCov = b.get("coverage"); // Team B has HR only
+    assertThat(bCov.get("teams").asLong()).isEqualTo(1);
+    assertThat(bCov.get("hrFilled").asLong()).isEqualTo(1);
+    assertThat(bCov.get("managersFilled").asLong()).isZero();
+    assertThat(bCov.get("accountantsFilled").asLong()).isZero();
+    JsonNode zCov = z.get("coverage"); // archived, no teams
+    assertThat(zCov.get("teams").asLong()).isZero();
+    assertThat(zCov.get("hrFilled").asLong()).isZero();
   }
 
   @Test
@@ -250,16 +265,67 @@ class HierarchyAnalyticsApiTest {
   }
 
   @Test
+  void teamMembersExposesNamesCodesDesignationsRolesOnlyUnderTheCharterWidening() throws Exception {
+    JsonNode r = getJson("/hierarchy/teams/" + teamA.getId() + "/members");
+    assertThat(r.get("teamName").asText()).isEqualTo("Team A");
+    assertThat(r.get("companyName").asText()).isEqualTo("Acme");
+    assertThat(r.get("companyId").asText()).isEqualTo(companyA);
+
+    // Staff: the three filled slots, named, with their slot role — no code/designation.
+    JsonNode staff = r.get("staff");
+    assertThat(staff).hasSize(3);
+    java.util.Set<String> staffRoles = new java.util.HashSet<>();
+    for (JsonNode s : staff) {
+      assertMinimalMember(s);
+      staffRoles.add(s.get("role").asText());
+      assertThat(s.get("employeeCode").isNull()).isTrue();
+      assertThat(s.get("designation").isNull()).isTrue();
+      assertThat(s.get("fullName").asText()).isNotBlank();
+    }
+    assertThat(staffRoles).containsExactlyInAnyOrder("HR", "MANAGER", "ACCOUNTANT");
+
+    // Members: all 7 employees onboarded by hrA — names are EXPOSED now (the widening), codes where approved.
+    JsonNode members = r.get("members");
+    assertThat(members).hasSize(7);
+    int coded = 0;
+    for (JsonNode m : members) {
+      assertMinimalMember(m);
+      assertThat(m.get("role").asText()).isEqualTo("EMPLOYEE");
+      assertThat(m.get("fullName").asText()).contains(PII); // employee names are within the widened charter
+      if (!m.get("employeeCode").isNull()) {
+        coded++;
+      }
+    }
+    assertThat(coded).isEqualTo(3); // the 3 approved carry a code; the rest are null
+  }
+
+  @Test
   void aggregateEndpointsAreHierarchyOnly() throws Exception {
-    // A non-HIERARCHY role (SUPER_ADMIN) is refused on every aggregate endpoint.
+    // A non-HIERARCHY role (SUPER_ADMIN) is refused on every aggregate endpoint (both-layer gate).
     for (String path :
         new String[] {
           "/hierarchy/overview", "/hierarchy/trends", "/hierarchy/companies",
-          "/hierarchy/companies/" + companyA + "/breakdown"
+          "/hierarchy/companies/" + companyA + "/breakdown",
+          "/hierarchy/teams/" + teamA.getId() + "/members"
         }) {
       mvc.perform(get(path).header("Authorization", "Bearer " + superToken))
           .andExpect(status().isForbidden());
       mvc.perform(get(path).header("Authorization", "Bearer " + hierToken)).andExpect(status().isOk());
+    }
+  }
+
+  /** The §2 charter contract for a team member: EXACTLY four fields, and NONE of the forbidden PII. */
+  private static void assertMinimalMember(JsonNode member) {
+    assertThat(member.size()).isEqualTo(4);
+    java.util.Set<String> keys = new java.util.HashSet<>();
+    member.fieldNames().forEachRemaining(keys::add);
+    assertThat(keys).containsExactlyInAnyOrder("fullName", "employeeCode", "designation", "role");
+    for (String forbidden :
+        new String[] {
+          "email", "phone", "mobile", "address", "panNumber", "aadhaarNumber", "axisAccountNumber",
+          "offeredCtc", "salary", "lastDrawnSalary", "documents", "form1", "form2", "dateOfJoining", "id"
+        }) {
+      assertThat(member.has(forbidden)).as(forbidden + " must be absent").isFalse();
     }
   }
 

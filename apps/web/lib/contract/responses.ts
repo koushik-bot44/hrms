@@ -770,9 +770,29 @@ export type TrendsResponse = Omit<DeepRequired<Schemas['TrendsResponse']>, 'seri
   series: TrendPoint[];
 };
 
+export type StaffCoverage = DeepRequired<Schemas['StaffCoverage']>;
 export type CompanySizeRow = DeepRequired<Schemas['CompanySizeRow']>;
 export type CompaniesResponse = Omit<DeepRequired<Schemas['CompaniesResponse']>, 'companies'> & {
   companies: CompanySizeRow[];
+};
+
+// A team's people for the org browser (§2 charter widening) — names/codes/designations/roles ONLY.
+// employeeCode + designation are null for staff (and pre-approval employees); companyName may be null.
+// Named HierarchyTeamMember to avoid the §3.4 TeamMember (TeamMemberView) above.
+export type HierarchyTeamMember = Omit<
+  DeepRequired<Schemas['TeamMember']>,
+  'employeeCode' | 'designation'
+> & {
+  employeeCode: string | null;
+  designation: string | null;
+};
+export type TeamMembersResponse = Omit<
+  DeepRequired<Schemas['TeamMembersResponse']>,
+  'companyName' | 'staff' | 'members'
+> & {
+  companyName: string | null;
+  staff: HierarchyTeamMember[];
+  members: HierarchyTeamMember[];
 };
 
 export type StaffRef = DeepRequired<Schemas['StaffRef']>;

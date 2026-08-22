@@ -1,19 +1,21 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { LayoutDashboard, LogOut } from 'lucide-react';
+import { LayoutDashboard, LogOut, Network } from 'lucide-react';
 import { UserRole } from '@/lib/contract';
 import { AppShell, type NavItem } from '@/components/app-shell';
 import { RequireRole } from '@/components/require-role';
 import { useApiQuery } from '@/lib/api/hooks';
 import { getPendingOffboarding } from '@/lib/api/offboarding';
 
-// Cross-platform, read-only, AGGREGATES-ONLY overview area (§2/§6), plus the ONE write surface it is granted:
-// offboarding approvals (§Offboarding) — a minimal-PII inbox, badged with the live pending count.
+// Cross-platform, read-only overview area (§2/§6): OVERVIEW (aggregates) + ORGANISATION (the company → team →
+// people browser; §2 charter widening — names/codes/designations/roles only), plus the ONE write surface it is
+// granted: OFFBOARDING approvals — a minimal-PII inbox, badged with the live pending count.
 export default function HierarchyLayout({ children }: { children: ReactNode }) {
   const { data: pending } = useApiQuery(['offboarding-pending'], getPendingOffboarding);
   const nav: NavItem[] = [
     { label: 'Overview', href: '/hierarchy', icon: LayoutDashboard },
+    { label: 'Organisation', href: '/hierarchy/organisation', icon: Network },
     {
       label: 'Offboarding approvals',
       href: '/hierarchy/offboarding',

@@ -4,6 +4,7 @@ import com.ihrms.attendance.ShiftConfig;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.UserRole;
 import com.ihrms.domain.model.Company;
+import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Team;
 import com.ihrms.domain.model.User;
 import com.ihrms.domain.repository.ApprovalRequestRepository;
@@ -19,10 +20,13 @@ import com.ihrms.hierarchy.dto.HierarchyDtos.OnboardingFunnel;
 import com.ihrms.hierarchy.dto.HierarchyDtos.OpsMetrics;
 import com.ihrms.hierarchy.dto.HierarchyDtos.PlatformOverview;
 import com.ihrms.hierarchy.dto.HierarchyDtos.PlatformTotals;
+import com.ihrms.hierarchy.dto.HierarchyDtos.StaffCoverage;
 import com.ihrms.hierarchy.dto.HierarchyDtos.StaffRef;
 import com.ihrms.hierarchy.dto.HierarchyDtos.StaffTotals;
 import com.ihrms.hierarchy.dto.HierarchyDtos.StuckStage;
 import com.ihrms.hierarchy.dto.HierarchyDtos.TeamBreakdown;
+import com.ihrms.hierarchy.dto.HierarchyDtos.TeamMember;
+import com.ihrms.hierarchy.dto.HierarchyDtos.TeamMembersResponse;
 import com.ihrms.hierarchy.dto.HierarchyDtos.TrendPoint;
 import com.ihrms.hierarchy.dto.HierarchyDtos.TrendsResponse;
 import java.time.Instant;
@@ -34,6 +38,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -148,8 +153,16 @@ public class HierarchyAnalyticsService {
   public CompaniesResponse companies() {
     Map<String, Long> teamCounts = countMap(teams.countGroupByCompany());
     Map<String, Long> empCounts = countMap(employees.countGroupByCompany());
+    // Staff-slot coverage per company — one GROUP BY, keyed by companyId (no N+1).
+    Map<String, StaffCoverage> coverage = new HashMap<>();
+    for (Object[] row : teams.staffCoverageGroupByCompany()) {
+      coverage.put(
+          (String) row[0],
+          new StaffCoverage(asLong(row[4]), asLong(row[1]), asLong(row[2]), asLong(row[3])));
+    }
     List<CompanySizeRow> rows = new ArrayList<>();
     for (Company c : companies.findAllByOrderByCreatedAtDesc()) {
+      long teamCount = teamCounts.getOrDefault(c.getId(), 0L);
       rows.add(
           new CompanySizeRow(
               c.getId(),
@@ -157,10 +170,60 @@ public class HierarchyAnalyticsService {
               c.getCode(),
               c.getSlug(),
               ARCHIVED.equals(c.getStatus()),
-              teamCounts.getOrDefault(c.getId(), 0L),
-              empCounts.getOrDefault(c.getId(), 0L)));
+              teamCount,
+              empCounts.getOrDefault(c.getId(), 0L),
+              coverage.getOrDefault(c.getId(), new StaffCoverage(teamCount, 0, 0, 0))));
     }
     return new CompaniesResponse(rows);
+  }
+
+  // --- GET /hierarchy/teams/{teamId}/members (§2 charter widening) ----------
+
+  /**
+   * A team's people for the org browser (§2 charter widening): its assigned staff (HR/Manager/Accountant,
+   * named, with their slot role) and its employees (name, code, designation). Minimal-PII — mapped by hand to
+   * {@link TeamMember} so NOTHING else about a person can leak. Batched: team, staff-by-ids, employees-by-hr.
+   */
+  @Transactional(readOnly = true)
+  public TeamMembersResponse teamMembers(String teamId) {
+    Team team =
+        teams
+            .findById(teamId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Team not found"));
+    String companyName =
+        companies.findById(team.getCompanyId()).map(Company::getName).orElse(null);
+
+    // Assigned staff — one findAllById over the (≤3) slot ids, then emit in HR/Manager/Accountant order.
+    List<String> slotIds =
+        Stream.of(team.getHrUserId(), team.getManagerUserId(), team.getAccountantUserId())
+            .filter(id -> id != null)
+            .toList();
+    Map<String, User> byId = new HashMap<>();
+    for (User u : users.findAllById(slotIds)) {
+      byId.put(u.getId(), u);
+    }
+    List<TeamMember> staff = new ArrayList<>();
+    addStaff(staff, byId.get(team.getHrUserId()), "HR");
+    addStaff(staff, byId.get(team.getManagerUserId()), "MANAGER");
+    addStaff(staff, byId.get(team.getAccountantUserId()), "ACCOUNTANT");
+
+    // Employees of the team = those onboarded by the team's HR (the platform scoping rule). Named/coded only.
+    List<TeamMember> members = new ArrayList<>();
+    if (team.getHrUserId() != null) {
+      for (Employee e :
+          employees.findByCompanyIdAndOnboardingHrIdOrderByCreatedAtDesc(
+              team.getCompanyId(), team.getHrUserId())) {
+        members.add(new TeamMember(e.getFullName(), e.getEmployeeCode(), e.getDesignation(), "EMPLOYEE"));
+      }
+    }
+    return new TeamMembersResponse(
+        team.getId(), team.getCompanyId(), companyName, team.getName(), staff, members);
+  }
+
+  private static void addStaff(List<TeamMember> out, User u, String role) {
+    if (u != null) {
+      out.add(new TeamMember(u.getName(), null, null, role));
+    }
   }
 
   // --- GET /hierarchy/companies/{id}/breakdown ------------------------------

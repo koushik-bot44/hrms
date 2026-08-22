@@ -37,7 +37,7 @@ Super Admin
 |------|-------|--------|
 | **Super Admin** | Entire portal | Create/manage Companies; provision each Company's Company Admin; **provision the single Accounts Admin**; **archive (soft-delete) a company and restore it**; **manage teams in any company** (create / rename / reassign HR + Manager + Accountant) and **onboard employees into any company** (selecting company → team → HR); view **all** companies' audit logs (separated per company), including archived companies'. |
 | **Accounts Admin** | Entire portal — **read-only** | A central, cross-company **viewer** (`companyId = null`, like Super Admin but never writes). Sees **approved** employees across **all** companies and their **full records** (the four forms + documents/PDFs) with sensitive fields **masked by default** and an **audited reveal** — the exact HR mechanism; and an **approval-only** audit trail across companies. **No onboarding / verify / approve / edit / archive / delete / provisioning — GET-only.** In-flight (non-approved) employees are **not** visible. **Exactly one** may exist; provisioned by Super Admin. |
-| **Hierarchy** | Entire platform — **read-only, aggregates-only** | A top-level, cross-platform **overview** role (`companyId = null`, like Super Admin/Accounts Admin but never writes). Sees only **platform-wide aggregates / counts / summaries** — **never** individual employee records or PII, **never** attendance or leave. Its **one** write surface is **offboarding approval** (§3.6): a pending inbox with a deliberate **minimal-PII** contract (name/code/company/team/reason/last-day/initiator only) where it approves or rejects HR's offboarding requests — nothing else about the employee is reachable. Otherwise no writes and no onboarding / verification / provisioning / company-management involvement. **Exactly one** may exist; provisioned by Super Admin; signs in with staff **email + password**. |
+| **Hierarchy** | Entire platform — **read-only, aggregates-only** | A top-level, cross-platform **overview** role (`companyId = null`, like Super Admin/Accounts Admin but never writes). Sees only **platform-wide aggregates / counts / summaries** — **never** individual employee records or PII, **never** attendance or leave, with **two bounded exceptions**: (a) the offboarding minimal-PII inbox below, and (b) the Organisation team view (§2), which exposes a team's members' **name / code / designation / role only**. Its **one** write surface is **offboarding approval** (§3.6): a pending inbox with a deliberate **minimal-PII** contract (name/code/company/team/reason/last-day/initiator only) where it approves or rejects HR's offboarding requests — nothing else about the employee is reachable. Otherwise no writes and no onboarding / verification / provisioning / company-management involvement. **Exactly one** may exist; provisioned by Super Admin; signs in with staff **email + password**. |
 | **Company Admin** | One company | Create teams and assign the team's HR, Manager and Accountant (one each); **assign/reset the mailbox credentials of any APPROVED employee in the company** (§6, alongside the onboarding HR); view **own company's** audit logs. |
 | **HR** | Own team / own onboarded employees | Onboard by **filling Form 2** (which creates the record + sends the invite); **edit Form 2 while the employee is `INVITED`** (locked once they start, 409; a personal-email change re-invites); look up an employee by ID and see all their forms/documents; verify **Forms 1/3/4 + documents** (Form 2 is not verified); once every item is verified, **approve** the employee onto a **team** (minting the ID) **or terminally reject** the application. |
 | **Manager** | Own team | Workspace **notifications** (who was onboarded, who was verified, who was **approved onto their team**) + a **read-only team-onboarding history** (approval authority sits with HR — no approve/reject/inbox); **read-only attendance analytics for their own team** (§8a — the same live per-employee / per-team metrics the Accountant sees, own team only). |
@@ -131,8 +131,9 @@ identity or record field ever appears. Sources are stated so they stay stable:
     is the source of truth).
   - **offboardedPerMonth** = **labelled placeholder, always 0** (offboarding isn't built; the field is
     present so a later stage can fill it).
-- **Employees per company** — per company: name, active/archived, employee count (for a company-size
-  bar/pie + the drill list). Aggregate only.
+- **Employees per company** — per company: name, active/archived, team + employee count, and **staff
+  coverage** across its teams (how many of its teams have each of HR / Manager / Accountant filled vs total —
+  an unfilled slot is the actionable gap). Aggregate only; backs the Organisation browser's Level 1.
 - **Per-company org breakdown** — for one company: #teams, #employees (+ by-status counts), the assigned
   **Company Admin** (staff name/email), and per team: label + assigned **HR / Manager / Accountant**
   (staff names/emails) + that team's employee count (employees whose `onboardingHrId` is the team's HR).
@@ -148,14 +149,33 @@ identity or record field ever appears. Sources are stated so they stay stable:
     threshold (**`STUCK_THRESHOLD_DAYS = 7`**), with an optional by-stage breakdown.
 
 Company scoping does **not** restrict the Hierarchy (it is the platform role), but every query is an
-efficient GROUP BY / COUNT (a constant number per endpoint — no N+1 over companies/teams/employees). These
-aggregates surface in a single-glance, read-only **Platform Overview** dashboard at `/hierarchy` — headline
-totals, the onboarding funnel + status-distribution donut (both from the same counts), monthly trends
-(with the offboarding series shown as a labelled "coming soon" placeholder — never faked), employees-per-
-company + the per-company org drill-down (naming assigned staff, never employee identities), and the ops
-metric cards. It is **live-on-load** with polling + refetch-on-focus, and **read-only** throughout. Two
-**client-side CSV exports** (from the already-loaded data — no refetch) are offered: the companies
-roll-up and a drilled company's per-team org breakdown (staff only, never employee identities).
+efficient GROUP BY / COUNT (a constant number per endpoint — no N+1 over companies/teams/employees).
+
+**The Hierarchy area is organised into TABS** — top-level navigation reflected in the URL so a level can be
+linked and refreshed: **Overview**, **Organisation**, and **Offboarding approvals** (§3.6, its one write
+surface).
+- **Overview** (`/hierarchy`) — the single-glance, read-only dashboard. It **leads with what needs attention**
+  (pending offboarding approvals, linking into the inbox; and stuck onboardings), then the headline totals
+  (Companies / Teams / Employees — **each a link into the Organisation browser**), the staff-by-role counts,
+  the ops metric cards, the by-status snapshot, monthly trends, and the employees-per-company chart. Live-on-
+  load with polling + refetch-on-focus; read-only throughout.
+- **Organisation** (`/hierarchy/organisation`) — a **three-level, breadcrumbed** browser of full pages (opaque
+  ids in the URL — the company slug is never used inside the platform area): **(1) all companies** (team +
+  employee counts + staff coverage; archived visually distinguished) → **(2) a company** (its teams, each with
+  headcount and its assigned HR / Manager / Accountant by name, or "Unassigned") → **(3) a team** (its people).
+  Every level has loading skeletons and empty states; rows stack on mobile. Two **client-side CSV exports**
+  (from the already-loaded data — no refetch): the companies roll-up (Level 1) and a company's per-team org
+  breakdown (Level 2), staff names only.
+
+**Charter widening — the Organisation team view (bounded, deliberate).** Levels 1–2 remain aggregates + **staff**
+org data (never employee identity). **Level 3 — a team's people — is a bounded exception** to the "never
+individual PII" rule, in the same spirit as the offboarding minimal-PII inbox (§3.6): for any team the Hierarchy
+may see each member's **FULL NAME, EMPLOYEE CODE, DESIGNATION, and staff ROLE** (HR / Manager / Accountant /
+Employee) — and **NOTHING ELSE**. No email, phone, address, PAN / Aadhaar, bank account, salary, documents,
+forms, attendance or leave. `canAccessEmployee` stays **false** and no record-view is reachable. It is served
+read-only by `GET /hierarchy/teams/{teamId}/members` (both-layer HIERARCHY-gated), returns a **minimal-PII DTO of
+exactly those four fields** (a team's employees = those onboarded by the team's HR), and that exact shape (four
+fields; forbidden fields absent) is asserted in a test — the discipline that keeps the charter honest.
 
 **Accountant (team-scoped read-only viewer).** The **per-team** analogue of the Accounts Admin: a staff
 `User` with a `companyId` **and a `teamId`** (like HR/Manager), **read-only**. It sees exactly the

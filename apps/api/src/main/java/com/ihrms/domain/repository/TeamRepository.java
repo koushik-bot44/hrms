@@ -35,4 +35,13 @@ public interface TeamRepository extends JpaRepository<Team, String> {
   /** Teams per company: {@code [companyId, Long]} rows (Hierarchy companies list, §2). */
   @Query("select t.companyId, count(t) from Team t group by t.companyId")
   List<Object[]> countGroupByCompany();
+
+  /**
+   * Staff-slot coverage per company (Hierarchy org browser, §2): {@code [companyId, hrFilled, managersFilled,
+   * accountantsFilled, teams]} — {@code count(column)} counts only non-null slots. One GROUP BY, no N+1.
+   */
+  @Query(
+      "select t.companyId, count(t.hrUserId), count(t.managerUserId), count(t.accountantUserId), count(t)"
+          + " from Team t group by t.companyId")
+  List<Object[]> staffCoverageGroupByCompany();
 }
