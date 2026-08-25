@@ -99,6 +99,36 @@ app:
   # runs every break-alert-scan-ms. Single-instance job (multi-instance would need a shared lock).
   break-alert-minutes: ${BREAK_ALERT_MINUTES:35}
   break-alert-scan-ms: ${BREAK_ALERT_SCAN_MS:300000}
+  # eSSL/ZKTeco ADMS ("iClock" push) ingestion — Phase 0. Bound to IclockProperties.
+  # enabled gates PERSISTENCE ONLY: the /iclock handlers and the capture filter always register, so the
+  # namespace always answers text/plain and never leaks a JSON 404 to a device. Default FALSE — the module
+  # is inert on the public deployment until an operator sets ICLOCK_ENABLED=true on the LAN box that the
+  # terminal can actually reach over plain HTTP. NOTE: the V41 tables are created by Flyway regardless of
+  # this flag (Flyway and @Entity scanning are both unconditional).
+  iclock:
+    enabled: ${ICLOCK_ENABLED:false}
+    # Hard ceiling on the bytes read from a device push. There is no server-wide request-size limit in
+    # this app, and /iclock is the only unauthenticated write path, so this is the DoS bound. Bodies over
+    # the cap are stored truncated and flagged.
+    max-body-bytes: ${ICLOCK_MAX_BODY_BYTES:262144}
+    # Generous per-IP ceiling, ~10x above any real terminal's poll rate, so a device is never throttled.
+    # Over-limit requests still get text/plain "OK" (never the app-wide JSON 429) but persist nothing.
+    rate-limit-per-minute: ${ICLOCK_RATE_LIMIT_PER_MINUTE:600}
+    # ATTLOG acknowledgement shape: "count" -> "OK: <n>" (per spec), "plain" -> bare "OK". Switchable
+    # because firmware differs on which it accepts; confirm against a real capture before changing.
+    ack-format: ${ICLOCK_ACK_FORMAT:count}
+    # The handshake options block. Every key is config-driven because we do not yet know which ones this
+    # firmware honours; Realtime=1 is what enables live push instead of scheduled batch upload.
+    options:
+      error-delay: ${ICLOCK_ERROR_DELAY:30}
+      delay: ${ICLOCK_DELAY:10}
+      # Quoted: the default value contains colons, which a plain YAML scalar would make ambiguous.
+      trans-times: "${ICLOCK_TRANS_TIMES:00:00;14:05}"
+      trans-interval: ${ICLOCK_TRANS_INTERVAL:1}
+      trans-flag: ${ICLOCK_TRANS_FLAG:1111000000}
+      time-zone: ${ICLOCK_TIME_ZONE:5.5}
+      realtime: ${ICLOCK_REALTIME:1}
+      encrypt: ${ICLOCK_ENCRYPT:0}
   # AES-256-GCM key for field-level encryption of sensitive PII/financial columns (§6). Any
   # passphrase works (SHA-256 -> 256-bit key); production MUST override with a real secret.
   field-enc-key: ${FIELD_ENC_KEY:dev-insecure-field-enc-key-change-me-please-0001}

@@ -70,6 +70,19 @@ public class SecurityConfig {
                     // (a presigned-URL equivalent), so no JWT is required.
                     .requestMatchers("/storage/blobs/**")
                     .permitAll()
+                    // eSSL/ZKTeco ADMS device push (Phase 0). A biometric terminal on the customer LAN
+                    // speaks a protocol with NO authentication mechanism of any kind — it announces only
+                    // a serial number as a query param, and rejects any non-text/plain reply by retrying
+                    // forever. This is the second APPLICATION-path subtree carve-out (after
+                    // /storage/blobs/** above; /actuator/**, /v3/api-docs/** and /swagger-ui/** are
+                    // framework/docs namespaces). It is a whole subtree rather than the exact paths this
+                    // module implements because the firmware's endpoint list is genuinely unknown — an
+                    // unmatched sibling would 404 as JSON and wedge the device. Persistence is gated by
+                    // app.iclock.enabled (default FALSE — nothing is written in prod until an operator
+                    // enables it on the LAN box), the handlers read and write no employee or attendance
+                    // data, and a device is RECORDED, never trusted. Serial allow-listing is Phase 1.
+                    .requestMatchers("/iclock/**")
+                    .permitAll()
                     // Slug -> company resolver (Stage 2 routing): open to any authenticated session;
                     // CompaniesService.resolveBySlug authorizes it like a by-id read (SUPER_ADMIN /
                     // ACCOUNTS_ADMIN any, a company-scoped session only its OWN company) and 404s
