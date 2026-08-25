@@ -132,7 +132,10 @@ app:
       trans-times: "${ICLOCK_TRANS_TIMES:00:00;14:05}"
       trans-interval: ${ICLOCK_TRANS_INTERVAL:1}
       trans-flag: ${ICLOCK_TRANS_FLAG:1111000000}
-      time-zone: ${ICLOCK_TIME_ZONE:5.5}
+      # INTEGER OFFSET IN MINUTES — 330 = +05:30 (Asia/Kolkata). Verified on hardware.
+      # Do NOT use fractional hours: an earlier "5.5" was truncated to 5 by the firmware, leaving the
+      # terminal 30 minutes slow and mis-stamping every punch until it was re-handshaken.
+      time-zone: ${ICLOCK_TIME_ZONE:330}
       realtime: ${ICLOCK_REALTIME:1}
       encrypt: ${ICLOCK_ENCRYPT:0}
       # pushver 2.4.1 terminals commonly look for a server version line; blank omits it.

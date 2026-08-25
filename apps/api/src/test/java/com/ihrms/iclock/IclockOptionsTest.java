@@ -60,9 +60,33 @@ class IclockOptionsTest {
         .contains("TransTimes=00:00;14:05")
         .contains("TransInterval=1")
         .contains("TransFlag=1111000000")
-        .contains("TimeZone=5.5") // +05:30, Asia/Kolkata
+        .contains("TimeZone=330") // +05:30 expressed in MINUTES — see the format guard below
         .contains("Encrypt=0")
         .contains("ServerVer=2.4.1");
+  }
+
+  @Test
+  void timeZoneIsAnIntegerMinuteOffsetNeverFractionalHours() {
+    // REGRESSION GUARD. A default of "5.5" (hours) shipped once and the firmware silently truncated
+    // it to 5, putting every terminal that handshook 30 minutes SLOW and mis-stamping every punch
+    // until it was re-handshaken and 76 rows were repaired. The wire format must stay an integer
+    // number of minutes; anything with a decimal point is the exact shape of that outage.
+    String timeZone =
+        IclockOptions.block("ABC123", "1", "1", OPTIONS)
+            .lines()
+            .filter(l -> l.startsWith("TimeZone="))
+            .findFirst()
+            .orElseThrow()
+            .substring("TimeZone=".length());
+
+    assertThat(timeZone).matches("-?\\d+").doesNotContain(".");
+    assertThat(Integer.parseInt(timeZone)).isEqualTo(330); // +05:30
+  }
+
+  @Test
+  void theDefaultOptionsCarryAnIntegerMinuteTimeZone() {
+    // Guards the bound default itself, not just what the block renders.
+    assertThat(IclockProperties.Options.defaults().timeZone()).matches("-?\\d+").isEqualTo("330");
   }
 
   @Test

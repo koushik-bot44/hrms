@@ -71,8 +71,13 @@ public record IclockProperties(
 
     public static Options defaults() {
       // Delay=30 matches the observed poll cadence of the ZAM180 / pushver 2.4.1 firmware.
-      // TimeZone 5.5 = +05:30 (Asia/Kolkata), which is what this fleet runs on.
-      return new Options(30, 30, "00:00;14:05", 1, "1111000000", "5.5", 1, 0, "2.4.1");
+      //
+      // TimeZone MUST be an INTEGER OFFSET IN MINUTES. 330 = +05:30 (Asia/Kolkata).
+      // This was learned the hard way: an earlier default of "5.5" (hours) was silently truncated
+      // to 5 by the firmware, leaving every terminal that handshook 30 minutes SLOW and stamping
+      // every punch with a wrong time. Verified on hardware — 330 restores sub-second accuracy.
+      // Never express this in fractional hours; see IclockOptionsTest for the format guard.
+      return new Options(30, 30, "00:00;14:05", 1, "1111000000", "330", 1, 0, "2.4.1");
     }
   }
 }

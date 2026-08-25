@@ -50,9 +50,11 @@ class IclockPropertiesBindingTest {
           assertThat(props.options().realtime()).isEqualTo(1);
           assertThat(props.options().delay()).isEqualTo(30);
           assertThat(props.options().serverVer()).isEqualTo("2.4.1");
+          // The bound value from the real yml must be integer minutes, not fractional hours —
+          // fractional is what put a live terminal 30 minutes slow.
+          assertThat(props.options().timeZone()).matches("-?\\d+").isEqualTo("330");
           // The quoted default contains colons — this is the assertion that catches a YAML slip.
           assertThat(props.options().transTimes()).isEqualTo("00:00;14:05");
-          assertThat(props.options().timeZone()).isEqualTo("5.5");
         });
   }
 
