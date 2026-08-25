@@ -70,6 +70,18 @@ public class IclockDevice {
   @Column(name = "firmwareInfo")
   private String firmwareInfo;
 
+  /**
+   * Last {@code Stamp} the device sent on an ATTLOG push, echoed back in the handshake options block.
+   * The observed firmware sends a constant {@code 9999}, so this is not a reliable high-water mark on
+   * this model — duplicate history is prevented by the ack plus the dedupe index, not by this value.
+   */
+  @Column(name = "attlogStamp")
+  private String attlogStamp;
+
+  /** Last {@code OpStamp} sent on an OPERLOG/BIODATA push. Same caveat as {@link #attlogStamp}. */
+  @Column(name = "opStamp")
+  private String opStamp;
+
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP_WITH_TIMEZONE)
   @Column(name = "createdAt", nullable = false, updatable = false)

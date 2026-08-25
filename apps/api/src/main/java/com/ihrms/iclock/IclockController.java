@@ -4,7 +4,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -17,8 +16,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The eSSL/ZKTeco ADMS ("iClock" push") endpoints — Phase 0: handshake, command poll, and raw ATTLOG
- * ingest. No employee mapping, no attendance derivation, no remote commands.
+ * The eSSL/ZKTeco ADMS ("iClock" push") endpoints — Phase 0/0.1: handshake, command poll, and raw
+ * ATTLOG ingest. No employee mapping, no attendance derivation, no remote commands.
+ *
+ * <p><b>Both path spellings are mapped.</b> The first real capture showed this firmware
+ * ({@code ZAM180-NF50VD-4.0.12-CR-1545-01}, pushver 2.4.1) calls {@code /iclock/cdata.aspx} and
+ * {@code /iclock/getrequest.aspx}. Under P0 those fell through to the catch-all, so 16,970 ATTLOG
+ * lines were captured raw but never parsed and the handshake never delivered its options block.
+ * Other firmware uses the bare form, so both are accepted rather than swapped.
  *
  * <p><b>Everything in this class is one class on purpose.</b> A controller-local
  * {@code @ExceptionHandler} only covers handler methods declared in its own controller, and the
@@ -30,8 +35,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>Responses are {@code ResponseEntity<byte[]>} with an explicit {@code text/plain} content type.
  * Bytes rather than String so the {@code StringHttpMessageConverter} cannot append a {@code charset}
- * parameter to the header; whether this firmware tolerates one is an open question, and this makes
- * the wire format deterministic either way.
+ * parameter; the captured device sends a wildcard Accept header, so negotiation is not a factor
+ * either way.
  */
 @RestController
 public class IclockController {
@@ -49,46 +54,59 @@ public class IclockController {
   /**
    * Handshake. The device fetches its configuration here; {@code Realtime=1} in the reply is what
    * switches it from scheduled batch upload to live push.
+   *
+   * <p>The full query string is stored as {@code firmwareInfo} — it carries {@code pushver},
+   * {@code DeviceType} and {@code language}, which is our best record of what this terminal is.
    */
-  @GetMapping("/iclock/cdata")
+  @GetMapping({"/iclock/cdata", "/iclock/cdata.aspx"})
   public ResponseEntity<byte[]> handshake(HttpServletRequest request) {
-    String serial = IclockQuery.param(request.getQueryString(), "SN");
+    String query = request.getQueryString();
+    String serial = IclockQuery.param(query, "SN");
+    IclockStore.DeviceView device = null;
     if (service.persistenceEnabled()) {
-      // The full query string is kept as firmware info: it carries pushver/options and is our best
-      // early evidence of which dialect this terminal speaks.
-      service.touch(serial, true, request.getQueryString());
+      device = service.touch(serial, true, query, null, null);
     }
     String block =
-        IclockOptions.block(serial, Instant.now().getEpochSecond(), props.options());
+        IclockOptions.block(
+            serial,
+            device == null ? null : device.attlogStamp(),
+            device == null ? null : device.opStamp(),
+            props.options());
     return text(block);
   }
 
   /**
-   * Command poll, every few seconds. P0 issues no commands, so the queue is always empty and the
-   * device is told so with a bare "OK".
+   * Command poll, every {@code Delay} seconds. P0 issues no commands, so the queue is always empty
+   * and the device is told so with a bare "OK".
    */
-  @GetMapping("/iclock/getrequest")
+  @GetMapping({"/iclock/getrequest", "/iclock/getrequest.aspx"})
   public ResponseEntity<byte[]> getrequest(HttpServletRequest request) {
     if (service.persistenceEnabled()) {
-      service.touch(IclockQuery.param(request.getQueryString(), "SN"), false, null);
+      String query = request.getQueryString();
+      // Some polls carry &INFO=<firmware,counters,...>; keep it, it is free dialect evidence.
+      String info = IclockQuery.param(query, "INFO");
+      service.touch(IclockQuery.param(query, "SN"), false, info == null ? null : query, null, null);
     }
     return text("OK");
   }
 
   /**
-   * Push. {@code table=ATTLOG} is parsed into one row per line; every other table (OPERLOG and
-   * whatever else this firmware sends) is acknowledged without structured parsing — the raw capture
-   * row already holds it verbatim, which is all P0 needs.
+   * Push. {@code table=ATTLOG} is parsed into one row per line; OPERLOG, BIODATA and anything else
+   * this firmware sends are acknowledged without structured parsing — the raw capture row already
+   * holds them verbatim, which is all P0 needs.
    *
-   * <p>The acknowledgement is what lets the terminal advance its cursor and stop re-sending, so it
-   * is returned even when the parse or the insert failed.
+   * <p>The acknowledgement is what lets the terminal advance its own pointer and stop re-sending, so
+   * it is returned even when the parse or the insert failed.
    */
-  @PostMapping("/iclock/cdata")
+  @PostMapping({"/iclock/cdata", "/iclock/cdata.aspx"})
   public ResponseEntity<byte[]> push(HttpServletRequest request) {
     String query = request.getQueryString();
     String serial = IclockQuery.param(query, "SN");
     String table = IclockQuery.param(query, "table");
-    String body = rawBody(request);
+    // ATTLOG uses Stamp; OPERLOG and BIODATA use OpStamp. Accept either name on either path rather
+    // than assuming which registry a given firmware pairs with which parameter.
+    String stamp = IclockQuery.param(query, "Stamp");
+    String opStamp = IclockQuery.param(query, "OpStamp");
 
     if (!service.persistenceEnabled()) {
       // NEVER acknowledge data we did not store. "OK" would let the terminal advance its cursor and
@@ -97,30 +115,39 @@ public class IclockController {
       return unavailable();
     }
     if (table == null || !table.equalsIgnoreCase("ATTLOG")) {
-      service.touch(serial, false, null);
+      // OPERLOG / BIODATA / unknown: raw-logged only, but still record liveness and the cursor.
+      service.touch(serial, false, null, stamp, opStamp);
       return text("OK");
     }
     String logId = (String) request.getAttribute(IclockRequestLogFilter.ATTR_LOG_ID);
-    int lines = service.ingestAttlog(serial, body, logId);
-    return text(props.ackWithCount() ? "OK: " + lines : "OK");
+    IclockService.IngestResult result =
+        service.ingestAttlog(serial, rawBody(request), logId, stamp);
+    if (result.duplicates() > 0) {
+      log.debug(
+          "iclock: SN={} batch {} lines, {} new, {} duplicate",
+          serial,
+          result.lines(),
+          result.inserted(),
+          result.duplicates());
+    }
+    return text(props.ackWithCount() ? "OK: " + result.lines() : "OK");
   }
 
   /**
-   * Catch-all for any other {@code /iclock} path or method — {@code devicecmd}, {@code fdata},
-   * {@code ping}, whatever this firmware probes. MANDATORY, not defensive: without it those requests
-   * become a {@code NoHandlerFoundException} and a JSON 404 the device would reject and retry
-   * forever. The capture filter has already recorded the request verbatim, which is how we learn
-   * which paths to implement properly in Phase 1.
+   * Catch-all for any other {@code /iclock} path or method — {@code devicecmd}, {@code rtdata},
+   * {@code ping}, whatever this firmware probes, in either the bare or {@code .aspx} spelling.
+   * MANDATORY, not defensive: without it those requests become a {@code NoHandlerFoundException} and
+   * a JSON 404 the device would reject and retry forever. The capture filter has already recorded the
+   * request verbatim, which is how the {@code .aspx} dialect was discovered in the first place.
    */
   @RequestMapping("/iclock/**")
   public ResponseEntity<byte[]> catchAll(HttpServletRequest request) {
     if (!service.persistenceEnabled()) {
-      // A write method on an unknown path may well be carrying data (fdata, rtdata, a table variant
-      // we have not mapped). Same rule as above: do not acknowledge what we did not store. Reads stay
-      // "OK" so a device is not error-looped on harmless polling.
+      // A write method on an unknown path may well be carrying data. Same rule as above: do not
+      // acknowledge what we did not store. Reads stay "OK" so a device is not error-looped.
       return isWrite(request) ? unavailable() : text("OK");
     }
-    service.touch(IclockQuery.param(request.getQueryString(), "SN"), false, null);
+    service.touch(IclockQuery.param(request.getQueryString(), "SN"), false, null, null, null);
     return text("OK");
   }
 
@@ -134,9 +161,9 @@ public class IclockController {
    * "OK" in {@code text/plain} rather than escaping to the global {@code @RestControllerAdvice},
    * whose JSON envelope would break the device.
    *
-   * <p>Note the trade-off this makes: because every failure still returns 200, a completely broken
-   * ingest is indistinguishable from a healthy one from outside the process. The signal to watch is
-   * this log line and the row counts in {@code iclock_request_logs} / {@code iclock_raw_punches}.
+   * <p>Note the trade-off: because every failure still returns 200, a completely broken ingest is
+   * indistinguishable from a healthy one from outside. The signals to watch are this log line and the
+   * row counts in {@code iclock_request_logs} / {@code iclock_raw_punches}.
    */
   @ExceptionHandler(Exception.class)
   public ResponseEntity<byte[]> handleAnything(HttpServletRequest request, Exception e) {
@@ -145,8 +172,8 @@ public class IclockController {
   }
 
   /**
-   * The body the capture filter already read. Falls back to reading the stream only if the filter
-   * did not run, which should be impossible for a mapped {@code /iclock} path.
+   * The body the capture filter already read. Falls back to reading the stream only if the filter did
+   * not run, which should be impossible for a mapped {@code /iclock} path.
    */
   private String rawBody(HttpServletRequest request) {
     Object cached = request.getAttribute(IclockRequestLogFilter.ATTR_BODY);

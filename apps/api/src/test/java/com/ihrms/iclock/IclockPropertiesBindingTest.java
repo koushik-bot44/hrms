@@ -43,9 +43,13 @@ class IclockPropertiesBindingTest {
           assertThat(props.rateLimitPerMinute()).isEqualTo(600);
           assertThat(props.ackWithCount()).isTrue();
 
+          // Default capture verbosity stays 'full' until live push is verified.
+          assertThat(props.leanCapture()).isFalse();
+
           assertThat(props.options()).isNotNull();
           assertThat(props.options().realtime()).isEqualTo(1);
-          assertThat(props.options().delay()).isEqualTo(10);
+          assertThat(props.options().delay()).isEqualTo(30);
+          assertThat(props.options().serverVer()).isEqualTo("2.4.1");
           // The quoted default contains colons — this is the assertion that catches a YAML slip.
           assertThat(props.options().transTimes()).isEqualTo("00:00;14:05");
           assertThat(props.options().timeZone()).isEqualTo("5.5");
@@ -56,19 +60,28 @@ class IclockPropertiesBindingTest {
   void appliesSafeFallbacksWhenEnvVarsAreBlankedOut() {
     // A zeroed max-body-bytes would otherwise mean "read nothing"; a zeroed rate limit would reject
     // every request. Neither should be reachable from a mis-set env var.
-    IclockProperties props = new IclockProperties(true, 0, 0, "  ", null);
+    IclockProperties props = new IclockProperties(true, 0, 0, "  ", "  ", null);
 
     assertThat(props.maxBodyBytes()).isEqualTo(262_144);
     assertThat(props.rateLimitPerMinute()).isEqualTo(600);
     assertThat(props.ackWithCount()).isTrue();
+    // A blanked capture-mode must not silently become lean and start dropping bodies.
+    assertThat(props.leanCapture()).isFalse();
     assertThat(props.options()).isNotNull();
     assertThat(props.options().realtime()).isEqualTo(1);
   }
 
   @Test
+  void leanCaptureIsOptInOnly() {
+    assertThat(new IclockProperties(true, 1024, 60, "count", "lean", null).leanCapture()).isTrue();
+    assertThat(new IclockProperties(true, 1024, 60, "count", "FULL", null).leanCapture()).isFalse();
+    assertThat(new IclockProperties(true, 1024, 60, "count", "nonsense", null).leanCapture()).isFalse();
+  }
+
+  @Test
   void honoursThePlainAckFormatWhenFirmwareNeedsABareOk() {
     IclockProperties props =
-        new IclockProperties(true, 1024, 60, "plain", IclockProperties.Options.defaults());
+        new IclockProperties(true, 1024, 60, "plain", "full", IclockProperties.Options.defaults());
 
     assertThat(props.ackWithCount()).isFalse();
   }

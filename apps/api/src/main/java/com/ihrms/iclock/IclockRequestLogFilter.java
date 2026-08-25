@@ -131,15 +131,32 @@ public class IclockRequestLogFilter extends OncePerRequestFilter {
     }
   }
 
+  /**
+   * True for the command poll on either mapped spelling — the one request type that is pure noise at
+   * volume (one every {@code Delay} seconds, forever, per device) and carries no payload.
+   */
+  private static boolean isMappedPoll(HttpServletRequest request) {
+    if (!"GET".equalsIgnoreCase(request.getMethod())) {
+      return false;
+    }
+    String uri = request.getRequestURI();
+    return "/iclock/getrequest".equals(uri) || "/iclock/getrequest.aspx".equals(uri);
+  }
+
   private IclockRequestLog buildRow(HttpServletRequest request, Body body) {
     String query = request.getQueryString();
+    // Lean mode drops the stored body for mapped polls ONLY; every other request stays fully
+    // captured, because those are the ones whose dialect we are still learning. Note this saves
+    // little on its own — a poll body is already empty — so the row count, not the body, is the real
+    // volume. Retention is the lever that matters; see the prune SQL in the runbook.
+    boolean dropBody = props.leanCapture() && isMappedPoll(request);
     IclockRequestLog row = new IclockRequestLog();
     row.setSerialNumber(IclockQuery.param(query, "SN"));
     row.setMethod(request.getMethod());
     row.setPath(request.getRequestURI());
     row.setQueryString(query);
     row.setHeaders(headerDump(request));
-    row.setBody(body.text());
+    row.setBody(dropBody ? null : body.text());
     row.setBodyBytes(body.bytes().length);
     row.setBodyTruncated(body.truncated());
     row.setSanitized(body.sanitized());

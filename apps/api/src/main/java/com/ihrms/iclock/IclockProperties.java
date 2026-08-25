@@ -21,6 +21,7 @@ public record IclockProperties(
     int maxBodyBytes,
     int rateLimitPerMinute,
     String ackFormat,
+    String captureMode,
     Options options) {
 
   /** Applies safe fallbacks so a blank or zeroed env var cannot produce a nonsensical config. */
@@ -28,12 +29,25 @@ public record IclockProperties(
     maxBodyBytes = maxBodyBytes > 0 ? maxBodyBytes : 262_144;
     rateLimitPerMinute = rateLimitPerMinute > 0 ? rateLimitPerMinute : 600;
     ackFormat = (ackFormat == null || ackFormat.isBlank()) ? "count" : ackFormat.trim();
+    captureMode = (captureMode == null || captureMode.isBlank()) ? "full" : captureMode.trim();
     options = options != null ? options : Options.defaults();
   }
 
   /** True when the ATTLOG acknowledgement should be {@code OK: <n>} rather than a bare {@code OK}. */
   public boolean ackWithCount() {
     return "count".equalsIgnoreCase(ackFormat);
+  }
+
+  /**
+   * True in {@code lean} capture mode, which drops the stored body for mapped, successful
+   * {@code getrequest} polls only — every other request stays fully captured. Intended for after live
+   * push is verified, when the poll stream is pure noise.
+   *
+   * <p>Be aware this saves less than it sounds: a {@code getrequest} poll carries an EMPTY body
+   * already, so the row itself (not its body) is the volume. Retention/pruning is the real lever.
+   */
+  public boolean leanCapture() {
+    return "lean".equalsIgnoreCase(captureMode);
   }
 
   /**
@@ -52,10 +66,13 @@ public record IclockProperties(
       String transFlag,
       String timeZone,
       int realtime,
-      int encrypt) {
+      int encrypt,
+      String serverVer) {
 
     public static Options defaults() {
-      return new Options(30, 10, "00:00;14:05", 1, "1111000000", "5.5", 1, 0);
+      // Delay=30 matches the observed poll cadence of the ZAM180 / pushver 2.4.1 firmware.
+      // TimeZone 5.5 = +05:30 (Asia/Kolkata), which is what this fleet runs on.
+      return new Options(30, 30, "00:00;14:05", 1, "1111000000", "5.5", 1, 0, "2.4.1");
     }
   }
 }

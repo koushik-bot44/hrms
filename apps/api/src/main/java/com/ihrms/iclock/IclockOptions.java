@@ -1,33 +1,51 @@
 package com.ihrms.iclock;
 
 /**
- * Builds the plain-text options block returned from the handshake (GET /iclock/cdata). Pure and
+ * Builds the plain-text options block returned from the handshake (GET /iclock/cdata[.aspx]). Pure and
  * static so it is unit-testable without a Spring context.
  *
- * <p>Lines are CRLF-separated, which is what ADMS firmware emits and is the safer of the two
- * choices for a device whose parser we have not seen. {@code Realtime=1} is the key that switches
- * the terminal from scheduled batch upload to live push — without it, punches only arrive at the
- * {@code TransTimes} slots.
+ * <p>Lines are CRLF-separated, which is what ADMS firmware emits. {@code Realtime=1} is the key that
+ * switches the terminal from scheduled batch upload to live push — during P0 this block was never
+ * actually delivered (the handshake fell through to the catch-all because the firmware calls
+ * {@code cdata.aspx}), which is why the observed device sat in ~30s batch mode.
+ *
+ * <p><b>On the registry stamps.</b> In the classic protocol these are per-table cursors: the device
+ * uploads records newer than the stamp the server returns. The observed firmware
+ * ({@code ZAM180-NF50VD-4.0.12-CR-1545-01}, pushver 2.4.1) instead sends a CONSTANT
+ * {@code Stamp=9999} / {@code OpStamp=9999} on every push, so on this model they are not a reliable
+ * high-water mark. They are persisted per device and echoed back for consistency, but what actually
+ * prevents duplicate history being stored is the {@code OK: <n>} acknowledgement (which advances the
+ * device's own internal pointer) plus the content-dedupe unique index from V42.
  */
 final class IclockOptions {
+
+  /** What we echo when a device has never reported a stamp — the value this firmware itself sends. */
+  static final String DEFAULT_STAMP = "9999";
 
   private IclockOptions() {}
 
   /**
-   * @param serialNumber the device's {@code ?SN=}; echoed back in the first line, which is the shape
-   *     the firmware expects to confirm the server recognised it
-   * @param stamp monotonic cursor the device uses to resume; seconds since epoch is sufficient in P0
+   * @param serialNumber the device's {@code ?SN=}; echoed in the first line, which is the shape the
+   *     firmware expects in order to confirm the server recognised it
+   * @param attlogStamp cursor for ATTLOG; null falls back to {@link #DEFAULT_STAMP}
+   * @param opStamp cursor for OPERLOG/BIODATA/ATTPHOTO; null falls back to {@link #DEFAULT_STAMP}
    */
-  static String block(String serialNumber, long stamp, IclockProperties.Options options) {
-    StringBuilder sb = new StringBuilder(256);
+  static String block(
+      String serialNumber, String attlogStamp, String opStamp, IclockProperties.Options options) {
+    String att = blankTo(attlogStamp, DEFAULT_STAMP);
+    String op = blankTo(opStamp, DEFAULT_STAMP);
+
+    StringBuilder sb = new StringBuilder(384);
     line(sb, "GET OPTION FROM: " + (serialNumber == null ? "" : serialNumber));
-    line(sb, "Stamp=" + stamp);
-    line(sb, "OpStamp=" + stamp);
-    // Per-table cursors. Firmware varies in which of these it reads; sending all three is harmless
-    // and covers the common variants.
-    line(sb, "ATTLOGStamp=" + stamp);
-    line(sb, "OPERLOGStamp=" + stamp);
-    line(sb, "ATTPHOTOStamp=" + stamp);
+    // Both the bare and per-registry spellings are sent: firmware differs in which it reads, and an
+    // unrecognised key is ignored rather than rejected.
+    line(sb, "Stamp=" + att);
+    line(sb, "OpStamp=" + op);
+    line(sb, "ATTLOGStamp=" + att);
+    line(sb, "OPERLOGStamp=" + op);
+    // BIODATA is pushed by this firmware (observed) — give it a cursor of its own spelling too.
+    line(sb, "BIODATAStamp=" + op);
+    line(sb, "ATTPHOTOStamp=" + op);
     line(sb, "ErrorDelay=" + options.errorDelay());
     line(sb, "Delay=" + options.delay());
     line(sb, "TransTimes=" + options.transTimes());
@@ -36,7 +54,15 @@ final class IclockOptions {
     line(sb, "TimeZone=" + options.timeZone());
     line(sb, "Realtime=" + options.realtime());
     line(sb, "Encrypt=" + options.encrypt());
+    if (options.serverVer() != null && !options.serverVer().isBlank()) {
+      // pushver 2.4.1 terminals commonly look for a server version line.
+      line(sb, "ServerVer=" + options.serverVer());
+    }
     return sb.toString();
+  }
+
+  private static String blankTo(String value, String fallback) {
+    return (value == null || value.isBlank()) ? fallback : value;
   }
 
   private static void line(StringBuilder sb, String text) {

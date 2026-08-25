@@ -117,11 +117,17 @@ app:
     # ATTLOG acknowledgement shape: "count" -> "OK: <n>" (per spec), "plain" -> bare "OK". Switchable
     # because firmware differs on which it accepts; confirm against a real capture before changing.
     ack-format: ${ICLOCK_ACK_FORMAT:count}
+    # Capture verbosity. 'full' (default) stores every request body verbatim — required while the
+    # firmware dialect is still being learned. 'lean' drops the stored body for MAPPED command polls
+    # only (everything else stays full); flip it after live push is verified. Caveat: a poll body is
+    # already empty, so lean saves little on its own — row RETENTION is the real volume lever.
+    capture-mode: ${ICLOCK_CAPTURE_MODE:full}
     # The handshake options block. Every key is config-driven because we do not yet know which ones this
     # firmware honours; Realtime=1 is what enables live push instead of scheduled batch upload.
     options:
       error-delay: ${ICLOCK_ERROR_DELAY:30}
-      delay: ${ICLOCK_DELAY:10}
+      # Matches the observed poll cadence of the ZAM180 / pushver 2.4.1 firmware.
+      delay: ${ICLOCK_DELAY:30}
       # Quoted: the default value contains colons, which a plain YAML scalar would make ambiguous.
       trans-times: "${ICLOCK_TRANS_TIMES:00:00;14:05}"
       trans-interval: ${ICLOCK_TRANS_INTERVAL:1}
@@ -129,6 +135,8 @@ app:
       time-zone: ${ICLOCK_TIME_ZONE:5.5}
       realtime: ${ICLOCK_REALTIME:1}
       encrypt: ${ICLOCK_ENCRYPT:0}
+      # pushver 2.4.1 terminals commonly look for a server version line; blank omits it.
+      server-ver: ${ICLOCK_SERVER_VER:2.4.1}
   # AES-256-GCM key for field-level encryption of sensitive PII/financial columns (§6). Any
   # passphrase works (SHA-256 -> 256-bit key); production MUST override with a real secret.
   field-enc-key: ${FIELD_ENC_KEY:dev-insecure-field-enc-key-change-me-please-0001}
@@ -174,6 +182,11 @@ ihrms:
   # The previous passphrase used to decrypt existing values; blank = the old committed dev default — the case
   # the prod boot guard caught (FIELD_ENC_KEY unset, so data was written under the dev key).
   reencrypt-from-key: ${REENCRYPT_FROM_KEY:}
+  # One-off iClock backfill (P0.1) — see IclockReplayRunner. Re-parses ATTLOG bodies already captured in
+  # iclock_request_logs into iclock_raw_punches, for pushes that landed on the catch-all before the .aspx
+  # paths were mapped. Idempotent (content-dedupe unique index, V42), so a repeat run is a no-op; enable
+  # for a single boot, read the counts it logs, then unset.
+  iclock-replay: ${ICLOCK_REPLAY:false}
 
 ---
 # Local/dev profile: refresh cookie relaxes to insecure + SameSite=Lax (set in auth phase).

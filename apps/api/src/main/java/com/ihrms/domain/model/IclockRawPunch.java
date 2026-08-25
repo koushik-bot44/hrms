@@ -76,6 +76,15 @@ public class IclockRawPunch {
   @Column(name = "requestLogId")
   private String requestLogId;
 
+  /**
+   * Content-addressed dedupe key, {@code md5(serialNumber + "\n" + rawLine)} — see V42. Uniquely
+   * indexed, and computed identically by live ingest and by the one-off replay so the two can never
+   * double-count the same line. The device supplies no per-record id and a constant
+   * {@code Stamp=9999}, so the line content is the only stable identity available.
+   */
+  @Column(name = "dedupeKey", nullable = false)
+  private String dedupeKey;
+
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP_WITH_TIMEZONE)
   @Column(name = "receivedAt", nullable = false, updatable = false)
