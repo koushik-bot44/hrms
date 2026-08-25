@@ -23,6 +23,15 @@ final class IclockDedupe {
   private IclockDedupe() {}
 
   /**
+   * <b>Accepted trade-off — same-second collapse.</b> Because the key is the line content, two
+   * genuinely distinct punches from the SAME pin in the SAME second with the same status/verify
+   * fields are byte-identical and collapse into one row. The device timestamp has one-second
+   * resolution and carries no per-record id, so a real repeat and a duplicate upload are
+   * indistinguishable at this layer — there is no signal that could separate them. This is
+   * deliberate and ratified: losing that rare repeat is preferable to double-counting a 17k-line
+   * backlog every time a terminal re-uploads its history. If Phase 1 ever needs true repeats, it
+   * must come from a firmware that emits a record id, not from changing this key.
+   *
    * @param serialNumber the device serial; a null or blank serial still yields a stable key so a
    *     malformed push cannot bypass dedupe entirely
    * @param rawLine the verbatim ATTLOG line
