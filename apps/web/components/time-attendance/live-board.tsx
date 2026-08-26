@@ -9,8 +9,10 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
+import { GroupedList } from '@/components/console/grouped-list';
+import { Combobox } from '@/components/console/combobox';
 import { istDayLabel, istTime } from '@/lib/date';
-import { surface } from '@/components/ui/surface';
+import type { GroupOptions } from '@/lib/console/grouping';
 import { cn } from '@/lib/utils';
 import { ConsoleError } from './console-error';
 
@@ -22,8 +24,7 @@ const REFETCH_MS = 30_000;
  *
  * `stale` is driven by consecutive FAILURES, never by `isFetching`: a routine 30-second refetch is not
  * a reconnection, and flashing "Reconnecting…" twice a minute on a healthy board would train the
- * operator to ignore the one time it means something. The timestamp is the honest part — it says how
- * old the data actually is regardless of what the connection is doing.
+ * operator to ignore the one time it means something.
  */
 function LiveIndicator({ asOf, stale }: { asOf: string; stale: boolean }) {
   return (
@@ -33,10 +34,7 @@ function LiveIndicator({ asOf, stale }: { asOf: string; stale: boolean }) {
           <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
         ) : null}
         <span
-          className={cn(
-            'relative inline-flex size-2 rounded-full',
-            stale ? 'bg-warning' : 'bg-success',
-          )}
+          className={cn('relative inline-flex size-2 rounded-full', stale ? 'bg-warning' : 'bg-success')}
         />
       </span>
       {stale ? `Reconnecting… showing ${istTime(asOf)}` : `Live · as of ${istTime(asOf)}`}
@@ -44,23 +42,19 @@ function LiveIndicator({ asOf, stale }: { asOf: string; stale: boolean }) {
   );
 }
 
-function Chip({ person, siteId }: { person: PersonChip; siteId: string }) {
+/** One person. Deliberately one line tall — the standard keeps rows scannable. */
+function PersonRow({ person, siteId }: { person: PersonChip; siteId: string }) {
   return (
     <Link
       href={`/super-admin/time-attendance/people/${person.personId}?site=${siteId}`}
-      className={cn(
-        surface('card'),
-        'flex items-center justify-between gap-3 px-3 py-2 transition-colors hover:bg-accent',
-      )}
+      className="flex items-center justify-between gap-3 px-3 py-2 transition-colors hover:bg-accent"
     >
-      <div className="min-w-0">
-        <div className="truncate text-sm font-medium">
-          {person.name ?? <span className="text-muted-foreground">Unnamed · {person.pin}</span>}
-        </div>
-        <div className="truncate text-xs text-muted-foreground">
-          {[person.companyName, person.team].filter(Boolean).join(' · ') || `Pin ${person.pin}`}
-        </div>
-      </div>
+      <span className="min-w-0 flex-1 truncate text-sm">
+        {person.name ?? <span className="text-muted-foreground">Unnamed · {person.pin}</span>}
+        {person.team ? (
+          <span className="ml-2 text-xs text-muted-foreground">{person.team}</span>
+        ) : null}
+      </span>
       {person.lastAt ? (
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
           {istTime(person.lastAt)}
@@ -70,21 +64,44 @@ function Chip({ person, siteId }: { person: PersonChip; siteId: string }) {
   );
 }
 
+type Axis = 'company' | 'team';
+
+/** The grouping axes the board offers. Company is the default the standard names. */
+function groupingFor(axis: Axis): GroupOptions<PersonChip> {
+  if (axis === 'team') {
+    return {
+      keyOf: (p) => p.team,
+      timeOf: (p) => p.lastAt,
+      ungroupedLabel: 'No team',
+    };
+  }
+  return {
+    keyOf: (p) => p.companyName,
+    timeOf: (p) => p.lastAt,
+    ungroupedLabel: 'No company',
+  };
+}
+
 function Column({
   title,
   icon: Icon,
   people,
   siteId,
   tone,
+  axis,
   emptyLine,
+  storageKey,
 }: {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
   people: PersonChip[];
   siteId: string;
   tone: 'success' | 'primarySoft' | 'neutral' | 'warning';
+  axis: Axis;
   emptyLine: string;
+  storageKey: string;
 }) {
+  const grouping = React.useMemo(() => groupingFor(axis), [axis]);
   return (
     <Card className="flex min-h-[12rem] flex-col p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -99,19 +116,22 @@ function Column({
       {people.length === 0 ? (
         <p className="my-auto py-6 text-center text-sm text-muted-foreground">{emptyLine}</p>
       ) : (
-        <ul className="space-y-2">
-          {people.map((p) => (
-            <li key={p.personId}>
-              <Chip person={p} siteId={siteId} />
-            </li>
-          ))}
-        </ul>
+        <GroupedList
+          items={people}
+          grouping={grouping}
+          badgeVariant={tone}
+          storageKey={`board.${storageKey}.${axis}`}
+          itemKey={(p) => p.personId}
+          renderItem={(p) => <PersonRow person={p} siteId={siteId} />}
+        />
       )}
     </Card>
   );
 }
 
 export function LiveBoard({ siteId }: { siteId: string }) {
+  const [axis, setAxis] = React.useState<Axis>('company');
+
   const query = useApiQuery<Board>(
     iclockKeys.board(siteId),
     (signal) => getBoard(siteId, signal),
@@ -122,8 +142,7 @@ export function LiveBoard({ siteId }: { siteId: string }) {
   if (query.isError || !query.data) return <ConsoleError error={query.error} />;
 
   const b = query.data;
-  const rosterSize =
-    b.inOffice.length + b.inCafeteria.length + b.left.length + b.notArrived.length;
+  const rosterSize = b.inOffice.length + b.inCafeteria.length + b.left.length + b.notArrived.length;
   const arrived = b.inOffice.length + b.inCafeteria.length + b.left.length;
 
   // EMPTY STATE — nobody on the roster.
@@ -137,19 +156,30 @@ export function LiveBoard({ siteId }: { siteId: string }) {
     );
   }
 
-  // EMPTY STATE — the roster exists but the shift has not started: every single person is still
-  // NOT_ARRIVED. Rendering four columns, three of them empty, would read as a broken screen; saying
-  // the day hasn't started reads as the truth. The counts stay visible underneath so the operator can
-  // still confirm the roster is the size they expect.
+  const header = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <span className="text-sm text-muted-foreground">Shift day {istDayLabel(b.shiftDate)}</span>
+      <div className="flex items-center gap-3">
+        <Combobox
+          ariaLabel="Group people by"
+          options={[
+            { value: 'company', label: 'Group by company' },
+            { value: 'team', label: 'Group by team' },
+          ]}
+          value={axis}
+          onChange={(v) => setAxis(v as Axis)}
+          className="w-48"
+        />
+        <LiveIndicator asOf={b.asOf} stale={query.failureCount > 0} />
+      </div>
+    </div>
+  );
+
+  // EMPTY STATE — the roster exists but the shift has not started: everyone is still NOT_ARRIVED.
   if (arrived === 0) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
-            Shift day {istDayLabel(b.shiftDate)}
-          </span>
-          <LiveIndicator asOf={b.asOf} stale={query.failureCount > 0} />
-        </div>
+        {header}
         <EmptyState
           icon={Moon}
           title="No one has arrived yet"
@@ -161,11 +191,7 @@ export function LiveBoard({ siteId }: { siteId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-sm text-muted-foreground">Shift day {istDayLabel(b.shiftDate)}</span>
-        <LiveIndicator asOf={b.asOf} stale={query.failureCount > 0} />
-      </div>
-
+      {header}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Column
           title="In office"
@@ -173,6 +199,8 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           people={b.inOffice}
           siteId={siteId}
           tone="success"
+          axis={axis}
+          storageKey="inOffice"
           emptyLine="Nobody in the office right now."
         />
         <Column
@@ -181,6 +209,8 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           people={b.inCafeteria}
           siteId={siteId}
           tone="primarySoft"
+          axis={axis}
+          storageKey="inCafeteria"
           emptyLine="Nobody in the cafeteria."
         />
         <Column
@@ -189,14 +219,20 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           people={b.left}
           siteId={siteId}
           tone="neutral"
+          axis={axis}
+          storageKey="left"
           emptyLine="Nobody has left yet."
         />
+        {/* The 202 case. Grouped and collapsed, this is six headers rather than 202 cards — which is
+            exactly the Gate A acceptance criterion, and why the grouping rule is a tested function. */}
         <Column
           title="Not arrived"
           icon={Moon}
           people={b.notArrived}
           siteId={siteId}
           tone="warning"
+          axis={axis}
+          storageKey="notArrived"
           emptyLine="Everyone is accounted for."
         />
       </div>
