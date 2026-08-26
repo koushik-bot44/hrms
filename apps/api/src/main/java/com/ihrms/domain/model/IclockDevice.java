@@ -62,9 +62,32 @@ public class IclockDevice {
   @Column(name = "lastHandshakeAt")
   private Instant lastHandshakeAt;
 
-  /** {@code UNCLAIMED} until a Phase-1 operator adopts the device into a company. */
+  /** {@code UNCLAIMED} until an operator adopts it, then {@code CLAIMED} (V43). */
   @Column(name = "status", nullable = false)
   private String status = "UNCLAIMED";
+
+  /**
+   * The premises this terminal guards. Null while UNCLAIMED. A DB CHECK makes the claim all-or-nothing
+   * — siteId, area, direction and claimedAt are set together or not at all — because a half-claimed
+   * device would promote punches with a null direction.
+   */
+  @Column(name = "siteId")
+  private String siteId;
+
+  /** {@code GATE} or {@code CAFETERIA}. Cafeteria punches never influence gate burst logic. */
+  @Column(name = "area")
+  private String area;
+
+  /**
+   * {@code IN}, {@code OUT} or {@code MIXED}. THE ONLY source of direction: on this fleet statusCode is
+   * always 255 and verifyMode always 15, so the punch payload carries no directional signal at all.
+   */
+  @Column(name = "direction")
+  private String direction;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP_WITH_TIMEZONE)
+  @Column(name = "claimedAt")
+  private Instant claimedAt;
 
   /** Verbatim options/info string the firmware volunteers on handshake, kept for dialect forensics. */
   @Column(name = "firmwareInfo")

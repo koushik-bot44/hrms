@@ -29,10 +29,18 @@ public class IclockService {
 
   private final IclockStore store;
   private final IclockProperties props;
+  private final com.ihrms.domain.repository.IclockRawPunchRepository rawPunches;
+  private final IclockPromotionService promotion;
 
-  public IclockService(IclockStore store, IclockProperties props) {
+  public IclockService(
+      IclockStore store,
+      IclockProperties props,
+      com.ihrms.domain.repository.IclockRawPunchRepository rawPunches,
+      IclockPromotionService promotion) {
     this.store = store;
     this.props = props;
+    this.rawPunches = rawPunches;
+    this.promotion = promotion;
   }
 
   public boolean persistenceEnabled() {
@@ -73,6 +81,17 @@ public class IclockService {
       return null;
     }
     try {
+      // Self-announce cap. /iclock is unauthenticated, so an unknown caller can otherwise mint device
+      // rows without limit by varying ?SN=. Only NEW serials are capped — a device already known (and
+      // especially a claimed one) is always served, so a real terminal can never be locked out by
+      // someone else's noise.
+      if (store.findDeviceBySerial(serialNumber).isEmpty() && overDeviceCap()) {
+        log.warn(
+            "iclock: refusing to register new serial {} — {} unclaimed devices already exist (cap)",
+            serialNumber,
+            props.maxUnclaimedDevices());
+        return null;
+      }
       return store.upsertDevice(serialNumber, handshake, firmwareInfo, attlogStamp, opStamp);
     } catch (DataIntegrityViolationException race) {
       // Another request created the same serial between our read and our insert.
@@ -81,6 +100,27 @@ public class IclockService {
       log.warn("iclock: device upsert failed for SN={}", serialNumber, e);
       return null;
     }
+  }
+
+  /** True when the unclaimed-device population is already at its configured ceiling. */
+  private boolean overDeviceCap() {
+    return store.countUnclaimedDevices() >= props.maxUnclaimedDevices();
+  }
+
+  /**
+   * True when an UNCLAIMED serial has already banked its allowance of raw punches.
+   *
+   * <p>Claimed devices are never capped — losing a real terminal's attendance to a storage ceiling
+   * would be far worse than the disk it saves. This only bounds an anonymous serial nobody has
+   * adopted, and the response stays {@code 200 OK} text/plain so a genuine device is never pushed into
+   * a retry loop.
+   */
+  boolean overPunchCap(String serialNumber) {
+    var device = store.findDeviceBySerial(serialNumber).orElse(null);
+    if (device != null && device.claimed()) {
+      return false;
+    }
+    return rawPunches.countBySerialNumber(serialNumber) >= props.unclaimedSerialPunchCap();
   }
 
   /** Touches liveness for a non-ATTLOG request (handshake, command poll, OPERLOG/BIODATA push). */
@@ -106,7 +146,7 @@ public class IclockService {
     List<IclockRawPunch> rows =
         buildRows(serialNumber, device == null ? null : device.id(), lines, requestLogId, null);
     try {
-      int inserted = store.insertPunches(rows);
+      int inserted = persistAndPromote(rows);
       return new IngestResult(lines.size(), inserted, rows.size() - inserted);
     } catch (Exception e) {
       // The raw capture row is already committed, so the batch is recoverable from it.
@@ -155,8 +195,36 @@ public class IclockService {
     return rows;
   }
 
-  /** Insert path for the replay, sharing the store's conflict-skipping behaviour. */
-  int insertPunches(List<IclockRawPunch> rows) {
-    return store.insertPunches(rows);
+  /**
+   * THE single write path for raw punches: persist (conflict-skipping), then promote each persisted
+   * row into an effective punch.
+   *
+   * <p>Live ingest and the one-off replay both call this and nothing else. P0.1 was needed precisely
+   * because two code paths handled punches differently; keeping insertion and promotion welded
+   * together here is what stops that recurring — a punch cannot be stored by one path and left
+   * unpromoted by the other.
+   *
+   * <p>Promotion is best-effort and never propagates: the raw rows are already committed and the
+   * device has already been acknowledged, so a promotion failure costs visibility, never data. The
+   * sweep and the backfill both re-attempt anything left behind.
+   *
+   * @return the number of raw rows actually inserted (excludes content-deduped duplicates)
+   */
+  int persistAndPromote(List<IclockRawPunch> rows) {
+    int inserted = store.insertPunches(rows);
+    if (rows.isEmpty()) {
+      return inserted;
+    }
+    try {
+      // Look the rows up by content key rather than by the ids we minted: a deduped row kept the
+      // ORIGINAL punch's id, so promoting our discarded id would silently do nothing.
+      List<String> keys = rows.stream().map(IclockRawPunch::getDedupeKey).toList();
+      for (IclockRawPunch persisted : rawPunches.findByDedupeKeyIn(keys)) {
+        promotion.promote(persisted.getId());
+      }
+    } catch (Exception e) {
+      log.warn("iclock: promotion after insert failed; the sweep will retry", e);
+    }
+    return inserted;
   }
 }

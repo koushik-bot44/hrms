@@ -22,15 +22,45 @@ public record IclockProperties(
     int rateLimitPerMinute,
     String ackFormat,
     String captureMode,
+    int burstWindowSeconds,
+    int maxUnclaimedDevices,
+    int unclaimedSerialPunchCap,
+    int logRetentionDays,
+    boolean nullBodiesAfterTwoDays,
     Options options) {
 
-  /** Applies safe fallbacks so a blank or zeroed env var cannot produce a nonsensical config. */
+  /**
+   * Applies safe fallbacks so a blank or zeroed env var cannot produce a nonsensical config.
+   *
+   * <p>{@code @ConstructorBinding} is REQUIRED here, not decoration. A record with a single
+   * constructor binds automatically, but this type also has the convenience constructor below — and
+   * with two constructors Spring cannot infer which one to bind, falls back to looking for a no-arg
+   * constructor, and fails context startup app-wide with "No default constructor found".
+   */
+  @org.springframework.boot.context.properties.bind.ConstructorBinding
   public IclockProperties {
     maxBodyBytes = maxBodyBytes > 0 ? maxBodyBytes : 262_144;
     rateLimitPerMinute = rateLimitPerMinute > 0 ? rateLimitPerMinute : 600;
     ackFormat = (ackFormat == null || ackFormat.isBlank()) ? "count" : ackFormat.trim();
     captureMode = (captureMode == null || captureMode.isBlank()) ? "full" : captureMode.trim();
+    // Must exceed 1s to mean anything: V42's content dedupe already collapses same-second repeats.
+    burstWindowSeconds = burstWindowSeconds > 1 ? burstWindowSeconds : 120;
+    maxUnclaimedDevices = maxUnclaimedDevices > 0 ? maxUnclaimedDevices : 10;
+    unclaimedSerialPunchCap = unclaimedSerialPunchCap > 0 ? unclaimedSerialPunchCap : 50_000;
+    logRetentionDays = logRetentionDays > 0 ? logRetentionDays : 7;
     options = options != null ? options : Options.defaults();
+  }
+
+  /**
+   * Convenience constructor naming only the fields a caller cares about; every numeric default is
+   * filled in by the compact constructor above, which clamps a zero to its documented default.
+   *
+   * <p>Exists so that adding a property does not break every construction site. The canonical
+   * constructor already grew from six components to eleven across P0.1 and P1a, and each growth
+   * mechanically broke the tests — which is noise that hides real failures.
+   */
+  public IclockProperties(boolean enabled, String ackFormat, String captureMode, Options options) {
+    this(enabled, 0, 0, ackFormat, captureMode, 0, 0, 0, 0, false, options);
   }
 
   /** True when the ATTLOG acknowledgement should be {@code OK: <n>} rather than a bare {@code OK}. */

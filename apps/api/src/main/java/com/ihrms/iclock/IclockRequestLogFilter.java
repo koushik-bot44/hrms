@@ -161,8 +161,31 @@ public class IclockRequestLogFilter extends OncePerRequestFilter {
     row.setBodyTruncated(body.truncated());
     row.setSanitized(body.sanitized());
     row.setRemoteAddr(request.getRemoteAddr());
+    row.setXForwardedFor(forwardedFor(request));
     row.setTableName(IclockQuery.param(query, "table"));
     return row;
+  }
+
+  /**
+   * The real client address, when a proxy tells us one.
+   *
+   * <p>In production {@code getRemoteAddr()} records the CLOUDFLARE EDGE (172.71.x.x observed), not the
+   * terminal — so the source-IP signal that identified the {@code .aspx} dialect on the LAN is
+   * unavailable there. Several headers are tried because which one survives depends on the proxy
+   * chain: {@code ForwardedHeaderFilter} consumes {@code X-Forwarded-For} when it is trusted, while
+   * {@code CF-Connecting-IP} and {@code True-Client-IP} pass through untouched.
+   *
+   * <p>Diagnostics only. Devices are identified by SERIAL, never by IP — anything here is
+   * caller-supplied and trivially forged.
+   */
+  private static String forwardedFor(HttpServletRequest request) {
+    for (String name : new String[] {"X-Forwarded-For", "CF-Connecting-IP", "True-Client-IP"}) {
+      String value = request.getHeader(name);
+      if (value != null && !value.isBlank()) {
+        return name + ": " + value.trim();
+      }
+    }
+    return null;
   }
 
   /** All headers, one per line, with sensitive values replaced rather than dropped. */

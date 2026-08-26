@@ -72,6 +72,15 @@ public class IclockRequestLog {
   @Column(name = "remoteAddr")
   private String remoteAddr;
 
+  /**
+   * The forwarded client-IP header verbatim, when present (V43). In production behind Cloudflare,
+   * {@code remoteAddr} records the EDGE address (172.71.x.x observed), not the terminal — so the
+   * source-IP signal that identified the {@code .aspx} dialect on the LAN is unavailable there.
+   * Diagnostics only: devices are identified by SERIAL, never by IP.
+   */
+  @Column(name = "xForwardedFor")
+  private String xForwardedFor;
+
   /** The {@code ?table=} parameter (ATTLOG / OPERLOG / ...). Named to avoid the SQL reserved word. */
   @Column(name = "tableName")
   private String tableName;

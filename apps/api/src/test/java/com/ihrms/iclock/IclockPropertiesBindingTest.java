@@ -62,7 +62,7 @@ class IclockPropertiesBindingTest {
   void appliesSafeFallbacksWhenEnvVarsAreBlankedOut() {
     // A zeroed max-body-bytes would otherwise mean "read nothing"; a zeroed rate limit would reject
     // every request. Neither should be reachable from a mis-set env var.
-    IclockProperties props = new IclockProperties(true, 0, 0, "  ", "  ", null);
+    IclockProperties props = new IclockProperties(true, "  ", "  ", null);
 
     assertThat(props.maxBodyBytes()).isEqualTo(262_144);
     assertThat(props.rateLimitPerMinute()).isEqualTo(600);
@@ -75,15 +75,15 @@ class IclockPropertiesBindingTest {
 
   @Test
   void leanCaptureIsOptInOnly() {
-    assertThat(new IclockProperties(true, 1024, 60, "count", "lean", null).leanCapture()).isTrue();
-    assertThat(new IclockProperties(true, 1024, 60, "count", "FULL", null).leanCapture()).isFalse();
-    assertThat(new IclockProperties(true, 1024, 60, "count", "nonsense", null).leanCapture()).isFalse();
+    assertThat(new IclockProperties(true, "count", "lean", null).leanCapture()).isTrue();
+    assertThat(new IclockProperties(true, "count", "FULL", null).leanCapture()).isFalse();
+    assertThat(new IclockProperties(true, "count", "nonsense", null).leanCapture()).isFalse();
   }
 
   @Test
   void honoursThePlainAckFormatWhenFirmwareNeedsABareOk() {
     IclockProperties props =
-        new IclockProperties(true, 1024, 60, "plain", "full", IclockProperties.Options.defaults());
+        new IclockProperties(true, "plain", "full", IclockProperties.Options.defaults());
 
     assertThat(props.ackWithCount()).isFalse();
   }

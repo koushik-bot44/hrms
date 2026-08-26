@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class IclockStore {
 
   /** Just enough of a device for the handshake to answer with, without leaking a JPA entity around. */
-  public record DeviceView(String id, String attlogStamp, String opStamp) {}
+  public record DeviceView(String id, String attlogStamp, String opStamp, boolean claimed) {}
 
   private static final String INSERT_PUNCH =
       """
@@ -107,14 +107,22 @@ public class IclockStore {
       device.setOpStamp(opStamp);
     }
     IclockDevice saved = devices.saveAndFlush(device);
-    return new DeviceView(saved.getId(), saved.getAttlogStamp(), saved.getOpStamp());
+    return new DeviceView(
+        saved.getId(), saved.getAttlogStamp(), saved.getOpStamp(), "CLAIMED".equals(saved.getStatus()));
+  }
+
+  /** How many devices have never been adopted — the self-announce cap's input. */
+  @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+  public long countUnclaimedDevices() {
+    return devices.countByStatus("UNCLAIMED");
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
   public Optional<DeviceView> findDeviceBySerial(String serialNumber) {
     return devices
         .findBySerialNumber(serialNumber)
-        .map(d -> new DeviceView(d.getId(), d.getAttlogStamp(), d.getOpStamp()));
+        .map(d -> new DeviceView(
+            d.getId(), d.getAttlogStamp(), d.getOpStamp(), "CLAIMED".equals(d.getStatus())));
   }
 
   /**

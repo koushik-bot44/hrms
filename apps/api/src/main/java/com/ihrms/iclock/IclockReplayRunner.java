@@ -96,7 +96,9 @@ public class IclockReplayRunner implements CommandLineRunner {
         List<IclockRawPunch> punches =
             service.buildRows(serial, deviceId, lines, row.getId(), row.getReceivedAt());
         try {
-          int inserted = service.insertPunches(punches);
+          // Same write path as live ingest: persist, then promote. Sharing it is what keeps the two
+          // from diverging the way P0 and P0.1 did.
+          int inserted = service.persistAndPromote(punches);
           rowsOut += inserted;
           dupes += (punches.size() - inserted);
         } catch (Exception e) {

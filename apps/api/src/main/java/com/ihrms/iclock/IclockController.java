@@ -119,6 +119,13 @@ public class IclockController {
       service.touch(serial, false, null, stamp, opStamp);
       return text("OK");
     }
+    if (serial != null && service.overPunchCap(serial)) {
+      // An UNCLAIMED serial has banked its allowance. Answer OK and store nothing: a 503 here would
+      // make a genuine terminal retry the same batch forever, and a JSON error would break it
+      // outright. Claimed devices are never capped — see IclockService.overPunchCap.
+      log.warn("iclock: SN={} is over the unclaimed-serial punch cap; accepting without storing", serial);
+      return text(props.ackWithCount() ? "OK: " + IclockAttlog.parse(rawBody(request)).size() : "OK");
+    }
     String logId = (String) request.getAttribute(IclockRequestLogFilter.ATTR_LOG_ID);
     IclockService.IngestResult result =
         service.ingestAttlog(serial, rawBody(request), logId, stamp);

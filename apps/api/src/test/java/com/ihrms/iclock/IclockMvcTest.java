@@ -57,8 +57,7 @@ class IclockMvcTest {
   static class Config {
     @Bean
     IclockProperties iclockProperties() {
-      return new IclockProperties(
-          true, 262_144, 600, "count", "full", IclockProperties.Options.defaults());
+      return new IclockProperties(true, "count", "full", IclockProperties.Options.defaults());
     }
   }
 

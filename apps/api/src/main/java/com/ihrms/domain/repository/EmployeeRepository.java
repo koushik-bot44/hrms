@@ -18,6 +18,17 @@ public interface EmployeeRepository
   /** Employees authenticate by email (globally unique) + full name + OTP (§6). */
   Optional<Employee> findByEmail(String email);
 
+  /**
+   * Case-insensitive email lookup returning ALL matches.
+   *
+   * <p>Deliberately a List, not an Optional: {@code employees.email} carries no unique index (only
+   * {@code users.email} does), so two rows can share an address and an Optional-returning finder would
+   * throw. The PIN import needs to REPORT that ambiguity rather than fail or pick one — the seed data
+   * genuinely contains addresses shared by two different people.
+   */
+  @Query("select e from Employee e where lower(e.email) = lower(:email)")
+  List<Employee> findAllByEmailIgnoreCase(@Param("email") String email);
+
   /** A credentialed employee by their mailbox address — the {@code /login} door for employees (§8). */
   Optional<Employee> findByMailAddress(String mailAddress);
 

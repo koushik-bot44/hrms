@@ -122,6 +122,20 @@ app:
     # only (everything else stays full); flip it after live push is verified. Caveat: a poll body is
     # already empty, so lean saves little on its own — row RETENTION is the real volume lever.
     capture-mode: ${ICLOCK_CAPTURE_MODE:full}
+    # P1a — burst collapse. Repeated taps by the same person on the same device within this window
+    # collapse to one effective punch (IN keeps the first, OUT keeps the latest). Must be > 1s to mean
+    # anything: V42's content dedupe already collapses byte-identical same-second repeats. 120s is the
+    # brief's figure and is NOT yet measured against this hardware — validate before trusting totals.
+    burst-window-seconds: ${ICLOCK_BURST_WINDOW_SECONDS:120}
+    # Self-announce caps. /iclock is unauthenticated, so an unknown caller can mint device rows by
+    # varying ?SN= and raw punches by POSTing distinct lines. Past these caps the request is answered
+    # 200 OK text/plain and simply not stored — never a JSON error, never a 503 that would make a real
+    # terminal retry forever.
+    max-unclaimed-devices: ${ICLOCK_MAX_UNCLAIMED_DEVICES:10}
+    unclaimed-serial-punch-cap: ${ICLOCK_UNCLAIMED_SERIAL_PUNCH_CAP:50000}
+    # Retention for iclock_request_logs ONLY. Punches are never touched by retention.
+    log-retention-days: ${ICLOCK_LOG_RETENTION_DAYS:7}
+    null-bodies-after-two-days: ${ICLOCK_NULL_BODIES_AFTER_TWO_DAYS:false}
     # The handshake options block. Every key is config-driven because we do not yet know which ones this
     # firmware honours; Realtime=1 is what enables live push instead of scheduled batch upload.
     options:
@@ -190,6 +204,10 @@ ihrms:
   # paths were mapped. Idempotent (content-dedupe unique index, V42), so a repeat run is a no-op; enable
   # for a single boot, read the counts it logs, then unset.
   iclock-replay: ${ICLOCK_REPLAY:false}
+  # One-off P1a backfill — see IclockBackfillRunner. Derives effective punches from ALL existing raw
+  # history. Claim the devices and load the pin mappings FIRST, or every punch is simply declined as
+  # DEVICE_UNCLAIMED (harmless and re-runnable, but pointless). Idempotent; enable for ONE boot.
+  iclock-backfill: ${ICLOCK_BACKFILL:false}
 
 ---
 # Local/dev profile: refresh cookie relaxes to insecure + SameSite=Lax (set in auth phase).
