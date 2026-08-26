@@ -86,6 +86,21 @@ public final class IclockAdminDtos {
       String companyName,
       String employeeStatus) {}
 
+  /**
+   * The inbox, split by whether a pin is still punching.
+   *
+   * <p>With backfill OFF, an archive-only pin is history and needs no action, while a pin punching
+   * since the device was claimed is somebody at the gate right now going unattributed. Collapsing
+   * the two buries the handful that matter under hundreds of rows of archaeology, so the archive
+   * side is deliberately reduced to a count.
+   */
+  public record UnmappedInbox(
+      Instant since,
+      /** The action list: pins punching in the live window, heaviest first. */
+      List<UnmappedPinView> live,
+      int archiveOnlyPins,
+      long archiveOnlyPunches) {}
+
   /** One row of the unmapped-pin inbox: a pin that punched but resolves to nobody. */
   public record UnmappedPinView(
       String pin,
@@ -96,8 +111,21 @@ public final class IclockAdminDtos {
       String siteName,
       /** UNKNOWN_PIN, DEVICE_UNCLAIMED, ANOMALY_OFFBOARDED, UNPARSEABLE_TIME or NO_PIN. */
       String reason,
-      /** Name mined from the terminal's own enrolment records, when one was captured. */
-      String suggestedName) {}
+      /**
+       * Identity suggestion for the operator — the terminal's own enrolment name where one was
+       * captured. A SUGGESTION only: these are terse device-register strings ("Web Developer" is a
+       * role, not a person), so every created identity still takes a human decision.
+       */
+      String suggestedName,
+      /** Punches in the live window (since the device was claimed). */
+      long livePunchCount,
+      /**
+       * True when the pin DOES resolve to a roster person who is marked inactive. The remedy is to
+       * flip them active on the People screen, not to create a duplicate — so the console must say
+       * so rather than offering "create person".
+       */
+      boolean inactivePerson,
+      String personId) {}
 
   // ----------------------------------------------------------------- import
 

@@ -3,12 +3,15 @@ package com.ihrms.iclock;
 import com.ihrms.domain.model.IclockDevice;
 import com.ihrms.domain.model.IclockRawPunch;
 import com.ihrms.domain.repository.IclockDeviceRepository;
-import com.ihrms.domain.repository.IclockEmployeePinRepository;
 import com.ihrms.domain.repository.IclockRawPunchRepository;
 import com.ihrms.domain.repository.IclockSiteRepository;
+import com.ihrms.domain.model.IclockPerson;
+import com.ihrms.domain.repository.IclockPersonRepository;
 import com.ihrms.iclock.dto.IclockAdminDtos.SweepResult;
+import com.ihrms.iclock.dto.IclockAdminDtos.UnmappedInbox;
 import com.ihrms.iclock.dto.IclockAdminDtos.UnmappedPinView;
-import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -31,73 +34,164 @@ public class IclockInboxService {
   private final IclockRawPunchRepository rawPunches;
   private final IclockDeviceRepository devices;
   private final IclockSiteRepository sites;
-  private final IclockEmployeePinRepository pins;
+  private final IclockPersonRepository people;
   private final IclockPromotionService promotion;
 
   public IclockInboxService(
       IclockRawPunchRepository rawPunches,
       IclockDeviceRepository devices,
       IclockSiteRepository sites,
-      IclockEmployeePinRepository pins,
+      IclockPersonRepository people,
       IclockPromotionService promotion) {
     this.rawPunches = rawPunches;
     this.devices = devices;
     this.sites = sites;
-    this.pins = pins;
+    this.people = people;
     this.promotion = promotion;
   }
 
   /**
-   * Pins that punched but resolve to nobody, newest-heaviest first.
+   * The operator inbox, split by the live window.
    *
    * <p>The reason is computed here rather than in SQL so it can only ever be derived from the same
-   * facts promotion uses — device claim state, then pin mapping.
+   * facts promotion uses — device claim state, then roster lookup.
+   *
+   * <p>{@code since} is the earliest device claim at the site: punches before it are archive (backfill
+   * is off by policy), punches after it are attribution that is failing RIGHT NOW.
    */
   @Transactional(readOnly = true)
-  public List<UnmappedPinView> unmapped(int limit) {
-    List<UnmappedPinView> out = new ArrayList<>();
-    for (Object[] row : rawPunches.findUnmappedPinSummary(limit)) {
+  public UnmappedInbox unmapped(String siteId, Instant since, int limit) {
+    List<UnmappedPinView> live = new ArrayList<>();
+    int archivePins = 0;
+    long archivePunches = 0;
+
+    for (Object[] row : rawPunches.findUnmappedPinSummarySince(siteId, since, limit)) {
       String devicePin = (String) row[0];
       String serial = (String) row[1];
       long count = ((Number) row[2]).longValue();
-      var first = row[3] == null ? null : ((Timestamp) row[3]).toInstant();
-      var last = row[4] == null ? null : ((Timestamp) row[4]).toInstant();
+      Instant first = toInstant(row[3]);
+      Instant last = toInstant(row[4]);
+      long liveCount = ((Number) row[5]).longValue();
+
+      if (liveCount == 0) {
+        archivePins++;
+        archivePunches += count;
+        continue;
+      }
 
       IclockDevice device = devices.findBySerialNumber(serial).orElse(null);
-      String siteId = device == null ? null : device.getSiteId();
-      String siteName = siteId == null ? null : sites.findById(siteId).map(s -> s.getName()).orElse(null);
+      String resolvedSite = device == null ? null : device.getSiteId();
+      String siteName =
+          resolvedSite == null ? null : sites.findById(resolvedSite).map(s -> s.getName()).orElse(null);
+      String canonical = IclockPin.canonicalOrNull(devicePin);
 
       String reason;
+      boolean inactive = false;
+      String personId = null;
       if (device == null || !"CLAIMED".equals(device.getStatus())) {
         reason = "DEVICE_UNCLAIMED";
+      } else if (canonical == null) {
+        reason = "NO_PIN";
       } else {
-        String canonical = IclockPin.canonicalOrNull(devicePin);
-        if (canonical == null) {
-          reason = "NO_PIN";
-        } else if (pins.findBySiteIdAndPin(siteId, canonical).isEmpty()) {
+        IclockPerson person =
+            people.findBySiteIdAndPin(resolvedSite, canonical).orElse(null);
+        if (person == null) {
           reason = "UNKNOWN_PIN";
+        } else if (!person.isActive()) {
+          // Not a missing identity — an existing one switched off. The remedy is to flip them
+          // active, NOT to create a second person, so the console is told which case this is.
+          reason = "INACTIVE_PERSON";
+          inactive = true;
+          personId = person.getId();
         } else {
-          // The pin resolves, so the punch was declined for a per-punch reason — most often the
-          // employee was already past their last working day (D4).
           reason = "ANOMALY_OFFBOARDED";
+          personId = person.getId();
         }
       }
-      out.add(new UnmappedPinView(
-          IclockPin.canonical(devicePin), count, first, last, siteId, siteName, reason, null));
+      live.add(
+          new UnmappedPinView(
+              canonical == null ? devicePin : canonical, count, first, last,
+              resolvedSite, siteName, reason, null, liveCount, inactive, personId));
     }
-    return out;
+    return new UnmappedInbox(since, live, archivePins, archivePunches);
   }
 
   /**
-   * Re-attempts promotion for everything still unpromoted. Idempotent, so it is safe to run twice, and
-   * it is the "I fixed the cause, try again" button after a device is claimed or a pin is mapped.
+   * Coerces whatever the driver hands back for a {@code timestamptz} into an {@link Instant}.
+   *
+   * <p>Deliberately type-tolerant. A native query returns driver types, not entity types, and pgjdbc
+   * gives a {@code timestamptz} as an {@link OffsetDateTime} under JDBC 4.2 — not the
+   * {@link java.sql.Timestamp} an older mapping would suggest. Casting to one concrete type threw
+   * {@code ClassCastException} and surfaced as a 500 on the operator's main work surface, which is a
+   * silly way to lose an endpoint. Accepting the family is both correct and future-proof.
+   */
+  private static Instant toInstant(Object value) {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof Instant i) {
+      return i;
+    }
+    if (value instanceof OffsetDateTime odt) {
+      return odt.toInstant();
+    }
+    if (value instanceof java.sql.Timestamp ts) {
+      return ts.toInstant();
+    }
+    if (value instanceof java.util.Date d) {
+      return d.toInstant();
+    }
+    throw new IllegalStateException(
+        "Unexpected timestamp type from the driver: " + value.getClass().getName());
+  }
+
+  /**
+   * Re-attempts promotion for EVERYTHING still unpromoted, back to the very first raw punch ever
+   * captured. Idempotent.
+   *
+   * <p><b>This is the backfill primitive, and it is not safe to expose to a button.</b> It reaches the
+   * entire archive and is ordered oldest-first, so on this deployment it would start by promoting the
+   * oldest of ~33,000 punches captured before the terminals were ever adopted. Backfill is off by
+   * policy; the only sanctioned caller is {@link IclockBackfillRunner}, which is gated behind the
+   * one-shot {@code ihrms.iclock-backfill} flag. Anything operator-facing must call
+   * {@link #sweepSinceClaim} instead.
+   *
+   * <p>Under P1a this was harmlessly inert — no roster existed, so every punch died at UNKNOWN_PIN
+   * regardless of how far back the query reached. P1b is what makes it live.
    *
    * <p>Processed in {@code punchedAtRaw} order rather than arrival order, so a buffered flush promotes
    * the same way it would have live.
    */
   @Transactional
   public SweepResult sweep(int limit) {
-    List<IclockRawPunch> batch = rawPunches.findUnpromoted(limit);
+    return promoteAll(rawPunches.findUnpromoted(limit));
+  }
+
+  /**
+   * The operator's "I fixed the cause, try again" — bounded to punches that arrived at or after the
+   * earliest device claim.
+   *
+   * <p>Same bound {@code reresolveSinceClaim} uses, for the same reason: punches after adoption failed
+   * to attribute because something was misconfigured and is now fixed, whereas everything before it is
+   * archive that backfill policy says to leave alone. With no claimed device there is no window at all,
+   * so it does nothing rather than falling back to the whole archive.
+   */
+  @Transactional
+  public SweepResult sweepSinceClaim(int limit) {
+    Instant earliestClaim =
+        devices.findAll().stream()
+            .filter(d -> "CLAIMED".equals(d.getStatus()))
+            .map(IclockDevice::getClaimedAt)
+            .filter(java.util.Objects::nonNull)
+            .min(Instant::compareTo)
+            .orElse(null);
+    if (earliestClaim == null) {
+      return new SweepResult(0, 0, 0, List.of());
+    }
+    return promoteAll(rawPunches.findUnpromotedSince(earliestClaim, limit));
+  }
+
+  private SweepResult promoteAll(List<IclockRawPunch> batch) {
     Map<IclockPromotionService.Outcome, Integer> tally =
         new EnumMap<>(IclockPromotionService.Outcome.class);
     int promoted = 0;

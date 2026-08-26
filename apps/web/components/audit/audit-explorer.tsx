@@ -15,6 +15,8 @@ import { TableSkeleton } from '@/components/loading-skeleton';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 25;
+/** Mirrors `AuditQueryService.PLATFORM_SCOPE` — the opt-in to the company-less slice of the trail. */
+const PLATFORM_SCOPE = '__platform__';
 const SELECT_CLASS =
   'h-11 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
@@ -132,6 +134,10 @@ export function AuditExplorer({ scope }: { scope: 'super' | 'company' }) {
             className={cn(SELECT_CLASS, 'w-full max-w-sm')}
           >
             <option value="">Select a company…</option>
+            {/* The platform's own trail — SUPER_ADMIN logins, purges, hierarchy changes. Those rows
+                carry no companyId at all, so they are unreachable from any per-company selection; an
+                explicit scope is the only way to read them. */}
+            <option value={PLATFORM_SCOPE}>Platform (no company)</option>
             {companyOptions.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name} ({c.code}){c.status === 'DELETED' ? ' — archived' : ''}

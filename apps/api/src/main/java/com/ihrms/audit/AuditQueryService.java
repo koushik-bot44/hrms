@@ -42,6 +42,16 @@ public class AuditQueryService {
    * ({@code APPROVAL_ROUTED}/{@code APPROVAL_APPROVED}/{@code APPROVAL_REJECTED}) — the audit is append-only,
    * so the historical trail stays readable.
    */
+  /**
+   * The sentinel a SUPER_ADMIN sends to read the PLATFORM trail — the rows whose {@code companyId} is
+   * null because the action belonged to no company (a SUPER_ADMIN login, a purge, a hierarchy change).
+   *
+   * <p>A sentinel rather than "blank means platform": blank is what a client sends when it forgot the
+   * parameter, and that must keep returning 400 instead of quietly widening the read. Deliberately not
+   * a plausible cuid, so it can never collide with a real company id.
+   */
+  static final String PLATFORM_SCOPE = "__platform__";
+
   private static final Set<String> APPROVAL_ACTIONS =
       Set.of(
           "HR_APPROVED",
@@ -82,7 +92,15 @@ public class AuditQueryService {
     Specification<AuditLog> spec =
         (root, q, cb) -> {
           List<Predicate> p = new ArrayList<>();
-          p.add(cb.equal(root.get("companyId"), companyId)); // every query is companyId-scoped
+          // Every query is companyId-scoped. NULL-aware on purpose: a plain `= ?` can never match a
+          // row where companyId IS NULL, and the platform's OWN trail is exactly those rows — every
+          // SUPER_ADMIN login, every interceptor row from a SUPER_ADMIN request, and the deliberately
+          // company-less traces (COMPANY_PURGED, HIERARCHY_PROVISIONED/REMOVED). They were being
+          // written and then made unreadable by the query, which is why the explorer looked empty.
+          p.add(
+              companyId == null
+                  ? cb.isNull(root.get("companyId"))
+                  : cb.equal(root.get("companyId"), companyId));
           if (isPresent(action)) {
             p.add(cb.like(cb.lower(root.get("action")), "%" + action.toLowerCase() + "%"));
           }
@@ -105,7 +123,8 @@ public class AuditQueryService {
         page.getSize(),
         page.getTotalElements(),
         page.getTotalPages(),
-        authz.isCompanyDeleted(companyId)); // still viewable, flagged as archived (§7)
+        // The platform scope has no company, so "archived" is not a question that can be asked of it.
+        companyId != null && authz.isCompanyDeleted(companyId)); // still viewable, flagged (§7)
   }
 
   /**
@@ -152,9 +171,20 @@ public class AuditQueryService {
         false);
   }
 
-  /** SUPER_ADMIN picks any company (required); COMPANY_ADMIN is forced to their own (cross -> 403). */
+  /**
+   * SUPER_ADMIN picks any company (required); COMPANY_ADMIN is forced to their own (cross -> 403).
+   *
+   * <p>{@link #PLATFORM_SCOPE} is an EXPLICIT opt-in to the company-less slice, rather than treating a
+   * blank parameter as "show me everything". Blank still 400s exactly as before, so a client that
+   * forgets the parameter cannot silently fall into a cross-cutting read, and the existing contract
+   * (and its test) is untouched. Only SUPER_ADMIN can reach it — a COMPANY_ADMIN sending the sentinel
+   * falls through to the branch below and is locked to their own companyId, as always.
+   */
   private String resolveCompany(IhrmsPrincipal.User actor, String companyIdParam) {
     if (actor.role() == UserRole.SUPER_ADMIN) {
+      if (PLATFORM_SCOPE.equals(companyIdParam)) {
+        return null;
+      }
       if (!isPresent(companyIdParam)) {
         throw new ResponseStatusException(
             HttpStatus.BAD_REQUEST, "companyId is required to view a company's audit trail");

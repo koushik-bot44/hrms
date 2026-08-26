@@ -49,12 +49,18 @@ public interface IclockPunchRepository extends JpaRepository<IclockPunch, String
       @Param("windowSeconds") int windowSeconds);
 
   /**
-   * Whether the employee punched on a DIFFERENT device, in the SAME area, between two instants — the
+   * Whether the PERSON punched on a DIFFERENT device, in the SAME area, between two instants — the
    * chain-break test.
    *
+   * <p><b>Keyed on personId, not employeeId, and that is load-bearing.</b> Under the identity-first
+   * model most people have no linked employee, so {@code employeeId} is NULL — and {@code NULL = NULL}
+   * is UNKNOWN in SQL, not true. Keying this predicate on a nullable column would silently switch the
+   * chain-break test OFF for exactly the majority case: no exception, no log line, just separate
+   * presentations quietly merging into one burst. personId is always present on a promoted punch.
+   *
    * <p>Restricted to the same area on purpose: a CAFETERIA punch must never break a GATE burst. That
-   * is the whole reason {@code area} is a parameter rather than being ignored, and it is unit-tested
-   * even though no cafeteria terminal exists on this fleet yet.
+   * is why {@code area} is a parameter rather than being ignored, and it is unit-tested even though no
+   * cafeteria terminal exists on this fleet yet.
    *
    * <p>The bounds are passed pre-ordered by the caller, so this is correct whether the incoming punch
    * is later or earlier than the burst it might join.
@@ -64,7 +70,7 @@ public interface IclockPunchRepository extends JpaRepository<IclockPunch, String
           """
           SELECT EXISTS (
             SELECT 1 FROM "iclock_punches"
-             WHERE "employeeId" = :employeeId
+             WHERE "personId" = :personId
                AND "area" = :area
                AND "deviceId" <> :deviceId
                AND "effectiveAt" > :from
@@ -72,7 +78,7 @@ public interface IclockPunchRepository extends JpaRepository<IclockPunch, String
           """,
       nativeQuery = true)
   boolean existsInterveningPunch(
-      @Param("employeeId") String employeeId,
+      @Param("personId") String personId,
       @Param("area") String area,
       @Param("deviceId") String deviceId,
       @Param("from") Instant from,
@@ -85,7 +91,28 @@ public interface IclockPunchRepository extends JpaRepository<IclockPunch, String
   List<IclockPunch> findByEmployeeIdAndShiftDateOrderByEffectiveAtAsc(
       String employeeId, LocalDate shiftDate);
 
+  /** Person Day View: one person's punches for one shift-day, in effect order. */
+  List<IclockPunch> findByPersonIdAndShiftDateOrderByEffectiveAtAsc(
+      String personId, LocalDate shiftDate);
+
+  /** The Live Board's hot read: everyone at a site on a shift-day. */
+  List<IclockPunch> findBySiteIdAndShiftDateOrderByEffectiveAtDesc(String siteId, LocalDate shiftDate);
+
+  long countBySiteIdAndShiftDate(String siteId, LocalDate shiftDate);
+
+  /**
+   * Punches attributed to ONE terminal on a shift-day — the per-device figure the Overview shows.
+   *
+   * <p>Exists because the device card previously rendered the SITE-wide count, identically on every
+   * row. With two terminals both reporting the same number, "which gate is actually seeing traffic?"
+   * — the question the card is there to answer — became unanswerable, and a dead terminal would have
+   * looked as busy as a live one.
+   */
+  long countByDeviceIdAndShiftDate(String deviceId, LocalDate shiftDate);
+
   long countBySiteId(String siteId);
+
+  long countByPersonId(String personId);
 
   List<IclockPunch> findByAnomalyIsNotNullOrderByEffectiveAtDesc(Pageable pageable);
 }

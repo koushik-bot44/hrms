@@ -55,11 +55,28 @@ public class IclockPunch {
   @Column(name = "siteId", nullable = false)
   private String siteId;
 
-  /** Snapshotted at promotion; survives a later company move by the employee. */
-  @Column(name = "companyId", nullable = false)
+  /**
+   * The roster person this punch belongs to — the primary identity from P1b onward (V44).
+   *
+   * <p>Nullable in the SCHEMA only to survive a rolling deploy where the P1a jar, which does not know
+   * this column, briefly still writes rows. Every punch the P1b pipeline promotes sets it.
+   */
+  @Column(name = "personId")
+  private String personId;
+
+  /**
+   * Snapshotted IHRMS company at promotion. NULLABLE since V44: a roster person whose company label
+   * never matched an IHRMS company still punches, and refusing to record that would lose real
+   * attendance over a bookkeeping gap.
+   */
+  @Column(name = "companyId")
   private String companyId;
 
-  @Column(name = "employeeId", nullable = false)
+  /**
+   * The linked IHRMS employee, when there is one. NULLABLE since V44 — under the identity-first model
+   * most people have no employee record yet, and that must not stop their punches being attributed.
+   */
+  @Column(name = "employeeId")
   private String employeeId;
 
   /** Canonical pin (leading zeros stripped), as resolved. */

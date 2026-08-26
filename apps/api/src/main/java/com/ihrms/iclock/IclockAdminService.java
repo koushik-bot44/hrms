@@ -295,8 +295,28 @@ public class IclockAdminService {
    *
    * <p>Dry-run by default. {@code commit=true} performs the writes.
    */
+  /**
+   * What the pin import WOULD do. Writes nothing, and cannot — see
+   * {@code IclockRosterService.previewRosterImport} for why {@code readOnly = true} is the safety
+   * rather than the {@code commit} flag.
+   *
+   * <p>This path happens to construct only NEW entities inside its commit guard, so it never had the
+   * dirty-checking bug its sibling did. That is a property of how it is written today, not a property
+   * anything enforces — one future edit that adjusts a loaded row would reintroduce it silently. The
+   * read-only transaction makes it structural.
+   */
+  @Transactional(readOnly = true)
+  public ImportResult previewPinImport(String siteId, String csv) {
+    return runPinImport(siteId, csv, false);
+  }
+
+  /** Applies the pin import. */
   @Transactional
-  public ImportResult importPins(String siteId, String csv, boolean commit) {
+  public ImportResult applyPinImport(String siteId, String csv) {
+    return runPinImport(siteId, csv, true);
+  }
+
+  private ImportResult runPinImport(String siteId, String csv, boolean commit) {
     IclockSite site = site(siteId);
     List<ImportRow> report = new ArrayList<>();
     int created = 0, already = 0, conflicts = 0, unmatched = 0, skipped = 0;

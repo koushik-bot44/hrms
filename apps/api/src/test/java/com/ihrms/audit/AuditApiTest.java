@@ -108,6 +108,51 @@ class AuditApiTest {
         .isZero();
   }
 
+  /**
+   * The PLATFORM slice — rows whose {@code companyId} is null because the action belonged to no
+   * company (a SUPER_ADMIN login, a purge, a hierarchy change, an iClock device claim).
+   *
+   * <p>These were being written and then made unreadable: the list query was an unconditional
+   * {@code companyId = ?}, and in SQL nothing equals NULL, so no parameter value could ever reach
+   * them. The explorer looked empty for the one role entitled to see them.
+   */
+  @Test
+  void superAdminCanReadThePlatformTrailAndItStaysSeparateFromCompanyTrails() throws Exception {
+    log(null, "USER", "s-1", "COMPANY_PURGED");
+    log(null, "USER", "s-1", "ICLOCK_DEVICE_CLAIMED");
+
+    JsonNode platform = page(superToken, "companyId", "__platform__");
+    assertThat(platform.get("totalElements").asInt()).isEqualTo(2);
+    platform.get("content").forEach(row -> assertThat(row.get("companyId").isNull()).isTrue());
+
+    // The separation still holds in BOTH directions: platform rows must not leak into a company's
+    // trail, and a company's rows must not appear in the platform slice.
+    assertThat(page(superToken, "companyId", companyA).get("totalElements").asInt()).isEqualTo(3);
+    assertThat(page(superToken, "companyId", companyB).get("totalElements").asInt()).isEqualTo(2);
+
+    // Filters still apply within the platform scope.
+    assertThat(
+            page(superToken, "companyId", "__platform__", "action", "iclock")
+                .get("totalElements")
+                .asInt())
+        .isEqualTo(1);
+
+    // A blank companyId is still a 400 — the sentinel is an explicit opt-in, not a default.
+    mvc.perform(get("/audit").header("Authorization", "Bearer " + superToken))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void companyAdminCannotReachThePlatformTrailViaTheSentinel() throws Exception {
+    // A COMPANY_ADMIN sending the sentinel is not treated as a scope request at all — they fall
+    // through to being locked to their own company, exactly as if they had sent nothing.
+    mvc.perform(
+            get("/audit")
+                .param("companyId", "__platform__")
+                .header("Authorization", "Bearer " + adminAToken))
+        .andExpect(status().isForbidden());
+  }
+
   @Test
   void companyAdminIsLockedToOwnCompanyAndCrossIsDenied() throws Exception {
     // No companyId param -> forced to their own company.

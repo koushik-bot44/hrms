@@ -4,14 +4,14 @@ import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.OffboardingStatus;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.IclockDevice;
-import com.ihrms.domain.model.IclockEmployeePin;
 import com.ihrms.domain.model.IclockPunch;
+import com.ihrms.domain.model.IclockPerson;
 import com.ihrms.domain.model.IclockPunchMember;
 import com.ihrms.domain.model.IclockRawPunch;
 import com.ihrms.domain.model.IclockSite;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.IclockDeviceRepository;
-import com.ihrms.domain.repository.IclockEmployeePinRepository;
+import com.ihrms.domain.repository.IclockPersonRepository;
 import com.ihrms.domain.repository.IclockPunchMemberRepository;
 import com.ihrms.domain.repository.IclockPunchRepository;
 import com.ihrms.domain.repository.IclockRawPunchRepository;
@@ -74,7 +74,9 @@ public class IclockPromotionService {
     NO_PIN,
     UNKNOWN_PIN,
     /** Punched after their last working day (D4) — surfaced, never silently attributed. */
-    OFFBOARDED;
+    OFFBOARDED,
+    /** The roster person exists but is marked inactive — surfaced, not attributed. */
+    INACTIVE_PERSON;
 
     public boolean promoted() {
       return this == PROMOTED_NEW || this == PROMOTED_JOINED;
@@ -84,7 +86,7 @@ public class IclockPromotionService {
   private final IclockRawPunchRepository rawPunches;
   private final IclockDeviceRepository devices;
   private final IclockSiteRepository sites;
-  private final IclockEmployeePinRepository pins;
+  private final IclockPersonRepository people;
   private final IclockPunchRepository punches;
   private final IclockPunchMemberRepository members;
   private final EmployeeRepository employees;
@@ -95,7 +97,7 @@ public class IclockPromotionService {
       IclockRawPunchRepository rawPunches,
       IclockDeviceRepository devices,
       IclockSiteRepository sites,
-      IclockEmployeePinRepository pins,
+      IclockPersonRepository people,
       IclockPunchRepository punches,
       IclockPunchMemberRepository members,
       EmployeeRepository employees,
@@ -104,7 +106,7 @@ public class IclockPromotionService {
     this.rawPunches = rawPunches;
     this.devices = devices;
     this.sites = sites;
-    this.pins = pins;
+    this.people = people;
     this.punches = punches;
     this.members = members;
     this.employees = employees;
@@ -145,20 +147,27 @@ public class IclockPromotionService {
     if (pin == null) {
       return Outcome.NO_PIN;
     }
-    Optional<IclockEmployeePin> mapping = pins.findBySiteIdAndPin(site.getId(), pin);
-    if (mapping.isEmpty()) {
+    // THE resolution step, identity-first: the roster is the sole source. An IHRMS employee is
+    // optional enrichment, so a person with no employee link resolves and attributes normally.
+    Optional<IclockPerson> found = people.findBySiteIdAndPin(site.getId(), pin);
+    if (found.isEmpty()) {
       return Outcome.UNKNOWN_PIN;
     }
-    Employee employee = employees.findById(mapping.get().getEmployeeId()).orElse(null);
-    if (employee == null) {
-      return Outcome.UNKNOWN_PIN;
+    IclockPerson person = found.get();
+    if (!person.isActive()) {
+      return Outcome.INACTIVE_PERSON;
     }
-    if (!wasActiveAt(employee, punchedAt, zone)) {
-      return Outcome.OFFBOARDED;
+    // D4 still applies, but ONLY where an employee link exists to judge against. An unlinked person
+    // has no offboarding record, and refusing their punch on that basis would decline the majority.
+    if (person.getEmployeeId() != null) {
+      Employee employee = employees.findById(person.getEmployeeId()).orElse(null);
+      if (employee != null && !wasActiveAt(employee, punchedAt, zone)) {
+        return Outcome.OFFBOARDED;
+      }
     }
 
     try {
-      return collapse(raw, device, site, zone, employee, pin, punchedAt);
+      return collapse(raw, device, site, zone, person, pin, punchedAt);
     } catch (DataIntegrityViolationException race) {
       // Another thread promoted the same raw punch or created the same anchor concurrently. The
       // member unique index is the arbiter; losing the race is a no-op, not an error.
@@ -174,7 +183,7 @@ public class IclockPromotionService {
       IclockDevice device,
       IclockSite site,
       ZoneId zone,
-      Employee employee,
+      IclockPerson person,
       String pin,
       Instant punchedAt) {
 
@@ -184,7 +193,7 @@ public class IclockPromotionService {
     // MIXED carries no usable direction, so collapsing would invent one. Each punch stands alone and
     // is flagged. No such device exists on this fleet; the branch is unit-tested regardless.
     if ("MIXED".equals(direction)) {
-      createBurst(raw, device, site, zone, employee, pin, punchedAt, "MIXED_NO_COLLAPSE");
+      createBurst(raw, device, site, zone, person, pin, punchedAt, "MIXED_NO_COLLAPSE");
       return Outcome.PROMOTED_NEW;
     }
 
@@ -193,11 +202,11 @@ public class IclockPromotionService {
             .findBurstCandidate(device.getId(), pin, punchedAt, props.burstWindowSeconds())
             .orElse(null);
 
-    if (candidate != null && !chainBroken(candidate, employee, area, device.getId(), punchedAt)) {
+    if (candidate != null && !chainBroken(candidate, person, area, device.getId(), punchedAt)) {
       joinBurst(candidate, raw, zone, punchedAt, direction);
       return Outcome.PROMOTED_JOINED;
     }
-    createBurst(raw, device, site, zone, employee, pin, punchedAt, null);
+    createBurst(raw, device, site, zone, person, pin, punchedAt, null);
     return Outcome.PROMOTED_NEW;
   }
 
@@ -208,13 +217,13 @@ public class IclockPromotionService {
    * <p>Same-area only: a CAFETERIA punch must never break a GATE burst.
    */
   private boolean chainBroken(
-      IclockPunch burst, Employee employee, String area, String deviceId, Instant punchedAt) {
+      IclockPunch burst, IclockPerson person, String area, String deviceId, Instant punchedAt) {
     Instant from = punchedAt.isBefore(burst.getBurstFirstAt()) ? punchedAt : burst.getBurstLastAt();
     Instant to = punchedAt.isBefore(burst.getBurstFirstAt()) ? burst.getBurstFirstAt() : punchedAt;
     if (!from.isBefore(to)) {
       return false;
     }
-    return punches.existsInterveningPunch(employee.getId(), area, deviceId, from, to);
+    return punches.existsInterveningPunch(person.getId(), area, deviceId, from, to);
   }
 
   private void createBurst(
@@ -222,7 +231,7 @@ public class IclockPromotionService {
       IclockDevice device,
       IclockSite site,
       ZoneId zone,
-      Employee employee,
+      IclockPerson person,
       String pin,
       Instant punchedAt,
       String anomaly) {
@@ -231,8 +240,10 @@ public class IclockPromotionService {
     p.setEffectiveRawPunchId(raw.getId());
     p.setDeviceId(device.getId());
     p.setSiteId(site.getId());
-    p.setCompanyId(employee.getCompanyId());
-    p.setEmployeeId(employee.getId());
+    // Identity comes from the roster; company/employee are enrichment and may legitimately be null.
+    p.setPersonId(person.getId());
+    p.setCompanyId(person.getCompanyId());
+    p.setEmployeeId(person.getEmployeeId());
     p.setDevicePin(pin);
     p.setPunchedAt(punchedAt);
     p.setEffectiveAt(punchedAt);

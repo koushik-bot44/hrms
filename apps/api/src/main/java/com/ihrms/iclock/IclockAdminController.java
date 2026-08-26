@@ -1,5 +1,8 @@
 package com.ihrms.iclock;
 
+import com.ihrms.audit.AuditActor;
+import com.ihrms.audit.AuditService;
+import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.iclock.dto.IclockAdminDtos.AssignPinRequest;
 import com.ihrms.iclock.dto.IclockAdminDtos.ClaimDeviceRequest;
 import com.ihrms.iclock.dto.IclockAdminDtos.CreateSiteRequest;
@@ -12,10 +15,17 @@ import com.ihrms.iclock.dto.IclockAdminDtos.RenameSiteRequest;
 import com.ihrms.iclock.dto.IclockAdminDtos.SiteDetailView;
 import com.ihrms.iclock.dto.IclockAdminDtos.SiteView;
 import com.ihrms.iclock.dto.IclockAdminDtos.SweepResult;
-import com.ihrms.iclock.dto.IclockAdminDtos.UnmappedPinView;
+import com.ihrms.iclock.dto.IclockAdminDtos;
+import com.ihrms.iclock.dto.IclockRosterDtos.AssignPersonRequest;
+import com.ihrms.iclock.dto.IclockRosterDtos.PersonView;
+import com.ihrms.iclock.dto.IclockRosterDtos.UpsertPersonRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -27,7 +37,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * iClock administration — sites, device claiming and PIN mapping.
+ * iClock administration — sites, device claiming, PIN mapping and the roster.
  *
  * <p><b>The path prefix is load-bearing, not cosmetic.</b> {@code /provisioning/**} is already
  * {@code hasRole("SUPER_ADMIN")} in the security chain, so this surface is fail-closed even if someone
@@ -45,6 +55,17 @@ import org.springframework.web.bind.annotation.RestController;
  * matters: a {@code @PreAuthorize} denial surfaces as a 500 here, because the global advice has a
  * catch-all {@code Exception} handler and no {@code AccessDeniedException} handler, whereas the
  * filter-chain path yields the proper 403 envelope.
+ *
+ * <p><b>Auditing.</b> Every mutation below records an explicit, named audit event. The interceptor
+ * already logs {@code "POST /provisioning/iclock/sites/{id}/people/import"} with a status code, which
+ * says an operator did <em>something</em> here — but not which site, which pin, whose identity, or how
+ * many rows changed. These endpoints decide who every punch in the building belongs to, so the trail
+ * has to answer "who changed this person's attribution, and to what" without a log dive.
+ *
+ * <p>The events are PLATFORM-scoped (no {@code companyId}), because a site spans many companies and a
+ * terminal belongs to none. Partitioning a device claim under one arbitrary company would file it
+ * where nobody looks and imply an ownership that does not exist. The affected company is carried in
+ * the metadata instead. They are readable via the audit explorer's "Platform (no company)" scope.
  */
 @RestController
 @RequestMapping("/provisioning/iclock")
@@ -53,17 +74,34 @@ public class IclockAdminController {
 
   private final IclockAdminService admin;
   private final IclockInboxService inbox;
+  private final IclockRosterService roster;
+  private final IclockBoardService board;
+  private final AuditService audit;
 
-  public IclockAdminController(IclockAdminService admin, IclockInboxService inbox) {
+  public IclockAdminController(
+      IclockAdminService admin,
+      IclockInboxService inbox,
+      IclockRosterService roster,
+      IclockBoardService board,
+      AuditService audit) {
     this.admin = admin;
     this.inbox = inbox;
+    this.roster = roster;
+    this.board = board;
+    this.audit = audit;
   }
 
   // ------------------------------------------------------------------ sites
 
   @PostMapping("/sites")
-  public SiteView createSite(@Valid @RequestBody CreateSiteRequest req) {
-    return admin.createSite(req);
+  public SiteView createSite(
+      @Valid @RequestBody CreateSiteRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    SiteView site = admin.createSite(req);
+    record(actor, http, "ICLOCK_SITE_CREATED", "IclockSite", site.id(),
+        meta("name", site.name(), "timezone", site.timezone()));
+    return site;
   }
 
   @GetMapping("/sites")
@@ -77,8 +115,14 @@ public class IclockAdminController {
   }
 
   @PatchMapping("/sites/{siteId}")
-  public SiteView renameSite(@PathVariable String siteId, @Valid @RequestBody RenameSiteRequest req) {
-    return admin.renameSite(siteId, req.name());
+  public SiteView renameSite(
+      @PathVariable String siteId,
+      @Valid @RequestBody RenameSiteRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    SiteView site = admin.renameSite(siteId, req.name());
+    record(actor, http, "ICLOCK_SITE_RENAMED", "IclockSite", siteId, meta("name", site.name()));
+    return site;
   }
 
   /**
@@ -88,13 +132,25 @@ public class IclockAdminController {
    */
   @PostMapping("/sites/{siteId}/companies")
   public SiteDetailView linkCompany(
-      @PathVariable String siteId, @Valid @RequestBody LinkCompanyRequest req) {
-    return admin.linkCompany(siteId, req.companyId());
+      @PathVariable String siteId,
+      @Valid @RequestBody LinkCompanyRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    SiteDetailView detail = admin.linkCompany(siteId, req.companyId());
+    record(actor, http, "ICLOCK_COMPANY_LINKED", "IclockSite", siteId,
+        meta("companyId", req.companyId()));
+    return detail;
   }
 
   @DeleteMapping("/sites/{siteId}/companies/{companyId}")
-  public void unlinkCompany(@PathVariable String siteId, @PathVariable String companyId) {
+  public void unlinkCompany(
+      @PathVariable String siteId,
+      @PathVariable String companyId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
     admin.unlinkCompany(siteId, companyId);
+    record(actor, http, "ICLOCK_COMPANY_UNLINKED", "IclockSite", siteId,
+        meta("companyId", companyId));
   }
 
   // ---------------------------------------------------------------- devices
@@ -106,13 +162,30 @@ public class IclockAdminController {
   }
 
   @PostMapping("/devices/{deviceId}/claim")
-  public DeviceView claim(@PathVariable String deviceId, @Valid @RequestBody ClaimDeviceRequest req) {
-    return admin.claimDevice(deviceId, req);
+  public DeviceView claim(
+      @PathVariable String deviceId,
+      @Valid @RequestBody ClaimDeviceRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    DeviceView device = admin.claimDevice(deviceId, req);
+    // The serial is the identifier an operator standing next to the terminal can actually read off it.
+    record(actor, http, "ICLOCK_DEVICE_CLAIMED", "IclockDevice", deviceId,
+        meta("serialNumber", device.serialNumber(), "siteId", req.siteId(),
+            "area", device.area(), "direction", device.direction()));
+    return device;
   }
 
   @PostMapping("/devices/{deviceId}/unclaim")
-  public DeviceView unclaim(@PathVariable String deviceId) {
-    return admin.unclaimDevice(deviceId);
+  public DeviceView unclaim(
+      @PathVariable String deviceId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    DeviceView device = admin.unclaimDevice(deviceId);
+    // Unclaiming silently stops attribution while punches keep arriving, so it is the single most
+    // important thing in this controller to be able to trace back to a person and a time.
+    record(actor, http, "ICLOCK_DEVICE_UNCLAIMED", "IclockDevice", deviceId,
+        meta("serialNumber", device.serialNumber()));
+    return device;
   }
 
   // ------------------------------------------------------------------- pins
@@ -123,8 +196,16 @@ public class IclockAdminController {
   }
 
   @PostMapping("/sites/{siteId}/pins")
-  public PinView assignPin(@PathVariable String siteId, @Valid @RequestBody AssignPinRequest req) {
-    return admin.assignPin(siteId, req);
+  public PinView assignPin(
+      @PathVariable String siteId,
+      @Valid @RequestBody AssignPinRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    PinView pin = admin.assignPin(siteId, req);
+    record(actor, http, "ICLOCK_PIN_ASSIGNED", "IclockEmployeePin", pin.id(),
+        meta("siteId", siteId, "pin", pin.pin(), "employeeId", pin.employeeId(),
+            "companyId", pin.companyId()));
+    return pin;
   }
 
   /**
@@ -132,8 +213,12 @@ public class IclockAdminController {
    * that employee's company. The URL shape tells the truth about the data model.
    */
   @DeleteMapping("/pins/{pinId}")
-  public void deletePin(@PathVariable String pinId) {
+  public void deletePin(
+      @PathVariable String pinId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
     admin.deletePin(pinId);
+    record(actor, http, "ICLOCK_PIN_DELETED", "IclockEmployeePin", pinId, meta());
   }
 
   /**
@@ -146,21 +231,227 @@ public class IclockAdminController {
   public ImportResult importPins(
       @PathVariable String siteId,
       @Valid @RequestBody ImportRequest req,
-      @RequestParam(defaultValue = "false") boolean commit) {
-    return admin.importPins(siteId, req.csv(), commit);
+      @RequestParam(defaultValue = "false") boolean commit,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    ImportResult result =
+        commit ? admin.applyPinImport(siteId, req.csv()) : admin.previewPinImport(siteId, req.csv());
+    // Only the commit is audited. A dry run writes nothing, and auditing every preview would bury the
+    // handful of rows that actually changed the system under the many that changed nothing.
+    if (commit) {
+      record(actor, http, "ICLOCK_PINS_IMPORTED", "IclockSite", siteId,
+          meta("total", result.total(), "created", result.created(),
+              "alreadyMapped", result.alreadyMapped(), "conflicts", result.conflicts(),
+              "unmatched", result.unmatched(), "skipped", result.skipped()));
+    }
+    return result;
   }
 
   // ------------------------------------------------------------------ inbox
 
-  /** Pins that punched but resolve to nobody — the operator's daily queue. */
-  @GetMapping("/inbox/unmapped")
-  public List<UnmappedPinView> unmapped(@RequestParam(defaultValue = "200") int limit) {
-    return inbox.unmapped(limit);
+  /**
+   * Pins that punched but resolve to nobody — the operator's daily queue, split into the live
+   * action list and a collapsed archive count.
+   */
+  @GetMapping("/sites/{siteId}/inbox/unmapped")
+  public IclockAdminDtos.UnmappedInbox unmapped(
+      @PathVariable String siteId, @RequestParam(defaultValue = "500") int limit) {
+    return roster.inboxFor(siteId, limit);
   }
 
-  /** "I fixed the cause, try again." Idempotent. */
+  /**
+   * "I fixed the cause, try again." Idempotent, and BOUNDED to punches received since the earliest
+   * device claim.
+   *
+   * <p>Deliberately {@code sweepSinceClaim} and not {@code sweep}: the unbounded variant reaches the
+   * whole pre-adoption archive oldest-first, which is backfill, and backfill is off by policy and
+   * belongs to the one-shot flag-gated runner — not to an operator's button.
+   */
   @PostMapping("/promote/sweep")
-  public SweepResult sweep(@RequestParam(defaultValue = "5000") int limit) {
-    return inbox.sweep(limit);
+  public SweepResult sweep(
+      @RequestParam(defaultValue = "5000") int limit,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    SweepResult result = inbox.sweepSinceClaim(limit);
+    record(actor, http, "ICLOCK_SWEEP_RUN", null, null,
+        meta("scanned", result.scanned(), "promoted", result.promoted(),
+            "skipped", result.skipped(), "byOutcome", result.byOutcome()));
+    return result;
+  }
+
+  // ----------------------------------------------------------------- roster
+
+  /** The roster — the biometric system's own identity source. */
+  @GetMapping("/sites/{siteId}/people")
+  public List<PersonView> people(@PathVariable String siteId) {
+    return roster.listPeople(siteId);
+  }
+
+  /** Create or edit one person. Used by the console's "assign this pin" two-click flow. */
+  @PostMapping("/sites/{siteId}/people")
+  public PersonView upsertPerson(
+      @PathVariable String siteId,
+      @Valid @RequestBody UpsertPersonRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    PersonView person = roster.upsertPerson(siteId, req);
+    record(actor, http, "ICLOCK_PERSON_UPSERTED", "IclockPerson", person.id(),
+        meta("siteId", siteId, "pin", person.pin(), "name", person.name(),
+            "companyId", person.companyId()));
+    return person;
+  }
+
+  @PatchMapping("/people/{personId}")
+  public PersonView editPerson(
+      @PathVariable String personId,
+      @Valid @RequestBody UpsertPersonRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    PersonView person = roster.editPerson(personId, req);
+    // active and excludedFromReports are recorded as RESULTING state rather than as a diff: the two
+    // are routinely confused (one stops resolution, the other only stops reporting), and the trail
+    // has to say unambiguously what the person was left as.
+    record(actor, http, "ICLOCK_PERSON_EDITED", "IclockPerson", personId,
+        meta("pin", person.pin(), "name", person.name(), "active", person.active(),
+            "excludedFromReports", person.excludedFromReports()));
+    return person;
+  }
+
+  /**
+   * Bulk roster import. DRY RUN by default — reports what it would do, including per-company person
+   * counts and every company-less row, and writes nothing. {@code ?commit=true} applies it.
+   */
+  @PostMapping("/sites/{siteId}/people/import")
+  public IclockRosterService.ImportReport importRoster(
+      @PathVariable String siteId,
+      @Valid @RequestBody ImportRequest req,
+      @RequestParam(defaultValue = "false") boolean commit,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    IclockRosterService.ImportReport report =
+        commit
+            ? roster.applyRosterImport(siteId, req.csv())
+            : roster.previewRosterImport(siteId, req.csv());
+    // Commits only — see importPins.
+    if (commit) {
+      record(actor, http, "ICLOCK_ROSTER_IMPORTED", "IclockSite", siteId,
+          meta("total", report.total(), "created", report.created(), "updated", report.updated(),
+              "skipped", report.skipped(), "companiesMatched", report.companiesMatched(),
+              "companiesUnmatched", report.companiesUnmatched(),
+              "companyless", report.companyless().size()));
+    }
+    return report;
+  }
+
+  /** IHRMS link suggestions for one roster person. Nothing is ever auto-linked. */
+  @GetMapping("/people/{personId}/suggestions")
+  public List<IclockRosterService.LinkSuggestion> suggestions(@PathVariable String personId) {
+    return roster.suggestionsFor(personId);
+  }
+
+  /** Confirms a link and retro-fills that person's existing punches. Idempotent. */
+  @PostMapping("/people/{personId}/link")
+  public PersonView link(
+      @PathVariable String personId,
+      @Valid @RequestBody AssignPersonRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    PersonView person = roster.confirmLink(personId, req.employeeId());
+    // This one retro-fills existing punches onto an IHRMS employee, so it rewrites history for that
+    // employee's attendance. Both sides of the link go in the metadata.
+    record(actor, http, "ICLOCK_PERSON_LINKED", "IclockPerson", personId,
+        meta("pin", person.pin(), "employeeId", req.employeeId(),
+            "employeeName", person.employeeName()));
+    return person;
+  }
+
+  @DeleteMapping("/people/{personId}/link")
+  public PersonView unlink(
+      @PathVariable String personId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    PersonView person = roster.unlink(personId);
+    record(actor, http, "ICLOCK_PERSON_UNLINKED", "IclockPerson", personId,
+        meta("pin", person.pin()));
+    return person;
+  }
+
+  /**
+   * Scoped re-resolution: re-attempts promotion for raw punches received since the site's devices
+   * were claimed. This is what makes a roster import retroactive without touching the archive.
+   */
+  @PostMapping("/sites/{siteId}/reresolve")
+  public IclockRosterService.ReresolveReport reresolve(
+      @PathVariable String siteId,
+      @RequestParam(defaultValue = "20000") int limit,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    IclockRosterService.ReresolveReport report = roster.reresolveSinceClaim(siteId, limit);
+    record(actor, http, "ICLOCK_RERESOLVED", "IclockSite", siteId,
+        meta("scanned", report.scanned(), "promoted", report.promoted(),
+            "alreadyDone", report.alreadyDone(),
+            "since", report.since() == null ? null : report.since().toString()));
+    return report;
+  }
+
+  // ------------------------------------------------------------ console reads
+
+  /** Overview tiles for one site on the current shift-day. */
+  @GetMapping("/sites/{siteId}/overview")
+  public IclockBoardService.Overview overview(@PathVariable String siteId) {
+    return board.overview(siteId);
+  }
+
+  /** Live Board: everyone bucketed by where they are right now. Polled by the console. */
+  @GetMapping("/sites/{siteId}/board")
+  public IclockBoardService.Board board(@PathVariable String siteId) {
+    return board.board(siteId);
+  }
+
+  /** Person Day View: one person, one shift-day. Read-only in P1b. */
+  @GetMapping("/people/{personId}/day")
+  public IclockBoardService.PersonDay personDay(
+      @PathVariable String personId, @RequestParam(required = false) String shiftDate) {
+    return board.personDay(personId, shiftDate);
+  }
+
+  // ------------------------------------------------------------------ audit
+
+  /**
+   * Writes one iClock admin audit event.
+   *
+   * <p>The actor is passed through {@link AuditActor#from} unchanged, which for a SUPER_ADMIN yields a
+   * null {@code companyId} — deliberately, see the class javadoc. {@link AuditService#record} never
+   * throws, so no call site needs a try/catch and a failed audit write can never fail the mutation
+   * that was already applied.
+   */
+  private void record(
+      IhrmsPrincipal.User actor,
+      HttpServletRequest http,
+      String action,
+      String targetType,
+      String targetId,
+      Map<String, Object> metadata) {
+    audit.record(
+        AuditActor.from(actor), action, targetType, targetId, metadata, http.getRemoteAddr());
+  }
+
+  /**
+   * Builds an audit metadata map from alternating key/value pairs, DROPPING null values.
+   *
+   * <p>{@code Map.of} rejects nulls outright, and half of what is worth recording here is legitimately
+   * null — an unnamed person, a company label that matched nothing, a site with no claimed device yet.
+   * Throwing on those would turn "this person has no name" into a 500 on a mutation that already
+   * succeeded. Insertion-ordered so the metadata reads in the order it was written.
+   */
+  private static Map<String, Object> meta(Object... pairs) {
+    Map<String, Object> map = new LinkedHashMap<>();
+    for (int i = 0; i + 1 < pairs.length; i += 2) {
+      Object value = pairs[i + 1];
+      if (value != null) {
+        map.put(String.valueOf(pairs[i]), value);
+      }
+    }
+    return map;
   }
 }

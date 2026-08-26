@@ -9,6 +9,7 @@ import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.IclockDevice;
 import com.ihrms.domain.model.IclockEmployeePin;
+import com.ihrms.domain.model.IclockPerson;
 import com.ihrms.domain.model.IclockPunch;
 import com.ihrms.domain.model.IclockRawPunch;
 import com.ihrms.domain.model.IclockSite;
@@ -18,6 +19,7 @@ import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.EmployeeRepository;
 import com.ihrms.domain.repository.IclockDeviceRepository;
 import com.ihrms.domain.repository.IclockEmployeePinRepository;
+import com.ihrms.domain.repository.IclockPersonRepository;
 import com.ihrms.domain.repository.IclockPunchRepository;
 import com.ihrms.domain.repository.IclockRawPunchRepository;
 import com.ihrms.domain.repository.IclockSiteCompanyRepository;
@@ -54,6 +56,7 @@ class IclockBurstCollapseTest {
   @Autowired private IclockSiteRepository sites;
   @Autowired private IclockSiteCompanyRepository siteCompanies;
   @Autowired private IclockEmployeePinRepository pins;
+  @Autowired private IclockPersonRepository people;
   @Autowired private EmployeeRepository employees;
   @Autowired private CompanyRepository companies;
   @Autowired private UserRepository users;
@@ -110,6 +113,23 @@ class IclockBurstCollapseTest {
     mapping.setPin(pin);
     mapping.setSiteId(site.getId());
     pins.save(mapping);
+
+    // P1b: the ROSTER is the sole resolution source. Under P1a this fixture stopped at the pin
+    // mapping above, and promotion joined pin -> employee_pins -> employees; it now goes
+    // pin -> iclock_people, so a fixture without a person resolves to UNKNOWN_PIN and every
+    // scenario below silently stops testing burst collapse at all.
+    //
+    // The employee link is set here because these tests assert on the punch's employeeId, but note
+    // that it is ENRICHMENT: the same scenarios pass with employeeId null, which is the majority
+    // case in production. The employee_pins row is kept so the P1a mapping surface stays exercised.
+    IclockPerson person = new IclockPerson();
+    person.setSiteId(site.getId());
+    person.setPin(pin);
+    person.setName(employee.getFullName());
+    person.setEmail(employee.getEmail());
+    person.setCompanyId(company.getId());
+    person.setEmployeeId(employee.getId());
+    people.save(person);
 
     gateIn = claimedDevice("IN-" + tag, "GATE", "IN");
     gateOut = claimedDevice("OUT-" + tag, "GATE", "OUT");
