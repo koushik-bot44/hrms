@@ -38,9 +38,16 @@ const SELECT_CLASS =
  * Claiming a terminal — the moment punches start being attributed.
  *
  * Area and direction are asked for together because the pipeline needs both: direction decides
- * whether a punch is an arrival or a departure, and area decides whether a burst chain breaks. A
- * cafeteria OUT means "went for lunch" and still counts as in the building, which is only derivable
+ * whether a punch is an arrival or a departure, and area decides whether a burst chain breaks.
+ *
+ * ON A CAFETERIA READER, IN AND OUT INVERT: "IN for cafeteria is OUT for work". Tapping IN at the
+ * cafeteria STARTS a break (presence becomes IN_CAFETERIA); tapping OUT ENDS it and puts the person
+ * back at their desk (IN_OFFICE). Either way they are still in the building, which is only derivable
  * if the terminal declared itself as CAFETERIA at claim time.
+ *
+ * This comment previously said the opposite — that a cafeteria OUT meant "went for lunch". The code
+ * in IclockBoardService was right and the comment was wrong, which is the worse way round: a reviewer
+ * reading it concluded the presence logic was inverted when it was not.
  */
 function ClaimDialog({
   device,

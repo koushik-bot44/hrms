@@ -25,11 +25,15 @@ final class IclockShiftDay {
 
   /**
    * The shift-day an instant belongs to: its local date in {@code zone}, minus one day when the local
-   * time falls before the 04:00 cutoff, so the overnight tail stays with the day the shift started.
+   * time falls before {@link ShiftConfig#DAY_CUT}, so the overnight tail stays with the day the shift
+   * started.
+   *
+   * <p>The cut is the MIDPOINT of the non-working window (11:30 IST), not the shift end. It used to be
+   * the shift end, which filed the closing OUT of every full shift on the following day.
    */
   static LocalDate of(Instant instant, ZoneId zone) {
     var local = instant.atZone(zone);
-    return local.toLocalTime().isBefore(ShiftConfig.SHIFT_END)
+    return local.toLocalTime().isBefore(ShiftConfig.DAY_CUT)
         ? local.toLocalDate().minusDays(1)
         : local.toLocalDate();
   }

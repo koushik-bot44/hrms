@@ -230,7 +230,7 @@ public class IclockBoardService {
     return out;
   }
 
-  /** People whose first gate IN was after the 19:20 threshold. lateExemptMin is a P2 input. */
+  /** People whose first gate IN was after the 19:15 threshold. lateExemptMin is a P2 input. */
   private long lateCount(String siteId, LocalDate shiftDate, ZoneId zone) {
     Instant threshold = ShiftConfig.lateThreshold(shiftDate);
     Map<String, Instant> firstIn = new LinkedHashMap<>();

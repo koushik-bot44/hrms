@@ -307,15 +307,28 @@ class IclockBurstCollapseTest {
   // ---------------------------------------------------------- shift-day cut
 
   @Test
-  void shiftDateFollowsTheKeptPunchAcrossTheFourAmCut() {
-    // An OUT burst straddling 04:00: the kept punch is the LATEST, so the shift-day must follow it.
+  void theClosingOutBurstFilesOnTheShiftItCloses() {
+    // THE REGRESSION, at burst level. These two OUTs are someone tapping out at the end of the
+    // 19:00->04:00 shift that started on the 25th. The cut used to be 04:00 — the shift's own closing
+    // boundary — so the kept punch (OUT keeps the LATEST, 04:00:30) landed on the 26th: a whole shift
+    // whose closing OUT was filed against the following day, leaving the 25th with an unpaired IN.
+    //
+    // With the cut at the midpoint of the non-working window, both punches belong to the 25th, which
+    // is the day they were worked.
     punch(gateOut, "2026-08-26 03:59:30");
     punch(gateOut, "2026-08-26 04:00:30");
 
-    List<IclockPunch> all = punches.findByEmployeeIdAndShiftDateOrderByEffectiveAtAsc(
-        employee.getId(), LocalDate.parse("2026-08-26"));
-    assertThat(all).hasSize(1);
-    assertThat(all.get(0).getEffectiveAt()).isEqualTo(ist("2026-08-26 04:00:30"));
+    List<IclockPunch> closingShift = punches.findByEmployeeIdAndShiftDateOrderByEffectiveAtAsc(
+        employee.getId(), LocalDate.parse("2026-08-25"));
+    assertThat(closingShift).hasSize(1);
+    assertThat(closingShift.get(0).getBurstCount()).isEqualTo(2);
+    // OUT keeps the LATEST — the burst semantics are unchanged by the cut.
+    assertThat(closingShift.get(0).getEffectiveAt()).isEqualTo(ist("2026-08-26 04:00:30"));
+
+    // And nothing leaks onto the following day.
+    assertThat(punches.findByEmployeeIdAndShiftDateOrderByEffectiveAtAsc(
+            employee.getId(), LocalDate.parse("2026-08-26")))
+        .isEmpty();
   }
 
   // ------------------------------------------------------------- resolution
