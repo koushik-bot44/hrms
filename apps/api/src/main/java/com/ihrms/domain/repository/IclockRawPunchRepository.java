@@ -131,5 +131,96 @@ public interface IclockRawPunchRepository extends JpaRepository<IclockRawPunch, 
       @Param("since") java.time.Instant since,
       @Param("limit") int limit);
 
+  /**
+   * THE PUNCH FEED: raw punches newest-first, with attribution resolved in the same query.
+   *
+   * <p>Returns {@code [id, receivedAt, punchedAtRaw, devicePin, serialNumber, deviceName, area,
+   * direction, siteId, siteName, personId, personName, companyName, collapsedAway]}.
+   *
+   * <p><b>Raw, not effective.</b> This is the feed of what the terminals actually sent, so a punch that
+   * burst-collapse absorbed still appears — that is the point of having it alongside the board. Whether
+   * a row survived into an effective punch as the KEPT one, or was absorbed into somebody else's burst,
+   * is computed here as {@code collapsedAway} rather than by a second round-trip per row.
+   *
+   * <p>Attribution is resolved by the SAME rule promotion uses — canonical pin within the device's site
+   * — so a row reading "Unknown pin" here means the same thing it means in the inbox, rather than two
+   * screens disagreeing about who somebody is. Devices with no site are excluded when a site filter is
+   * supplied and included when it is not, which is what "All buildings" has to mean for a fleet view.
+   *
+   * <p>Ordered on {@code receivedAt} DESC — arrival order, which is what a live ticker is watching. The
+   * device's own clock is shown beside it, because the two disagreeing IS the interesting case.
+   */
+  @Query(
+      value =
+          """
+          SELECT r."id",
+                 r."receivedAt",
+                 r."punchedAtRaw",
+                 r."devicePin",
+                 r."serialNumber",
+                 d."name"        AS device_name,
+                 d."area"        AS device_area,
+                 d."direction"   AS device_direction,
+                 d."siteId"      AS site_id,
+                 s."name"        AS site_name,
+                 p."id"          AS person_id,
+                 p."name"        AS person_name,
+                 c."name"        AS company_name,
+                 EXISTS (SELECT 1 FROM "iclock_punch_members" m
+                          WHERE m."rawPunchId" = r."id"
+                            AND NOT EXISTS (SELECT 1 FROM "iclock_punches" q
+                                             WHERE q."id" = m."punchId"
+                                               AND q."effectiveRawPunchId" = r."id")) AS collapsed_away
+            FROM "iclock_raw_punches" r
+            LEFT JOIN "iclock_devices" d ON d."serialNumber" = r."serialNumber"
+            LEFT JOIN "iclock_sites"   s ON s."id" = d."siteId"
+            LEFT JOIN "iclock_people"  p ON p."siteId" = d."siteId"
+                                        AND p."pin" = regexp_replace(r."devicePin", '^0+', '')
+            LEFT JOIN "companies"      c ON c."id" = p."companyId"
+           WHERE (:siteId IS NULL OR d."siteId" = :siteId)
+             AND (:deviceId IS NULL OR d."id" = :deviceId)
+             AND (CAST(:from AS timestamptz) IS NULL OR r."receivedAt" >= CAST(:from AS timestamptz))
+             AND (CAST(:to   AS timestamptz) IS NULL OR r."receivedAt" <  CAST(:to   AS timestamptz))
+             AND (:unknownOnly = FALSE OR p."id" IS NULL)
+             AND (:rosteredOnly = FALSE OR p."id" IS NOT NULL)
+           ORDER BY r."receivedAt" DESC, r."id" DESC
+           LIMIT :limit OFFSET :offset
+          """,
+      nativeQuery = true)
+  List<Object[]> findFeed(
+      @Param("siteId") String siteId,
+      @Param("deviceId") String deviceId,
+      @Param("from") java.time.Instant from,
+      @Param("to") java.time.Instant to,
+      @Param("unknownOnly") boolean unknownOnly,
+      @Param("rosteredOnly") boolean rosteredOnly,
+      @Param("limit") int limit,
+      @Param("offset") int offset);
+
+  /** Total matching the same filters, so the feed can paginate honestly rather than guessing. */
+  @Query(
+      value =
+          """
+          SELECT count(*)
+            FROM "iclock_raw_punches" r
+            LEFT JOIN "iclock_devices" d ON d."serialNumber" = r."serialNumber"
+            LEFT JOIN "iclock_people"  p ON p."siteId" = d."siteId"
+                                        AND p."pin" = regexp_replace(r."devicePin", '^0+', '')
+           WHERE (:siteId IS NULL OR d."siteId" = :siteId)
+             AND (:deviceId IS NULL OR d."id" = :deviceId)
+             AND (CAST(:from AS timestamptz) IS NULL OR r."receivedAt" >= CAST(:from AS timestamptz))
+             AND (CAST(:to   AS timestamptz) IS NULL OR r."receivedAt" <  CAST(:to   AS timestamptz))
+             AND (:unknownOnly = FALSE OR p."id" IS NULL)
+             AND (:rosteredOnly = FALSE OR p."id" IS NOT NULL)
+          """,
+      nativeQuery = true)
+  long countFeed(
+      @Param("siteId") String siteId,
+      @Param("deviceId") String deviceId,
+      @Param("from") java.time.Instant from,
+      @Param("to") java.time.Instant to,
+      @Param("unknownOnly") boolean unknownOnly,
+      @Param("rosteredOnly") boolean rosteredOnly);
+
   long countBySerialNumberAndDeviceIdIsNull(String serialNumber);
 }

@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -76,6 +77,8 @@ public class IclockAdminController {
   private final IclockInboxService inbox;
   private final IclockRosterService roster;
   private final IclockBoardService board;
+  private final IclockFeedService feed;
+  private final IclockSitePolicyService policies;
   private final AuditService audit;
 
   public IclockAdminController(
@@ -83,11 +86,15 @@ public class IclockAdminController {
       IclockInboxService inbox,
       IclockRosterService roster,
       IclockBoardService board,
+      IclockFeedService feed,
+      IclockSitePolicyService policies,
       AuditService audit) {
     this.admin = admin;
     this.inbox = inbox;
     this.roster = roster;
     this.board = board;
+    this.feed = feed;
+    this.policies = policies;
     this.audit = audit;
   }
 
@@ -413,6 +420,103 @@ public class IclockAdminController {
   public IclockBoardService.PersonDay personDay(
       @PathVariable String personId, @RequestParam(required = false) String shiftDate) {
     return board.personDay(personId, shiftDate);
+  }
+
+  // ------------------------------------------------------------- punch feed
+
+  /**
+   * The raw punch feed — what the terminals actually sent, newest first.
+   *
+   * <p>{@code siteId} omitted means EVERY building, which is what a fleet view has to mean. Scoping is
+   * a filter on the same query rather than a separate data path.
+   *
+   * <p>{@code shiftDate} omitted defaults to the current shift day: the archive is 34,000 rows and a
+   * ticker that opens on all of history is not a ticker.
+   */
+  @GetMapping("/punch-feed")
+  public IclockFeedService.Feed punchFeed(
+      @RequestParam(required = false) String siteId,
+      @RequestParam(required = false) String deviceId,
+      @RequestParam(required = false) String shiftDate,
+      @RequestParam(defaultValue = "ALL") IclockFeedService.Attribution attribution,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "100") int size) {
+    java.time.LocalDate day = shiftDate == null || shiftDate.isBlank()
+        ? null
+        : java.time.LocalDate.parse(shiftDate);
+    return feed.feed(siteId, deviceId, day, attribution, page, size);
+  }
+
+  // ------------------------------------------------ multi-building scoping
+
+  /**
+   * Live board across ONE building or ALL of them.
+   *
+   * <p>The nested {@code /sites/{siteId}/board} stays as the single-building form; this is the same
+   * read with the scope as a filter, so a fleet view is not a second pipeline.
+   */
+  @GetMapping("/board")
+  public IclockBoardService.Board boardScoped(@RequestParam(required = false) String siteId) {
+    return board.boardAcross(siteId);
+  }
+
+  /** Overview across one building or all of them. Same scoping rule as the board. */
+  @GetMapping("/overview")
+  public IclockBoardService.Overview overviewScoped(@RequestParam(required = false) String siteId) {
+    return board.overviewAcross(siteId);
+  }
+
+  // ---------------------------------------------------------- roster delete
+
+  /** What deleting this person would do, or why it is refused. Read-only; drives the confirm dialog. */
+  @GetMapping("/people/{personId}/delete-preflight")
+  public IclockRosterService.DeletePreflight deletePreflight(@PathVariable String personId) {
+    return roster.deletePreflight(personId);
+  }
+
+  /**
+   * Hard-deletes a roster person. Refused with 409 unless they have NO punches and NO IHRMS link.
+   *
+   * <p>The audit entry carries the person's snapshot, captured before the row disappears — "a person
+   * was deleted" with no name, pin or company is barely an audit entry.
+   */
+  @DeleteMapping("/people/{personId}")
+  public IclockRosterService.DeletePreflight deletePerson(
+      @PathVariable String personId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    IclockRosterService.DeletePreflight removed = roster.deletePerson(personId);
+    record(actor, http, "ICLOCK_PERSON_DELETED", "IclockPerson", personId,
+        meta("pin", removed.pin(), "name", removed.name(),
+            "punchCount", removed.punchCount(), "wasLinked", removed.linkedToEmployee()));
+    return removed;
+  }
+
+  // -------------------------------------------------------- building policy
+
+  /** The building's "exceeding break" thresholds. Returns defaults when nothing is stored yet. */
+  @GetMapping("/sites/{siteId}/policy")
+  public IclockSitePolicyService.PolicyView sitePolicy(@PathVariable String siteId) {
+    return policies.effective(siteId);
+  }
+
+  /**
+   * Saves the building's break thresholds. Takes effect on the next board refresh — no redeploy.
+   *
+   * <p>Per building, which falls out free: the row is already site-scoped, so a second building gets
+   * its own thresholds without further work.
+   */
+  @PutMapping("/sites/{siteId}/policy")
+  public IclockSitePolicyService.PolicyView saveSitePolicy(
+      @PathVariable String siteId,
+      @Valid @RequestBody IclockAdminDtos.SitePolicyRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    IclockSitePolicyService.PolicyView saved =
+        policies.save(siteId, req.breakAlertMin(), req.breakAlertMaxMin());
+    record(actor, http, "ICLOCK_SITE_POLICY_UPDATED", "IclockSite", siteId,
+        meta("breakAlertMin", saved.breakAlertMin(), "breakAlertMaxMin", saved.breakAlertMaxMin()));
+    return saved;
   }
 
   // ------------------------------------------------------------------ audit

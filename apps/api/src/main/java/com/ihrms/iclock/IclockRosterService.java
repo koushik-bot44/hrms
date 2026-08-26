@@ -140,6 +140,70 @@ public class IclockRosterService {
     return view(people.save(person), java.util.Set.of());
   }
 
+  /** What a delete would do, or why it is refused. Computed before the dialog, not after the click. */
+  public record DeletePreflight(
+      boolean allowed,
+      String reason,
+      long punchCount,
+      boolean linkedToEmployee,
+      String pin,
+      String name) {}
+
+  /**
+   * Whether this person can be hard-deleted, and if not, why.
+   *
+   * <p>THE ANTI-BIPUL RULE. Deleting a person who has punches would orphan attendance history — rows in
+   * iclock_punches pointing at a personId that no longer exists, which the FK refuses anyway (V44 makes
+   * it ON DELETE RESTRICT), so the alternative to this check is a 500 the operator cannot interpret.
+   * Worse, the operator's real intent in that case is almost always "this person left", and the correct
+   * expression of that is DEACTIVATE: their history stays attributable and their pin stops resolving.
+   * Bipul Mohan is the case that named this — flagged deleted in the legacy tool while walking through
+   * the gate every night.
+   *
+   * <p>An IHRMS employee link blocks it too. That link is a claim about who a real employee IS, and
+   * quietly dropping it during a roster tidy-up loses information nobody recorded anywhere else.
+   */
+  @Transactional(readOnly = true)
+  public DeletePreflight deletePreflight(String personId) {
+    IclockPerson person = requirePerson(personId);
+    long count = punches.countByPersonId(personId);
+    boolean linked = person.getEmployeeId() != null;
+    if (count > 0) {
+      return new DeletePreflight(false,
+          "This person has " + count + " attendance punch" + (count == 1 ? "" : "es") + " on record. "
+              + "Deleting them would orphan that history. Deactivate them instead — their punches stay "
+              + "attributed and their pin stops resolving.",
+          count, linked, person.getPin(), person.getName());
+    }
+    if (linked) {
+      return new DeletePreflight(false,
+          "This person is linked to an IHRMS employee. Unlink them first if the link is wrong, or "
+              + "deactivate them if they have left.",
+          count, true, person.getPin(), person.getName());
+    }
+    return new DeletePreflight(true,
+        "No punches and no IHRMS link — safe to remove. Their pin becomes unmapped, so any future "
+            + "punch on it arrives in the inbox as an unknown pin.",
+        0, false, person.getPin(), person.getName());
+  }
+
+  /**
+   * Hard-deletes a roster person. Refuses unless {@link #deletePreflight} allows it.
+   *
+   * <p>Returns the snapshot the caller audits — taken BEFORE the delete, because afterwards there is
+   * nothing left to describe and an audit entry saying only "a person was deleted" is barely an audit
+   * entry at all.
+   */
+  @Transactional
+  public DeletePreflight deletePerson(String personId) {
+    DeletePreflight preflight = deletePreflight(personId);
+    if (!preflight.allowed()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, preflight.reason());
+    }
+    people.deleteById(personId);
+    return preflight;
+  }
+
   /** Removes the IHRMS link. Punch history is untouched — it belongs to the roster person. */
   @Transactional
   public PersonView unlink(String personId) {

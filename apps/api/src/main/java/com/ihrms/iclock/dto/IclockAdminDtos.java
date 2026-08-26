@@ -188,4 +188,25 @@ public final class IclockAdminDtos {
       String anomaly) {}
 
   public record SweepResult(int scanned, int promoted, int skipped, List<String> byOutcome) {}
+
+  // -------------------------------------------------------- building policy
+
+  /**
+   * The "exceeding break" thresholds for one building.
+   *
+   * <p>Bean validation MIRRORS the V46 check constraints, per the standing rule: Hibernate's
+   * {@code ddl-auto: validate} verifies tables, columns and types but never CHECKs, so a constraint on
+   * its own surfaces as a {@code DataIntegrityViolationException} — a 500 the operator cannot act on.
+   * The cross-field rule (max &gt; min) has no annotation form, so the service states it and returns a
+   * sentence rather than a stack trace.
+   */
+  public record SitePolicyRequest(
+      @jakarta.validation.constraints.NotNull
+          @jakarta.validation.constraints.Min(value = 5, message = "Alert after must be at least 5 minutes")
+          @jakarta.validation.constraints.Max(value = 1440, message = "Alert after must be under a day")
+          Integer breakAlertMin,
+      @jakarta.validation.constraints.NotNull
+          @jakarta.validation.constraints.Min(value = 6, message = "Stop-treating-as-break must be at least 6 minutes")
+          @jakarta.validation.constraints.Max(value = 1440, message = "Stop-treating-as-break must be under a day")
+          Integer breakAlertMaxMin) {}
 }

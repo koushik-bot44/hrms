@@ -5,6 +5,7 @@ import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.IclockDevice;
 import com.ihrms.domain.model.IclockPerson;
 import com.ihrms.domain.model.IclockPunch;
+import com.ihrms.domain.model.IclockSite;
 import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.IclockDeviceRepository;
 import com.ihrms.domain.repository.IclockPersonRepository;
@@ -44,7 +45,21 @@ public class IclockBoardService {
 
   public record PersonChip(
       String personId, String name, String pin, String companyName, String team,
-      Presence presence, Instant lastAt, String lastDirection, String lastArea) {}
+      Presence presence, Instant lastAt, String lastDirection, String lastArea,
+      /**
+       * Overlay flag for the "exceeding break" lens. The person stays in their canonical presence
+       * column — this only lets that column show a matching amber badge, so the alert strip and the
+       * columns cannot disagree about who is overdue.
+       */
+      boolean breakAlert) {}
+
+  /** One row of the "exceeding break" strip. Elapsed is recomputed per refresh, never stored. */
+  public record BreakAlert(
+      String personId, String name, String companyName,
+      /** OUTSIDE or CAFETERIA. */
+      String where,
+      Instant since,
+      long elapsedMinutes) {}
 
   public record DeviceHealth(
       String serialNumber, String name, String direction, String status,
@@ -58,7 +73,12 @@ public class IclockBoardService {
   public record Board(
       String siteId, LocalDate shiftDate, Instant asOf,
       List<PersonChip> inOffice, List<PersonChip> inCafeteria,
-      List<PersonChip> left, List<PersonChip> notArrived) {}
+      List<PersonChip> left, List<PersonChip> notArrived,
+      /**
+       * People whose current absence has run past the break threshold. An OVERLAY: everyone here also
+       * appears in their presence column. Empty outside shift hours by design.
+       */
+      List<BreakAlert> exceedingBreak) {}
 
   public record DayPunch(
       String id, Instant effectiveAt, String direction, String area,
@@ -81,16 +101,24 @@ public class IclockBoardService {
       IclockPunchRepository punches,
       IclockDeviceRepository devices,
       IclockSiteRepository sites,
-      CompanyRepository companies) {
+      CompanyRepository companies,
+      IclockSitePolicyService policies) {
     this.people = people;
     this.punches = punches;
     this.devices = devices;
     this.sites = sites;
     this.companies = companies;
+    this.policies = policies;
   }
 
   /** A device is considered healthy if it has checked in within three poll intervals. */
   private static final long HEALTHY_MINUTES = 3;
+
+  /**
+   * "Exceeding break" thresholds. Simple config now; these fold into P2b's per-site policy tables when
+   * those exist, which is why they are named for the rule rather than for a screen.
+   */
+  private final IclockSitePolicyService policies;
 
   @Transactional(readOnly = true)
   public Overview overview(String siteId) {
@@ -99,8 +127,9 @@ public class IclockBoardService {
     ZoneId zone = zoneOf(site.getTimezone());
     LocalDate shiftDate = IclockShiftDay.of(Instant.now(), zone);
 
+    IclockSitePolicyService.PolicyView policy = policies.effective(siteId);
     List<IclockPerson> roster = people.findBySiteIdAndActiveTrue(siteId);
-    Map<String, PersonChip> chips = chipsFor(siteId, roster, shiftDate);
+    Map<String, PersonChip> chips = chipsFor(siteId, roster, shiftDate, zone, policy);
 
     long present = chips.values().stream().filter(c -> c.presence() == Presence.IN_OFFICE
         || c.presence() == Presence.IN_CAFETERIA).count();
@@ -134,8 +163,9 @@ public class IclockBoardService {
     ZoneId zone = zoneOf(site.getTimezone());
     LocalDate shiftDate = IclockShiftDay.of(Instant.now(), zone);
 
+    IclockSitePolicyService.PolicyView policy = policies.effective(siteId);
     List<IclockPerson> roster = people.findBySiteIdAndActiveTrue(siteId);
-    Map<String, PersonChip> chips = chipsFor(siteId, roster, shiftDate);
+    Map<String, PersonChip> chips = chipsFor(siteId, roster, shiftDate, zone, policy);
 
     List<PersonChip> inOffice = new ArrayList<>();
     List<PersonChip> inCafeteria = new ArrayList<>();
@@ -161,7 +191,116 @@ public class IclockBoardService {
     left.sort(NEWEST_FIRST);
     notArrived.sort(BY_NAME);
 
-    return new Board(siteId, shiftDate, Instant.now(), inOffice, inCafeteria, left, notArrived);
+    return new Board(siteId, shiftDate, Instant.now(), inOffice, inCafeteria, left, notArrived,
+        alertsFrom(chips.values(), zone, policy));
+  }
+
+  /**
+   * The alert strip, derived from the same chips the columns are built from — so the strip and the
+   * badge on a person's chip can never disagree.
+   *
+   * <p>Sorted by ELAPSED DESCENDING: a deliberate, documented exception to the recency standard. These
+   * are ranked by how overdue they are, and the most overdue person is the one worth walking over to.
+   * Newest-first would put the person who just stepped out at the top of an alert list, which inverts
+   * the only thing the list is for.
+   */
+  private List<BreakAlert> alertsFrom(
+      java.util.Collection<PersonChip> chips, ZoneId zone, IclockSitePolicyService.PolicyView policy) {
+    Instant now = Instant.now();
+    List<BreakAlert> out = new ArrayList<>();
+    for (PersonChip c : chips) {
+      IclockBreakAlert.Where where =
+          IclockBreakAlert.evaluate(
+              c.lastAt(), c.lastArea(), c.lastDirection(), now, zone,
+              policy.breakAlertMin(), policy.breakAlertMaxMin());
+      if (where != null) {
+        out.add(new BreakAlert(
+            c.personId(), c.name(), c.companyName(), where.name(), c.lastAt(),
+            IclockBreakAlert.elapsedMinutes(c.lastAt(), now)));
+      }
+    }
+    out.sort(java.util.Comparator.comparingLong(BreakAlert::elapsedMinutes).reversed()
+        .thenComparing(a -> a.name() == null ? "￿" : a.name()));
+    return out;
+  }
+
+  /**
+   * Board across ONE building, or across ALL of them when {@code siteId} is null.
+   *
+   * <p>Scoping is a FILTER, not a second pipeline: the all-buildings form is the per-building form run
+   * over every site and merged, with the same chips, the same presence rules and the same ordering.
+   * Building it as a separate query would be a second place for the presence logic to drift.
+   *
+   * <p>The merged columns are re-sorted, because concatenating four already-sorted lists does not give
+   * a sorted list — the freshest punch in the second building belongs above a stale one in the first.
+   */
+  @Transactional(readOnly = true)
+  public Board boardAcross(String siteId) {
+    if (siteId != null) {
+      return board(siteId);
+    }
+    List<IclockSite> all = sites.findAll();
+    if (all.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No buildings yet");
+    }
+    List<PersonChip> inOffice = new ArrayList<>();
+    List<PersonChip> inCafeteria = new ArrayList<>();
+    List<PersonChip> left = new ArrayList<>();
+    List<PersonChip> notArrived = new ArrayList<>();
+    List<BreakAlert> alerts = new ArrayList<>();
+    LocalDate shiftDate = IclockShiftDay.of(Instant.now(), ShiftConfig.ZONE);
+    for (IclockSite site : all) {
+      Board one = board(site.getId());
+      inOffice.addAll(one.inOffice());
+      inCafeteria.addAll(one.inCafeteria());
+      left.addAll(one.left());
+      notArrived.addAll(one.notArrived());
+      alerts.addAll(one.exceedingBreak());
+      shiftDate = one.shiftDate();
+    }
+    inOffice.sort(NEWEST_FIRST);
+    inCafeteria.sort(NEWEST_FIRST);
+    left.sort(NEWEST_FIRST);
+    notArrived.sort(BY_NAME);
+    // Re-sorted for the same reason the columns are: concatenating per-building alert lists does not
+    // give a list ordered by how overdue people are.
+    alerts.sort(java.util.Comparator.comparingLong(BreakAlert::elapsedMinutes).reversed()
+        .thenComparing(a -> a.name() == null ? "￿" : a.name()));
+    return new Board(null, shiftDate, Instant.now(), inOffice, inCafeteria, left, notArrived, alerts);
+  }
+
+  /**
+   * Overview across one building or all of them.
+   *
+   * <p>Counts SUM and device health concatenates; the shift-day is shared because every building runs
+   * the same shift today. {@code siteName} becomes "All buildings" so the console can label it without
+   * knowing whether it asked for one or many.
+   */
+  @Transactional(readOnly = true)
+  public Overview overviewAcross(String siteId) {
+    if (siteId != null) {
+      return overview(siteId);
+    }
+    List<IclockSite> all = sites.findAll();
+    if (all.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No buildings yet");
+    }
+    long roster = 0, present = 0, arrived = 0, notArrived = 0, late = 0, punchesToday = 0;
+    List<DeviceHealth> devicesOut = new ArrayList<>();
+    LocalDate shiftDate = IclockShiftDay.of(Instant.now(), ShiftConfig.ZONE);
+    for (IclockSite site : all) {
+      Overview o = overview(site.getId());
+      roster += o.rosterSize();
+      present += o.presentNow();
+      arrived += o.arrived();
+      notArrived += o.notArrived();
+      late += o.lateSoFar();
+      punchesToday += o.punchesToday();
+      devicesOut.addAll(o.devices());
+      shiftDate = o.shiftDate();
+    }
+    return new Overview(null, "All buildings", shiftDate, roster, present, arrived, notArrived,
+        late, punchesToday, devicesOut);
   }
 
   /** Latest punch at the top; a chip with no punch sorts last rather than first. */
@@ -231,7 +370,8 @@ public class IclockBoardService {
   // ------------------------------------------------------------------ inner
 
   private Map<String, PersonChip> chipsFor(
-      String siteId, List<IclockPerson> roster, LocalDate shiftDate) {
+      String siteId, List<IclockPerson> roster, LocalDate shiftDate, ZoneId zone,
+      IclockSitePolicyService.PolicyView policy) {
     // Company names, resolved in ONE query for the whole roster.
     //
     // This field used to be passed as a literal null on every chip, which meant the Live Board carried
@@ -274,11 +414,18 @@ public class IclockBoardService {
           person.getCompanyId() == null
               ? person.getCompanyLabel()
               : companyNames.getOrDefault(person.getCompanyId(), person.getCompanyLabel());
+      boolean alerting =
+          last != null
+              && IclockBreakAlert.evaluate(
+                      last.getEffectiveAt(), last.getArea(), last.getDirection(),
+                      Instant.now(), zone, policy.breakAlertMin(), policy.breakAlertMaxMin())
+                  != null;
       out.put(person.getId(), new PersonChip(
           person.getId(), person.getName(), person.getPin(), companyName, person.getTeam(),
           presence, last == null ? null : last.getEffectiveAt(),
           last == null ? null : last.getDirection(),
-          last == null ? null : last.getArea()));
+          last == null ? null : last.getArea(),
+          alerting));
     }
     return out;
   }
