@@ -34,7 +34,11 @@ function elapsedSeconds(from: string | null, to: string | null, isToday: boolean
 }
 
 export function PersonDayView({ personId, siteId }: { personId: string; siteId: string | null }) {
-  const [date, setDate] = React.useState(istTodayIso());
+  // Empty means "let the server decide". Only the server knows which shift profile this person is
+  // on, and therefore which shift day is theirs right now; seeding this with the IST CALENDAR date
+  // showed every night worker an empty grid between midnight and the 11:30 cut, because at 02:00
+  // their shift day is still yesterday.
+  const [date, setDate] = React.useState('');
 
   const query = useApiQuery(
     iclockKeys.personDay(personId, date),
@@ -48,7 +52,8 @@ export function PersonDayView({ personId, siteId }: { personId: string; siteId: 
   if (query.isError || !query.data) return <ConsoleError error={query.error} />;
 
   const d = query.data;
-  const isToday = d.shiftDate === istTodayIso();
+  // Answered by the server per the person's own shift, not guessed from the calendar.
+  const isToday = d.current;
   const onSite = d.sessions.filter((s) => !s.cafeteria).map((s) => elapsedSeconds(s.from, s.to, isToday));
   const totalOnSite = onSite.reduce((acc: number, s) => acc + (s ?? 0), 0);
   // A total built partly from sessions that could not be measured is not a total. Saying so beats
@@ -78,7 +83,7 @@ export function PersonDayView({ personId, siteId }: { personId: string; siteId: 
           <Input
             id="day"
             type="date"
-            value={date}
+            value={date || d.shiftDate}
             max={istTodayIso()}
             onChange={(e) => setDate(e.target.value)}
             className="w-44"

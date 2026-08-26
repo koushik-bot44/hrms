@@ -303,6 +303,8 @@ export interface PersonDay {
   lastOut: string | null;
   punches: DayPunch[];
   sessions: DaySession[];
+  /** True when shiftDate is this person's CURRENT shift day — answered per their shift, not the calendar. */
+  current: boolean;
 }
 
 // --- calls -----------------------------------------------------------------

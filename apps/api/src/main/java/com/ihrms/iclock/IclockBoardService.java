@@ -114,7 +114,17 @@ public class IclockBoardService {
 
   public record PersonDay(
       String personId, String name, String pin, LocalDate shiftDate,
-      Instant firstIn, Instant lastOut, List<DayPunch> punches, List<DaySession> sessions) {}
+      Instant firstIn, Instant lastOut, List<DayPunch> punches, List<DaySession> sessions,
+      /**
+       * True when {@code shiftDate} is the person's CURRENT shift day.
+       *
+       * <p>The console needs this to decide whether an unclosed session is still running or was
+       * simply never tapped out, and it cannot work it out itself: the answer depends on the
+       * person's shift profile, so a day-shift person at 02:00 and a night-shift person at 02:00
+       * get opposite answers. The frontend used to compare against the IST calendar date, which is
+       * wrong for every night worker between midnight and the 11:30 cut.
+       */
+      boolean current) {}
 
   private final IclockPersonRepository people;
   private final IclockPunchRepository punches;
@@ -454,37 +464,33 @@ public class IclockBoardService {
     // Sessions are PAIRED BY INFERENCE, not asserted — an unpaired IN is flagged estimated rather
     // than silently closed, because a missing OUT is normal in an event stream and pretending
     // otherwise is how a board starts lying.
-    List<DaySession> sessions = new ArrayList<>();
-    Instant openFrom = null;
-    boolean openCafeteria = false;
-    for (IclockPunch p : rows) {
-      boolean cafe = "CAFETERIA".equals(p.getArea());
-      if ("IN".equals(p.getDirection())) {
-        if (openFrom != null) {
-          sessions.add(new DaySession(openFrom, null, true, openCafeteria)); // unpaired
-        }
-        openFrom = p.getEffectiveAt();
-        openCafeteria = cafe;
-      } else if ("OUT".equals(p.getDirection())) {
-        if (openFrom != null) {
-          sessions.add(new DaySession(openFrom, p.getEffectiveAt(), false, openCafeteria));
-          openFrom = null;
-        } else {
-          sessions.add(new DaySession(null, p.getEffectiveAt(), true, cafe)); // OUT with no IN
-        }
-      }
-    }
-    if (openFrom != null) {
-      sessions.add(new DaySession(openFrom, null, true, openCafeteria));
-    }
+    //
+    // The pairing rule lives in IclockDaySessions because it has to honour the cafeteria inversion,
+    // and it used to branch on direction alone. A CAFETERIA IN means a break STARTS, so the old rule
+    // read it as an arrival: it orphaned the open work session and left the closing GATE OUT with
+    // nothing to pair against. One coffee break turned a normal 9-hour night into "On site 0m" with
+    // two Estimated badges.
+    List<IclockDaySessions.Punch> facts =
+        rows.stream()
+            .map(p -> new IclockDaySessions.Punch(p.getEffectiveAt(), p.getArea(), p.getDirection()))
+            .toList();
+    List<DaySession> sessions =
+        IclockDaySessions.segment(facts).stream()
+            .map(s -> new DaySession(s.from(), s.to(), s.estimated(), s.cafeteria()))
+            .toList();
 
-    Instant firstIn = rows.stream().filter(p -> "IN".equals(p.getDirection()))
-        .map(IclockPunch::getEffectiveAt).findFirst().orElse(null);
-    Instant lastOut = rows.stream().filter(p -> "OUT".equals(p.getDirection()))
-        .map(IclockPunch::getEffectiveAt).reduce((a, b) -> b).orElse(null);
+    // GATE only, both of them. A cafeteria punch is a break boundary, not an arrival or a departure —
+    // taking the latest OUT of any area displayed the moment somebody sat back DOWN as their "last
+    // out", which reads exactly like going home and is nothing of the kind.
+    Instant firstIn = IclockDaySessions.firstArrival(facts);
+    Instant lastOut = IclockDaySessions.lastDeparture(facts);
 
+    LocalDate currentDay =
+        policies.effective(person.getSiteId())
+            .profileFor(person.getShiftProfile())
+            .shiftDateOf(Instant.now(), zone);
     return new PersonDay(personId, person.getName(), person.getPin(), day,
-        firstIn, lastOut, dayPunches, sessions);
+        firstIn, lastOut, dayPunches, sessions, day.equals(currentDay));
   }
 
   // ------------------------------------------------------------------ inner
