@@ -195,8 +195,16 @@ public class IclockAdminService {
 
   @Transactional(readOnly = true)
   public List<DeviceView> listDevices(String status) {
+    // Newest contact first, per the recency addendum — and deterministic, which findAll() alone was
+    // not: it returned database row order, so two calls could disagree for no reason. A terminal that
+    // has never called in sorts last rather than first; "never seen" is not "just seen".
     return devices.findAll().stream()
         .filter(d -> status == null || status.equalsIgnoreCase(d.getStatus()))
+        .sorted(
+            java.util.Comparator.comparing(
+                    IclockDevice::getLastSeenAt,
+                    java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()))
+                .thenComparing(IclockDevice::getSerialNumber))
         .map(d -> view(d, siteName(d.getSiteId())))
         .toList();
   }

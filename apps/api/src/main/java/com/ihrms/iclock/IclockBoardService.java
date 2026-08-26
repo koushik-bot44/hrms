@@ -1,9 +1,11 @@
 package com.ihrms.iclock;
 
 import com.ihrms.attendance.ShiftConfig;
+import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.IclockDevice;
 import com.ihrms.domain.model.IclockPerson;
 import com.ihrms.domain.model.IclockPunch;
+import com.ihrms.domain.repository.CompanyRepository;
 import com.ihrms.domain.repository.IclockDeviceRepository;
 import com.ihrms.domain.repository.IclockPersonRepository;
 import com.ihrms.domain.repository.IclockPunchRepository;
@@ -15,6 +17,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,16 +74,19 @@ public class IclockBoardService {
   private final IclockPunchRepository punches;
   private final IclockDeviceRepository devices;
   private final IclockSiteRepository sites;
+  private final CompanyRepository companies;
 
   public IclockBoardService(
       IclockPersonRepository people,
       IclockPunchRepository punches,
       IclockDeviceRepository devices,
-      IclockSiteRepository sites) {
+      IclockSiteRepository sites,
+      CompanyRepository companies) {
     this.people = people;
     this.punches = punches;
     this.devices = devices;
     this.sites = sites;
+    this.companies = companies;
   }
 
   /** A device is considered healthy if it has checked in within three poll intervals. */
@@ -143,8 +149,32 @@ public class IclockBoardService {
         case NOT_ARRIVED -> notArrived.add(c);
       }
     }
+    // NEWEST FIRST within every column, per the recency addendum: the latest punch sits at the top, so
+    // the board reads as a feed of what just happened rather than as a roster in pin order — which is
+    // what it was, because chips are emitted in roster order and nothing re-sorted them.
+    //
+    // NOT_ARRIVED has no punch by definition, so lastAt is null for all of them and recency cannot
+    // order that column; it falls through to name, which is the only useful order for a list whose
+    // whole content is "people who are missing".
+    inOffice.sort(NEWEST_FIRST);
+    inCafeteria.sort(NEWEST_FIRST);
+    left.sort(NEWEST_FIRST);
+    notArrived.sort(BY_NAME);
+
     return new Board(siteId, shiftDate, Instant.now(), inOffice, inCafeteria, left, notArrived);
   }
+
+  /** Latest punch at the top; a chip with no punch sorts last rather than first. */
+  private static final java.util.Comparator<PersonChip> NEWEST_FIRST =
+      java.util.Comparator.comparing(
+              PersonChip::lastAt, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()))
+          .thenComparing(c -> c.name() == null ? "￿" : c.name().toLowerCase(java.util.Locale.ROOT));
+
+  /** Unnamed people sort to the bottom: they are a cleanup task, not the headline. */
+  private static final java.util.Comparator<PersonChip> BY_NAME =
+      java.util.Comparator.comparing(
+              (PersonChip c) -> c.name() == null ? "￿" : c.name().toLowerCase(java.util.Locale.ROOT))
+          .thenComparing(PersonChip::pin);
 
   @Transactional(readOnly = true)
   public PersonDay personDay(String personId, String shiftDateOrNull) {
@@ -202,6 +232,23 @@ public class IclockBoardService {
 
   private Map<String, PersonChip> chipsFor(
       String siteId, List<IclockPerson> roster, LocalDate shiftDate) {
+    // Company names, resolved in ONE query for the whole roster.
+    //
+    // This field used to be passed as a literal null on every chip, which meant the Live Board carried
+    // no company at all — and the console's requirement to GROUP the board by company was therefore a
+    // backend gap, not a presentation one. Batched rather than per-person because a 212-person roster
+    // would otherwise be 212 lookups on the screen that refreshes every 30 seconds.
+    Set<String> companyIds =
+        roster.stream()
+            .map(IclockPerson::getCompanyId)
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+    Map<String, String> companyNames =
+        companyIds.isEmpty()
+            ? Map.of()
+            : companies.findAllById(companyIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Company::getId, Company::getName));
+
     Map<String, IclockPunch> lastByPerson = new LinkedHashMap<>();
     // Ordered newest-first, so the FIRST row seen per person is their latest punch.
     for (IclockPunch p : punches.findBySiteIdAndShiftDateOrderByEffectiveAtDesc(siteId, shiftDate)) {
@@ -221,8 +268,14 @@ public class IclockBoardService {
       } else {
         presence = "IN".equals(last.getDirection()) ? Presence.IN_OFFICE : Presence.LEFT;
       }
+      // companyLabel is the fallback: a person whose seed label never matched an IHRMS company still
+      // belongs somewhere on the board, and "Combino IT (unmatched)" groups better than "no company".
+      String companyName =
+          person.getCompanyId() == null
+              ? person.getCompanyLabel()
+              : companyNames.getOrDefault(person.getCompanyId(), person.getCompanyLabel());
       out.put(person.getId(), new PersonChip(
-          person.getId(), person.getName(), person.getPin(), null, person.getTeam(),
+          person.getId(), person.getName(), person.getPin(), companyName, person.getTeam(),
           presence, last == null ? null : last.getEffectiveAt(),
           last == null ? null : last.getDirection(),
           last == null ? null : last.getArea()));

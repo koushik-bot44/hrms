@@ -16,6 +16,20 @@ public interface IclockPersonRepository extends JpaRepository<IclockPerson, Stri
 
   List<IclockPerson> findBySiteIdOrderByPinAsc(String siteId);
 
+  /**
+   * The People directory order: by NAME, with pin breaking ties.
+   *
+   * <p>The recency addendum exempts this screen from newest-first and asks for name order with
+   * sortable columns — a directory is something you look someone up in, not a feed. Pin order was an
+   * artefact of the import, and nobody looks a colleague up by biometric pin.
+   *
+   * <p>Nulls last: an unnamed person sorts to the bottom rather than the top, because they are a
+   * cleanup task rather than the first thing an operator should meet.
+   */
+  @Query("SELECT p FROM IclockPerson p WHERE p.siteId = :siteId "
+      + "ORDER BY CASE WHEN p.name IS NULL THEN 1 ELSE 0 END, LOWER(p.name) ASC, p.pin ASC")
+  List<IclockPerson> findBySiteIdOrderByNameAscPinAsc(@Param("siteId") String siteId);
+
   List<IclockPerson> findBySiteIdAndActiveTrue(String siteId);
 
   long countBySiteId(String siteId);

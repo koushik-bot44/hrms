@@ -117,7 +117,12 @@ public interface IclockRawPunchRepository extends JpaRepository<IclockRawPunch, 
                    SELECT d."serialNumber" FROM "iclock_devices" d WHERE d."siteId" = :siteId)
              AND NOT EXISTS (SELECT 1 FROM "iclock_punch_members" m WHERE m."rawPunchId" = r."id")
            GROUP BY r."devicePin"
-           ORDER BY live_n DESC, n DESC
+           -- RECENCY FIRST. The pin that punched most recently is the person standing at the gate now;
+           -- volume is context, not urgency, and remains a sortable column in the console. Live count
+           -- breaks ties so an archive-only pin can never outrank one punching tonight.
+           ORDER BY (max(r."receivedAt") >= CAST(:since AS timestamptz)) DESC,
+                    max(r."receivedAt") DESC,
+                    live_n DESC, n DESC
            LIMIT :limit
           """,
       nativeQuery = true)

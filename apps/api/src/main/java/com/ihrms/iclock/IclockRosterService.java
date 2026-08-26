@@ -96,7 +96,7 @@ public class IclockRosterService {
   public List<PersonView> listPeople(String siteId) {
     requireSite(siteId);
     java.util.Set<String> dupes = new java.util.HashSet<>(people.findDuplicateEmails(siteId));
-    return people.findBySiteIdOrderByPinAsc(siteId).stream().map(p -> view(p, dupes)).toList();
+    return people.findBySiteIdOrderByNameAscPinAsc(siteId).stream().map(p -> view(p, dupes)).toList();
   }
 
   /**
