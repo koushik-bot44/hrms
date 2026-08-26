@@ -188,3 +188,71 @@ describe('edges', () => {
     expect(g.items[0].name).toBe('good'); // the unparseable one sinks, it does not poison the sort
   });
 });
+
+describe('view mode — both modes are first-class and both are decided here', () => {
+  const items: Chip[] = [
+    chip('older', 'Alpha', '2026-08-26T10:00:00Z'),
+    chip('newest', 'Beta', '2026-08-26T20:00:00Z'),
+    chip('middle', 'Alpha', '2026-08-26T15:00:00Z'),
+    chip('untimed', 'Beta', null),
+  ];
+
+  it('ALL mode is one flat list, newest-first, with ZERO headers', () => {
+    const groups = groupItems(items, { ...byCompany, mode: 'all' });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].showHeader).toBe(false);
+    expect(groups[0].count).toBe(4);
+    expect(groups[0].items.map((c) => c.name)).toEqual(['newest', 'middle', 'older', 'untimed']);
+    // No headers render, so the visible rows ARE the items.
+    expect(visibleRowCount(groups)).toBe(4);
+  });
+
+  it('ALL mode ignores the grouping axis entirely', () => {
+    // Same items, different axis, identical result — the axis is carried but inert, so switching back
+    // to Grouped restores the operator's choice instead of resetting it.
+    const byCompanyAll = groupItems(items, { ...byCompany, mode: 'all' });
+    const byNameAll = groupItems(items, { keyOf: (c) => c.name, timeOf: (c) => c.lastAt, mode: 'all' });
+    expect(byNameAll.map((g) => g.items.map((c) => c.name))).toEqual(
+      byCompanyAll.map((g) => g.items.map((c) => c.name)),
+    );
+    expect(byNameAll).toHaveLength(1);
+  });
+
+  it('GROUPED mode still shows headers, and is the default', () => {
+    const explicit = groupItems(items, { ...byCompany, mode: 'grouped' });
+    const implicit = groupItems(items, byCompany);
+
+    expect(explicit.every((g) => g.showHeader)).toBe(true);
+    expect(implicit.map((g) => g.label)).toEqual(explicit.map((g) => g.label));
+    expect(explicit.length).toBeGreaterThan(1);
+  });
+
+  it('ALL mode of the 202 case is deliberately flat — and the standard says so', () => {
+    // The ticker is SUPPOSED to be 202 rows. The standard is a grouped-mode criterion, and asserting
+    // it against 'all' would be asserting the wrong thing; this pins that distinction so nobody
+    // "fixes" the ticker into groups later.
+    const many = Array.from({ length: 202 }, (_, i) => chip(`P${i}`, 'Co', null));
+    const flat = groupItems(many, { ...byCompany, mode: 'all' });
+
+    expect(flat).toHaveLength(1);
+    expect(visibleRowCount(flat)).toBe(202);
+    expect(meetsConsoleStandard(flat).ok).toBe(false);
+
+    // The same data in grouped mode passes, which is the acceptance criterion.
+    expect(meetsConsoleStandard(groupItems(many, byCompany)).ok).toBe(true);
+  });
+
+  it('ALL mode of an empty listing invents nothing', () => {
+    expect(groupItems([], { ...byCompany, mode: 'all' })).toEqual([]);
+  });
+
+  it('ALL mode honours an explicit comparator, like the exempt surfaces do', () => {
+    const groups = groupItems(items, {
+      ...byCompany,
+      mode: 'all',
+      compare: (a, b) => a.name.localeCompare(b.name),
+    });
+    expect(groups[0].items.map((c) => c.name)).toEqual(['middle', 'newest', 'older', 'untimed']);
+  });
+});

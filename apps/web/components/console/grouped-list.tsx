@@ -76,6 +76,22 @@ export function GroupedList<T>({
   return (
     <div className={cn('space-y-2', className)}>
       {groups.map((g) => {
+        // The function decided there is no header — 'all' mode, the flat ticker. Render the rows and
+        // nothing else. The renderer never inspects the mode; it obeys the flag it was handed, which is
+        // what keeps the layout decision in one testable place.
+        if (!g.showHeader) {
+          return (
+            <ul
+              key={g.key}
+              className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card"
+            >
+              {g.items.map((item) => (
+                <li key={itemKey(item)}>{renderItem(item)}</li>
+              ))}
+            </ul>
+          );
+        }
+
         const open = expandAll || (overrides[g.key] ?? !g.defaultCollapsed);
         return (
           <Collapsible

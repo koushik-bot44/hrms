@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/empty-state';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { GroupedList } from '@/components/console/grouped-list';
 import { Combobox } from '@/components/console/combobox';
+import { ViewToggle, usePersistedViewMode, type ViewMode } from '@/components/console/view-toggle';
 import { istDayLabel, istTime } from '@/lib/date';
 import type { GroupOptions } from '@/lib/console/grouping';
 import { cn } from '@/lib/utils';
@@ -66,20 +67,18 @@ function PersonRow({ person, siteId }: { person: PersonChip; siteId: string }) {
 
 type Axis = 'company' | 'team';
 
-/** The grouping axes the board offers. Company is the default the standard names. */
-function groupingFor(axis: Axis): GroupOptions<PersonChip> {
+/**
+ * The grouping axes the board offers, and the view mode, BOTH as parameters to the shared rule.
+ *
+ * In 'all' mode the axis is irrelevant — the function returns one flat newest-first list — but it is
+ * still passed, so switching back to Grouped restores the operator's axis rather than resetting it.
+ */
+function groupingFor(axis: Axis, mode: ViewMode): GroupOptions<PersonChip> {
+  const base = { timeOf: (p: PersonChip) => p.lastAt, mode };
   if (axis === 'team') {
-    return {
-      keyOf: (p) => p.team,
-      timeOf: (p) => p.lastAt,
-      ungroupedLabel: 'No team',
-    };
+    return { ...base, keyOf: (p: PersonChip) => p.team, ungroupedLabel: 'No team' };
   }
-  return {
-    keyOf: (p) => p.companyName,
-    timeOf: (p) => p.lastAt,
-    ungroupedLabel: 'No company',
-  };
+  return { ...base, keyOf: (p: PersonChip) => p.companyName, ungroupedLabel: 'No company' };
 }
 
 function Column({
@@ -89,6 +88,7 @@ function Column({
   siteId,
   tone,
   axis,
+  mode,
   emptyLine,
   storageKey,
 }: {
@@ -98,10 +98,11 @@ function Column({
   siteId: string;
   tone: 'success' | 'primarySoft' | 'neutral' | 'warning';
   axis: Axis;
+  mode: ViewMode;
   emptyLine: string;
   storageKey: string;
 }) {
-  const grouping = React.useMemo(() => groupingFor(axis), [axis]);
+  const grouping = React.useMemo(() => groupingFor(axis, mode), [axis, mode]);
   return (
     <Card className="flex min-h-[12rem] flex-col p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -131,6 +132,7 @@ function Column({
 
 export function LiveBoard({ siteId }: { siteId: string }) {
   const [axis, setAxis] = React.useState<Axis>('company');
+  const [mode, setMode] = usePersistedViewMode('board');
 
   const query = useApiQuery<Board>(
     iclockKeys.board(siteId),
@@ -159,17 +161,22 @@ export function LiveBoard({ siteId }: { siteId: string }) {
   const header = (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <span className="text-sm text-muted-foreground">Shift day {istDayLabel(b.shiftDate)}</span>
-      <div className="flex items-center gap-3">
-        <Combobox
-          ariaLabel="Group people by"
-          options={[
-            { value: 'company', label: 'Group by company' },
-            { value: 'team', label: 'Group by team' },
-          ]}
-          value={axis}
-          onChange={(v) => setAxis(v as Axis)}
-          className="w-48"
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <ViewToggle value={mode} onChange={setMode} />
+        {/* The axis picker is meaningless in the flat ticker, so it goes away rather than sitting
+            there inert — but the choice is remembered for when Grouped comes back. */}
+        {mode === 'grouped' ? (
+          <Combobox
+            ariaLabel="Group people by"
+            options={[
+              { value: 'company', label: 'Group by company' },
+              { value: 'team', label: 'Group by team' },
+            ]}
+            value={axis}
+            onChange={(v) => setAxis(v as Axis)}
+            className="w-48"
+          />
+        ) : null}
         <LiveIndicator asOf={b.asOf} stale={query.failureCount > 0} />
       </div>
     </div>
@@ -200,6 +207,7 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           siteId={siteId}
           tone="success"
           axis={axis}
+          mode={mode}
           storageKey="inOffice"
           emptyLine="Nobody in the office right now."
         />
@@ -210,6 +218,7 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           siteId={siteId}
           tone="primarySoft"
           axis={axis}
+          mode={mode}
           storageKey="inCafeteria"
           emptyLine="Nobody in the cafeteria."
         />
@@ -220,6 +229,7 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           siteId={siteId}
           tone="neutral"
           axis={axis}
+          mode={mode}
           storageKey="left"
           emptyLine="Nobody has left yet."
         />
@@ -232,6 +242,7 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           siteId={siteId}
           tone="warning"
           axis={axis}
+          mode={mode}
           storageKey="notArrived"
           emptyLine="Everyone is accounted for."
         />
