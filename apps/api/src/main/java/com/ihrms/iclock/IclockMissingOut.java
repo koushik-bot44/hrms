@@ -16,6 +16,11 @@ import java.util.List;
  * <p>ONE DEFINITION, TWO SURFACES. The rule is the same unpaired-IN the day view already badges as
  * estimated: the person's last punch of the shift day is not a gate exit. Deriving it twice would let
  * the strip and the day view disagree about the same person on the same day.
+ *
+ * <p><b>FOR P2b.</b> Membership is recomputed from effective punches on every board read, which is
+ * cheap for one shift day and wrong as a permanent arrangement. Once {@code iclock_shift_days} exists,
+ * re-point this at the stored {@code hasMissingPunch} flag rather than deriving it here — and keep this
+ * function as the thing that COMPUTES that flag, so the definition still lives in one place.
  */
 final class IclockMissingOut {
 
