@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -50,6 +51,28 @@ public class IclockSitePolicy {
    */
   @Column(name = "breakAlertMaxMin", nullable = false)
   private int breakAlertMaxMin = 120;
+
+  // ---- Shift profile definitions (V47). The shift-day cut for each is DERIVED from these, never
+  // stored: the midpoint of the gap between one shift and the next. Storing a cut alongside the shift
+  // is what let the old constant drift out of agreement with the shift it was supposed to describe.
+
+  @Column(name = "nightStart", nullable = false)
+  private LocalTime nightStart = LocalTime.of(19, 0);
+
+  @Column(name = "nightEnd", nullable = false)
+  private LocalTime nightEnd = LocalTime.of(4, 0);
+
+  @Column(name = "nightLateGraceMin", nullable = false)
+  private int nightLateGraceMin = 15;
+
+  @Column(name = "dayStart", nullable = false)
+  private LocalTime dayStart = LocalTime.of(9, 0);
+
+  @Column(name = "dayEnd", nullable = false)
+  private LocalTime dayEnd = LocalTime.of(18, 0);
+
+  @Column(name = "dayLateGraceMin", nullable = false)
+  private int dayLateGraceMin = 15;
 
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP_WITH_TIMEZONE)

@@ -1,6 +1,9 @@
 package com.ihrms.iclock.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
+import java.util.List;
 
 /**
  * Roster shapes for the Time &amp; Attendance console ({@code /provisioning/iclock/**}).
@@ -27,7 +30,36 @@ public final class IclockRosterDtos {
       Integer lateExemptMin,
       Boolean active,
       /** Reporting exclusion only; does not affect resolution. */
-      Boolean excludedFromReports) {}
+      Boolean excludedFromReports,
+      /**
+       * NIGHT or DAY. Null leaves the current assignment alone.
+       *
+       * <p>Validated here as well as by the V47 CHECK, so an unknown value is a 400 naming the
+       * accepted ones rather than the 500 a raw constraint violation produces —
+       * {@code ddl-auto: validate} never checks CHECK constraints, so the database alone cannot make
+       * this a polite failure.
+       */
+      @Pattern(regexp = "NIGHT|DAY", message = "Shift must be NIGHT or DAY.")
+          String shiftProfile) {}
+
+  /**
+   * Moving a group of people onto a shift in one action.
+   *
+   * <p>A bulk action rather than per-person edits because the real input is a confirmed LIST — "these
+   * 22 pins work the day shift" — and applying it one row at a time across a 255-person roster invites
+   * a half-finished assignment where some of a team are on one shift and the rest on another.
+   */
+  public record AssignShiftRequest(
+      /** Roster person ids. Pins are deliberately not accepted: they are only unique within a site. */
+      @NotEmpty(message = "Select at least one person.") List<String> personIds,
+      @NotBlank @Pattern(regexp = "NIGHT|DAY", message = "Shift must be NIGHT or DAY.")
+          String shiftProfile) {}
+
+  /** What a bulk assignment did, per person, so the operator can see it rather than trust it. */
+  public record AssignShiftReport(
+      String shiftProfile, int changed, int alreadyOnIt, List<AssignShiftRow> rows) {}
+
+  public record AssignShiftRow(String personId, String pin, String name, String from, String to) {}
 
   public record AssignPersonRequest(@NotBlank String employeeId) {}
 
@@ -52,5 +84,10 @@ public final class IclockRosterDtos {
       boolean duplicateEmail,
       /** True when the person has no name at all; the console surfaces these for cleanup. */
       boolean unnamed,
+      /**
+       * NIGHT or DAY — which shift this person works, and therefore which day their punches file
+       * under, when they count as late, and when a long absence is worth alerting on.
+       */
+      String shiftProfile,
       long punchCount) {}
 }

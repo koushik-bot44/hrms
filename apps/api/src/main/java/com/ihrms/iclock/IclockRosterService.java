@@ -15,6 +15,8 @@ import com.ihrms.domain.repository.IclockSiteCompanyRepository;
 import com.ihrms.domain.repository.IclockRawPunchRepository;
 import com.ihrms.domain.repository.IclockSiteRepository;
 import com.ihrms.iclock.dto.IclockRosterDtos.PersonView;
+import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftReport;
+import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftRow;
 import com.ihrms.iclock.dto.IclockRosterDtos.UpsertPersonRequest;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -212,6 +214,21 @@ public class IclockRosterService {
     return view(people.save(person), java.util.Set.of());
   }
 
+  /**
+   * A shift name from a CSV cell, or null for "not specified".
+   *
+   * <p>An unrecognised value reads as unspecified rather than as an error or as NIGHT: a stray cell
+   * must not move somebody, and failing the whole import over one bad word in an optional column would
+   * be worse than leaving that person's assignment where the operator last put it.
+   */
+  private static String parseShiftProfile(String cell) {
+    if (cell == null || cell.isBlank()) {
+      return null;
+    }
+    String v = cell.trim().toUpperCase(Locale.ROOT);
+    return "NIGHT".equals(v) || "DAY".equals(v) ? v : null;
+  }
+
   private void apply(IclockPerson person, UpsertPersonRequest req) {
     if (req.name() != null) person.setName(blankToNull(req.name()));
     if (req.email() != null) person.setEmail(normaliseEmail(req.email()));
@@ -222,6 +239,50 @@ public class IclockRosterService {
     if (req.lateExemptMin() != null) person.setLateExemptMin(Math.max(0, req.lateExemptMin()));
     if (req.active() != null) person.setActive(req.active());
     if (req.excludedFromReports() != null) person.setExcludedFromReports(req.excludedFromReports());
+    if (req.shiftProfile() != null) person.setShiftProfile(req.shiftProfile());
+  }
+
+  /**
+   * Moves a group of people onto a shift, and reports what actually changed.
+   *
+   * <p>Re-dating is the reason this is deliberate rather than convenient: a person's shift decides
+   * which shift-day their punches file under, so moving them changes how tonight's board reads for
+   * them. Already-correct rows are counted separately from changed ones so an operator can tell a
+   * no-op apart from a real move, which is exactly the distinction a "22 people updated" toast hides.
+   *
+   * <p><b>Existing punches are NOT re-dated.</b> A punch keeps the shift-day it was promoted under.
+   * Re-attributing history to a shift somebody may not have been working at the time would rewrite
+   * settled attendance on the strength of a setting changed today; the assignment governs everything
+   * from here forward, and P2b's derivation store is where a deliberate, audited recompute belongs.
+   */
+  @Transactional
+  public AssignShiftReport assignShift(String siteId, List<String> personIds, String profile) {
+    requireSite(siteId);
+    String target = profile == null ? "" : profile.trim().toUpperCase(Locale.ROOT);
+    if (!"NIGHT".equals(target) && !"DAY".equals(target)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Shift must be NIGHT or DAY.");
+    }
+    List<AssignShiftRow> rows = new ArrayList<>();
+    int changed = 0, alreadyOnIt = 0;
+    for (String personId : personIds) {
+      IclockPerson person = requirePerson(personId);
+      // Scoped to the building the request names, so a stray id from another site cannot be moved by
+      // an operator who only has this building open.
+      if (!siteId.equals(person.getSiteId())) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "Person " + person.getPin() + " is not in this building.");
+      }
+      String from = person.getShiftProfile();
+      if (target.equals(from)) {
+        alreadyOnIt++;
+      } else {
+        person.setShiftProfile(target);
+        people.save(person);
+        changed++;
+      }
+      rows.add(new AssignShiftRow(person.getId(), person.getPin(), person.getName(), from, target));
+    }
+    return new AssignShiftReport(target, changed, alreadyOnIt, rows);
   }
 
   PersonView view(IclockPerson p, java.util.Set<String> duplicateEmails) {
@@ -235,6 +296,7 @@ public class IclockRosterService {
         p.getTeam(), p.getRole(), p.getLateExemptMin(), p.isActive(), p.isExcludedFromReports(),
         p.getEmployeeId(), e == null ? null : e.getFullName(),
         dup, p.getName() == null || p.getName().isBlank(),
+        p.getShiftProfile(),
         punches.countByPersonId(p.getId()));
   }
 
@@ -326,6 +388,14 @@ public class IclockRosterService {
       boolean deleted = c.length > 8 && !c[8].trim().isBlank();
       // Optional 11th column; absent means false, so existing seed rows are unaffected.
       boolean excluded = c.length > 10 && isTruthy(c[10]);
+      // Optional 12th column: NIGHT or DAY.
+      //
+      // BLANK MEANS "LEAVE ALONE", NOT "NIGHT". Every other column here overwrites, which is right for
+      // a field the export always carries — but the terminal export does not carry a shift assignment,
+      // so treating blank as NIGHT would silently undo a confirmed day-shift list on the next routine
+      // import, and put those people's punches back on the cut that splits their day in half. Nothing
+      // in the report would say it had happened.
+      String shiftProfile = c.length > 11 ? parseShiftProfile(c[11]) : null;
 
       if (canonical == null) {
         skipped++;
@@ -374,6 +444,11 @@ public class IclockRosterService {
         person.setLateExemptMin(lateExempt);
         person.setActive(!deleted);
         person.setExcludedFromReports(excluded);
+        if (shiftProfile != null) {
+          person.setShiftProfile(shiftProfile);
+        } else if (isNew) {
+          person.setShiftProfile("NIGHT"); // the safe default: current behaviour for a new arrival
+        }
         people.save(person);
       }
       if (isNew) {

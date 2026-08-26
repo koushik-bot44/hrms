@@ -90,6 +90,22 @@ public class IclockPerson {
   @Column(name = "excludedFromReports", nullable = false)
   private boolean excludedFromReports;
 
+  /**
+   * Which shift this person works — {@code NIGHT} (19:00→04:00) or {@code DAY} (09:00→18:00), V47.
+   *
+   * <p><b>Their shift-day cut derives from this</b>, along with their late threshold, their break-alert
+   * window and which day the board and Missing OUT read for them. A global constant was correct while
+   * everyone worked nights and silently mis-filed a day-shift person's every punch once they did not:
+   * a 09:00 arrival lands one shift-day earlier than the 18:00 departure that follows it, so the pair
+   * never closes.
+   *
+   * <p>Defaults to {@code NIGHT} — which is exactly current behaviour — and only ever moves by an
+   * explicit, audited assignment. Never inferred from punch times: someone newly enrolled has a punch
+   * history made of onboarding noise, and guessing from it would re-date attribution that works.
+   */
+  @Column(name = "shiftProfile", nullable = false)
+  private String shiftProfile = "NIGHT";
+
   /** Deferred enrichment: the IHRMS employee this person turned out to be. Null until confirmed. */
   @Column(name = "employeeId")
   private String employeeId;

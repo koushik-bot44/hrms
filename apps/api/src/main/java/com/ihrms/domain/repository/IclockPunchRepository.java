@@ -3,6 +3,7 @@ package com.ihrms.domain.repository;
 import com.ihrms.domain.model.IclockPunch;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -98,7 +99,28 @@ public interface IclockPunchRepository extends JpaRepository<IclockPunch, String
   /** The Live Board's hot read: everyone at a site on a shift-day. */
   List<IclockPunch> findBySiteIdAndShiftDateOrderByEffectiveAtDesc(String siteId, LocalDate shiftDate);
 
+  /**
+   * Everyone at a site across SEVERAL shift-days at once — the board's read since V47.
+   *
+   * <p>A building can run more than one shift, and between 01:30 and 11:30 the day and night profiles
+   * disagree about what "today" is. Fetching one date and calling it the board would silently drop
+   * whichever population is on the other side of that disagreement, so the board asks for every
+   * shift-day currently in play (at most one per profile) and each person is matched to their own.
+   */
+  List<IclockPunch> findBySiteIdAndShiftDateInOrderByEffectiveAtDesc(
+      String siteId, Collection<LocalDate> shiftDates);
+
+  /** The same set, ascending — Missing OUT needs each person's punches in the order they happened. */
+  List<IclockPunch> findBySiteIdAndShiftDateInOrderByEffectiveAtAsc(
+      String siteId, Collection<LocalDate> shiftDates);
+
   long countBySiteIdAndShiftDate(String siteId, LocalDate shiftDate);
+
+  /** Site total across every shift-day currently in play, so a second shift is not left out of it. */
+  long countBySiteIdAndShiftDateIn(String siteId, Collection<LocalDate> shiftDates);
+
+  /** The same, per terminal — a gate serves both shifts and its card should say so. */
+  long countByDeviceIdAndShiftDateIn(String deviceId, Collection<LocalDate> shiftDates);
 
   /**
    * Punches attributed to ONE terminal on a shift-day — the per-device figure the Overview shows.

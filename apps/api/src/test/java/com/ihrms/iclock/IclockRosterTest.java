@@ -333,7 +333,7 @@ class IclockRosterTest {
     roster.editPerson(
         before.getId(),
         new com.ihrms.iclock.dto.IclockRosterDtos.UpsertPersonRequest(
-            before.getPin(), null, null, null, null, null, null, null, null, true));
+            before.getPin(), null, null, null, null, null, null, null, null, true, null));
 
     var after = people.findBySiteIdAndPin(siteId, "1").orElseThrow();
     assertThat(after.isExcludedFromReports()).isTrue();

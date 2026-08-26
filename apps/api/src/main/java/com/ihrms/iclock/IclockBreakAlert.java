@@ -1,9 +1,7 @@
 package com.ihrms.iclock;
 
-import com.ihrms.attendance.ShiftConfig;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalTime;
 import java.time.ZoneId;
 
 /**
@@ -39,6 +37,7 @@ final class IclockBreakAlert {
    * @param lastArea GATE or CAFETERIA
    * @param lastDirection IN or OUT
    * @param now evaluated, never {@code Instant.now()} inside, so tests can place the clock
+   * @param profile THIS PERSON'S shift — the window the alert is allowed to fire in
    * @param minMinutes below this, an absence is just a break
    * @param maxMinutes above this, a continuous absence is presumed a departure and the alert retires
    */
@@ -48,6 +47,7 @@ final class IclockBreakAlert {
       String lastDirection,
       Instant now,
       ZoneId zone,
+      IclockShiftProfile profile,
       int minMinutes,
       int maxMinutes) {
     // Never arrived — there is no absence to measure.
@@ -55,7 +55,11 @@ final class IclockBreakAlert {
       return null;
     }
     // No alerts outside working hours: at 11:00 everyone is "away" and none of it means anything.
-    if (!withinShift(now, zone)) {
+    //
+    // WHOSE working hours matters. Asking the night shift's window about a day-shift person would keep
+    // their alerts silent through their entire working day and then fire them all evening, once they
+    // have legitimately gone home.
+    if (!profile.withinShift(now, zone)) {
       return null;
     }
 
@@ -96,18 +100,14 @@ final class IclockBreakAlert {
   }
 
   /**
-   * Whether {@code now} falls inside the 19:00 to 04:00 shift.
+   * Whether {@code now} falls inside the DEFAULT (night) shift.
    *
-   * <p>Wraps midnight, so it is two ranges rather than one comparison — the mistake that would make the
-   * alert silent for the entire post-midnight half of every shift.
+   * <p>Retained for callers that have no person in hand. Anything that knows whose absence it is must
+   * ask {@link IclockShiftProfile#withinShift(Instant, ZoneId)} on their own profile instead — a shift
+   * window is a property of the shift, and there is now more than one.
    */
   static boolean withinShift(Instant now, ZoneId zone) {
-    LocalTime t = now.atZone(zone).toLocalTime();
-    LocalTime start = ShiftConfig.SHIFT_START;
-    LocalTime end = ShiftConfig.SHIFT_END;
-    return start.isBefore(end)
-        ? !t.isBefore(start) && t.isBefore(end)
-        : !t.isBefore(start) || t.isBefore(end);
+    return IclockShiftProfile.NIGHT.withinShift(now, zone);
   }
 
   /** Whole minutes a person has been away. Never negative, so a clock skew cannot read as "-3m". */

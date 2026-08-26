@@ -6,35 +6,41 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 
 /**
- * Shift-day attribution for an effective punch, in the SITE's timezone.
+ * Shift-day attribution for the DEFAULT (night) profile, in the site's timezone.
  *
- * <p>This mirrors {@link ShiftConfig#shiftDateOf(Instant)} exactly — the 19:00→04:00 overnight shift,
- * cut at 04:00 — but takes the zone as a parameter instead of using {@link ShiftConfig#ZONE}, which is
- * a hardcoded {@code Asia/Kolkata} constant.
+ * <p><b>Use this only where no person is in hand.</b> Since V47 the shift-day cut is a property of the
+ * person's shift, not of the system: a day-shift person cuts at 01:30 and a night-shift person at
+ * 11:30. Anything that knows whose punch it is must go through
+ * {@link IclockShiftProfile#shiftDateOf(Instant, ZoneId)} on THEIR profile instead — the promotion
+ * path, the board, Missing OUT and the late count all do. What is left here is the site-wide default:
+ * totals, and the day the console opens on.
  *
- * <p><b>This is a deliberate, contained fork and it must not drift.</b> {@code ShiftConfig} owns
- * shift-day attribution for the manual clock-in path; the site timezone owns it for the device path.
- * For {@code Asia/Kolkata} the two produce identical results, and {@code IclockShiftDayTest} asserts
- * that agreement so a change to one is caught rather than silently diverging. The admin API refuses to
- * create a site in any other timezone until {@code ShiftConfig} itself is parameterised — at which
- * point this class should collapse back into it.
+ * <p>Delegates to {@link IclockShiftProfile#NIGHT} rather than repeating the arithmetic, so there is
+ * exactly one derivation of the cut in the codebase. This class previously carried its own copy of it,
+ * which is precisely the arrangement that let a constant drift out of agreement with the shift it
+ * described.
  */
 final class IclockShiftDay {
 
   private IclockShiftDay() {}
 
   /**
-   * The shift-day an instant belongs to: its local date in {@code zone}, minus one day when the local
-   * time falls before {@link ShiftConfig#DAY_CUT}, so the overnight tail stays with the day the shift
-   * started.
-   *
-   * <p>The cut is the MIDPOINT of the non-working window (11:30 IST), not the shift end. It used to be
-   * the shift end, which filed the closing OUT of every full shift on the following day.
+   * The shift-day an instant belongs to under the default night shift: its local date in {@code zone},
+   * minus one day when the local time falls before the 11:30 cut, so the overnight tail stays with the
+   * day the shift started.
    */
   static LocalDate of(Instant instant, ZoneId zone) {
-    var local = instant.atZone(zone);
-    return local.toLocalTime().isBefore(ShiftConfig.DAY_CUT)
-        ? local.toLocalDate().minusDays(1)
-        : local.toLocalDate();
+    return IclockShiftProfile.NIGHT.shiftDateOf(instant, zone);
+  }
+
+  /**
+   * The default profile itself, for callers that need more than the date — the shift's end, its late
+   * threshold, or whether the clock is currently inside it.
+   *
+   * <p>{@link ShiftConfig} remains the manual clock-in path's own copy of the night shift, and
+   * {@code IclockShiftProfileTest} asserts the two agree so a change to one cannot silently diverge.
+   */
+  static IclockShiftProfile defaultProfile() {
+    return IclockShiftProfile.NIGHT;
   }
 }
