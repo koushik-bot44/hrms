@@ -15,6 +15,11 @@ import {
  * node mode — so the assertion is made against the rule that DECIDES the layout rather than against
  * rendered output. That is not a weaker test: if 202 people would render as 202 rows, it is a property
  * of this function, and it fails here.
+ *
+ * SCOPE: the standard governs a screen's DEFAULT presentation. Operator-selected 'all' mode — the flat
+ * ticker — is exempt by design: someone who asks for every row and gets every row is the feature
+ * working, so meetsConsoleStandard returning false there is correct rather than a gate failure. The
+ * "deliberately flat" test below pins both halves of that distinction side by side.
  */
 
 interface Chip {
@@ -228,10 +233,10 @@ describe('view mode — both modes are first-class and both are decided here', (
     expect(explicit.length).toBeGreaterThan(1);
   });
 
-  it('ALL mode of the 202 case is deliberately flat — and the standard says so', () => {
-    // The ticker is SUPPOSED to be 202 rows. The standard is a grouped-mode criterion, and asserting
-    // it against 'all' would be asserting the wrong thing; this pins that distinction so nobody
-    // "fixes" the ticker into groups later.
+  it('ALL mode of the 202 case is deliberately flat, and is EXEMPT from the standard', () => {
+    // The ticker is SUPPOSED to be 202 rows. The standard governs DEFAULT presentation; an operator who
+    // switched to All asked for every row, so a false here is the feature working. This pins both
+    // halves side by side so nobody later "fixes" the ticker into groups and deletes the mode.
     const many = Array.from({ length: 202 }, (_, i) => chip(`P${i}`, 'Co', null));
     const flat = groupItems(many, { ...byCompany, mode: 'all' });
 
