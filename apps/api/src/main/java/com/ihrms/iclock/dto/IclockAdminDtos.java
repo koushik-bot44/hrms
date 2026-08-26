@@ -69,6 +69,22 @@ public final class IclockAdminDtos {
 
   public record RenameDeviceRequest(@NotBlank String name) {}
 
+  /**
+   * A role change on an already-claimed terminal.
+   *
+   * <p>Same validation as the claim, mirroring the V43 CHECK constraints so a bad value is a 400 rather
+   * than the 500 a bare constraint produces. Note jakarta's {@code @Pattern} passes null, so
+   * {@code @NotBlank} carries the required-ness.
+   */
+  public record ChangeRoleRequest(
+      @NotBlank @Pattern(regexp = "GATE|CAFETERIA", message = "area must be GATE or CAFETERIA")
+          String area,
+      @NotBlank @Pattern(regexp = "IN|OUT|MIXED", message = "direction must be IN, OUT or MIXED")
+          String direction) {}
+
+  /** Which building a terminal moves to. */
+  public record MoveBuildingRequest(@NotBlank String siteId) {}
+
   // ------------------------------------------------------------------- pins
 
   public record AssignPinRequest(

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownUp, Eye, EyeOff, Link2, Link2Off, Search, Upload, UserRound, Users } from 'lucide-react';
+import { ArrowDownUp, Eye, EyeOff, Link2, Link2Off, Search, Trash2, Upload, UserRound, Users } from 'lucide-react';
 import { editPerson, iclockKeys, listPeople, type IclockPerson } from '@/lib/api/iclock';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import { RowMenu } from '@/components/console/row-menu';
 import type { GroupOptions } from '@/lib/console/grouping';
 import { RosterImportDialog } from './roster-import-dialog';
 import { LinkSuggestionsDialog } from './link-suggestions';
+import { DeletePersonDialog } from './delete-person-dialog';
 import { UnmappedPinInbox } from './unmapped-pin-inbox';
 import { ConsoleError } from './console-error';
 
@@ -113,10 +114,12 @@ function PersonRow({
   person,
   siteId,
   onLink,
+  onDelete,
 }: {
   person: IclockPerson;
   siteId: string;
   onLink: (p: IclockPerson) => void;
+  onDelete: (p: IclockPerson) => void;
 }) {
   const qc = useQueryClient();
   const toggleExclusion = useApiMutation(
@@ -183,6 +186,12 @@ function PersonRow({
               disabled: toggleActive.isPending,
               danger: person.active,
             },
+            {
+              label: 'Delete from roster…',
+              icon: Trash2,
+              onSelect: () => onDelete(person),
+              danger: true,
+            },
           ]}
         />
       </div>
@@ -191,13 +200,16 @@ function PersonRow({
 }
 
 export function PeopleRoster({ siteId }: { siteId: string }) {
-  const [filter, setFilter] = React.useState<Filter>('all');
+  // Default to ACTIVE: the roster's working view is who currently resolves at the gate. Inactive and
+  // excluded people stay one dropdown away rather than padding the default list.
+  const [filter, setFilter] = React.useState<Filter>('active');
   const [company, setCompany] = React.useState('');
   const [axis, setAxis] = React.useState<Axis>('company');
   const [sort, setSort] = React.useState<SortBy>('name');
   const [search, setSearch] = React.useState('');
   const [importOpen, setImportOpen] = React.useState(false);
   const [linking, setLinking] = React.useState<IclockPerson | null>(null);
+  const [deleting, setDeleting] = React.useState<IclockPerson | null>(null);
 
   const query = useApiQuery(iclockKeys.people(siteId), (signal) => listPeople(siteId, signal), {
     retry: false,
@@ -327,7 +339,9 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
         grouping={grouping}
         storageKey={`people.${axis}`}
         itemKey={(p) => p.id}
-        renderItem={(p) => <PersonRow person={p} siteId={siteId} onLink={setLinking} />}
+        renderItem={(p) => (
+          <PersonRow person={p} siteId={siteId} onLink={setLinking} onDelete={setDeleting} />
+        )}
         empty={
           <EmptyState
             icon={UserRound}
@@ -346,6 +360,13 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
         open={Boolean(linking)}
         onOpenChange={(open) => {
           if (!open) setLinking(null);
+        }}
+      />
+      <DeletePersonDialog
+        person={deleting}
+        open={Boolean(deleting)}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
         }}
       />
     </div>

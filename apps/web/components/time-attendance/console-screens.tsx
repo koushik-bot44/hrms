@@ -6,6 +6,7 @@ import { TaOverview } from './ta-overview';
 import { LiveBoard } from './live-board';
 import { PeopleRoster } from './people-roster';
 import { DevicesPanel } from './devices-panel';
+import { PunchFeed } from './punch-feed';
 import { PersonDayView } from './person-day-view';
 
 /**
@@ -56,6 +57,17 @@ export function DevicesScreen() {
       description="Every device that has contacted the server. Claiming one binds it to a site and starts attributing its punches."
     >
       {(_siteId, site) => <DevicesPanel site={site} />}
+    </ConsoleShell>
+  );
+}
+
+export function FeedScreen() {
+  return (
+    <ConsoleShell
+      title="Punch feed"
+      description="Every punch the terminals have sent, newest first — before burst collapse and before attribution. This is what arrived, not what it was interpreted as."
+    >
+      {(siteId) => <PunchFeed siteId={siteId} />}
     </ConsoleShell>
   );
 }

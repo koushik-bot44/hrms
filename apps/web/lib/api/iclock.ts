@@ -517,6 +517,30 @@ export function renameSite(siteId: string, name: string): Promise<IclockSite> {
   return apiFetch<IclockSite>(`${BASE}/sites/${siteId}`, { method: 'PATCH', body: { name } });
 }
 
+// --- terminal role / building (FORWARD-ONLY) --------------------------------
+
+/**
+ * Changes a claimed terminal's role from this moment on.
+ *
+ * Deliberately not a re-claim: claiming stamps `claimedAt`, which bounds re-resolution and the
+ * inbox's live/archive split, so re-claiming to fix a label would shove that boundary forward and
+ * make tonight's traffic look like archive.
+ */
+export function changeDeviceRole(
+  deviceId: string,
+  body: { area: string; direction: string },
+): Promise<IclockDevice> {
+  return apiFetch<IclockDevice>(`${BASE}/devices/${deviceId}/role`, { method: 'PATCH', body });
+}
+
+/** Moves a claimed terminal to another building. Past punches keep the building they were made in. */
+export function moveDeviceBuilding(deviceId: string, siteId: string): Promise<IclockDevice> {
+  return apiFetch<IclockDevice>(`${BASE}/devices/${deviceId}/building`, {
+    method: 'PATCH',
+    body: { siteId },
+  });
+}
+
 /**
  * Query keys. Grouped under one root so a mutation can invalidate an entire site's console with
  * `queryClient.invalidateQueries({ queryKey: iclockKeys.site(siteId) })` without listing every screen

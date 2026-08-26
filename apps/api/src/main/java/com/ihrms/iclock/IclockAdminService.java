@@ -230,6 +230,55 @@ public class IclockAdminService {
     return view(devices.saveAndFlush(device), site.getName());
   }
 
+  /**
+   * Changes a claimed terminal's ROLE. Forward-only.
+   *
+   * <p>Deliberately NOT a re-claim. {@link #claimDevice} stamps {@code claimedAt = now()}, and that
+   * timestamp is the attribution window: it bounds re-resolution, the inbox's live/archive split and
+   * the operator sweep. Re-claiming to fix a role would silently shove that boundary forward, and
+   * punches already attributed would fall out of the live window — the console would start describing
+   * tonight's traffic as archive.
+   *
+   * <p>Forward-only in the other direction too: effective punches already written keep the area and
+   * direction they were promoted under. Rewriting them would change attendance history to match a
+   * configuration change, which is the opposite of what a correction should do — the terminal was
+   * mislabelled, but the punches through it really did happen the way they were recorded.
+   */
+  @Transactional
+  public DeviceView changeDeviceRole(String deviceId, String area, String direction) {
+    IclockDevice device = devices.findById(deviceId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Terminal not found"));
+    if (!"CLAIMED".equals(device.getStatus())) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Claim this terminal to a building before giving it a role.");
+    }
+    device.setArea(area);
+    device.setDirection(direction);
+    // claimedAt deliberately untouched.
+    return view(devices.saveAndFlush(device), siteName(device.getSiteId()));
+  }
+
+  /**
+   * Moves a claimed terminal to another building. Forward-only, and {@code claimedAt} is preserved for
+   * the same reason as {@link #changeDeviceRole}.
+   *
+   * <p>Past effective punches keep the building they were promoted under. A terminal physically moved
+   * last week did not retroactively record its earlier punches somewhere else.
+   */
+  @Transactional
+  public DeviceView moveDeviceToSite(String deviceId, String siteId) {
+    IclockDevice device = devices.findById(deviceId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Terminal not found"));
+    if (!"CLAIMED".equals(device.getStatus())) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Claim this terminal before moving it between buildings.");
+    }
+    IclockSite site = site(siteId);
+    device.setSiteId(site.getId());
+    // claimedAt deliberately untouched.
+    return view(devices.saveAndFlush(device), site.getName());
+  }
+
   @Transactional
   public DeviceView unclaimDevice(String deviceId) {
     IclockDevice device = devices.findById(deviceId)

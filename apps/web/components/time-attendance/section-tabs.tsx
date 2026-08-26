@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
+  Activity,
   BarChart3,
   CalendarClock,
   FileSpreadsheet,
@@ -36,6 +37,7 @@ interface Section {
 const SECTIONS: Section[] = [
   { label: 'Overview', href: ROOT, icon: LayoutDashboard },
   { label: 'Live board', href: `${ROOT}/live`, icon: Radio },
+  { label: 'Punch feed', href: `${ROOT}/feed`, icon: Activity },
   { label: 'People', href: `${ROOT}/people`, icon: Users },
   { label: 'Devices', href: `${ROOT}/devices`, icon: Router },
   { label: 'Reports', href: '', icon: BarChart3, disabled: true },

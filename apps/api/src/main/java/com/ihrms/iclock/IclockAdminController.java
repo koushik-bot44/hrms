@@ -195,6 +195,37 @@ public class IclockAdminController {
     return device;
   }
 
+  /**
+   * Changes a terminal's role. FORWARD-ONLY: attribution changes from this moment, and effective
+   * punches already written keep the role they were promoted under.
+   */
+  @PatchMapping("/devices/{deviceId}/role")
+  public DeviceView changeRole(
+      @PathVariable String deviceId,
+      @Valid @RequestBody IclockAdminDtos.ChangeRoleRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    DeviceView device = admin.changeDeviceRole(deviceId, req.area(), req.direction());
+    record(actor, http, "ICLOCK_DEVICE_ROLE_CHANGED", "IclockDevice", deviceId,
+        meta("serialNumber", device.serialNumber(), "area", device.area(),
+            "direction", device.direction()));
+    return device;
+  }
+
+  /** Moves a terminal to another building. FORWARD-ONLY; past punches keep their building. */
+  @PatchMapping("/devices/{deviceId}/building")
+  public DeviceView moveBuilding(
+      @PathVariable String deviceId,
+      @Valid @RequestBody IclockAdminDtos.MoveBuildingRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    DeviceView device = admin.moveDeviceToSite(deviceId, req.siteId());
+    record(actor, http, "ICLOCK_DEVICE_MOVED", "IclockDevice", deviceId,
+        meta("serialNumber", device.serialNumber(), "siteId", req.siteId(),
+            "siteName", device.siteName()));
+    return device;
+  }
+
   // ------------------------------------------------------------------- pins
 
   @GetMapping("/sites/{siteId}/pins")
