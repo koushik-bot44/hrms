@@ -45,6 +45,8 @@ public class IclockBoardService {
 
   public record PersonChip(
       String personId, String name, String pin, String companyName, String team,
+      /** The building this person belongs to. Carried so the board can group by it across a fleet. */
+      String siteName,
       Presence presence, Instant lastAt, String lastDirection, String lastArea,
       /**
        * Overlay flag for the "exceeding break" lens. The person stays in their canonical presence
@@ -52,6 +54,16 @@ public class IclockBoardService {
        * columns cannot disagree about who is overdue.
        */
       boolean breakAlert) {}
+
+  /**
+   * Someone who arrived on the last completed shift day and never tapped out at the gate.
+   *
+   * <p>Surfacing only. No OUT is invented and nothing is mutated — the day view already renders the
+   * unpaired session as an honest gap, and regularisation is P3's.
+   */
+  public record MissingOut(
+      String personId, String name, String companyName, LocalDate shiftDate,
+      Instant lastPunchAt, String lastDirection, String lastArea) {}
 
   /** One row of the "exceeding break" strip. Elapsed is recomputed per refresh, never stored. */
   public record BreakAlert(
@@ -78,7 +90,15 @@ public class IclockBoardService {
        * People whose current absence has run past the break threshold. An OVERLAY: everyone here also
        * appears in their presence column. Empty outside shift hours by design.
        */
-      List<BreakAlert> exceedingBreak) {}
+      List<BreakAlert> exceedingBreak,
+      /**
+       * People who arrived on the LAST COMPLETED shift day and never tapped out. A different day from
+       * everything else on this payload, deliberately: it is a "yesterday needs attention" list, and
+       * showing it for the live shift would flag everyone currently at their desk.
+       */
+      List<MissingOut> missingOut,
+      /** The day {@link #missingOut} refers to, so the console can label it rather than guess. */
+      LocalDate missingOutShiftDate) {}
 
   public record DayPunch(
       String id, Instant effectiveAt, String direction, String area,
@@ -129,7 +149,7 @@ public class IclockBoardService {
 
     IclockSitePolicyService.PolicyView policy = policies.effective(siteId);
     List<IclockPerson> roster = people.findBySiteIdAndActiveTrue(siteId);
-    Map<String, PersonChip> chips = chipsFor(siteId, roster, shiftDate, zone, policy);
+    Map<String, PersonChip> chips = chipsFor(siteId, site.getName(), roster, shiftDate, zone, policy);
 
     long present = chips.values().stream().filter(c -> c.presence() == Presence.IN_OFFICE
         || c.presence() == Presence.IN_CAFETERIA).count();
@@ -165,7 +185,7 @@ public class IclockBoardService {
 
     IclockSitePolicyService.PolicyView policy = policies.effective(siteId);
     List<IclockPerson> roster = people.findBySiteIdAndActiveTrue(siteId);
-    Map<String, PersonChip> chips = chipsFor(siteId, roster, shiftDate, zone, policy);
+    Map<String, PersonChip> chips = chipsFor(siteId, site.getName(), roster, shiftDate, zone, policy);
 
     List<PersonChip> inOffice = new ArrayList<>();
     List<PersonChip> inCafeteria = new ArrayList<>();
@@ -191,8 +211,65 @@ public class IclockBoardService {
     left.sort(NEWEST_FIRST);
     notArrived.sort(BY_NAME);
 
+    LocalDate completed = IclockMissingOut.completedShiftDay(Instant.now(), zone);
     return new Board(siteId, shiftDate, Instant.now(), inOffice, inCafeteria, left, notArrived,
-        alertsFrom(chips.values(), zone, policy));
+        alertsFrom(chips.values(), zone, policy), missingOutFor(siteId, completed), completed);
+  }
+
+  /**
+   * People who arrived on {@code day} and never tapped out at the gate.
+   *
+   * <p>Ordered by last punch DESCENDING — the person who was last seen most recently is the one whose
+   * exit is most likely simply un-tapped rather than genuinely unknown.
+   */
+  private List<MissingOut> missingOutFor(String siteId, LocalDate day) {
+    Map<String, List<IclockPunch>> byPerson = new LinkedHashMap<>();
+    for (IclockPunch p : punches.findBySiteIdAndShiftDateOrderByEffectiveAtAsc(siteId, day)) {
+      if (p.getPersonId() != null) {
+        byPerson.computeIfAbsent(p.getPersonId(), k -> new ArrayList<>()).add(p);
+      }
+    }
+    if (byPerson.isEmpty()) {
+      return List.of();
+    }
+    Map<String, IclockPerson> roster = new LinkedHashMap<>();
+    for (IclockPerson person : people.findBySiteIdOrderByPinAsc(siteId)) {
+      roster.put(person.getId(), person);
+    }
+    Set<String> companyIds =
+        roster.values().stream()
+            .map(IclockPerson::getCompanyId)
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+    Map<String, String> companyNames =
+        companyIds.isEmpty()
+            ? Map.of()
+            : companies.findAllById(companyIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Company::getId, Company::getName));
+
+    List<MissingOut> out = new ArrayList<>();
+    for (Map.Entry<String, List<IclockPunch>> e : byPerson.entrySet()) {
+      List<IclockMissingOut.PunchFacts> facts =
+          e.getValue().stream()
+              .map(p -> new IclockMissingOut.PunchFacts(p.getEffectiveAt(), p.getArea(), p.getDirection()))
+              .toList();
+      if (!IclockMissingOut.isMissingOut(facts)) {
+        continue;
+      }
+      IclockPunch last = e.getValue().get(e.getValue().size() - 1);
+      IclockPerson person = roster.get(e.getKey());
+      String company =
+          person == null
+              ? null
+              : person.getCompanyId() == null
+                  ? person.getCompanyLabel()
+                  : companyNames.getOrDefault(person.getCompanyId(), person.getCompanyLabel());
+      out.add(new MissingOut(
+          e.getKey(), person == null ? null : person.getName(), company, day,
+          last.getEffectiveAt(), last.getDirection(), last.getArea()));
+    }
+    out.sort(java.util.Comparator.comparing(MissingOut::lastPunchAt).reversed());
+    return out;
   }
 
   /**
@@ -248,6 +325,8 @@ public class IclockBoardService {
     List<PersonChip> left = new ArrayList<>();
     List<PersonChip> notArrived = new ArrayList<>();
     List<BreakAlert> alerts = new ArrayList<>();
+    List<MissingOut> missing = new ArrayList<>();
+    LocalDate missingDay = IclockMissingOut.completedShiftDay(Instant.now(), ShiftConfig.ZONE);
     LocalDate shiftDate = IclockShiftDay.of(Instant.now(), ShiftConfig.ZONE);
     for (IclockSite site : all) {
       Board one = board(site.getId());
@@ -256,6 +335,8 @@ public class IclockBoardService {
       left.addAll(one.left());
       notArrived.addAll(one.notArrived());
       alerts.addAll(one.exceedingBreak());
+      missing.addAll(one.missingOut());
+      missingDay = one.missingOutShiftDate();
       shiftDate = one.shiftDate();
     }
     inOffice.sort(NEWEST_FIRST);
@@ -266,7 +347,9 @@ public class IclockBoardService {
     // give a list ordered by how overdue people are.
     alerts.sort(java.util.Comparator.comparingLong(BreakAlert::elapsedMinutes).reversed()
         .thenComparing(a -> a.name() == null ? "￿" : a.name()));
-    return new Board(null, shiftDate, Instant.now(), inOffice, inCafeteria, left, notArrived, alerts);
+    missing.sort(java.util.Comparator.comparing(MissingOut::lastPunchAt).reversed());
+    return new Board(null, shiftDate, Instant.now(), inOffice, inCafeteria, left, notArrived, alerts,
+        missing, missingDay);
   }
 
   /**
@@ -370,7 +453,7 @@ public class IclockBoardService {
   // ------------------------------------------------------------------ inner
 
   private Map<String, PersonChip> chipsFor(
-      String siteId, List<IclockPerson> roster, LocalDate shiftDate, ZoneId zone,
+      String siteId, String siteName, List<IclockPerson> roster, LocalDate shiftDate, ZoneId zone,
       IclockSitePolicyService.PolicyView policy) {
     // Company names, resolved in ONE query for the whole roster.
     //
@@ -421,7 +504,7 @@ public class IclockBoardService {
                       Instant.now(), zone, policy.breakAlertMin(), policy.breakAlertMaxMin())
                   != null;
       out.put(person.getId(), new PersonChip(
-          person.getId(), person.getName(), person.getPin(), companyName, person.getTeam(),
+          person.getId(), person.getName(), person.getPin(), companyName, person.getTeam(), siteName,
           presence, last == null ? null : last.getEffectiveAt(),
           last == null ? null : last.getDirection(),
           last == null ? null : last.getArea(),

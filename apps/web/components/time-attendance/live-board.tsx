@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Coffee, DoorOpen, Moon, Users } from 'lucide-react';
-import { getBoard, iclockKeys, type Board, type PersonChip } from '@/lib/api/iclock';
+import { getBoardScoped, iclockKeys, listSites, type Board, type PersonChip } from '@/lib/api/iclock';
 import { useApiQuery } from '@/lib/api/hooks';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,14 @@ import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { GroupedList } from '@/components/console/grouped-list';
 import { Combobox } from '@/components/console/combobox';
 import { ViewToggle, usePersistedViewMode, type ViewMode } from '@/components/console/view-toggle';
+import { BreakAlertStrip, BreakSettings } from './break-alert-strip';
+import { MissingOutSection } from './missing-out-section';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { ChevronRight } from 'lucide-react';
 import { istDayLabel, istTime } from '@/lib/date';
 import type { GroupOptions } from '@/lib/console/grouping';
 import { cn } from '@/lib/utils';
@@ -65,7 +73,7 @@ function PersonRow({ person, siteId }: { person: PersonChip; siteId: string }) {
   );
 }
 
-type Axis = 'company' | 'team';
+type Axis = 'company' | 'team' | 'building';
 
 /**
  * The grouping axes the board offers, and the view mode, BOTH as parameters to the shared rule.
@@ -77,6 +85,11 @@ function groupingFor(axis: Axis, mode: ViewMode): GroupOptions<PersonChip> {
   const base = { timeOf: (p: PersonChip) => p.lastAt, mode };
   if (axis === 'team') {
     return { ...base, keyOf: (p: PersonChip) => p.team, ungroupedLabel: 'No team' };
+  }
+  if (axis === 'building') {
+    // Only offered when more than one building exists — grouping 208 people under a single heading
+    // called "Orion Towers" is a heading, not a grouping.
+    return { ...base, keyOf: (p: PersonChip) => p.siteName ?? null, ungroupedLabel: 'No building' };
   }
   return { ...base, keyOf: (p: PersonChip) => p.companyName, ungroupedLabel: 'No company' };
 }
@@ -91,6 +104,7 @@ function Column({
   mode,
   emptyLine,
   storageKey,
+  defaultOpen,
 }: {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -101,42 +115,100 @@ function Column({
   mode: ViewMode;
   emptyLine: string;
   storageKey: string;
+  defaultOpen: boolean;
 }) {
   const grouping = React.useMemo(() => groupingFor(axis, mode), [axis, mode]);
+  // Column-level collapse, ORTHOGONAL to Grouped/All: one is "is this column worth screen space",
+  // the other is "how are its rows arranged". Not-arrived starts collapsed because it is the largest
+  // column and the least urgent — 139 people who have not shown up push the three columns that matter
+  // off the screen. Presentation state only; the boolean is all that reaches the renderer.
+  const [open, setOpen] = usePersistedColumn(`board.col.${storageKey}`, defaultOpen);
+
   return (
-    <Card className="flex min-h-[12rem] flex-col p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 text-sm font-semibold">
-          <Icon className="size-4 text-muted-foreground" />
-          {title}
-        </span>
-        <Badge variant={tone} className="tabular-nums">
-          {people.length}
-        </Badge>
-      </div>
-      {people.length === 0 ? (
-        <p className="my-auto py-6 text-center text-sm text-muted-foreground">{emptyLine}</p>
-      ) : (
-        <GroupedList
-          items={people}
-          grouping={grouping}
-          badgeVariant={tone}
-          storageKey={`board.${storageKey}.${axis}`}
-          itemKey={(p) => p.personId}
-          renderItem={(p) => <PersonRow person={p} siteId={siteId} />}
-        />
-      )}
-    </Card>
+    <Collapsible open={open} onOpenChange={setOpen} asChild>
+      <Card className={cn('flex flex-col p-4', open && 'min-h-[12rem]')}>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              'flex w-full items-center gap-2 rounded-md text-left transition-colors',
+              'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              open && 'mb-3',
+            )}
+          >
+            <ChevronRight
+              className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')}
+              aria-hidden
+            />
+            <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</span>
+            <Badge variant={tone} className="tabular-nums">
+              {people.length}
+            </Badge>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          {people.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{emptyLine}</p>
+          ) : (
+            <GroupedList
+              items={people}
+              grouping={grouping}
+              badgeVariant={tone}
+              storageKey={`board.${storageKey}.${axis}`}
+              itemKey={(p) => p.personId}
+              renderItem={(p) => <PersonRow person={p} siteId={siteId} />}
+            />
+          )}
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
+}
+
+/**
+ * Whether a board column starts open. Same guarded-storage discipline as the view toggle: a private
+ * window or blocked site storage throws rather than returning empty, and losing the preference is free.
+ */
+function usePersistedColumn(key: string, fallback: boolean) {
+  const [open, setOpen] = React.useState(fallback);
+  React.useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(key);
+      if (stored === 'open' || stored === 'closed') setOpen(stored === 'open');
+    } catch {
+      // Storage unavailable — the column still collapses, it just forgets between visits.
+    }
+  }, [key]);
+  const update = React.useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      try {
+        window.localStorage.setItem(key, next ? 'open' : 'closed');
+      } catch {
+        // As above.
+      }
+    },
+    [key],
+  );
+  return [open, update] as const;
 }
 
 export function LiveBoard({ siteId }: { siteId: string }) {
   const [axis, setAxis] = React.useState<Axis>('company');
   const [mode, setMode] = usePersistedViewMode('board');
+  // null = every building. Only meaningful once a second building exists, so the control hides at one.
+  const [scope, setScope] = React.useState<string | null>(siteId);
+
+  const sitesQuery = useApiQuery(iclockKeys.sites(), listSites, { retry: false });
+  const buildings = sitesQuery.data ?? [];
+  const multiBuilding = buildings.length > 1;
+
+  const effectiveScope = multiBuilding ? scope : siteId;
 
   const query = useApiQuery<Board>(
-    iclockKeys.board(siteId),
-    (signal) => getBoard(siteId, signal),
+    iclockKeys.boardScoped(effectiveScope),
+    (signal) => getBoardScoped(effectiveScope, signal),
     { retry: false, refetchInterval: REFETCH_MS, placeholderData: (prev) => prev },
   );
 
@@ -163,6 +235,16 @@ export function LiveBoard({ siteId }: { siteId: string }) {
       <span className="text-sm text-muted-foreground">Shift day {istDayLabel(b.shiftDate)}</span>
       <div className="flex flex-wrap items-center gap-3">
         <ViewToggle value={mode} onChange={setMode} />
+        {multiBuilding ? (
+          <Combobox
+            ariaLabel="Building"
+            options={buildings.map((b) => ({ value: b.id, label: b.name }))}
+            value={scope}
+            onChange={(v) => setScope(v || null)}
+            emptyOptionLabel="All buildings"
+            className="w-52"
+          />
+        ) : null}
         {/* The axis picker is meaningless in the flat ticker, so it goes away rather than sitting
             there inert — but the choice is remembered for when Grouped comes back. */}
         {mode === 'grouped' ? (
@@ -171,12 +253,15 @@ export function LiveBoard({ siteId }: { siteId: string }) {
             options={[
               { value: 'company', label: 'Group by company' },
               { value: 'team', label: 'Group by team' },
+              ...(multiBuilding ? [{ value: 'building', label: 'Group by building' }] : []),
             ]}
             value={axis}
             onChange={(v) => setAxis(v as Axis)}
             className="w-48"
           />
         ) : null}
+        {/* Reachable on a quiet night, not only during an incident. */}
+        {effectiveScope ? <BreakSettings siteId={effectiveScope} /> : null}
         <LiveIndicator asOf={b.asOf} stale={query.failureCount > 0} />
       </div>
     </div>
@@ -199,6 +284,12 @@ export function LiveBoard({ siteId }: { siteId: string }) {
   return (
     <div className="space-y-4">
       {header}
+      <BreakAlertStrip alerts={b.exceedingBreak} siteId={effectiveScope} />
+      <MissingOutSection
+        rows={b.missingOut}
+        shiftDate={b.missingOutShiftDate}
+        siteId={effectiveScope}
+      />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Column
           title="In office"
@@ -209,6 +300,7 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           axis={axis}
           mode={mode}
           storageKey="inOffice"
+          defaultOpen={true}
           emptyLine="Nobody in the office right now."
         />
         <Column
@@ -220,6 +312,7 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           axis={axis}
           mode={mode}
           storageKey="inCafeteria"
+          defaultOpen={true}
           emptyLine="Nobody in the cafeteria."
         />
         <Column
@@ -231,6 +324,7 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           axis={axis}
           mode={mode}
           storageKey="left"
+          defaultOpen={true}
           emptyLine="Nobody has left yet."
         />
         {/* The 202 case. Grouped and collapsed, this is six headers rather than 202 cards — which is
@@ -244,6 +338,7 @@ export function LiveBoard({ siteId }: { siteId: string }) {
           axis={axis}
           mode={mode}
           storageKey="notArrived"
+          defaultOpen={false}
           emptyLine="Everyone is accounted for."
         />
       </div>

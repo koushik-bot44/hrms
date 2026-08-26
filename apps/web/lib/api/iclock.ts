@@ -192,10 +192,25 @@ export interface PersonChip {
   pin: string;
   companyName: string | null;
   team: string | null;
+  /** The building this person belongs to — the Building grouping axis on a multi-building board. */
+  siteName: string | null;
   presence: Presence;
   lastAt: string | null;
   lastDirection: string | null;
   lastArea: string | null;
+  /** Overlay flag: this person's current absence has run past the break threshold. */
+  breakAlert: boolean;
+}
+
+/** One row of the "exceeding break" strip. Elapsed is recomputed per refresh, never stored. */
+export interface BreakAlert {
+  personId: string;
+  name: string | null;
+  companyName: string | null;
+  /** OUTSIDE or CAFETERIA. */
+  where: string;
+  since: string;
+  elapsedMinutes: number;
 }
 
 export interface DeviceHealth {
@@ -230,6 +245,29 @@ export interface Board {
   inCafeteria: PersonChip[];
   left: PersonChip[];
   notArrived: PersonChip[];
+  /**
+   * People whose absence has run long. An OVERLAY — everyone here also appears in their presence
+   * column, so the strip and the columns can never disagree about who is overdue.
+   */
+  exceedingBreak: BreakAlert[];
+  /**
+   * People who arrived on the LAST COMPLETED shift day and never tapped out. A different day from the
+   * rest of this payload, deliberately — showing it for the live shift would flag everyone at their desk.
+   */
+  missingOut: MissingOut[];
+  /** The day `missingOut` refers to, so the console labels it rather than guessing. */
+  missingOutShiftDate: string;
+}
+
+/** Surfacing only — no OUT is invented, and regularisation stays P3's job. */
+export interface MissingOut {
+  personId: string;
+  name: string | null;
+  companyName: string | null;
+  shiftDate: string;
+  lastPunchAt: string;
+  lastDirection: string;
+  lastArea: string | null;
 }
 
 export interface DayPunch {
@@ -360,6 +398,125 @@ export function getPersonDay(
   return apiFetch<PersonDay>(`${BASE}/people/${personId}/day${qs}`, { signal });
 }
 
+
+// --- punch feed ------------------------------------------------------------
+
+export interface FeedRow {
+  rawPunchId: string;
+  receivedAt: string;
+  /** The terminal's own clock, verbatim. Shown beside receivedAt because drift is the signal. */
+  deviceTime: string | null;
+  pin: string | null;
+  serialNumber: string;
+  deviceName: string | null;
+  area: string | null;
+  direction: string | null;
+  siteId: string | null;
+  siteName: string | null;
+  /** Null when the pin resolves to nobody — the prominent "Unknown pin" state. */
+  personId: string | null;
+  personName: string | null;
+  companyName: string | null;
+  /** Absorbed into a burst whose kept punch is a different row. Real data the board hides. */
+  collapsedAway: boolean;
+}
+
+export interface Feed {
+  rows: FeedRow[];
+  total: number;
+  page: number;
+  size: number;
+  from: string;
+  to: string;
+}
+
+export type Attribution = 'ALL' | 'UNKNOWN' | 'ROSTERED';
+
+export function getPunchFeed(
+  params: {
+    siteId?: string | null;
+    deviceId?: string | null;
+    shiftDate?: string | null;
+    attribution?: Attribution;
+    page?: number;
+    size?: number;
+  },
+  signal?: AbortSignal,
+): Promise<Feed> {
+  const q = new URLSearchParams();
+  if (params.siteId) q.set('siteId', params.siteId);
+  if (params.deviceId) q.set('deviceId', params.deviceId);
+  if (params.shiftDate) q.set('shiftDate', params.shiftDate);
+  if (params.attribution) q.set('attribution', params.attribution);
+  q.set('page', String(params.page ?? 0));
+  q.set('size', String(params.size ?? 100));
+  return apiFetch<Feed>(`${BASE}/punch-feed?${q.toString()}`, { signal });
+}
+
+// --- multi-building scoping ------------------------------------------------
+
+/** siteId omitted means EVERY building — the fleet view. */
+export function getBoardScoped(siteId: string | null, signal?: AbortSignal): Promise<Board> {
+  const qs = siteId ? `?siteId=${encodeURIComponent(siteId)}` : '';
+  return apiFetch<Board>(`${BASE}/board${qs}`, { signal });
+}
+
+export function getOverviewScoped(siteId: string | null, signal?: AbortSignal): Promise<Overview> {
+  const qs = siteId ? `?siteId=${encodeURIComponent(siteId)}` : '';
+  return apiFetch<Overview>(`${BASE}/overview${qs}`, { signal });
+}
+
+// --- roster delete ---------------------------------------------------------
+
+export interface DeletePreflight {
+  allowed: boolean;
+  /** Plain words, shown in the confirm dialog whether or not the delete is allowed. */
+  reason: string;
+  punchCount: number;
+  linkedToEmployee: boolean;
+  pin: string;
+  name: string | null;
+}
+
+export function getDeletePreflight(personId: string, signal?: AbortSignal): Promise<DeletePreflight> {
+  return apiFetch<DeletePreflight>(`${BASE}/people/${personId}/delete-preflight`, { signal });
+}
+
+export function deletePerson(personId: string): Promise<DeletePreflight> {
+  return apiFetch<DeletePreflight>(`${BASE}/people/${personId}`, { method: 'DELETE' });
+}
+
+// --- building policy -------------------------------------------------------
+
+export interface SitePolicy {
+  siteId: string;
+  breakAlertMin: number;
+  breakAlertMaxMin: number;
+  /** False when the building has no stored row and these are the code defaults. */
+  stored: boolean;
+}
+
+export function getSitePolicy(siteId: string, signal?: AbortSignal): Promise<SitePolicy> {
+  return apiFetch<SitePolicy>(`${BASE}/sites/${siteId}/policy`, { signal });
+}
+
+export function saveSitePolicy(
+  siteId: string,
+  body: { breakAlertMin: number; breakAlertMaxMin: number },
+): Promise<SitePolicy> {
+  return apiFetch<SitePolicy>(`${BASE}/sites/${siteId}/policy`, { method: 'PUT', body });
+}
+
+// --- buildings -------------------------------------------------------------
+
+export function createSite(body: { name: string; timezone?: string }): Promise<IclockSite> {
+  return apiFetch<IclockSite>(`${BASE}/sites`, { method: 'POST', body });
+}
+
+export function renameSite(siteId: string, name: string): Promise<IclockSite> {
+  return apiFetch<IclockSite>(`${BASE}/sites/${siteId}`, { method: 'PATCH', body: { name } });
+}
+
 /**
  * Query keys. Grouped under one root so a mutation can invalidate an entire site's console with
  * `queryClient.invalidateQueries({ queryKey: iclockKeys.site(siteId) })` without listing every screen
@@ -377,4 +534,11 @@ export const iclockKeys = {
   suggestions: (personId: string) => ['iclock', 'person', personId, 'suggestions'] as const,
   personDay: (personId: string, shiftDate?: string) =>
     ['iclock', 'person', personId, 'day', shiftDate ?? 'today'] as const,
+  // A null siteId means "all buildings"; it must key differently from any real building id.
+  boardScoped: (siteId: string | null) => ['iclock', 'board', siteId ?? '__all__'] as const,
+  overviewScoped: (siteId: string | null) => ['iclock', 'overview', siteId ?? '__all__'] as const,
+  feed: (siteId: string | null, deviceId: string | null, day: string | null, attribution: string) =>
+    ['iclock', 'feed', siteId ?? '__all__', deviceId ?? '__any__', day ?? 'today', attribution] as const,
+  policy: (siteId: string) => ['iclock', 'site', siteId, 'policy'] as const,
+  deletePreflight: (personId: string) => ['iclock', 'person', personId, 'delete-preflight'] as const,
 };
