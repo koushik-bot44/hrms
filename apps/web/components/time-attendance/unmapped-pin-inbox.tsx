@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
+import { GroupedList } from '@/components/console/grouped-list';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { surface } from '@/components/ui/surface';
 import { istDateTime, relativeTime } from '@/lib/date';
@@ -50,7 +51,7 @@ function InboxRow({ row, siteId }: { row: UnmappedPin; siteId: string }) {
   );
 
   return (
-    <li className={cn(surface('subtle'), 'p-4')}>
+    <div className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -121,7 +122,7 @@ function InboxRow({ row, siteId }: { row: UnmappedPin; siteId: string }) {
           </Button>
         </form>
       ) : null}
-    </li>
+    </div>
   );
 }
 
@@ -188,11 +189,22 @@ export function UnmappedPinInbox({ siteId }: { siteId: string }) {
           className="py-10"
         />
       ) : (
-        <ul className="space-y-3">
-          {live.map((row) => (
-            <InboxRow key={`${row.pin}-${row.reason}`} row={row} siteId={siteId} />
-          ))}
-        </ul>
+        // Grouped by REASON, because the reason is the remedy: "no identity" is an add-person queue and
+        // "marked inactive" is a reactivate queue, and working them together means switching task on
+        // every row. Recency ordering comes from the shared rule via lastSeen — the pin punching now
+        // leads, which is the whole point of the addendum on this screen.
+        <GroupedList
+          items={live}
+          grouping={{
+            keyOf: (r) => reasonMeta(r.reason).label,
+            timeOf: (r) => r.lastSeen,
+            ungroupedLabel: 'Unclassified',
+          }}
+          badgeVariant="warning"
+          storageKey="inbox.reason"
+          itemKey={(r) => `${r.pin}-${r.reason}`}
+          renderItem={(r) => <InboxRow row={r} siteId={siteId} />}
+        />
       )}
 
       {archiveOnlyPins > 0 ? (
