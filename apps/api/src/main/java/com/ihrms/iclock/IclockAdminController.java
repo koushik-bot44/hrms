@@ -18,6 +18,9 @@ import com.ihrms.iclock.dto.IclockAdminDtos.SweepResult;
 import com.ihrms.iclock.dto.IclockAdminDtos;
 import com.ihrms.iclock.dto.IclockRosterDtos.AssignPersonRequest;
 import com.ihrms.iclock.dto.IclockRosterDtos.PersonView;
+import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftReport;
+import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftRequest;
+import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftRow;
 import com.ihrms.iclock.dto.IclockRosterDtos.UpsertPersonRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -353,6 +356,32 @@ public class IclockAdminController {
         meta("pin", person.pin(), "name", person.name(), "active", person.active(),
             "excludedFromReports", person.excludedFromReports()));
     return person;
+  }
+
+  /**
+   * Moves a group of people onto a shift — the People screen's bulk action.
+   *
+   * <p>Audited with the pins that MOVED rather than the whole selection, because the selection is what
+   * was clicked and the moved set is what happened; a trail that cannot tell a real assignment from a
+   * re-application of one is no use when somebody asks why a night turned up on the wrong day.
+   */
+  @PostMapping("/sites/{siteId}/people/shift-profile")
+  public AssignShiftReport assignShift(
+      @PathVariable String siteId,
+      @Valid @RequestBody AssignShiftRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    AssignShiftReport report =
+        roster.assignShift(siteId, req.personIds(), req.shiftProfile());
+    record(actor, http, "ICLOCK_SHIFT_ASSIGNED", "IclockSite", siteId,
+        meta("shiftProfile", report.shiftProfile(), "changed", report.changed(),
+            "alreadyOnIt", report.alreadyOnIt(),
+            "pins",
+            report.rows().stream()
+                .filter(r -> !java.util.Objects.equals(r.from(), r.to()))
+                .map(AssignShiftRow::pin)
+                .toList()));
+    return report;
   }
 
   /**

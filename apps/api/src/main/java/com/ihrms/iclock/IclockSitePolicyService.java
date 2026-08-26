@@ -31,8 +31,32 @@ public class IclockSitePolicyService {
     this.sites = sites;
   }
 
-  /** What the console shows and the board applies. */
-  public record PolicyView(String siteId, int breakAlertMin, int breakAlertMaxMin, boolean stored) {}
+  /**
+   * What the console shows and the board applies.
+   *
+   * <p>Carries the shift PROFILES as well as the alert thresholds, because everything downstream of a
+   * punch — which shift-day it files under, whether it is late, whether an absence is a break — is a
+   * question about the person's shift, and the person's shift is defined here.
+   */
+  public record PolicyView(
+      String siteId,
+      int breakAlertMin,
+      int breakAlertMaxMin,
+      boolean stored,
+      IclockShiftProfile night,
+      IclockShiftProfile day) {
+
+    /**
+     * The profile a person is assigned to, falling back to NIGHT for anything unrecognised.
+     *
+     * <p>Falling back rather than throwing is deliberate: an unknown profile name must never re-date
+     * somebody. NIGHT is current behaviour, so the failure mode of a bad value is "unchanged", not
+     * "silently attributed to a shift they do not work".
+     */
+    public IclockShiftProfile profileFor(String name) {
+      return "DAY".equals(name) ? day : night;
+    }
+  }
 
   /**
    * The effective policy for a building — the stored row, or the defaults when there is none.
@@ -45,11 +69,31 @@ public class IclockSitePolicyService {
   public PolicyView effective(String siteId) {
     return policies
         .findBySiteId(siteId)
-        .map(p -> new PolicyView(siteId, p.getBreakAlertMin(), p.getBreakAlertMaxMin(), true))
+        .map(p -> viewOf(siteId, p))
         .orElseGet(
             () ->
                 new PolicyView(
-                    siteId, DEFAULT_BREAK_ALERT_MIN, DEFAULT_BREAK_ALERT_MAX_MIN, false));
+                    siteId,
+                    DEFAULT_BREAK_ALERT_MIN,
+                    DEFAULT_BREAK_ALERT_MAX_MIN,
+                    false,
+                    IclockShiftProfile.NIGHT,
+                    IclockShiftProfile.DAY));
+  }
+
+  /**
+   * One place that turns a stored row into a view, so {@code effective} and {@code save} cannot
+   * disagree about what a saved policy means — the console reads the second and the board reads the
+   * first, and a divergence would show as a setting that "did not take" until the next refresh.
+   */
+  private static PolicyView viewOf(String siteId, IclockSitePolicy p) {
+    return new PolicyView(
+        siteId,
+        p.getBreakAlertMin(),
+        p.getBreakAlertMaxMin(),
+        true,
+        new IclockShiftProfile("NIGHT", p.getNightStart(), p.getNightEnd(), p.getNightLateGraceMin()),
+        new IclockShiftProfile("DAY", p.getDayStart(), p.getDayEnd(), p.getDayLateGraceMin()));
   }
 
   /**
@@ -87,6 +131,6 @@ public class IclockSitePolicyService {
     row.setBreakAlertMin(breakAlertMin);
     row.setBreakAlertMaxMin(breakAlertMaxMin);
     IclockSitePolicy saved = policies.save(row);
-    return new PolicyView(siteId, saved.getBreakAlertMin(), saved.getBreakAlertMaxMin(), true);
+    return viewOf(siteId, saved);
   }
 }

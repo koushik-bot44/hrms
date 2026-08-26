@@ -32,7 +32,8 @@ class IclockBreakAlertTest {
   private static final Instant NOW = ist("2026-08-26T21:00:00");
 
   private static IclockBreakAlert.Where evaluate(Instant lastAt, String area, String dir, Instant now) {
-    return IclockBreakAlert.evaluate(lastAt, area, dir, now, IST, MIN, MAX);
+    return IclockBreakAlert.evaluate(
+        lastAt, area, dir, now, IST, IclockShiftProfile.NIGHT, MIN, MAX);
   }
 
   // ------------------------------------------------------------------ arrival

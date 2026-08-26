@@ -91,6 +91,8 @@ public class IclockPromotionService {
   private final IclockPunchMemberRepository members;
   private final EmployeeRepository employees;
   private final OffboardingCaseRepository offboarding;
+  /** Owns the shift PROFILES: which shift a person works decides which shift-day their punch files on. */
+  private final IclockSitePolicyService policies;
   private final IclockProperties props;
 
   public IclockPromotionService(
@@ -102,7 +104,9 @@ public class IclockPromotionService {
       IclockPunchMemberRepository members,
       EmployeeRepository employees,
       OffboardingCaseRepository offboarding,
+      IclockSitePolicyService policies,
       IclockProperties props) {
+    this.policies = policies;
     this.rawPunches = rawPunches;
     this.devices = devices;
     this.sites = sites;
@@ -190,10 +194,17 @@ public class IclockPromotionService {
     String direction = device.getDirection();
     String area = device.getArea();
 
+    // THE PERSON'S OWN SHIFT decides which shift-day this punch files under — resolved once here and
+    // threaded down, rather than each writer reaching for a global constant. A day-shift person's
+    // 09:00 arrival and 18:00 departure belong to the SAME shift-day; under the night cut they land on
+    // consecutive ones and the pair never closes.
+    IclockShiftProfile profile =
+        policies.effective(site.getId()).profileFor(person.getShiftProfile());
+
     // MIXED carries no usable direction, so collapsing would invent one. Each punch stands alone and
     // is flagged. No such device exists on this fleet; the branch is unit-tested regardless.
     if ("MIXED".equals(direction)) {
-      createBurst(raw, device, site, zone, person, pin, punchedAt, "MIXED_NO_COLLAPSE");
+      createBurst(raw, device, site, zone, person, pin, punchedAt, "MIXED_NO_COLLAPSE", profile);
       return Outcome.PROMOTED_NEW;
     }
 
@@ -203,10 +214,10 @@ public class IclockPromotionService {
             .orElse(null);
 
     if (candidate != null && !chainBroken(candidate, person, area, device.getId(), punchedAt)) {
-      joinBurst(candidate, raw, zone, punchedAt, direction);
+      joinBurst(candidate, raw, zone, punchedAt, direction, profile);
       return Outcome.PROMOTED_JOINED;
     }
-    createBurst(raw, device, site, zone, person, pin, punchedAt, null);
+    createBurst(raw, device, site, zone, person, pin, punchedAt, null, profile);
     return Outcome.PROMOTED_NEW;
   }
 
@@ -234,7 +245,8 @@ public class IclockPromotionService {
       IclockPerson person,
       String pin,
       Instant punchedAt,
-      String anomaly) {
+      String anomaly,
+      IclockShiftProfile profile) {
     IclockPunch p = new IclockPunch();
     p.setRawPunchId(raw.getId());
     p.setEffectiveRawPunchId(raw.getId());
@@ -247,7 +259,7 @@ public class IclockPromotionService {
     p.setDevicePin(pin);
     p.setPunchedAt(punchedAt);
     p.setEffectiveAt(punchedAt);
-    p.setShiftDate(IclockShiftDay.of(punchedAt, zone));
+    p.setShiftDate(profile.shiftDateOf(punchedAt, zone));
     p.setArea(device.getArea());
     p.setDirection(device.getDirection());
     p.setBurstFirstAt(punchedAt);
@@ -266,7 +278,12 @@ public class IclockPromotionService {
    * <p>Aggregates use min/max, so the outcome does not depend on the order punches are processed in.
    */
   private void joinBurst(
-      IclockPunch burst, IclockRawPunch raw, ZoneId zone, Instant punchedAt, String direction) {
+      IclockPunch burst,
+      IclockRawPunch raw,
+      ZoneId zone,
+      Instant punchedAt,
+      String direction,
+      IclockShiftProfile profile) {
     if (punchedAt.isBefore(burst.getBurstFirstAt())) {
       burst.setBurstFirstAt(punchedAt);
     }
@@ -285,9 +302,9 @@ public class IclockPromotionService {
     if (takesOver) {
       burst.setEffectiveRawPunchId(raw.getId());
       burst.setEffectiveAt(punchedAt);
-      // Shift-day always follows the KEPT punch, so a burst straddling the 04:00 cut is attributed to
-      // the day it actually counts for.
-      burst.setShiftDate(IclockShiftDay.of(punchedAt, zone));
+      // Shift-day always follows the KEPT punch, so a burst straddling the cut is attributed to the
+      // day it actually counts for — and the cut is the one belonging to THIS person's shift.
+      burst.setShiftDate(profile.shiftDateOf(punchedAt, zone));
     }
     punches.saveAndFlush(burst);
     addMember(burst.getId(), raw.getId());

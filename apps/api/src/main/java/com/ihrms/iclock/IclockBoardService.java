@@ -47,6 +47,12 @@ public class IclockBoardService {
       String personId, String name, String pin, String companyName, String team,
       /** The building this person belongs to. Carried so the board can group by it across a fleet. */
       String siteName,
+      /**
+       * NIGHT or DAY. Carried because it explains the row: whether someone counts as late, which day
+       * their punches file under and when their break alerts may fire all follow from it, and an
+       * operator looking at a board with two shifts on it needs to see which one they are reading.
+       */
+      String shiftProfile,
       Presence presence, Instant lastAt, String lastDirection, String lastArea,
       /**
        * Overlay flag for the "exceeding break" lens. The person stays in their canonical presence
@@ -108,7 +114,17 @@ public class IclockBoardService {
 
   public record PersonDay(
       String personId, String name, String pin, LocalDate shiftDate,
-      Instant firstIn, Instant lastOut, List<DayPunch> punches, List<DaySession> sessions) {}
+      Instant firstIn, Instant lastOut, List<DayPunch> punches, List<DaySession> sessions,
+      /**
+       * True when {@code shiftDate} is the person's CURRENT shift day.
+       *
+       * <p>The console needs this to decide whether an unclosed session is still running or was
+       * simply never tapped out, and it cannot work it out itself: the answer depends on the
+       * person's shift profile, so a day-shift person at 02:00 and a night-shift person at 02:00
+       * get opposite answers. The frontend used to compare against the IST calendar date, which is
+       * wrong for every night worker between midnight and the 11:30 cut.
+       */
+      boolean current) {}
 
   private final IclockPersonRepository people;
   private final IclockPunchRepository punches;
@@ -145,16 +161,18 @@ public class IclockBoardService {
     var site = sites.findById(siteId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Site not found"));
     ZoneId zone = zoneOf(site.getTimezone());
-    LocalDate shiftDate = IclockShiftDay.of(Instant.now(), zone);
+    Instant asOf = Instant.now();
 
     IclockSitePolicyService.PolicyView policy = policies.effective(siteId);
     List<IclockPerson> roster = people.findBySiteIdAndActiveTrue(siteId);
-    Map<String, PersonChip> chips = chipsFor(siteId, site.getName(), roster, shiftDate, zone, policy);
+    ShiftDays days = shiftDaysFor(roster, asOf, zone, policy);
+    LocalDate shiftDate = days.defaultDay();
+    Map<String, PersonChip> chips = chipsFor(siteId, site.getName(), roster, days, zone, policy);
 
     long present = chips.values().stream().filter(c -> c.presence() == Presence.IN_OFFICE
         || c.presence() == Presence.IN_CAFETERIA).count();
     long arrived = chips.values().stream().filter(c -> c.presence() != Presence.NOT_ARRIVED).count();
-    long late = lateCount(siteId, shiftDate, zone);
+    long late = lateCount(siteId, roster, days, zone, policy);
 
     List<DeviceHealth> health = new ArrayList<>();
     Instant now = Instant.now();
@@ -166,14 +184,15 @@ public class IclockBoardService {
           d.getSerialNumber(), d.getName(), d.getDirection(), d.getStatus(), d.getLastSeenAt(),
           mins == Long.MAX_VALUE ? -1 : mins, mins <= HEALTHY_MINUTES,
           // Per DEVICE, not per site. This used to pass the site-wide count inside the per-device
-          // loop, so every terminal claimed the whole building's traffic as its own.
-          punches.countByDeviceIdAndShiftDate(d.getId(), shiftDate)));
+          // loop, so every terminal claimed the whole building's traffic as its own. Counted across
+          // every shift-day in play, because one gate serves both shifts.
+          punches.countByDeviceIdAndShiftDateIn(d.getId(), days.all())));
     }
 
     return new Overview(
         siteId, site.getName(), shiftDate, roster.size(), present, arrived,
         roster.size() - arrived, late,
-        punches.countBySiteIdAndShiftDate(siteId, shiftDate), health);
+        punches.countBySiteIdAndShiftDateIn(siteId, days.all()), health);
   }
 
   @Transactional(readOnly = true)
@@ -181,11 +200,13 @@ public class IclockBoardService {
     var site = sites.findById(siteId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Site not found"));
     ZoneId zone = zoneOf(site.getTimezone());
-    LocalDate shiftDate = IclockShiftDay.of(Instant.now(), zone);
+    Instant asOf = Instant.now();
 
     IclockSitePolicyService.PolicyView policy = policies.effective(siteId);
     List<IclockPerson> roster = people.findBySiteIdAndActiveTrue(siteId);
-    Map<String, PersonChip> chips = chipsFor(siteId, site.getName(), roster, shiftDate, zone, policy);
+    ShiftDays days = shiftDaysFor(roster, asOf, zone, policy);
+    LocalDate shiftDate = days.defaultDay();
+    Map<String, PersonChip> chips = chipsFor(siteId, site.getName(), roster, days, zone, policy);
 
     List<PersonChip> inOffice = new ArrayList<>();
     List<PersonChip> inCafeteria = new ArrayList<>();
@@ -211,9 +232,12 @@ public class IclockBoardService {
     left.sort(NEWEST_FIRST);
     notArrived.sort(BY_NAME);
 
-    LocalDate completed = IclockMissingOut.completedShiftDay(Instant.now(), zone);
-    return new Board(siteId, shiftDate, Instant.now(), inOffice, inCafeteria, left, notArrived,
-        alertsFrom(chips.values(), zone, policy), missingOutFor(siteId, completed), completed);
+    // The header's day. Individual Missing OUT rows carry their own, because a day-shift person's last
+    // completed shift is not the same date as a night-shift person's.
+    LocalDate completed = policy.night().completedShiftDay(asOf, zone);
+    return new Board(siteId, shiftDate, asOf, inOffice, inCafeteria, left, notArrived,
+        alertsFrom(chips.values(), zone, policy),
+        missingOutFor(siteId, asOf, zone, policy), completed);
   }
 
   /**
@@ -222,19 +246,36 @@ public class IclockBoardService {
    * <p>Ordered by last punch DESCENDING — the person who was last seen most recently is the one whose
    * exit is most likely simply un-tapped rather than genuinely unknown.
    */
-  private List<MissingOut> missingOutFor(String siteId, LocalDate day) {
+  private List<MissingOut> missingOutFor(
+      String siteId, Instant now, ZoneId zone, IclockSitePolicyService.PolicyView policy) {
+    Map<String, IclockPerson> roster = new LinkedHashMap<>();
+    for (IclockPerson person : people.findBySiteIdOrderByPinAsc(siteId)) {
+      roster.put(person.getId(), person);
+    }
+
+    // WHICH DAY IS "LAST COMPLETED" DEPENDS ON THE SHIFT. The night shift's finished at 04:00; the day
+    // shift's finishes at 18:00. Asking one question for both would either flag day-shift people who
+    // are still at work or leave night-shift people out of the list until the following evening. Each
+    // person is measured against their own last finished shift, and the row carries the date it used.
+    Map<String, LocalDate> dayByPerson = new LinkedHashMap<>();
+    Set<LocalDate> allDays = new java.util.LinkedHashSet<>();
+    for (IclockPerson person : roster.values()) {
+      LocalDate completed = policy.profileFor(person.getShiftProfile()).completedShiftDay(now, zone);
+      dayByPerson.put(person.getId(), completed);
+      allDays.add(completed);
+    }
+    allDays.add(policy.night().completedShiftDay(now, zone)); // never an empty IN (...)
+
     Map<String, List<IclockPunch>> byPerson = new LinkedHashMap<>();
-    for (IclockPunch p : punches.findBySiteIdAndShiftDateOrderByEffectiveAtAsc(siteId, day)) {
-      if (p.getPersonId() != null) {
+    for (IclockPunch p : punches.findBySiteIdAndShiftDateInOrderByEffectiveAtAsc(siteId, allDays)) {
+      if (p.getPersonId() != null
+          && p.getShiftDate() != null
+          && p.getShiftDate().equals(dayByPerson.get(p.getPersonId()))) {
         byPerson.computeIfAbsent(p.getPersonId(), k -> new ArrayList<>()).add(p);
       }
     }
     if (byPerson.isEmpty()) {
       return List.of();
-    }
-    Map<String, IclockPerson> roster = new LinkedHashMap<>();
-    for (IclockPerson person : people.findBySiteIdOrderByPinAsc(siteId)) {
-      roster.put(person.getId(), person);
     }
     Set<String> companyIds =
         roster.values().stream()
@@ -265,7 +306,8 @@ public class IclockBoardService {
                   ? person.getCompanyLabel()
                   : companyNames.getOrDefault(person.getCompanyId(), person.getCompanyLabel());
       out.add(new MissingOut(
-          e.getKey(), person == null ? null : person.getName(), company, day,
+          e.getKey(), person == null ? null : person.getName(), company,
+          dayByPerson.get(e.getKey()),
           last.getEffectiveAt(), last.getDirection(), last.getArea()));
     }
     out.sort(java.util.Comparator.comparing(MissingOut::lastPunchAt).reversed());
@@ -289,6 +331,7 @@ public class IclockBoardService {
       IclockBreakAlert.Where where =
           IclockBreakAlert.evaluate(
               c.lastAt(), c.lastArea(), c.lastDirection(), now, zone,
+              policy.profileFor(c.shiftProfile()),
               policy.breakAlertMin(), policy.breakAlertMaxMin());
       if (where != null) {
         out.add(new BreakAlert(
@@ -404,8 +447,12 @@ public class IclockBoardService {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found"));
     var site = sites.findById(person.getSiteId()).orElseThrow();
     ZoneId zone = zoneOf(site.getTimezone());
+    // "Today" for this person means today ON THEIR SHIFT — a day-shift person opening the view at
+    // 10:00 is mid-shift, and the night profile would show them the previous date's empty grid.
     LocalDate day = shiftDateOrNull == null || shiftDateOrNull.isBlank()
-        ? IclockShiftDay.of(Instant.now(), zone)
+        ? policies.effective(person.getSiteId())
+            .profileFor(person.getShiftProfile())
+            .shiftDateOf(Instant.now(), zone)
         : LocalDate.parse(shiftDateOrNull);
 
     List<IclockPunch> rows = punches.findByPersonIdAndShiftDateOrderByEffectiveAtAsc(personId, day);
@@ -417,43 +464,67 @@ public class IclockBoardService {
     // Sessions are PAIRED BY INFERENCE, not asserted — an unpaired IN is flagged estimated rather
     // than silently closed, because a missing OUT is normal in an event stream and pretending
     // otherwise is how a board starts lying.
-    List<DaySession> sessions = new ArrayList<>();
-    Instant openFrom = null;
-    boolean openCafeteria = false;
-    for (IclockPunch p : rows) {
-      boolean cafe = "CAFETERIA".equals(p.getArea());
-      if ("IN".equals(p.getDirection())) {
-        if (openFrom != null) {
-          sessions.add(new DaySession(openFrom, null, true, openCafeteria)); // unpaired
-        }
-        openFrom = p.getEffectiveAt();
-        openCafeteria = cafe;
-      } else if ("OUT".equals(p.getDirection())) {
-        if (openFrom != null) {
-          sessions.add(new DaySession(openFrom, p.getEffectiveAt(), false, openCafeteria));
-          openFrom = null;
-        } else {
-          sessions.add(new DaySession(null, p.getEffectiveAt(), true, cafe)); // OUT with no IN
-        }
-      }
-    }
-    if (openFrom != null) {
-      sessions.add(new DaySession(openFrom, null, true, openCafeteria));
-    }
+    //
+    // The pairing rule lives in IclockDaySessions because it has to honour the cafeteria inversion,
+    // and it used to branch on direction alone. A CAFETERIA IN means a break STARTS, so the old rule
+    // read it as an arrival: it orphaned the open work session and left the closing GATE OUT with
+    // nothing to pair against. One coffee break turned a normal 9-hour night into "On site 0m" with
+    // two Estimated badges.
+    List<IclockDaySessions.Punch> facts =
+        rows.stream()
+            .map(p -> new IclockDaySessions.Punch(p.getEffectiveAt(), p.getArea(), p.getDirection()))
+            .toList();
+    List<DaySession> sessions =
+        IclockDaySessions.segment(facts).stream()
+            .map(s -> new DaySession(s.from(), s.to(), s.estimated(), s.cafeteria()))
+            .toList();
 
-    Instant firstIn = rows.stream().filter(p -> "IN".equals(p.getDirection()))
-        .map(IclockPunch::getEffectiveAt).findFirst().orElse(null);
-    Instant lastOut = rows.stream().filter(p -> "OUT".equals(p.getDirection()))
-        .map(IclockPunch::getEffectiveAt).reduce((a, b) -> b).orElse(null);
+    // GATE only, both of them. A cafeteria punch is a break boundary, not an arrival or a departure —
+    // taking the latest OUT of any area displayed the moment somebody sat back DOWN as their "last
+    // out", which reads exactly like going home and is nothing of the kind.
+    Instant firstIn = IclockDaySessions.firstArrival(facts);
+    Instant lastOut = IclockDaySessions.lastDeparture(facts);
 
+    LocalDate currentDay =
+        policies.effective(person.getSiteId())
+            .profileFor(person.getShiftProfile())
+            .shiftDateOf(Instant.now(), zone);
     return new PersonDay(personId, person.getName(), person.getPin(), day,
-        firstIn, lastOut, dayPunches, sessions);
+        firstIn, lastOut, dayPunches, sessions, day.equals(currentDay));
   }
 
   // ------------------------------------------------------------------ inner
 
+  /**
+   * Which shift-day each person is currently on, and the set of days that covers.
+   *
+   * <p>A building can run more than one shift, and the profiles disagree about what "today" is for the
+   * ten hours between the day cut (01:30) and the night one (11:30). One date for the whole board would
+   * silently drop whichever population sits on the other side of that disagreement — they would read as
+   * NOT_ARRIVED all morning while standing at their desks.
+   */
+  private record ShiftDays(
+      Map<String, LocalDate> byPerson, Set<LocalDate> all, LocalDate defaultDay) {}
+
+  private ShiftDays shiftDaysFor(
+      List<IclockPerson> roster, Instant now, ZoneId zone,
+      IclockSitePolicyService.PolicyView policy) {
+    Map<String, LocalDate> byPerson = new LinkedHashMap<>();
+    Set<LocalDate> all = new java.util.LinkedHashSet<>();
+    for (IclockPerson person : roster) {
+      LocalDate day = policy.profileFor(person.getShiftProfile()).shiftDateOf(now, zone);
+      byPerson.put(person.getId(), day);
+      all.add(day);
+    }
+    // The header's day, and the fallback for anything with no person in hand. Always present, so an
+    // empty roster still produces a legal `IN (...)` rather than a syntax error on an empty list.
+    LocalDate defaultDay = policy.night().shiftDateOf(now, zone);
+    all.add(defaultDay);
+    return new ShiftDays(byPerson, all, defaultDay);
+  }
+
   private Map<String, PersonChip> chipsFor(
-      String siteId, String siteName, List<IclockPerson> roster, LocalDate shiftDate, ZoneId zone,
+      String siteId, String siteName, List<IclockPerson> roster, ShiftDays days, ZoneId zone,
       IclockSitePolicyService.PolicyView policy) {
     // Company names, resolved in ONE query for the whole roster.
     //
@@ -474,8 +545,15 @@ public class IclockBoardService {
 
     Map<String, IclockPunch> lastByPerson = new LinkedHashMap<>();
     // Ordered newest-first, so the FIRST row seen per person is their latest punch.
-    for (IclockPunch p : punches.findBySiteIdAndShiftDateOrderByEffectiveAtDesc(siteId, shiftDate)) {
-      if (p.getPersonId() != null) {
+    //
+    // Fetched across every shift-day in play and then matched to the person's OWN day. Without that
+    // second filter a night-shift person's punch from the still-open night would be picked up as a
+    // day-shift person's "latest", and the board would show somebody present on a shift they do not
+    // work.
+    for (IclockPunch p : punches.findBySiteIdAndShiftDateInOrderByEffectiveAtDesc(siteId, days.all())) {
+      if (p.getPersonId() != null
+          && p.getShiftDate() != null
+          && p.getShiftDate().equals(days.byPerson().get(p.getPersonId()))) {
         lastByPerson.putIfAbsent(p.getPersonId(), p);
       }
     }
@@ -501,10 +579,12 @@ public class IclockBoardService {
           last != null
               && IclockBreakAlert.evaluate(
                       last.getEffectiveAt(), last.getArea(), last.getDirection(),
-                      Instant.now(), zone, policy.breakAlertMin(), policy.breakAlertMaxMin())
+                      Instant.now(), zone, policy.profileFor(person.getShiftProfile()),
+                      policy.breakAlertMin(), policy.breakAlertMaxMin())
                   != null;
       out.put(person.getId(), new PersonChip(
           person.getId(), person.getName(), person.getPin(), companyName, person.getTeam(), siteName,
+          person.getShiftProfile(),
           presence, last == null ? null : last.getEffectiveAt(),
           last == null ? null : last.getDirection(),
           last == null ? null : last.getArea(),
@@ -513,16 +593,43 @@ public class IclockBoardService {
     return out;
   }
 
-  /** People whose first gate IN was after the 19:15 threshold. lateExemptMin is a P2 input. */
-  private long lateCount(String siteId, LocalDate shiftDate, ZoneId zone) {
-    Instant threshold = ShiftConfig.lateThreshold(shiftDate);
+  /**
+   * People whose first gate IN was after THEIR OWN shift's late threshold. lateExemptMin is a P2 input.
+   *
+   * <p>The threshold is per person because the shift is: 19:15 for the night shift, 09:15 for the day
+   * shift. A single threshold would mark every day-shift arrival as late by about ten hours, which is
+   * the sort of number that discredits a report rather than being noticed as a bug.
+   */
+  private long lateCount(
+      String siteId, List<IclockPerson> roster, ShiftDays days, ZoneId zone,
+      IclockSitePolicyService.PolicyView policy) {
+    Map<String, IclockPerson> byId = new LinkedHashMap<>();
+    for (IclockPerson person : roster) {
+      byId.put(person.getId(), person);
+    }
     Map<String, Instant> firstIn = new LinkedHashMap<>();
-    for (IclockPunch p : punches.findBySiteIdAndShiftDateOrderByEffectiveAtDesc(siteId, shiftDate)) {
-      if (p.getPersonId() != null && "IN".equals(p.getDirection()) && "GATE".equals(p.getArea())) {
+    for (IclockPunch p : punches.findBySiteIdAndShiftDateInOrderByEffectiveAtDesc(siteId, days.all())) {
+      if (p.getPersonId() != null
+          && "IN".equals(p.getDirection())
+          && "GATE".equals(p.getArea())
+          && p.getShiftDate() != null
+          && p.getShiftDate().equals(days.byPerson().get(p.getPersonId()))) {
         firstIn.put(p.getPersonId(), p.getEffectiveAt()); // newest-first, so the last write is earliest
       }
     }
-    return firstIn.values().stream().filter(t -> t.isAfter(threshold)).count();
+    long late = 0;
+    for (Map.Entry<String, Instant> e : firstIn.entrySet()) {
+      IclockPerson person = byId.get(e.getKey());
+      if (person == null) {
+        continue; // punched at this site but not on its active roster — not a lateness question
+      }
+      IclockShiftProfile profile = policy.profileFor(person.getShiftProfile());
+      LocalDate day = days.byPerson().get(e.getKey());
+      if (e.getValue().isAfter(profile.lateThreshold(day, zone))) {
+        late++;
+      }
+    }
+    return late;
   }
 
   private static ZoneId zoneOf(String tz) {
