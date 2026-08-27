@@ -134,19 +134,81 @@ class IclockDaySessionsTest {
     assertThat(segments.get(0).estimated()).isTrue();
   }
 
+  // ------------------------------------------- THE CAFETERIA IS OUTSIDE THE GATE LINE
+
   @Test
-  void goingHomeStraightFromTheCafeteriaClosesTheBreakAndOpensNoWork() {
+  void vishnusRealBreak_gatePunchesInsideATripAreLegsOfIt() {
+    // VERBATIM from production, pin 22193 on 2026-08-26 — the first night cafeteria terminals ran.
+    // Read literally this is a 17-second break followed by a second arrival; it is one five-minute
+    // coffee, and the two gate taps are the walk there and back.
+    var segments = IclockDaySessions.segment(List.of(
+        gateIn("2026-08-26 02:41:10"),
+        cafeIn("2026-08-26 03:39:32"),
+        gateOut("2026-08-26 03:39:49"),
+        gateIn("2026-08-26 03:44:08"),
+        cafeOut("2026-08-26 03:44:25"),
+        gateOut("2026-08-26 04:11:05")));
+
+    assertThat(segments).hasSize(3);
+    assertThat(segments.get(0))
+        .isEqualTo(new IclockDaySessions.Segment(
+            ist("2026-08-26 02:41:10"), ist("2026-08-26 03:39:32"), false, false));
+    assertThat(segments.get(1))
+        .as("the break runs cafeteria-reader to cafeteria-reader, not gate to gate")
+        .isEqualTo(new IclockDaySessions.Segment(
+            ist("2026-08-26 03:39:32"), ist("2026-08-26 03:44:25"), false, true));
+    assertThat(segments.get(2))
+        .isEqualTo(new IclockDaySessions.Segment(
+            ist("2026-08-26 03:44:25"), ist("2026-08-26 04:11:05"), false, false));
+
+    assertThat(segments).noneMatch(IclockDaySessions.Segment::estimated);
+    assertThat(IclockDaySessions.cafeteriaMinutes(segments))
+        .as("a real coffee break, not seventeen seconds")
+        .isEqualTo(4);
+    assertThat(IclockDaySessions.lastDeparture(List.of(
+        gateIn("2026-08-26 02:41:10"),
+        cafeIn("2026-08-26 03:39:32"),
+        gateOut("2026-08-26 03:39:49"),
+        gateIn("2026-08-26 03:44:08"),
+        cafeOut("2026-08-26 03:44:25"),
+        gateOut("2026-08-26 04:11:05"))))
+        .as("the departure is the gate exit AFTER the trip, not the one inside it")
+        .isEqualTo(ist("2026-08-26 04:11:05"));
+  }
+
+  @Test
+  void vacuityNegative_readingGatePunchesLiterallyShredsTheDay() {
+    // What the previous rule produced for exactly those punches, asserted so the regression is
+    // described rather than merely absent: a 17-second break and the day in two pieces.
+    var literal = IclockDaySessions.segment(
+        List.of(
+            gateIn("2026-08-26 02:41:10"),
+            cafeIn("2026-08-26 03:39:32"),
+            gateOut("2026-08-26 03:39:49"),
+            gateIn("2026-08-26 03:44:08"),
+            cafeOut("2026-08-26 03:44:25"),
+            gateOut("2026-08-26 04:11:05")),
+        java.time.Duration.ZERO); // zero trip window == the old literal reading
+
+    assertThat(literal.stream().filter(IclockDaySessions.Segment::cafeteria))
+        .as("with no trip window the break collapses to the gate exit seconds later")
+        .anySatisfy(s -> assertThat(s.to()).isEqualTo(ist("2026-08-26 03:39:49")));
+    assertThat(literal).hasSizeGreaterThan(3);
+  }
+
+  @Test
+  void aGateExitLongIntoABreakIsGoingHome_theCapDoesItsJob() {
+    // The failure the cap exists to prevent: tap into the cafeteria, never tap back, leave. Without
+    // it the departure is swallowed and the person shows on an open break for the rest of the shift.
     var segments = IclockDaySessions.segment(List.of(
         gateIn("2026-08-27 19:00:00"),
-        cafeIn("2026-08-28 03:30:00"),
-        gateOut("2026-08-28 04:00:00")));
+        cafeIn("2026-08-27 21:00:00"),
+        gateOut("2026-08-27 23:30:00")));
 
     assertThat(segments).hasSize(2);
-    assertThat(segments.get(0).cafeteria()).isFalse();
     assertThat(segments.get(1))
-        .as("the break ends at the gate, and no phantom work segment follows")
         .isEqualTo(new IclockDaySessions.Segment(
-            ist("2026-08-28 03:30:00"), ist("2026-08-28 04:00:00"), false, true));
+            ist("2026-08-27 21:00:00"), ist("2026-08-27 23:30:00"), false, true));
     assertThat(segments).noneMatch(IclockDaySessions.Segment::estimated);
   }
 

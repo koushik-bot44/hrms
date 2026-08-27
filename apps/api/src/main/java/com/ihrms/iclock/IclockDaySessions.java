@@ -56,11 +56,47 @@ final class IclockDaySessions {
   }
 
   /**
+   * How long a cafeteria trip may run before a gate exit inside it is read as going home instead.
+   *
+   * <p>A JUDGEMENT, not a measurement. Without a cap, someone who taps into the cafeteria and then
+   * leaves for the day without tapping back has their departure swallowed and shows as on an open
+   * break for the rest of the shift. With it, a gate exit more than an hour into a "break" is treated
+   * as what it almost certainly is. An hour is deliberately generous: the observed trip legs are
+   * seconds apart, so anything in minutes is comfortably inside.
+   */
+  static final Duration MAX_CAFETERIA_TRIP = Duration.ofMinutes(60);
+
+  /**
    * Splits a shift day's punches into work and break segments.
    *
    * @param dayPunches one person's punches for one shift day, ASCENDING by effective time
    */
   static List<Segment> segment(List<Punch> dayPunches) {
+    return segment(dayPunches, MAX_CAFETERIA_TRIP);
+  }
+
+  /**
+   * As above, with the trip cap injected so it can be placed by a test rather than waited out.
+   *
+   * <p><b>THE CAFETERIA IS OUTSIDE THE GATE LINE.</b> That is a fact about this building, learned from
+   * the first night of live cafeteria data, and it breaks the assumption the inversion was written
+   * under. A single break produces FOUR punches, not two:
+   *
+   * <pre>
+   *   03:39:32  CAFETERIA IN    the break starts
+   *   03:39:49  GATE OUT        walking out to reach the cafeteria - NOT going home
+   *   03:44:08  GATE IN         walking back
+   *   03:44:25  CAFETERIA OUT   the break ends
+   * </pre>
+   *
+   * <p>Read literally, that gate exit ends the working day seventeen seconds into a break, and the
+   * gate entry four minutes later looks like a second arrival. The person's five-minute coffee is
+   * recorded as a seventeen-second break plus two fragments of a day.
+   *
+   * <p>So while a break is open, gate punches are legs of the trip and are passed over. The break
+   * ends where it says it ends: at the cafeteria reader.
+   */
+  static List<Segment> segment(List<Punch> dayPunches, Duration maxTrip) {
     List<Segment> out = new ArrayList<>();
     if (dayPunches == null || dayPunches.isEmpty()) {
       return out;
@@ -82,24 +118,32 @@ final class IclockDaySessions {
       }
 
       if (!cafe && in) {
-        // Arrived at work. A second arrival with one already open means the first was never closed.
+        // A gate entry DURING a break is the walk back from the cafeteria, not a fresh arrival.
+        // Passing over it is what stops one coffee from splitting the day into fragments.
         if (breakOpen != null) {
-          out.add(new Segment(breakOpen, null, true, true)); // break that never ended
-          breakOpen = null;
+          continue;
         }
+        // Arrived at work. A second arrival with one already open means the first was never closed.
         if (workOpen != null) {
           out.add(new Segment(workOpen, null, true, false));
         }
         workOpen = p.at();
       } else if (!cafe && outDir) {
-        // Left the building — the only punch that ends a working day.
         if (breakOpen != null) {
-          // Walked out straight from the cafeteria: the break ends here, and no work resumed.
+          // Inside a break, a gate exit is the walk OUT to the cafeteria — unless it has been long
+          // enough that they have plainly gone home instead, in which case the break ends here and
+          // so does the day. Without that cap a missing cafeteria-return would hide a departure.
+          if (Duration.between(breakOpen, p.at()).compareTo(maxTrip) < 0) {
+            continue;
+          }
           out.add(new Segment(breakOpen, p.at(), false, true));
           breakOpen = null;
-        } else if (workOpen != null) {
-          out.add(new Segment(workOpen, p.at(), false, false));
           workOpen = null;
+          continue;
+        }
+        // Left the building — the only punch that ends a working day.
+        if (workOpen != null) {
+          out.add(new Segment(workOpen, p.at(), false, false));
         } else {
           out.add(new Segment(null, p.at(), true, false)); // an exit with no matching arrival
         }
