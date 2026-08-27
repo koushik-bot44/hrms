@@ -124,6 +124,14 @@ public interface IclockPunchRepository extends JpaRepository<IclockPunch, String
   List<IclockPunch> findBySiteIdAndShiftDateBetweenOrderByEffectiveAtAsc(
       String siteId, LocalDate from, LocalDate to);
 
+  /**
+   * One person's punches from a shift day onward — the recompute window when their shift changes.
+   *
+   * <p>Bounded rather than "all of them" on purpose: a shift assignment is forward-only, and
+   * re-dating a closed payroll cycle would move numbers somebody has already been paid against.
+   */
+  List<IclockPunch> findByPersonIdAndShiftDateGreaterThanEqual(String personId, LocalDate from);
+
   long countBySiteIdAndShiftDate(String siteId, LocalDate shiftDate);
 
   /** Site total across every shift-day currently in play, so a second shift is not left out of it. */

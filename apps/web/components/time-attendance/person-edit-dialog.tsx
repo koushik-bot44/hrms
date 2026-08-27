@@ -8,6 +8,7 @@ import {
   iclockKeys,
   listCompanyOptions,
   listTeamOptions,
+  SHIFT_LABELS,
   upsertPerson,
   type CompanyOption,
   type IclockPerson,
@@ -64,6 +65,7 @@ export function PersonEditDialog({
   const [email, setEmail] = React.useState('');
   const [companyId, setCompanyId] = React.useState<string | null>(null);
   const [team, setTeam] = React.useState<string | null>(null);
+  const [shift, setShift] = React.useState<string>('NIGHT');
   /** Teams typed inline; held here so the option survives until the save round-trips. */
   const [newTeams, setNewTeams] = React.useState<string[]>([]);
 
@@ -85,6 +87,7 @@ export function PersonEditDialog({
     setEmail(person?.email ?? '');
     setCompanyId(person?.companyId ?? null);
     setTeam(person?.team ?? null);
+    setShift(person?.shiftProfile ?? 'NIGHT');
     setNewTeams([]);
   }, [open, person]);
 
@@ -109,6 +112,7 @@ export function PersonEditDialog({
         // alone", so a deliberate blanking would silently do nothing.
         companyId: companyId ?? '',
         team: team ?? '',
+        shiftProfile: shift,
       };
       return creating ? upsertPerson(siteId, body) : editPerson(person!.id, body);
     },
@@ -212,6 +216,23 @@ export function PersonEditDialog({
             />
             <p className="text-xs text-muted-foreground">
               Teams already used at this building. Type a new name to add one.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Shift</label>
+            <Combobox
+              ariaLabel="Shift"
+              options={Object.entries(SHIFT_LABELS).map(([value, label]) => ({ value, label }))}
+              value={shift}
+              onChange={(v) => setShift(v || 'NIGHT')}
+              placeholder="Select a shift…"
+              searchPlaceholder="Search shifts…"
+            />
+            <p className="text-xs text-muted-foreground">
+              Their shift decides which day their punches file under, when they count as late, and
+              when a long absence is worth alerting on. Changing it re-dates this payroll cycle;
+              earlier cycles are left alone.
             </p>
           </div>
 

@@ -57,7 +57,20 @@ public final class IclockRosterDtos {
 
   /** What a bulk assignment did, per person, so the operator can see it rather than trust it. */
   public record AssignShiftReport(
-      String shiftProfile, int changed, int alreadyOnIt, List<AssignShiftRow> rows) {}
+      String shiftProfile,
+      int changed,
+      int alreadyOnIt,
+      /**
+       * Punches re-dated in the current payroll cycle.
+       *
+       * <p>Reported because it is the part an operator would otherwise never see: moving somebody to
+       * the day shift silently rewrites which day this month's punches belong to, and a number is the
+       * difference between that being a deliberate correction and a surprise.
+       */
+      int punchesRedated,
+      /** The first shift day the recompute was allowed to touch. Earlier cycles are settled. */
+      java.time.LocalDate recomputedFrom,
+      List<AssignShiftRow> rows) {}
 
   public record AssignShiftRow(String personId, String pin, String name, String from, String to) {}
 

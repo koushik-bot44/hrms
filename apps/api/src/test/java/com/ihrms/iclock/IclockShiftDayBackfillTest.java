@@ -85,7 +85,7 @@ class IclockShiftDayBackfillTest {
     //
     // THE CUT IS PER PERSON SINCE V47, and this assertion has to follow. It used to hard-code 11:30
     // for every row, which was true while everyone worked nights and became wrong the moment anyone
-    // was assigned the day shift: a day-shift person cuts at 01:30, so their punches legitimately
+    // was assigned the day shift: a day-shift person cuts at 02:30, so their punches legitimately
     // disagree with the night rule. Left as it was, this test failed for correct data — and it did,
     // as soon as a sibling test committed day-profile punches into the same schema.
     //
@@ -101,7 +101,7 @@ class IclockShiftDayBackfillTest {
              WHERE p."shiftDate" IS DISTINCT FROM (
                      CASE WHEN (p."effectiveAt" AT TIME ZONE 'Asia/Kolkata')::time
                                < (CASE WHEN pe."shiftProfile" = 'DAY'
-                                       THEN TIME '01:30' ELSE TIME '11:30' END)
+                                       THEN TIME '02:30' ELSE TIME '11:30' END)
                           THEN (p."effectiveAt" AT TIME ZONE 'Asia/Kolkata')::date - 1
                           ELSE (p."effectiveAt" AT TIME ZONE 'Asia/Kolkata')::date END)
             """,
@@ -120,6 +120,6 @@ class IclockShiftDayBackfillTest {
         .isEqualTo(LocalTime.of(11, 30));
     assertThat(IclockShiftProfile.DAY.dayCut())
         .as("the day literal in this file's SQL")
-        .isEqualTo(LocalTime.of(1, 30));
+        .isEqualTo(LocalTime.of(2, 30));
   }
 }

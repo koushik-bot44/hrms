@@ -37,8 +37,8 @@ class IclockShiftProfileTest {
 
   @Test
   void dayCutsAtTheMidpointOfItsOwnNonWorkingWindow() {
-    // 18:00 plus half of the 15h gap = 01:30, wrapping past midnight. One formula, no branch.
-    assertThat(IclockShiftProfile.DAY.dayCut()).isEqualTo(LocalTime.of(1, 30));
+    // 19:00 plus half of the 15h gap = 02:30, wrapping past midnight. One formula, no branch.
+    assertThat(IclockShiftProfile.DAY.dayCut()).isEqualTo(LocalTime.of(2, 30));
   }
 
   @Test
@@ -62,12 +62,12 @@ class IclockShiftProfileTest {
 
   @Test
   void gsMirror_dayShiftInAndOutLandOnTheSameShiftDay() {
-    // The case that motivated per-person shifts: 09:00 in, 18:00 out. Under the day profile they pair.
+    // The case that motivated per-person shifts: 10:00 in, 19:00 out. Under the day profile they pair.
     LocalDate expected = LocalDate.parse("2026-08-27");
-    assertThat(IclockShiftProfile.DAY.shiftDateOf(ist("2026-08-27", "09:00"), IST))
+    assertThat(IclockShiftProfile.DAY.shiftDateOf(ist("2026-08-27", "10:00"), IST))
         .as("day-shift arrival")
         .isEqualTo(expected);
-    assertThat(IclockShiftProfile.DAY.shiftDateOf(ist("2026-08-27", "18:00"), IST))
+    assertThat(IclockShiftProfile.DAY.shiftDateOf(ist("2026-08-27", "19:00"), IST))
         .as("day-shift departure — the SAME day, which is the entire point")
         .isEqualTo(expected);
   }
@@ -75,22 +75,22 @@ class IclockShiftProfileTest {
   @Test
   void gsMirror_underTheNightProfileTheSamePairSplits() {
     // THE VACUITY NEGATIVE. If this ever reads as "same day", the day profile is decorative and the
-    // test above proves nothing. 09:00 is before the 11:30 night cut, so it files a day EARLIER than
-    // the 18:00 that follows it — an unpaired IN plus an orphan OUT, every single day.
-    assertThat(IclockShiftProfile.NIGHT.shiftDateOf(ist("2026-08-27", "09:00"), IST))
+    // test above proves nothing. 10:00 is before the 11:30 night cut, so it files a day EARLIER than
+    // the 19:00 that follows it — an unpaired IN plus an orphan OUT, every single day.
+    assertThat(IclockShiftProfile.NIGHT.shiftDateOf(ist("2026-08-27", "10:00"), IST))
         .isEqualTo(LocalDate.parse("2026-08-26"));
-    assertThat(IclockShiftProfile.NIGHT.shiftDateOf(ist("2026-08-27", "18:00"), IST))
+    assertThat(IclockShiftProfile.NIGHT.shiftDateOf(ist("2026-08-27", "19:00"), IST))
         .isEqualTo(LocalDate.parse("2026-08-27"));
-    assertThat(IclockShiftProfile.NIGHT.shiftDateOf(ist("2026-08-27", "09:00"), IST))
+    assertThat(IclockShiftProfile.NIGHT.shiftDateOf(ist("2026-08-27", "10:00"), IST))
         .as("the defect: a day-shift pair straddles two shift days under the night cut")
-        .isNotEqualTo(IclockShiftProfile.NIGHT.shiftDateOf(ist("2026-08-27", "18:00"), IST));
+        .isNotEqualTo(IclockShiftProfile.NIGHT.shiftDateOf(ist("2026-08-27", "19:00"), IST));
   }
 
   @Test
   void dayShiftOvertimePastMidnightStaysWithTheDayItStarted() {
-    // 00:30 is before the 01:30 day cut, so it belongs to the previous date — the mirror of the night
+    // 01:30 is before the 02:30 day cut, so it belongs to the previous date — the mirror of the night
     // shift's 03:00 tail.
-    assertThat(IclockShiftProfile.DAY.shiftDateOf(ist("2026-08-28", "00:30"), IST))
+    assertThat(IclockShiftProfile.DAY.shiftDateOf(ist("2026-08-28", "01:30"), IST))
         .isEqualTo(LocalDate.parse("2026-08-27"));
   }
 
@@ -163,11 +163,11 @@ class IclockShiftProfileTest {
     // Midday: today's day shift is still running, so the completed one is yesterday.
     assertThat(IclockShiftProfile.DAY.completedShiftDay(ist("2026-08-27", "12:00"), IST))
         .isEqualTo(LocalDate.parse("2026-08-26"));
-    // Evening: it finished at 18:00, so today counts.
+    // Evening: it finished at 19:00, so today counts.
     assertThat(IclockShiftProfile.DAY.completedShiftDay(ist("2026-08-27", "19:00"), IST))
         .isEqualTo(LocalDate.parse("2026-08-27"));
-    // Half past midnight: still inside the previous day's overtime tail, and that day IS complete.
-    assertThat(IclockShiftProfile.DAY.completedShiftDay(ist("2026-08-28", "00:30"), IST))
+    // Half past one: still inside the previous day's overtime tail, and that day IS complete.
+    assertThat(IclockShiftProfile.DAY.completedShiftDay(ist("2026-08-28", "01:30"), IST))
         .isEqualTo(LocalDate.parse("2026-08-27"));
   }
 
@@ -175,7 +175,7 @@ class IclockShiftProfileTest {
   void endOfAdvancesADayOnlyForTheOvernightShift() {
     LocalDate d = LocalDate.parse("2026-08-27");
     assertThat(IclockShiftProfile.NIGHT.endOf(d, IST)).isEqualTo(ist("2026-08-28", "04:00"));
-    assertThat(IclockShiftProfile.DAY.endOf(d, IST)).isEqualTo(ist("2026-08-27", "18:00"));
+    assertThat(IclockShiftProfile.DAY.endOf(d, IST)).isEqualTo(ist("2026-08-27", "19:00"));
   }
 
   @Test

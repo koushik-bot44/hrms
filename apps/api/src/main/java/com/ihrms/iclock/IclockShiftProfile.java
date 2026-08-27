@@ -33,9 +33,16 @@ record IclockShiftProfile(String name, LocalTime start, LocalTime end, int lateG
   static final IclockShiftProfile NIGHT =
       new IclockShiftProfile("NIGHT", LocalTime.of(19, 0), LocalTime.of(4, 0), 15);
 
-  /** Applied per person, only from a confirmed list — never inferred from punch times. */
+  /**
+   * Applied per person, only from a confirmed list — never inferred from punch times.
+   *
+   * <p>10:00&ndash;19:00, confirmed by the operator. It shipped as 09:00&ndash;18:00 in V47, taken from
+   * what the terminal report's "GS" label implied before anybody had checked. The correction matters
+   * because the cut derives from the hours: 09&ndash;18 cuts at 01:30 and 10&ndash;19 cuts at 02:30, so
+   * somebody finishing at 19:30 files on the right day under one and the wrong day under the other.
+   */
   static final IclockShiftProfile DAY =
-      new IclockShiftProfile("DAY", LocalTime.of(9, 0), LocalTime.of(18, 0), 15);
+      new IclockShiftProfile("DAY", LocalTime.of(10, 0), LocalTime.of(19, 0), 15);
 
   static IclockShiftProfile byName(String name) {
     return "DAY".equals(name) ? DAY : NIGHT;

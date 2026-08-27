@@ -19,6 +19,8 @@ import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftReport;
 import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftRow;
 import com.ihrms.iclock.dto.IclockRosterDtos.UpsertPersonRequest;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -68,6 +70,8 @@ public class IclockRosterService {
   private final IclockSiteCompanyRepository siteCompanies;
   private final IclockPromotionService promotion;
   private final IclockInboxService inbox;
+  /** Owns the shift PROFILES — a reassignment has to re-date against the building's own definitions. */
+  private final IclockSitePolicyService policies;
 
   public IclockRosterService(
       IclockPersonRepository people,
@@ -79,7 +83,8 @@ public class IclockRosterService {
       CompanyRepository companies,
       IclockSiteCompanyRepository siteCompanies,
       IclockPromotionService promotion,
-      IclockInboxService inbox) {
+      IclockInboxService inbox,
+      IclockSitePolicyService policies) {
     this.people = people;
     this.sites = sites;
     this.punches = punches;
@@ -90,6 +95,7 @@ public class IclockRosterService {
     this.siteCompanies = siteCompanies;
     this.promotion = promotion;
     this.inbox = inbox;
+    this.policies = policies;
   }
 
   // ------------------------------------------------------------- roster CRUD
@@ -256,6 +262,14 @@ public class IclockRosterService {
     return people.findDistinctTeams(siteId);
   }
 
+  private static ZoneId zoneOf(String tz) {
+    try {
+      return ZoneId.of(tz);
+    } catch (Exception e) {
+      return com.ihrms.attendance.ShiftConfig.ZONE;
+    }
+  }
+
   private void apply(IclockPerson person, UpsertPersonRequest req) {
     if (req.name() != null) person.setName(blankToNull(req.name()));
     if (req.email() != null) person.setEmail(normaliseEmail(req.email()));
@@ -301,8 +315,16 @@ public class IclockRosterService {
     if (!"NIGHT".equals(target) && !"DAY".equals(target)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Shift must be NIGHT or DAY.");
     }
+    var site = sites.findById(siteId).orElseThrow();
+    ZoneId zone = zoneOf(site.getTimezone());
+    IclockShiftProfile newProfile = policies.effective(siteId).profileFor(target);
+    // The cycle the assignment may touch. Everything before it is settled.
+    LocalDate cycleFrom = IclockReportService
+        .periodFor(java.time.YearMonth.now(zone), 1)
+        .from();
+
     List<AssignShiftRow> rows = new ArrayList<>();
-    int changed = 0, alreadyOnIt = 0;
+    int changed = 0, alreadyOnIt = 0, redated = 0;
     for (String personId : personIds) {
       IclockPerson person = requirePerson(personId);
       // Scoped to the building the request names, so a stray id from another site cannot be moved by
@@ -318,10 +340,47 @@ public class IclockRosterService {
         person.setShiftProfile(target);
         people.save(person);
         changed++;
+        redated += recomputeCurrentCycle(person, newProfile, zone, cycleFrom);
       }
       rows.add(new AssignShiftRow(person.getId(), person.getPin(), person.getName(), from, target));
     }
-    return new AssignShiftReport(target, changed, alreadyOnIt, rows);
+    return new AssignShiftReport(target, changed, alreadyOnIt, redated, cycleFrom, rows);
+  }
+
+  /**
+   * Re-dates a person's punches for the CURRENT payroll cycle under their new shift.
+   *
+   * <p><b>Why this has to happen at all.</b> {@code shiftDate} is stamped at promotion time from the
+   * profile the person was on then. Move somebody to the day shift and every punch they have already
+   * made this month is still filed against the 11:30 night cut, so their board day, their Missing OUT
+   * row and their whole month in the report stay wrong until the next punch — which is worse than
+   * wrong, because it is wrong in a way that looks settled.
+   *
+   * <p><b>Forward-only.</b> Bounded at the start of the current cycle. Re-dating a closed cycle would
+   * move numbers somebody has already been paid against, and no shift assignment made today is
+   * evidence about what they worked in July.
+   *
+   * <p><b>Idempotent.</b> The new date is derived, not incremented, and rows already on the right
+   * date are skipped, so running this twice changes nothing the second time.
+   *
+   * @return how many punches actually moved
+   */
+  private int recomputeCurrentCycle(IclockPerson person, IclockShiftProfile profile, ZoneId zone,
+      LocalDate cycleFrom) {
+    int moved = 0;
+    for (IclockPunch p : punches.findByPersonIdAndShiftDateGreaterThanEqual(
+        person.getId(), cycleFrom)) {
+      // The shift-day always follows the punch that is EFFECTIVE for its burst, which is the same
+      // instant promotion used. Deriving from effectiveAt rather than from the old shiftDate is what
+      // makes this idempotent instead of a drift that compounds on every reassignment.
+      LocalDate correct = profile.shiftDateOf(p.getEffectiveAt(), zone);
+      if (!correct.equals(p.getShiftDate())) {
+        p.setShiftDate(correct);
+        punches.save(p);
+        moved++;
+      }
+    }
+    return moved;
   }
 
   PersonView view(IclockPerson p, java.util.Set<String> duplicateEmails) {

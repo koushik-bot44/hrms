@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownUp, Eye, EyeOff, Link2, Link2Off, Pencil, Search, Trash2, Upload, UserRound, Users } from 'lucide-react';
+import { ArrowDownUp, CalendarClock, Eye, EyeOff, Link2, Link2Off, Pencil, Search, Trash2, Upload, UserRound, Users } from 'lucide-react';
 import { editPerson, iclockKeys, listPeople, type IclockPerson } from '@/lib/api/iclock';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { RosterImportDialog } from './roster-import-dialog';
 import { LinkSuggestionsDialog } from './link-suggestions';
 import { DeletePersonDialog } from './delete-person-dialog';
 import { PersonEditDialog } from './person-edit-dialog';
+import { BulkShiftDialog, InlineShiftPicker, ShiftBadge } from './shift-controls';
 import { UnmappedPinInbox } from './unmapped-pin-inbox';
 import { ConsoleError } from './console-error';
 
@@ -117,12 +118,16 @@ function PersonRow({
   onLink,
   onEdit,
   onDelete,
+  selected,
+  onSelect,
 }: {
   person: IclockPerson;
   siteId: string;
   onLink: (p: IclockPerson) => void;
   onEdit: (p: IclockPerson) => void;
   onDelete: (p: IclockPerson) => void;
+  selected: boolean;
+  onSelect: (id: string, checked: boolean) => void;
 }) {
   const qc = useQueryClient();
   const toggleExclusion = useApiMutation(
@@ -146,6 +151,15 @@ function PersonRow({
 
   return (
     <div className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-accent">
+      {/* Outside the Link, deliberately: a checkbox nested in an anchor navigates instead of
+          selecting on roughly half of clicks, which is the sort of bug that reads as flakiness. */}
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={(e) => onSelect(person.id, e.target.checked)}
+        aria-label={`Select ${person.name ?? person.pin}`}
+        className="size-4 shrink-0 cursor-pointer accent-primary"
+      />
       <Link
         href={`/super-admin/time-attendance/people/${person.id}?site=${siteId}`}
         className="flex min-w-0 flex-1 items-center gap-3"
@@ -169,6 +183,10 @@ function PersonRow({
           </Badge>
         ) : null}
         <ExclusionBadge person={person} />
+        {/* The badge reads at a glance; the picker is the change. Both, because a roster with two
+            shifts on it has to answer "which shift is this row?" before it answers anything else. */}
+        <ShiftBadge profile={person.shiftProfile} />
+        <InlineShiftPicker siteId={siteId} person={person} />
         <RowMenu
           label={`Actions for ${person.name ?? person.pin}`}
           actions={[
@@ -218,6 +236,8 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
   const [importOpen, setImportOpen] = React.useState(false);
   const [linking, setLinking] = React.useState<IclockPerson | null>(null);
   const [editing, setEditing] = React.useState<IclockPerson | null>(null);
+  const [picked, setPicked] = React.useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState<IclockPerson | null>(null);
 
   const query = useApiQuery(iclockKeys.people(siteId), (signal) => listPeople(siteId, signal), {
@@ -343,6 +363,22 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
         </Button>
       </div>
 
+      {picked.size > 0 ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2.5">
+          <span className="text-sm font-medium tabular-nums">{picked.size} selected</span>
+          <Button size="sm" onClick={() => setBulkOpen(true)}>
+            <CalendarClock className="mr-1.5 size-4" aria-hidden />
+            Assign shift
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setPicked(new Set())}>
+            Clear
+          </Button>
+          <span className="ml-auto text-xs text-muted-foreground">
+            Selection follows the current filter — clearing it is one click.
+          </span>
+        </div>
+      ) : null}
+
       <GroupedList
         items={rows}
         grouping={grouping}
@@ -355,6 +391,15 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
             onLink={setLinking}
             onEdit={setEditing}
             onDelete={setDeleting}
+            selected={picked.has(p.id)}
+            onSelect={(id, checked) =>
+              setPicked((prev) => {
+                const next = new Set(prev);
+                if (checked) next.add(id);
+                else next.delete(id);
+                return next;
+              })
+            }
           />
         )}
         empty={
@@ -376,6 +421,13 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
         onOpenChange={(open) => {
           if (!open) setLinking(null);
         }}
+      />
+      <BulkShiftDialog
+        siteId={siteId}
+        people={rows.filter((p) => picked.has(p.id))}
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        onDone={() => setPicked(new Set())}
       />
       <PersonEditDialog
         siteId={siteId}

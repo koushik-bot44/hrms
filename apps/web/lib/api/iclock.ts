@@ -86,6 +86,8 @@ export interface IclockPerson {
   employeeName: string | null;
   duplicateEmail: boolean;
   unnamed: boolean;
+  /** NIGHT or DAY — decides their shift-day cut, late threshold and break-alert window. */
+  shiftProfile: string;
   punchCount: number;
 }
 
@@ -100,6 +102,8 @@ export interface UpsertPersonRequest {
   lateExemptMin?: number | null;
   active?: boolean | null;
   excludedFromReports?: boolean | null;
+  /** NIGHT or DAY. Null leaves the current assignment alone. */
+  shiftProfile?: string | null;
 }
 
 export interface LinkSuggestion {
@@ -305,6 +309,43 @@ export interface PersonDay {
   sessions: DaySession[];
   /** True when shiftDate is this person's CURRENT shift day — answered per their shift, not the calendar. */
   current: boolean;
+}
+
+// --- shift assignment ------------------------------------------------------
+
+/** The two profiles, with the wording the operator reads. */
+export const SHIFT_LABELS: Record<string, string> = {
+  NIGHT: 'Night (7pm–4am)',
+  DAY: 'Day (10am–7pm)',
+};
+
+export interface AssignShiftRow {
+  personId: string;
+  pin: string;
+  name: string | null;
+  from: string;
+  to: string;
+}
+
+export interface AssignShiftReport {
+  shiftProfile: string;
+  changed: number;
+  alreadyOnIt: number;
+  /** Punches re-dated in the current payroll cycle. Past cycles are never touched. */
+  punchesRedated: number;
+  recomputedFrom: string;
+  rows: AssignShiftRow[];
+}
+
+export function assignShift(
+  siteId: string,
+  personIds: string[],
+  shiftProfile: string,
+): Promise<AssignShiftReport> {
+  return apiFetch<AssignShiftReport>(`${BASE}/sites/${siteId}/people/shift-profile`, {
+    method: 'POST',
+    body: { personIds, shiftProfile },
+  });
 }
 
 // --- pickers ---------------------------------------------------------------
