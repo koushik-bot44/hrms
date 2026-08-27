@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -82,6 +83,7 @@ public class IclockAdminController {
   private final IclockBoardService board;
   private final IclockFeedService feed;
   private final IclockSitePolicyService policies;
+  private final IclockReportService reports;
   private final AuditService audit;
 
   public IclockAdminController(
@@ -91,6 +93,7 @@ public class IclockAdminController {
       IclockBoardService board,
       IclockFeedService feed,
       IclockSitePolicyService policies,
+      IclockReportService reports,
       AuditService audit) {
     this.admin = admin;
     this.inbox = inbox;
@@ -98,6 +101,7 @@ public class IclockAdminController {
     this.board = board;
     this.feed = feed;
     this.policies = policies;
+    this.reports = reports;
     this.audit = audit;
   }
 
@@ -524,6 +528,83 @@ public class IclockAdminController {
   @GetMapping("/overview")
   public IclockBoardService.Overview overviewScoped(@RequestParam(required = false) String siteId) {
     return board.overviewAcross(siteId);
+  }
+
+  // ---------------------------------------------------------------- reports
+
+  /**
+   * The month, for one building. Read-only, so no audit entry: reading a report is not a change, and
+   * an audit trail that logs every screen view buries the entries that matter.
+   *
+   * @param period {@code yyyy-MM}, labelled by its END month per the ratified rule
+   */
+  @GetMapping("/sites/{siteId}/reports/monthly")
+  public IclockReportService.MonthlyReport monthlyReport(
+      @PathVariable String siteId, @RequestParam String period) {
+    return reports.monthly(siteId, parsePeriod(period));
+  }
+
+  /**
+   * The same month as a payroll CSV.
+   *
+   * <p>Formatted from the very same report object the screen renders, never recomputed — the CSV, the
+   * screen and the warning letter disagreeing about somebody's LOP is exactly what made the
+   * spreadsheet era untrustworthy.
+   */
+  @GetMapping(value = "/sites/{siteId}/reports/monthly.csv", produces = "text/csv")
+  public ResponseEntity<String> monthlyCsv(
+      @PathVariable String siteId,
+      @RequestParam String period,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    IclockReportService.MonthlyReport report = reports.monthly(siteId, parsePeriod(period));
+    // Audited, unlike the on-screen report: this one leaves the building.
+    record(actor, http, "ICLOCK_PAYROLL_EXPORTED", "IclockSite", siteId,
+        meta("period", period, "people", report.peopleReported(),
+            "excluded", report.peopleExcluded()));
+    return ResponseEntity.ok()
+        .header("Content-Disposition",
+            "attachment; filename=\"" + IclockPayrollExport.filename(report) + "\"")
+        .body(IclockPayrollExport.toCsv(report));
+  }
+
+  /**
+   * The warning letters this period WOULD produce. Composes only; nothing is sent from here.
+   *
+   * <p>Sending stays operator-triggered and is dark until the mail credentials are configured, so the
+   * preview is the whole surface for now — which is the right order: nobody should be able to mail 200
+   * people before somebody has read one of the letters.
+   */
+  @GetMapping("/sites/{siteId}/reports/warnings")
+  public List<Map<String, Object>> warningPreview(
+      @PathVariable String siteId, @RequestParam String period) {
+    IclockReportService.MonthlyReport report = reports.monthly(siteId, parsePeriod(period));
+    String label = parsePeriod(period).getMonth().getDisplayName(
+        java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH)
+        + " " + parsePeriod(period).getYear();
+    List<Map<String, Object>> out = new java.util.ArrayList<>();
+    for (IclockReportService.PersonReport r : report.rows()) {
+      if (!IclockWarningMail.warrantsWarning(r)) {
+        continue;
+      }
+      IclockWarningMail.Letter letter = IclockWarningMail.compose(r, label);
+      out.add(meta(
+          "personId", r.personId(), "pin", r.pin(), "name", r.name(),
+          "company", r.companyName(), "lateDays", letter.lateDays(),
+          "lopDays", letter.lopDays(), "subject", letter.subject(), "body", letter.body()));
+    }
+    return out;
+  }
+
+  /** {@code 2026-08} to a YearMonth, with a 400 rather than a 500 when it is not. */
+  private static java.time.YearMonth parsePeriod(String period) {
+    try {
+      return java.time.YearMonth.parse(period);
+    } catch (Exception e) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.BAD_REQUEST,
+          "Period must look like 2026-08.");
+    }
   }
 
   // ---------------------------------------------------------- roster delete

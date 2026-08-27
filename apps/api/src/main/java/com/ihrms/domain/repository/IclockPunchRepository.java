@@ -114,6 +114,16 @@ public interface IclockPunchRepository extends JpaRepository<IclockPunch, String
   List<IclockPunch> findBySiteIdAndShiftDateInOrderByEffectiveAtAsc(
       String siteId, Collection<LocalDate> shiftDates);
 
+  /**
+   * Every punch at a site across a span of shift days — the reporting read.
+   *
+   * <p>Ordered so the engine receives each person's day in the order it happened, which is what the
+   * session pairer assumes. Sorting per person afterwards would work too, and would be one more place
+   * for the assumption to be broken silently.
+   */
+  List<IclockPunch> findBySiteIdAndShiftDateBetweenOrderByEffectiveAtAsc(
+      String siteId, LocalDate from, LocalDate to);
+
   long countBySiteIdAndShiftDate(String siteId, LocalDate shiftDate);
 
   /** Site total across every shift-day currently in play, so a second shift is not left out of it. */

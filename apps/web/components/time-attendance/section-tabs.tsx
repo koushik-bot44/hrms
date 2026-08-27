@@ -29,7 +29,7 @@ interface Section {
 /**
  * The console's section bar.
  *
- * The three P2 sections are rendered as visible-but-inert pills rather than omitted. An operator who
+ * The remaining P2 sections are rendered as visible-but-inert pills rather than omitted. An operator who
  * can see that Reports exists and is not built yet asks a different question from one who assumes the
  * product simply cannot do it — and the placeholder is what stops "where are my reports?" arriving as
  * a bug report. They are `<span>`s, not disabled `<a>`s, so keyboard focus skips them entirely.
@@ -40,7 +40,7 @@ const SECTIONS: Section[] = [
   { label: 'Punch feed', href: `${ROOT}/feed`, icon: Activity },
   { label: 'People', href: `${ROOT}/people`, icon: Users },
   { label: 'Devices', href: `${ROOT}/devices`, icon: Router },
-  { label: 'Reports', href: '', icon: BarChart3, disabled: true },
+  { label: 'Reports', href: `${ROOT}/reports`, icon: BarChart3 },
   { label: 'Regularisation', href: '', icon: CalendarClock, disabled: true },
   { label: 'Payroll export', href: '', icon: FileSpreadsheet, disabled: true },
 ];

@@ -8,6 +8,7 @@ import { PeopleRoster } from './people-roster';
 import { DevicesPanel } from './devices-panel';
 import { PunchFeed } from './punch-feed';
 import { PersonDayView } from './person-day-view';
+import { ReportsPanel } from './reports-panel';
 
 /**
  * The console's four section screens, each a thin binding of {@link ConsoleShell} to one body.
@@ -68,6 +69,17 @@ export function FeedScreen() {
       description="Every punch the terminals have sent, newest first — before burst collapse and before attribution. This is what arrived, not what it was interpreted as."
     >
       {(siteId) => <PunchFeed siteId={siteId} />}
+    </ConsoleShell>
+  );
+}
+
+export function ReportsScreen() {
+  return (
+    <ConsoleShell
+      title="Reports"
+      description="The month, per person — derived from the punches themselves rather than from a spreadsheet somebody exported. Payroll CSV and warning letters are built from this same report, so they cannot disagree with it."
+    >
+      {(siteId) => <ReportsPanel siteId={siteId} />}
     </ConsoleShell>
   );
 }

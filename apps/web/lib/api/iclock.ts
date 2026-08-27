@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiBaseUrl, apiFetch } from './client';
 
 /**
  * Time & Attendance (iClock) admin surface — `/provisioning/iclock/**`.
@@ -307,6 +307,94 @@ export interface PersonDay {
   current: boolean;
 }
 
+// --- reports ---------------------------------------------------------------
+
+export interface PersonReport {
+  personId: string;
+  pin: string;
+  name: string | null;
+  companyName: string | null;
+  team: string | null;
+  shiftProfile: string;
+  presentDays: number;
+  absentDays: number;
+  weeklyOffDays: number;
+  holidayDays: number;
+  workingDays: number;
+  workedMin: number;
+  breakMin: number;
+  cafeteriaMin: number;
+  allowedBreakMin: number;
+  excessBreakMin: number;
+  lateDays: number;
+  lateMin: number;
+  avgLateMin: number;
+  daysWithMissingPunch: number;
+  expectedWorkMin: number;
+  productiveMin: number;
+  unproductiveMin: number;
+  productivePct: number;
+  workedPct: number;
+  lopDays: number;
+  lateDates: string[];
+}
+
+export interface CompanyRollup {
+  companyName: string;
+  people: number;
+  lateDays: number;
+  lopDays: number;
+  excessBreakMin: number;
+}
+
+export interface MonthlyReport {
+  siteId: string;
+  siteName: string;
+  period: { label: string; from: string; to: string };
+  peopleReported: number;
+  peopleExcluded: number;
+  rows: PersonReport[];
+  byCompany: CompanyRollup[];
+}
+
+export interface WarningLetter {
+  personId: string;
+  pin: string;
+  name: string | null;
+  company: string | null;
+  lateDays: number;
+  lopDays: number;
+  subject: string;
+  body: string;
+}
+
+export function getMonthlyReport(
+  siteId: string,
+  period: string,
+  signal?: AbortSignal,
+): Promise<MonthlyReport> {
+  return apiFetch<MonthlyReport>(
+    `${BASE}/sites/${siteId}/reports/monthly?period=${encodeURIComponent(period)}`,
+    { signal },
+  );
+}
+
+export function getWarningPreview(
+  siteId: string,
+  period: string,
+  signal?: AbortSignal,
+): Promise<WarningLetter[]> {
+  return apiFetch<WarningLetter[]>(
+    `${BASE}/sites/${siteId}/reports/warnings?period=${encodeURIComponent(period)}`,
+    { signal },
+  );
+}
+
+/** The CSV download URL. A plain link, so the browser handles the save rather than the app. */
+export function payrollCsvUrl(siteId: string, period: string): string {
+  return `${apiBaseUrl()}${BASE}/sites/${siteId}/reports/monthly.csv?period=${encodeURIComponent(period)}`;
+}
+
 // --- calls -----------------------------------------------------------------
 
 const BASE = '/provisioning/iclock';
@@ -550,6 +638,10 @@ export function moveDeviceBuilding(deviceId: string, siteId: string): Promise<Ic
  */
 export const iclockKeys = {
   root: ['iclock'] as const,
+  report: (siteId: string, period: string) =>
+    ['iclock', 'site', siteId, 'report', period] as const,
+  warnings: (siteId: string, period: string) =>
+    ['iclock', 'site', siteId, 'warnings', period] as const,
   sites: () => ['iclock', 'sites'] as const,
   devices: (status?: string) => ['iclock', 'devices', status ?? 'all'] as const,
   site: (siteId: string) => ['iclock', 'site', siteId] as const,
