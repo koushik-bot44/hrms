@@ -307,6 +307,24 @@ export interface PersonDay {
   current: boolean;
 }
 
+// --- pickers ---------------------------------------------------------------
+
+export interface CompanyOption {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
+/** Active IHRMS companies. A CLOSED list — company is not free text on the edit form. */
+export function listCompanyOptions(signal?: AbortSignal): Promise<CompanyOption[]> {
+  return apiFetch<CompanyOption[]>(`${BASE}/companies`, { signal });
+}
+
+/** Team labels already in use at a building. Open — a new team is legitimate. */
+export function listTeamOptions(siteId: string, signal?: AbortSignal): Promise<string[]> {
+  return apiFetch<string[]>(`${BASE}/sites/${siteId}/teams`, { signal });
+}
+
 // --- reports ---------------------------------------------------------------
 
 export interface PersonReport {
@@ -638,6 +656,8 @@ export function moveDeviceBuilding(deviceId: string, siteId: string): Promise<Ic
  */
 export const iclockKeys = {
   root: ['iclock'] as const,
+  companies: () => ['iclock', 'companies'] as const,
+  teams: (siteId: string) => ['iclock', 'site', siteId, 'teams'] as const,
   report: (siteId: string, period: string) =>
     ['iclock', 'site', siteId, 'report', period] as const,
   warnings: (siteId: string, period: string) =>

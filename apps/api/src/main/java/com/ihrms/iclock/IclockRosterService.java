@@ -139,7 +139,12 @@ public class IclockRosterService {
       person.setPin(pin);
     }
     apply(person, req);
-    return view(people.save(person), java.util.Set.of());
+    IclockPerson saved = people.save(person);
+    // Re-run the duplicate check against the SAVED state. Returning Set.of() here meant an edit that
+    // introduced a collision came back showing no flag, and the operator only found out on the next
+    // full roster load. Flagged, never blocking — the seed data genuinely contains one address shared
+    // by two people.
+    return view(saved, new java.util.HashSet<>(people.findDuplicateEmails(saved.getSiteId())));
   }
 
   /** What a delete would do, or why it is refused. Computed before the dialog, not after the click. */
@@ -229,10 +234,44 @@ public class IclockRosterService {
     return "NIGHT".equals(v) || "DAY".equals(v) ? v : null;
   }
 
+  /** Active IHRMS companies, for the console's company picker. Name-ordered. */
+  @Transactional(readOnly = true)
+  public List<CompanyOption> activeCompanies() {
+    return companies.findAll().stream()
+        // A soft-deleted or suspended company must not be offerable: assigning somebody to one would
+        // put live attendance under an entity the rest of IHRMS considers gone.
+        .filter(c -> c.getDeletedAt() == null && "ACTIVE".equalsIgnoreCase(c.getStatus()))
+        .sorted(java.util.Comparator.comparing(c -> c.getName() == null ? "" : c.getName().toLowerCase(Locale.ROOT)))
+        .map(c -> new CompanyOption(c.getId(), c.getName(), c.getCode()))
+        .toList();
+  }
+
+  /** One row of the company picker. */
+  public record CompanyOption(String id, String name, String code) {}
+
+  /** Team labels already in use at this building — the picker's options. */
+  @Transactional(readOnly = true)
+  public List<String> teamsAt(String siteId) {
+    requireSite(siteId);
+    return people.findDistinctTeams(siteId);
+  }
+
   private void apply(IclockPerson person, UpsertPersonRequest req) {
     if (req.name() != null) person.setName(blankToNull(req.name()));
     if (req.email() != null) person.setEmail(normaliseEmail(req.email()));
-    if (req.companyId() != null) person.setCompanyId(blankToNull(req.companyId()));
+    if (req.companyId() != null) {
+      String id = blankToNull(req.companyId());
+      person.setCompanyId(id);
+      // KEEP THE LABEL AGREEING WITH THE ID. companyLabel is the import's verbatim text and is what
+      // every grouped surface falls back to; leaving a stale "Combino IT" on somebody just moved to
+      // Screatives would show them under their old company on the board while reports used the new
+      // one. An explicit label in the same request still wins — that is the import's own path.
+      if (id != null && req.companyLabel() == null) {
+        companies.findById(id).ifPresent(c -> person.setCompanyLabel(c.getName()));
+      } else if (id == null && req.companyLabel() == null) {
+        person.setCompanyLabel(null);
+      }
+    }
     if (req.companyLabel() != null) person.setCompanyLabel(blankToNull(req.companyLabel()));
     if (req.team() != null) person.setTeam(blankToNull(req.team()));
     if (req.role() != null) person.setRole(blankToNull(req.role()));

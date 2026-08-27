@@ -8,12 +8,10 @@ import {
   getUnmappedInbox,
   iclockKeys,
   reresolve,
-  upsertPerson,
   type UnmappedPin,
 } from '@/lib/api/iclock';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/empty-state';
 import { GroupedList } from '@/components/console/grouped-list';
@@ -23,27 +21,15 @@ import { istDateTime, relativeTime } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { ReasonBadge, reasonMeta } from './person-state-badge';
 import { ConsoleError } from './console-error';
+import { PersonEditDialog } from './person-edit-dialog';
 
 /** One inbox row, with the remedy its reason actually calls for. */
 function InboxRow({ row, siteId }: { row: UnmappedPin; siteId: string }) {
   const qc = useQueryClient();
-  const [naming, setNaming] = React.useState(false);
-  const [name, setName] = React.useState(row.suggestedName ?? '');
+  const [adding, setAdding] = React.useState(false);
   const meta = reasonMeta(row.reason);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: iclockKeys.site(siteId) });
-
-  const create = useApiMutation(
-    (personName: string) =>
-      upsertPerson(siteId, { pin: row.pin, name: personName.trim() || null }),
-    {
-      successMessage: 'Person added. Retry attribution to pick up their punches.',
-      onSuccess: () => {
-        setNaming(false);
-        invalidate();
-      },
-    },
-  );
 
   const reactivate = useApiMutation(
     () => editPerson(row.personId as string, { pin: row.pin, active: true }),
@@ -89,8 +75,8 @@ function InboxRow({ row, siteId }: { row: UnmappedPin; siteId: string }) {
               <UserRoundCheck className="size-4" />
               Reactivate
             </Button>
-          ) : row.reason === 'UNKNOWN_PIN' && !naming ? (
-            <Button size="sm" variant="outline" onClick={() => setNaming(true)}>
+          ) : row.reason === 'UNKNOWN_PIN' ? (
+            <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
               <UserPlus className="size-4" />
               Add person
             </Button>
@@ -98,30 +84,17 @@ function InboxRow({ row, siteId }: { row: UnmappedPin; siteId: string }) {
         </div>
       </div>
 
-      {naming ? (
-        <form
-          className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            create.mutate(name);
-          }}
-        >
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Who is this? (leave blank to add them unnamed)"
-            className="min-w-0 flex-1"
-            aria-label={`Name for pin ${row.pin}`}
-            autoFocus
-          />
-          <Button type="submit" size="sm" disabled={create.isPending}>
-            {create.isPending ? 'Adding…' : 'Add'}
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setNaming(false)}>
-            Cancel
-          </Button>
-        </form>
-      ) : null}
+      {/* The SAME dialog the People screen uses. A new person is exactly where a free-text company
+          field does the most damage — that row becomes the seed of a company nobody meant to create —
+          so the inbox gets the closed company list and the team picker too. */}
+      <PersonEditDialog
+        siteId={siteId}
+        person={null}
+        presetPin={row.pin}
+        open={adding}
+        onOpenChange={setAdding}
+        onSaved={invalidate}
+      />
     </div>
   );
 }

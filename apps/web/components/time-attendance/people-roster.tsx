@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownUp, Eye, EyeOff, Link2, Link2Off, Search, Trash2, Upload, UserRound, Users } from 'lucide-react';
+import { ArrowDownUp, Eye, EyeOff, Link2, Link2Off, Pencil, Search, Trash2, Upload, UserRound, Users } from 'lucide-react';
 import { editPerson, iclockKeys, listPeople, type IclockPerson } from '@/lib/api/iclock';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import type { GroupOptions } from '@/lib/console/grouping';
 import { RosterImportDialog } from './roster-import-dialog';
 import { LinkSuggestionsDialog } from './link-suggestions';
 import { DeletePersonDialog } from './delete-person-dialog';
+import { PersonEditDialog } from './person-edit-dialog';
 import { UnmappedPinInbox } from './unmapped-pin-inbox';
 import { ConsoleError } from './console-error';
 
@@ -114,11 +115,13 @@ function PersonRow({
   person,
   siteId,
   onLink,
+  onEdit,
   onDelete,
 }: {
   person: IclockPerson;
   siteId: string;
   onLink: (p: IclockPerson) => void;
+  onEdit: (p: IclockPerson) => void;
   onDelete: (p: IclockPerson) => void;
 }) {
   const qc = useQueryClient();
@@ -170,6 +173,11 @@ function PersonRow({
           label={`Actions for ${person.name ?? person.pin}`}
           actions={[
             {
+              label: 'Edit…',
+              icon: Pencil,
+              onSelect: () => onEdit(person),
+            },
+            {
               label: person.employeeId ? 'Change IHRMS link' : 'Link to IHRMS employee',
               icon: person.employeeId ? Link2Off : Link2,
               onSelect: () => onLink(person),
@@ -209,6 +217,7 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
   const [search, setSearch] = React.useState('');
   const [importOpen, setImportOpen] = React.useState(false);
   const [linking, setLinking] = React.useState<IclockPerson | null>(null);
+  const [editing, setEditing] = React.useState<IclockPerson | null>(null);
   const [deleting, setDeleting] = React.useState<IclockPerson | null>(null);
 
   const query = useApiQuery(iclockKeys.people(siteId), (signal) => listPeople(siteId, signal), {
@@ -340,7 +349,13 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
         storageKey={`people.${axis}`}
         itemKey={(p) => p.id}
         renderItem={(p) => (
-          <PersonRow person={p} siteId={siteId} onLink={setLinking} onDelete={setDeleting} />
+          <PersonRow
+            person={p}
+            siteId={siteId}
+            onLink={setLinking}
+            onEdit={setEditing}
+            onDelete={setDeleting}
+          />
         )}
         empty={
           <EmptyState
@@ -361,6 +376,12 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
         onOpenChange={(open) => {
           if (!open) setLinking(null);
         }}
+      />
+      <PersonEditDialog
+        siteId={siteId}
+        person={editing}
+        open={editing != null}
+        onOpenChange={(o) => !o && setEditing(null)}
       />
       <DeletePersonDialog
         person={deleting}

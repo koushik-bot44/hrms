@@ -51,6 +51,18 @@ public interface IclockPersonRepository extends JpaRepository<IclockPerson, Stri
           + " group by lower(p.email) having count(p.id) > 1")
   List<String> findDuplicateEmails(@Param("siteId") String siteId);
 
+  /**
+   * The team labels already in use at a building.
+   *
+   * <p>Teams are LABELS, not entities — there is no team table and there should not be one, because
+   * the operator invents them as the floor reorganises. Offering the distinct values already present
+   * is what stops "Kiran Team", "kiran team" and "Kiran's Team" becoming three teams by typo, while
+   * still letting a genuinely new one be typed.
+   */
+  @Query("select distinct p.team from IclockPerson p "
+      + "where p.siteId = :siteId and p.team is not null and p.team <> '' order by p.team")
+  List<String> findDistinctTeams(@Param("siteId") String siteId);
+
   /** Case-insensitive lookup used by the HIGH-confidence link suggestion. */
   @Query("select p from IclockPerson p where p.siteId = :siteId and lower(p.email) = lower(:email)")
   List<IclockPerson> findBySiteIdAndEmailIgnoreCase(

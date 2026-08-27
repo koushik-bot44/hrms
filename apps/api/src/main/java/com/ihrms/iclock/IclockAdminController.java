@@ -356,9 +356,15 @@ public class IclockAdminController {
     // active and excludedFromReports are recorded as RESULTING state rather than as a diff: the two
     // are routinely confused (one stops resolution, the other only stops reporting), and the trail
     // has to say unambiguously what the person was left as.
+    //
+    // Company and team are recorded too. Moving somebody between companies changes which report they
+    // appear in and which company's admin is copied on their warning letter, so it is an attribution
+    // change and belongs in the trail rather than being filed as a cosmetic edit.
     record(actor, http, "ICLOCK_PERSON_EDITED", "IclockPerson", personId,
         meta("pin", person.pin(), "name", person.name(), "active", person.active(),
-            "excludedFromReports", person.excludedFromReports()));
+            "excludedFromReports", person.excludedFromReports(),
+            "companyId", person.companyId(), "companyName", person.companyName(),
+            "team", person.team(), "duplicateEmail", person.duplicateEmail()));
     return person;
   }
 
@@ -386,6 +392,31 @@ public class IclockAdminController {
                 .map(AssignShiftRow::pin)
                 .toList()));
     return report;
+  }
+
+  /**
+   * Active IHRMS companies, for the console's company picker.
+   *
+   * <p>A CLOSED LIST on purpose. Company was previously free text on the edit form, which is how a
+   * roster ends up with "Screatives", "screatives" and "Screatives Software Services" as three
+   * companies — the import already carries an alias map to undo exactly that damage from the seed
+   * data, and there is no reason to keep manufacturing it by hand.
+   */
+  @GetMapping("/companies")
+  public List<IclockRosterService.CompanyOption> companyOptions() {
+    return roster.activeCompanies();
+  }
+
+  /**
+   * Team labels already in use at a building.
+   *
+   * <p>Open by design, unlike companies: teams are labels the operator invents as the floor
+   * reorganises, so a new one is legitimate. Offering what already exists is what stops one team
+   * becoming three by typo.
+   */
+  @GetMapping("/sites/{siteId}/teams")
+  public List<String> teamOptions(@PathVariable String siteId) {
+    return roster.teamsAt(siteId);
   }
 
   /**
