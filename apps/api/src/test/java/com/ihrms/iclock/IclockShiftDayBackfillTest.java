@@ -82,16 +82,44 @@ class IclockShiftDayBackfillTest {
   void everyEffectivePunchInTheDatabaseAgreesWithTheRule() {
     // The post-condition V45 asserts, re-asserted from the test suite so a later write path that stamps
     // shiftDate incorrectly is caught here rather than in a payroll dispute.
+    //
+    // THE CUT IS PER PERSON SINCE V47, and this assertion has to follow. It used to hard-code 11:30
+    // for every row, which was true while everyone worked nights and became wrong the moment anyone
+    // was assigned the day shift: a day-shift person cuts at 01:30, so their punches legitimately
+    // disagree with the night rule. Left as it was, this test failed for correct data — and it did,
+    // as soon as a sibling test committed day-profile punches into the same schema.
+    //
+    // A punch with no person (personId NULL, from the rolling-deploy window V44 documents) has no
+    // profile to read, so the CASE falls through to the night default — which is what promotion
+    // would have used for it.
     Long drift =
         jdbc.queryForObject(
             """
-            SELECT count(*) FROM "iclock_punches" p
+            SELECT count(*)
+              FROM "iclock_punches" p
+              LEFT JOIN "iclock_people" pe ON pe."id" = p."personId"
              WHERE p."shiftDate" IS DISTINCT FROM (
-                     CASE WHEN (p."effectiveAt" AT TIME ZONE 'Asia/Kolkata')::time < TIME '11:30'
+                     CASE WHEN (p."effectiveAt" AT TIME ZONE 'Asia/Kolkata')::time
+                               < (CASE WHEN pe."shiftProfile" = 'DAY'
+                                       THEN TIME '01:30' ELSE TIME '11:30' END)
                           THEN (p."effectiveAt" AT TIME ZONE 'Asia/Kolkata')::date - 1
                           ELSE (p."effectiveAt" AT TIME ZONE 'Asia/Kolkata')::date END)
             """,
             Long.class);
-    assertThat(drift).isZero();
+    assertThat(drift)
+        .as("every punch must agree with ITS OWN person's shift-day cut")
+        .isZero();
+  }
+
+  @Test
+  void theSqlCutsMatchTheProfilesTheyClaimToMirror() {
+    // The literals above are mirrors of the derivation, and mirrors drift. This is the assertion that
+    // notices — the same job the 11:30 check does for V45, extended to the day profile.
+    assertThat(IclockShiftProfile.NIGHT.dayCut())
+        .as("the night literal in this file's SQL")
+        .isEqualTo(LocalTime.of(11, 30));
+    assertThat(IclockShiftProfile.DAY.dayCut())
+        .as("the day literal in this file's SQL")
+        .isEqualTo(LocalTime.of(1, 30));
   }
 }
