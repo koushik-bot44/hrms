@@ -97,10 +97,14 @@ class CompanyPurgeTest {
 
   @Test
   void purgeHardDeletesEverythingForTheCompanyOnly() throws Exception {
-    // Sanity: both companies are fully populated before the purge.
+    // Sanity: both companies are fully populated before the purge — including the restrict-FK rows
+    // (offer, agreement, offboarding case) that a real onboarded employee carries.
     assertThat(count("companies", "id", companyA)).isEqualTo(1);
     assertThat(count("employees", "companyId", companyA)).isEqualTo(1);
     assertThat(count("audit_logs", "companyId", companyA)).isEqualTo(1);
+    assertThat(count("employee_offers", "employeeId", empA)).isEqualTo(1);
+    assertThat(count("employee_agreements", "employeeId", empA)).isEqualTo(1);
+    assertThat(count("offboarding_cases", "employeeId", empA)).isEqualTo(1);
 
     mvc.perform(delete("/companies/" + companyA + "/purge").header("Authorization", "Bearer " + superToken))
         .andExpect(status().isOk());
@@ -118,6 +122,13 @@ class CompanyPurgeTest {
     assertThat(count("notifications", "recipientUserId", mgrA)).isZero();
     assertThat(count("employee_code_sequences", "companyId", companyA)).isZero();
     assertThat(count("audit_logs", "companyId", companyA)).isZero();
+    // The restrict-FK subtree that previously blocked the purge is gone too.
+    assertThat(count("employee_offers", "employeeId", empA)).isZero();
+    assertThat(count("employee_agreements", "employeeId", empA)).isZero();
+    assertThat(count("offboarding_cases", "employeeId", empA)).isZero();
+    assertThat(count("offboarding_documents", "caseId", "obc-a")).isZero();
+    assertThat(count("offboarding_letters", "caseId", "obc-a")).isZero();
+    assertThat(count("offboarding_clearance", "caseId", "obc-a")).isZero();
     assertThat(blobCount("a/")).isZero();
 
     // Company B: entirely untouched.
@@ -127,7 +138,10 @@ class CompanyPurgeTest {
     assertThat(count("teams", "companyId", companyB)).isEqualTo(1);
     assertThat(count("audit_logs", "companyId", companyB)).isEqualTo(1);
     assertThat(count("employee_code_sequences", "companyId", companyB)).isEqualTo(1);
-    assertThat(blobCount("b/")).isEqualTo(3);
+    assertThat(count("offboarding_cases", "id", "obc-b")).isEqualTo(1);
+    assertThat(count("employee_offers", "id", "off-b")).isEqualTo(1);
+    assertThat(count("employee_agreements", "id", "agr-b")).isEqualTo(1);
+    assertThat(blobCount("b/")).isEqualTo(7);
 
     // A portal-level COMPANY_PURGED trace survives (no companyId, records what was removed).
     assertThat(auditLogs.findByAction("COMPANY_PURGED"))
@@ -190,9 +204,40 @@ class CompanyPurgeTest {
     n.setEmployeeId(e.getId());
     notifications.save(n);
 
+    // Offer + agreement + a full offboarding case (document + letter + clearance). All have RESTRICT
+    // foreign keys to employees/users, so a real onboarded/offboarded employee carries them — this is
+    // exactly what the purge must clear before deleting employees + staff, and what a queue-only seed
+    // previously missed. Each PDF-bearing row gets a stored blob too.
+    jdbc.update(
+        "INSERT INTO \"employee_offers\" (\"id\",\"employeeId\",\"terms\",\"storageKey\") VALUES (?,?, '{}'::jsonb, ?)",
+        "off-" + slug, e.getId(), slug + "/offer");
+    jdbc.update(
+        "INSERT INTO \"employee_agreements\" (\"id\",\"employeeId\",\"type\",\"sentByUserId\",\"storageKey\")"
+            + " VALUES (?,?, CAST(? AS \"EmployeeAgreementType\"), ?, ?)",
+        "agr-" + slug, e.getId(), "NDA", hr.getId(), slug + "/agr");
+    jdbc.update(
+        "INSERT INTO \"offboarding_cases\" (\"id\",\"employeeId\",\"reason\",\"lastWorkingDay\",\"initiatedByUserId\")"
+            + " VALUES (?,?,?, CURRENT_DATE, ?)",
+        "obc-" + slug, e.getId(), "Restructuring", hr.getId());
+    jdbc.update(
+        "INSERT INTO \"offboarding_documents\" (\"id\",\"caseId\",\"type\",\"sentByUserId\",\"storageKey\")"
+            + " VALUES (?,?, CAST(? AS \"OffboardingDocType\"), ?, ?)",
+        "obd-" + slug, "obc-" + slug, "EXIT_FORMALITIES", hr.getId(), slug + "/obdoc");
+    jdbc.update(
+        "INSERT INTO \"offboarding_letters\" (\"id\",\"caseId\",\"type\",\"storageKey\",\"issuedByUserId\")"
+            + " VALUES (?,?, CAST(? AS \"RequestType\"), ?, ?)",
+        "obl-" + slug, "obc-" + slug, "RELIEVING_LETTER", slug + "/obletter", hr.getId());
+    jdbc.update(
+        "INSERT INTO \"offboarding_clearance\" (\"id\",\"caseId\",\"filledByUserId\") VALUES (?,?,?)",
+        "obcl-" + slug, "obc-" + slug, hr.getId());
+
     blob(slug + "/doc");
     blob(slug + "/sig");
     blob(slug + "/gen");
+    blob(slug + "/offer");
+    blob(slug + "/agr");
+    blob(slug + "/obdoc");
+    blob(slug + "/obletter");
     jdbc.update(
         "INSERT INTO \"employee_code_sequences\" (\"id\",\"companyId\",\"lastSeq\",\"updatedAt\") VALUES (?,?,?, now())",
         "seq-" + slug, cid, 1);

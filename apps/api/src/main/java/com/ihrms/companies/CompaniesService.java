@@ -181,25 +181,37 @@ public class CompaniesService {
     String name = company.getName();
     String code = company.getCode();
 
-    // Collect every stored object key for this company BEFORE deleting the rows that reference them,
-    // so the actual bytes (S3 objects / db blobs) can be removed AFTER this transaction commits.
-    java.util.List<String> storageKeys =
-        jdbc.queryForList(
-            "SELECT \"storageKey\" FROM \"documents\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
-                + " UNION SELECT \"storageKey\" FROM \"signatures\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
-                + " UNION SELECT \"storageKey\" FROM \"generated_documents\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)",
-            String.class, id, id, id);
+    // Row filters reused below: a company's employees, and its offboarding cases (the offboarding
+    // document / letter / clearance rows key off the case, not the employee).
+    String byEmployee = " WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)";
+    String byCase =
+        " WHERE \"caseId\" IN (SELECT \"id\" FROM \"offboarding_cases\" WHERE \"employeeId\" IN"
+            + " (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?))";
 
-    // 1) Stored blob bytes (db storage) for uploaded docs + signatures + generated PDFs.
+    // Collect every stored object key this company owns BEFORE deleting the rows that reference them,
+    // so the bytes (S3 objects / db blobs) can be removed AFTER this transaction commits. Covers ALL
+    // doc-bearing tables: uploaded docs, signatures, generated PDFs, offer + agreement PDFs, and the
+    // offboarding documents + letters (each keyed by employee, or by case for the offboarding pair).
+    String storageKeysSql =
+        "SELECT \"storageKey\" FROM \"documents\"" + byEmployee
+            + " UNION SELECT \"storageKey\" FROM \"signatures\"" + byEmployee
+            + " UNION SELECT \"storageKey\" FROM \"generated_documents\"" + byEmployee
+            + " UNION SELECT \"storageKey\" FROM \"employee_offers\"" + byEmployee
+            + " UNION SELECT \"storageKey\" FROM \"employee_agreements\"" + byEmployee
+            + " UNION SELECT \"storageKey\" FROM \"offboarding_documents\"" + byCase
+            + " UNION SELECT \"storageKey\" FROM \"offboarding_letters\"" + byCase;
+    java.util.List<String> storageKeys =
+        jdbc.queryForList(storageKeysSql, String.class, id, id, id, id, id, id, id).stream()
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+
+    // 1) Stored blob bytes (db storage) for every one of those keys.
     jdbc.update(
-        "DELETE FROM \"document_blobs\" WHERE \"storageKey\" IN ("
-            + " SELECT \"storageKey\" FROM \"documents\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
-            + " UNION SELECT \"storageKey\" FROM \"signatures\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
-            + " UNION SELECT \"storageKey\" FROM \"generated_documents\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?))",
-        id, id, id);
+        "DELETE FROM \"document_blobs\" WHERE \"storageKey\" IN (" + storageKeysSql + ")",
+        id, id, id, id, id, id, id);
 
     // 2) Employee-record children.
-    String byEmployee = " WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)";
     jdbc.update("DELETE FROM \"generated_documents\"" + byEmployee, id);
     jdbc.update("DELETE FROM \"documents\"" + byEmployee, id);
     jdbc.update("DELETE FROM \"signatures\"" + byEmployee, id);
@@ -217,6 +229,17 @@ public class CompaniesService {
         "DELETE FROM \"notifications\" WHERE \"employeeId\" IN (SELECT \"id\" FROM \"employees\" WHERE \"companyId\" = ?)"
             + " OR \"recipientUserId\" IN (SELECT \"id\" FROM \"users\" WHERE \"companyId\" = ?)",
         id, id);
+
+    // 3b) Offers, agreements, and the whole offboarding subtree. Each has RESTRICT foreign keys to
+    // employees/users, so they MUST be removed before those rows (otherwise DELETE FROM employees /
+    // users raises a foreign-key violation). The offboarding document / letter / clearance rows
+    // reference the case, so they precede the cases themselves.
+    jdbc.update("DELETE FROM \"offboarding_clearance\"" + byCase, id);
+    jdbc.update("DELETE FROM \"offboarding_documents\"" + byCase, id);
+    jdbc.update("DELETE FROM \"offboarding_letters\"" + byCase, id);
+    jdbc.update("DELETE FROM \"offboarding_cases\"" + byEmployee, id);
+    jdbc.update("DELETE FROM \"employee_agreements\"" + byEmployee, id);
+    jdbc.update("DELETE FROM \"employee_offers\"" + byEmployee, id);
 
     // 4) Employees, per-company ID sequence, teams.
     jdbc.update("DELETE FROM \"employees\" WHERE \"companyId\" = ?", id);
