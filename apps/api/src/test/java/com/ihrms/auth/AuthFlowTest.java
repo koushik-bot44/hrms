@@ -89,7 +89,9 @@ class AuthFlowTest {
     assertThat(cookie).isNotNull();
     assertThat(cookie.getValue()).isNotBlank();
     assertThat(cookie.isHttpOnly()).isTrue();
-    assertThat(cookie.getPath()).isEqualTo("/auth");
+    // Root path (not /auth): the web reaches the API through a same-origin /api/* proxy, so the
+    // cookie must match the proxied /api/auth/refresh as well as the direct /auth/* form.
+    assertThat(cookie.getPath()).isEqualTo("/");
     assertThat(cookie.getValue()).isNotEqualTo(body.get("accessToken").asText());
   }
 

@@ -11,7 +11,14 @@ import org.springframework.stereotype.Component;
 /**
  * Builds the httpOnly refresh cookie on the API domain (contract §1.4). Production is
  * Secure + SameSite=None for the cross-site web origin; dev relaxes to insecure + Lax so
- * localhost-over-http works. Scoped to {@code /auth} so it is only sent to refresh/logout.
+ * localhost-over-http works.
+ *
+ * <p>Path is {@code /} rather than {@code /auth}: the web app reaches the API through a
+ * same-origin reverse proxy ({@code /api/*} -> this API), so the browser stores the cookie
+ * under the web origin and would only replay a {@code /auth}-scoped cookie to {@code /auth/*},
+ * never to the proxied {@code /api/auth/refresh}. A root path matches both the proxied and the
+ * direct ({@code /auth/*}) forms. The cookie stays httpOnly + Secure, so the wider path only
+ * means it travels to the app's own origin — never cross-site.
  */
 @Component
 public class RefreshCookies {
@@ -39,7 +46,7 @@ public class RefreshCookies {
         .httpOnly(true)
         .secure(prod)
         .sameSite(prod ? "None" : "Lax")
-        .path("/auth")
+        .path("/")
         .maxAge(maxAgeSeconds)
         .build();
   }

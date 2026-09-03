@@ -17,8 +17,10 @@ export class ApiError extends Error {
 }
 
 // Base URL of the API, with any trailing slash(es) stripped so `${BASE}${path}`
-// never produces a double slash.
-const BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
+// never produces a double slash. Defaults to the same-origin `/api` proxy (see
+// next.config.js) so the refresh cookie stays first-party; local dev overrides it with
+// NEXT_PUBLIC_API_URL pointing straight at the dev API.
+const BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? '/api').replace(/\/+$/, '');
 
 export function apiBaseUrl(): string {
   return BASE_URL;
