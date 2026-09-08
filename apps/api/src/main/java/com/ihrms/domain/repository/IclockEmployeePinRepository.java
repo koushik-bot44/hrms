@@ -25,17 +25,28 @@ public interface IclockEmployeePinRepository extends JpaRepository<IclockEmploye
   long countBySiteId(String siteId);
 
   /**
-   * Re-points every pin of a company's employees at a new site, for a site re-link. Runs in the SAME
-   * transaction as the link change: the denormalised {@code siteId} is the scope the unique index
-   * guards, so leaving it stale would let the constraint protect a scope that no longer exists. A
-   * re-link that would create a collision fails here on the unique index — which is the intended,
-   * loud outcome.
+   * Re-points a company's pins THAT ARE CURRENTLY AT {@code fromSiteId} to {@code siteId}.
+   *
+   * <p><b>The site filter is the whole point, and it was missing.</b> The old form updated every pin
+   * of every employee of the company with no site predicate. Under D2 that was correct, because a
+   * company had one site and a re-link moved the lot. Once a company can span two buildings it
+   * becomes destructive: linking Screatives to Building 9 would have dragged Orion Towers' pins along
+   * with it, either silently — every Orion pin now claiming to live in Building 9 — or as a unique
+   * violation on (siteId, pin) that rolls back a legitimate operation with a 500.
+   *
+   * <p>An adversarial review called this unreachable, and it was: {@code linkCompany} refused the
+   * second building before ever getting here. Removing that refusal is the entire purpose of this
+   * change, which is exactly what makes the hazard live. The two had to move together.
    */
   @Modifying
   @Query(
       "update IclockEmployeePin p set p.siteId = :siteId"
-          + " where p.employeeId in (select e.id from Employee e where e.companyId = :companyId)")
-  int repointCompanyPins(@Param("companyId") String companyId, @Param("siteId") String siteId);
+          + " where p.siteId = :fromSiteId"
+          + " and p.employeeId in (select e.id from Employee e where e.companyId = :companyId)")
+  int repointCompanyPins(
+      @Param("companyId") String companyId,
+      @Param("fromSiteId") String fromSiteId,
+      @Param("siteId") String siteId);
 
   /**
    * Pins whose denormalised site no longer matches their employee's company membership — should always

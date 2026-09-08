@@ -52,6 +52,24 @@ class IclockDayShiftWitnessTest {
   /** A Tuesday, so neither the witness nor the control lands on a weekly off. */
   private static final String DAY1 = "2026-09-01";
 
+  /**
+   * A day inside the CURRENT payroll cycle, for the recompute tests.
+   *
+   * <p>Derived rather than fixed, because the recompute window is bounded by {@code YearMonth.now()}
+   * and a hard-coded date silently leaves the cycle when the month turns — which is exactly how these
+   * two tests started failing on 9 September while the code was correct.
+   *
+   * <p>Never the 1st. Under the night cut a 10:00 arrival on the 1st files as the last day of the
+   * PREVIOUS cycle, so it sits outside the recompute window on purpose; using it here would assert a
+   * reach-back that "past cycles untouched" forbids.
+   */
+  private static String inCycleDay() {
+    LocalDate today = LocalDate.now(IST);
+    LocalDate cycleStart = today.withDayOfMonth(1);
+    LocalDate candidate = today.minusDays(2);
+    return (candidate.isAfter(cycleStart) ? candidate : cycleStart.plusDays(1)).toString();
+  }
+
   private IclockSite site;
   private IclockDevice gateIn;
   private IclockDevice gateOut;
@@ -169,11 +187,12 @@ class IclockDayShiftWitnessTest {
     // She punched a full day BEFORE anybody corrected her shift, so those punches carry the night
     // cut. Without the recompute her board day, her Missing OUT row and her month all stay wrong
     // until her next punch — wrong in a way that looks settled.
-    punch(gateIn, "4101", DAY1 + " 10:00:00");
-    punch(gateOut, "4101", DAY1 + " 19:00:00");
+    String day = inCycleDay();
+    punch(gateIn, "4101", day + " 10:00:00");
+    punch(gateOut, "4101", day + " 19:00:00");
     assertThat(shiftDatesOf(priya.getId()))
         .as("filed under the night cut, split")
-        .containsExactly(LocalDate.parse("2026-08-31"), LocalDate.parse(DAY1));
+        .containsExactly(LocalDate.parse(day).minusDays(1), LocalDate.parse(day));
 
     // A punch from a settled cycle, planted directly so the recompute has something to leave alone.
     IclockRawPunch settledRaw = new IclockRawPunch();
@@ -211,7 +230,7 @@ class IclockDayShiftWitnessTest {
     assertThat(report.punchesRedated()).as("the split pair is corrected").isEqualTo(1);
     assertThat(shiftDatesOf(priya.getId()))
         .as("this cycle now pairs")
-        .contains(LocalDate.parse(DAY1), LocalDate.parse(DAY1));
+        .contains(LocalDate.parse(day), LocalDate.parse(day));
 
     assertThat(punches.findById(settledId).orElseThrow().getShiftDate())
         .as("FORWARD-ONLY: a settled cycle is never re-dated, whatever the new shift says")
@@ -220,8 +239,9 @@ class IclockDayShiftWitnessTest {
 
   @Test
   void theRecomputeIsIdempotent() {
-    punch(gateIn, "4101", DAY1 + " 10:00:00");
-    punch(gateOut, "4101", DAY1 + " 19:00:00");
+    String day = inCycleDay();
+    punch(gateIn, "4101", day + " 10:00:00");
+    punch(gateOut, "4101", day + " 19:00:00");
 
     var first = roster.assignShift(site.getId(), List.of(priya.getId()), "DAY");
     var again = roster.assignShift(site.getId(), List.of(priya.getId()), "DAY");
@@ -231,6 +251,29 @@ class IclockDayShiftWitnessTest {
     assertThat(again.punchesRedated())
         .as("derived, not incremented — running it twice moves nothing")
         .isZero();
+  }
+
+  @Test
+  void aPunchAlreadyFILEDInThePreviousCycleIsLeftAloneEvenWhenTheNewShiftDisagrees() {
+    // THE DELIBERATE BOUNDARY. A 10:00 arrival on the 1st files as the last day of the previous
+    // cycle under the night cut, and the day cut says it belongs to the 1st. The recompute does NOT
+    // reach back for it: correcting it would remove a day from a month that may already be paid.
+    //
+    // The cost is a punch that stays misfiled across a cycle edge. That is the accepted trade against
+    // rewriting settled payroll, and it is asserted here so nobody "fixes" it without meeting it.
+    LocalDate firstOfCycle = LocalDate.now(IST).withDayOfMonth(1);
+    LocalDate previousCycleDay = firstOfCycle.minusDays(1);
+
+    punch(gateIn, "4101", firstOfCycle + " 10:00:00");
+    assertThat(shiftDatesOf(priya.getId()))
+        .as("the night cut files it into the previous cycle")
+        .containsExactly(previousCycleDay);
+
+    var report = roster.assignShift(site.getId(), List.of(priya.getId()), "DAY");
+
+    assertThat(report.changed()).isEqualTo(1);
+    assertThat(report.punchesRedated()).as("nothing in a settled cycle is touched").isZero();
+    assertThat(shiftDatesOf(priya.getId())).containsExactly(previousCycleDay);
   }
 
   // ------------------------------------------------------------------ (4) lateness

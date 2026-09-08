@@ -153,34 +153,35 @@ public class IclockAdminService {
     companies.findById(companyId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
 
-    Optional<IclockSiteCompany> existing = siteCompanies.findByCompanyId(companyId);
-    if (existing.isPresent()) {
-      if (existing.get().getSiteId().equals(siteId)) {
-        return siteDetail(siteId); // idempotent
-      }
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT,
-          "That company is already linked to another site. Unlink it first — a company belongs to exactly one site.");
+    // Idempotent on THIS site's link. A link to another building is no longer a conflict: a company
+    // may work in several, which is the premise this whole change exists to correct.
+    if (siteCompanies.existsBySiteIdAndCompanyId(siteId, companyId)) {
+      return siteDetail(siteId);
     }
     IclockSiteCompany link = new IclockSiteCompany();
     link.setSiteId(siteId);
     link.setCompanyId(companyId);
     siteCompanies.saveAndFlush(link);
 
-    int repointed = pins.repointCompanyPins(companyId, siteId);
-    if (repointed > 0) {
-      log.info("iclock: re-pointed {} pins of company {} to site {}", repointed, companyId, site.getId());
-    }
+    // NO PIN RE-POINTING HERE. Under D2 a new link meant the company had MOVED, so its pins followed.
+    // Now a new link means the company has ADDED a building, and its existing pins belong exactly
+    // where they already are. Dragging them would be the destructive half of the old behaviour with
+    // none of its justification; assignPin is the only thing that decides a pin's site.
     return siteDetail(siteId);
   }
 
   @Transactional
   public void unlinkCompany(String siteId, String companyId) {
-    IclockSiteCompany link = siteCompanies.findByCompanyId(companyId)
-        .filter(sc -> sc.getSiteId().equals(siteId))
+    IclockSiteCompany link = siteCompanies.findBySiteIdAndCompanyId(siteId, companyId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "That company is not linked to this site"));
+    // SCOPED TO THIS BUILDING. The count was company-wide, so once a company spanned two sites its
+    // pins in one would have blocked unlinking it from the other — and with the lookup above also
+    // company-wide, there was no route out of a two-site state at all.
     long pinCount = employees.findByCompanyId(companyId).stream()
-        .filter(e -> pins.findByEmployeeId(e.getId()).isPresent())
+        .map(e -> pins.findByEmployeeId(e.getId()))
+        .filter(java.util.Optional::isPresent)
+        .map(java.util.Optional::get)
+        .filter(p -> siteId.equals(p.getSiteId()))
         .count();
     if (pinCount > 0) {
       // The pins' denormalised siteId would become a lie, and nothing would re-derive it.
@@ -311,12 +312,12 @@ public class IclockAdminService {
     Employee employee = employees.findById(req.employeeId())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
 
-    IclockSiteCompany link = siteCompanies.findByCompanyId(employee.getCompanyId())
-        .orElseThrow(() -> new ResponseStatusException(
-            HttpStatus.CONFLICT, "That employee's company is not linked to any site"));
-    if (!link.getSiteId().equals(site.getId())) {
+    // The question is no longer "which site is this company at" but "is it at THIS one" — a company
+    // linked to three buildings is fine, and an employee of it may be given a pin in any of them.
+    if (employee.getCompanyId() == null
+        || !siteCompanies.existsBySiteIdAndCompanyId(site.getId(), employee.getCompanyId())) {
       throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "That employee belongs to a company linked to a different site");
+          HttpStatus.CONFLICT, "That employee's company is not linked to this building");
     }
     pins.findByEmployeeId(employee.getId()).ifPresent(p -> {
       throw new ResponseStatusException(
@@ -434,11 +435,11 @@ public class IclockAdminService {
         matchedBy = "email+name";
       }
 
-      Optional<IclockSiteCompany> link = siteCompanies.findByCompanyId(match.getCompanyId());
-      if (link.isEmpty() || !link.get().getSiteId().equals(site.getId())) {
+      if (match.getCompanyId() == null
+          || !siteCompanies.existsBySiteIdAndCompanyId(site.getId(), match.getCompanyId())) {
         conflicts++;
         report.add(new ImportRow(rawPin, canonical, name, email, "CONFLICT",
-            "that employee's company is not linked to this site", matchedBy, match.getId()));
+            "that employee's company is not linked to this building", matchedBy, match.getId()));
         continue;
       }
 

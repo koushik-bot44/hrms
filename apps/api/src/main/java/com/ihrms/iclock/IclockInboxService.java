@@ -176,6 +176,15 @@ public class IclockInboxService {
    * archive that backfill policy says to leave alone. With no claimed device there is no window at all,
    * so it does nothing rather than falling back to the whole archive.
    */
+  /**
+   * How far a punch may predate its own arrival and still count as live.
+   *
+   * <p>Covers a genuine buffered flush — this fleet once held ~10 minutes during a DNS outage — while
+   * excluding a first-contact history dump, which arrives months late. Twelve hours is comfortably
+   * more than any real buffer and far less than any archive.
+   */
+  static final int PRE_ADOPTION_GRACE_HOURS = 12;
+
   @Transactional
   public SweepResult sweepSinceClaim(int limit) {
     Instant earliestClaim =
@@ -188,7 +197,8 @@ public class IclockInboxService {
     if (earliestClaim == null) {
       return new SweepResult(0, 0, 0, List.of());
     }
-    return promoteAll(rawPunches.findUnpromotedSince(earliestClaim, limit));
+    return promoteAll(
+        rawPunches.findUnpromotedSince(earliestClaim, PRE_ADOPTION_GRACE_HOURS, limit));
   }
 
   private SweepResult promoteAll(List<IclockRawPunch> batch) {

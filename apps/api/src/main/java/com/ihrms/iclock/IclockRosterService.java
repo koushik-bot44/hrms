@@ -17,6 +17,8 @@ import com.ihrms.domain.repository.IclockSiteRepository;
 import com.ihrms.iclock.dto.IclockRosterDtos.PersonView;
 import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftReport;
 import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftRow;
+import com.ihrms.iclock.dto.IclockRosterDtos.BulkDeactivateReport;
+import com.ihrms.iclock.dto.IclockRosterDtos.BulkDeactivateRow;
 import com.ihrms.iclock.dto.IclockRosterDtos.UpsertPersonRequest;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -293,6 +295,85 @@ public class IclockRosterService {
     if (req.active() != null) person.setActive(req.active());
     if (req.excludedFromReports() != null) person.setExcludedFromReports(req.excludedFromReports());
     if (req.shiftProfile() != null) person.setShiftProfile(req.shiftProfile());
+  }
+
+  /**
+   * What a bulk deactivation WOULD do. Structurally incapable of doing it.
+   *
+   * <p>Separate entry point rather than a boolean flag, per the standing rule. A {@code commit}
+   * parameter puts the write one typo away from the preview, and this method is
+   * {@code @Transactional(readOnly = true)} — Hibernate is in FlushMode.MANUAL, so even a stray
+   * managed-entity mutation cannot reach the database. That rule exists because a roster dry run once
+   * rewrote every person it touched through dirty checking alone.
+   */
+  @Transactional(readOnly = true)
+  public BulkDeactivateReport previewBulkDeactivate(String siteId, List<String> pins) {
+    return decideBulkDeactivate(siteId, pins, false, null);
+  }
+
+  /**
+   * Deactivates a list of pins at one building. DEACTIVATE ONLY — nothing here deletes.
+   *
+   * <p>Idempotent: only rows currently active are touched, so a re-run changes nothing and reports
+   * zero. That is what makes it safe to hand an operator a list they may already have applied.
+   */
+  @Transactional
+  public BulkDeactivateReport bulkDeactivate(String siteId, List<String> pins, String reason) {
+    return decideBulkDeactivate(siteId, pins, true, reason);
+  }
+
+  private BulkDeactivateReport decideBulkDeactivate(
+      String siteId, List<String> pins, boolean commit, String reason) {
+    requireSite(siteId);
+    List<BulkDeactivateRow> rows = new ArrayList<>();
+    int deactivated = 0, alreadyInactive = 0, notOnRoster = 0, invalid = 0;
+    long retained = 0;
+
+    for (String raw : pins) {
+      String pin = IclockPin.canonicalOrNull(raw);
+      if (pin == null) {
+        invalid++;
+        rows.add(new BulkDeactivateRow(raw, null, "INVALID_PIN", "not a usable pin", 0, false));
+        continue;
+      }
+      Optional<IclockPerson> found = people.findBySiteIdAndPin(siteId, pin);
+      if (found.isEmpty()) {
+        notOnRoster++;
+        rows.add(new BulkDeactivateRow(pin, null, "NOT_ON_ROSTER", "no such pin here", 0, false));
+        continue;
+      }
+      IclockPerson person = found.get();
+      long punchCount = punches.countByPersonId(person.getId());
+      retained += punchCount;
+
+      // Is this person active in ANOTHER building? Then switching them off here is a MOVE, and the
+      // operator should see that before doing it — a pin that resolves nowhere is a person whose
+      // punches start falling into the inbox tomorrow.
+      boolean elsewhere = people.findByPinAndActiveTrue(pin).stream()
+          .anyMatch(other -> !siteId.equals(other.getSiteId()));
+
+      if (!person.isActive()) {
+        alreadyInactive++;
+        rows.add(new BulkDeactivateRow(
+            pin, person.getName(), "ALREADY_INACTIVE", "dropped from the run", punchCount, elsewhere));
+        continue;
+      }
+      if (commit) {
+        person.setActive(false);
+        people.save(person);
+      }
+      deactivated++;
+      rows.add(new BulkDeactivateRow(
+          pin, person.getName(), commit ? "DEACTIVATED" : "WOULD_DEACTIVATE",
+          elsewhere ? "still active at another building — this is a move, not an exit" : null,
+          punchCount, elsewhere));
+    }
+
+    if (commit) {
+      log.info("iclock: bulk deactivate at {} — {} off, reason: {}", siteId, deactivated, reason);
+    }
+    return new BulkDeactivateReport(
+        commit, pins.size(), deactivated, alreadyInactive, notOnRoster, invalid, retained, rows);
   }
 
   /**
@@ -767,7 +848,9 @@ public class IclockRosterService {
                     HttpStatus.CONFLICT, "No claimed device at this site — nothing to re-resolve"));
 
     int scanned = 0, promoted = 0, already = 0;
-    for (IclockRawPunch raw : rawPunches.findUnpromotedSince(earliestClaim, limit)) {
+    for (IclockRawPunch raw :
+        rawPunches.findUnpromotedSince(
+            earliestClaim, IclockInboxService.PRE_ADOPTION_GRACE_HOURS, limit)) {
       scanned++;
       IclockPromotionService.Outcome outcome = promotion.promote(raw.getId());
       if (outcome.promoted()) {

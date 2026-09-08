@@ -74,6 +74,47 @@ public final class IclockRosterDtos {
 
   public record AssignShiftRow(String personId, String pin, String name, String from, String to) {}
 
+  /**
+   * A bulk deactivation, addressed by PIN.
+   *
+   * <p>Pins rather than person ids because the operator's input is a list produced elsewhere — a
+   * register reconciliation, a leavers list — and pins are what those carry. Scoped to one building,
+   * which is what makes a pin unambiguous.
+   */
+  public record BulkDeactivateRequest(
+      @NotEmpty(message = "Give at least one pin.") List<String> pins,
+      /** Recorded in the audit entry, so the trail says WHY 64 people were switched off. */
+      @NotBlank(message = "Say why — the audit entry is useless without it.") String reason) {}
+
+  /** One pin's fate, decided before anything is written. */
+  public record BulkDeactivateRow(
+      String pin,
+      String name,
+      /** WOULD_DEACTIVATE, ALREADY_INACTIVE, NOT_ON_ROSTER, or INVALID_PIN. */
+      String outcome,
+      /** Why it was dropped, or what to watch for. Null when the row is unremarkable. */
+      String detail,
+      long punchCount,
+      /** True when this pin is active at ANOTHER building — deactivating here is a move, not an exit. */
+      boolean activeElsewhere) {}
+
+  /**
+   * What a bulk deactivation did, or would do.
+   *
+   * <p>The same shape for preview and commit, so the operator compares like with like instead of
+   * reading one report before and a different one after.
+   */
+  public record BulkDeactivateReport(
+      boolean committed,
+      int requested,
+      int deactivated,
+      int alreadyInactive,
+      int notOnRoster,
+      int invalidPins,
+      /** Retained punches. Deactivation never deletes; this is the number that says so. */
+      long punchesRetained,
+      List<BulkDeactivateRow> rows) {}
+
   public record AssignPersonRequest(@NotBlank String employeeId) {}
 
   public record PersonView(

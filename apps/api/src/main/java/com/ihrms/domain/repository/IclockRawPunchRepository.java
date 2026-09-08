@@ -65,19 +65,35 @@ public interface IclockRawPunchRepository extends JpaRepository<IclockRawPunch, 
    *
    * <p>Ordered by the DEVICE's clock, not arrival, so a buffered flush promotes the way it would have
    * live.
+   *
+   * <p><b>BOUNDED ON punchedAt AS WELL AS receivedAt</b>, and the second bound is the load-bearing one.
+   *
+   * <p>{@code receivedAt >= claimedAt} was the whole guard, and it assumes arrival time tracks punch
+   * time. That holds for a running terminal and breaks completely for a newly adopted one: Building
+   * No.9's four terminals dumped their entire memory AFTER being claimed, so 111,231 punches dated
+   * back to 7 April arrived inside the "live" window. One operator click would have promoted ~104,673
+   * of them and invented four months of attendance.
+   *
+   * <p>A ledger rule protects until somebody forgets. This is the bound, so no future click can do it
+   * whatever anybody remembers. The grace hours cover the ordinary case the receivedAt guard was
+   * written for — a genuine buffered flush, where punches predate their arrival by minutes to hours.
    */
   @Query(
       value =
           """
           SELECT r.* FROM "iclock_raw_punches" r
            WHERE r."receivedAt" >= CAST(:since AS timestamptz)
+             AND (r."punchedAtRaw")::timestamp AT TIME ZONE 'Asia/Kolkata'
+                 >= CAST(:since AS timestamptz) - make_interval(hours => CAST(:graceHours AS int))
              AND NOT EXISTS (SELECT 1 FROM "iclock_punch_members" m WHERE m."rawPunchId" = r."id")
            ORDER BY r."punchedAtRaw" ASC, r."id" ASC
            LIMIT :limit
           """,
       nativeQuery = true)
   List<IclockRawPunch> findUnpromotedSince(
-      @Param("since") java.time.Instant since, @Param("limit") int limit);
+      @Param("since") java.time.Instant since,
+      @Param("graceHours") int graceHours,
+      @Param("limit") int limit);
 
   /**
    * Unmapped-pin summary for ONE SITE, split by the live window.

@@ -204,7 +204,7 @@ class IclockNativeQueryTest {
     IclockRawPunch second = raw("4002", claim.plusSeconds(120), "live-2");
     IclockRawPunch first = raw("4003", claim.plusSeconds(60), "live-1");
 
-    List<IclockRawPunch> found = rawPunches.findUnpromotedSince(claim, 100);
+    List<IclockRawPunch> found = rawPunches.findUnpromotedSince(claim, IclockInboxService.PRE_ADOPTION_GRACE_HOURS, 100);
 
     // Ordered by punchedAtRaw (the DEVICE's clock), not by arrival — a buffered flush has to promote
     // the way it would have live.

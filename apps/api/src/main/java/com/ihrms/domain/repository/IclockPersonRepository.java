@@ -52,6 +52,15 @@ public interface IclockPersonRepository extends JpaRepository<IclockPerson, Stri
   List<String> findDuplicateEmails(@Param("siteId") String siteId);
 
   /**
+   * Every ACTIVE person holding this pin, across all buildings.
+   *
+   * <p>Pins are unique per site, not globally, so one pin can be two different people in two
+   * buildings — and can also be one person who moved. Bulk deactivation uses this to say whether
+   * switching somebody off here leaves them resolving somewhere else or nowhere at all.
+   */
+  List<IclockPerson> findByPinAndActiveTrue(String pin);
+
+  /**
    * The team labels already in use at a building.
    *
    * <p>Teams are LABELS, not entities — there is no team table and there should not be one, because

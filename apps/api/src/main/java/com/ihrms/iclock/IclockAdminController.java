@@ -21,6 +21,9 @@ import com.ihrms.iclock.dto.IclockRosterDtos.PersonView;
 import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftReport;
 import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftRequest;
 import com.ihrms.iclock.dto.IclockRosterDtos.AssignShiftRow;
+import com.ihrms.iclock.dto.IclockRosterDtos.BulkDeactivateReport;
+import com.ihrms.iclock.dto.IclockRosterDtos.BulkDeactivateRequest;
+import com.ihrms.iclock.dto.IclockRosterDtos.BulkDeactivateRow;
 import com.ihrms.iclock.dto.IclockRosterDtos.UpsertPersonRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -140,9 +143,11 @@ public class IclockAdminController {
   }
 
   /**
-   * Links a company to a site. Idempotent. A company belongs to exactly one site (D2), so linking one
-   * that is already elsewhere is refused rather than silently moved — and any pin collision the link
-   * would create surfaces here as a 409 instead of shadowing somebody at the gate.
+   * Links a company to a building. Idempotent.
+   *
+   * <p>A company may work in SEVERAL buildings since V49 — Screatives and Sphinix both do — so a link
+   * elsewhere is no longer a conflict. Existing pins are left exactly where they are: a new link now
+   * means the company has ADDED a building, not moved.
    */
   @PostMapping("/sites/{siteId}/companies")
   public SiteDetailView linkCompany(
@@ -390,6 +395,49 @@ public class IclockAdminController {
             report.rows().stream()
                 .filter(r -> !java.util.Objects.equals(r.from(), r.to()))
                 .map(AssignShiftRow::pin)
+                .toList()));
+    return report;
+  }
+
+  /**
+   * What a bulk deactivation would do. Writes nothing — a separate entry point, not a flag.
+   */
+  @PostMapping("/sites/{siteId}/people/deactivate/preview")
+  public BulkDeactivateReport previewBulkDeactivate(
+      @PathVariable String siteId,
+      @Valid @RequestBody BulkDeactivateRequest req) {
+    return roster.previewBulkDeactivate(siteId, req.pins());
+  }
+
+  /**
+   * Deactivates a list of pins at one building. Deactivate only; nothing here deletes.
+   *
+   * <p>ONE audit entry naming every pin that actually changed — not one per person, which would bury
+   * the fact that a single operator action switched off sixty-four people. The reason is required and
+   * recorded: a trail that says "64 deactivated" without saying why is barely a trail.
+   */
+  @PostMapping("/sites/{siteId}/people/deactivate")
+  public BulkDeactivateReport bulkDeactivate(
+      @PathVariable String siteId,
+      @Valid @RequestBody BulkDeactivateRequest req,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    BulkDeactivateReport report =
+        roster.bulkDeactivate(siteId, req.pins(), req.reason());
+    record(actor, http, "ICLOCK_PEOPLE_DEACTIVATED", "IclockSite", siteId,
+        meta("reason", req.reason(),
+            "requested", report.requested(),
+            "deactivated", report.deactivated(),
+            "alreadyInactive", report.alreadyInactive(),
+            "notOnRoster", report.notOnRoster(),
+            "punchesRetained", report.punchesRetained(),
+            "pins", report.rows().stream()
+                .filter(r -> "DEACTIVATED".equals(r.outcome()))
+                .map(BulkDeactivateRow::pin)
+                .toList(),
+            "alsoActiveElsewhere", report.rows().stream()
+                .filter(BulkDeactivateRow::activeElsewhere)
+                .map(BulkDeactivateRow::pin)
                 .toList()));
     return report;
   }
