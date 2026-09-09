@@ -311,6 +311,74 @@ export interface PersonDay {
   current: boolean;
 }
 
+// --- device commands (P3) --------------------------------------------------
+
+export interface DeviceCommand {
+  id: string;
+  kind: string;
+  status: 'PENDING' | 'SENT' | 'ACKED' | 'FAILED';
+  payload: string;
+  pin: string | null;
+  serveCount: number;
+  ackReturn: string | null;
+  failureReason: string | null;
+  createdBy: string;
+  createdAt: string;
+  sentAt: string | null;
+  completedAt: string | null;
+}
+
+export interface NameSyncRow {
+  personId: string;
+  pin: string;
+  name: string | null;
+  outcome: string;
+  detail: string | null;
+}
+
+export interface NameSyncReport {
+  committed: boolean;
+  people: number;
+  skipped: number;
+  devices: number;
+  commandsQueued: number;
+  rows: NameSyncRow[];
+}
+
+export interface CommandStatus {
+  enabled: boolean;
+  outstanding: number;
+}
+
+/** Whether the channel may serve at all — so the console states it rather than implying it. */
+export function getCommandStatus(signal?: AbortSignal): Promise<CommandStatus> {
+  return apiFetch<CommandStatus>(`${BASE}/commands/status`, { signal });
+}
+
+/** Pushes one person's name to every claimed terminal at their building. */
+export function pushName(personId: string): Promise<Array<Record<string, unknown>>> {
+  return apiFetch(`${BASE}/people/${personId}/push-name`, { method: 'POST' });
+}
+
+export function previewNameSync(siteId: string): Promise<NameSyncReport> {
+  return apiFetch<NameSyncReport>(`${BASE}/sites/${siteId}/push-names/preview`, { method: 'POST' });
+}
+
+export function syncNames(siteId: string): Promise<NameSyncReport> {
+  return apiFetch<NameSyncReport>(`${BASE}/sites/${siteId}/push-names`, { method: 'POST' });
+}
+
+export function syncDeviceTime(deviceId: string): Promise<Record<string, unknown>> {
+  return apiFetch(`${BASE}/devices/${deviceId}/sync-time`, { method: 'POST' });
+}
+
+export function getCommandLog(
+  deviceId: string,
+  signal?: AbortSignal,
+): Promise<DeviceCommand[]> {
+  return apiFetch<DeviceCommand[]>(`${BASE}/devices/${deviceId}/commands?limit=50`, { signal });
+}
+
 // --- shift assignment ------------------------------------------------------
 
 /** The two profiles, with the wording the operator reads. */
@@ -697,6 +765,8 @@ export function moveDeviceBuilding(deviceId: string, siteId: string): Promise<Ic
  */
 export const iclockKeys = {
   root: ['iclock'] as const,
+  commandStatus: () => ['iclock', 'commands', 'status'] as const,
+  commandLog: (deviceId: string) => ['iclock', 'device', deviceId, 'commands'] as const,
   companies: () => ['iclock', 'companies'] as const,
   teams: (siteId: string) => ['iclock', 'site', siteId, 'teams'] as const,
   report: (siteId: string, period: string) =>

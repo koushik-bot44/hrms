@@ -47,12 +47,18 @@ public class IclockController {
   private final IclockProperties props;
   /** The command queue. Serves at most one line per poll, and only when the kill switch is on. */
   private final IclockCommandService commands;
+  /** Seeds roster rows from a device's own user table, when one ever arrives. */
+  private final IclockEnrolmentService enrolments;
 
   public IclockController(
-      IclockService service, IclockProperties props, IclockCommandService commands) {
+      IclockService service,
+      IclockProperties props,
+      IclockCommandService commands,
+      IclockEnrolmentService enrolments) {
     this.service = service;
     this.props = props;
     this.commands = commands;
+    this.enrolments = enrolments;
   }
 
   /**
@@ -188,8 +194,29 @@ public class IclockController {
       // where ingest is switched off. A non-OK reply makes it retain and retry instead.
       return unavailable();
     }
+    if (table != null && table.equalsIgnoreCase("USERINFO")) {
+      // A device telling us who it thinks its users are. This fleet has never sent one — 129,747
+      // logged requests, zero bodies containing Name= — but this is the only channel by which a
+      // terminal's own name for somebody could reach us, and it costs nothing to be ready. Seeds
+      // roster rows for pins nobody knows yet; NEVER overwrites a name a human entered.
+      service.touch(serial, false, null, stamp, opStamp);
+      try {
+        var seeded = enrolments.apply(serial, rawBody(request));
+        if (seeded.created() > 0 || seeded.suggestions() > 0) {
+          log.info("iclock: SN={} USERINFO {} record(s): {} seeded, {} differ from the roster",
+              serial, seeded.records(), seeded.created(), seeded.suggestions());
+        }
+      } catch (RuntimeException e) {
+        // Never cost the push. The body is captured raw regardless, so a parse failure loses
+        // nothing except the convenience of having read it.
+        log.warn("iclock: SN={} USERINFO parse failed; body captured raw", serial, e);
+      }
+      return text("OK");
+    }
     if (table == null || !table.equalsIgnoreCase("ATTLOG")) {
       // OPERLOG / BIODATA / unknown: raw-logged only, but still record liveness and the cursor.
+      // OPERLOG on this fleet is OPLOG operation records — numeric op-code, operator, timestamp and
+      // a pin — which say that something happened to a user but never what they are called.
       service.touch(serial, false, null, stamp, opStamp);
       return text("OK");
     }

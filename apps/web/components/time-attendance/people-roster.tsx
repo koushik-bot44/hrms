@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownUp, CalendarClock, Eye, EyeOff, Link2, Link2Off, Pencil, Search, Trash2, Upload, UserRound, Users } from 'lucide-react';
+import { ArrowDownUp, CalendarClock, Eye, EyeOff, Link2, Link2Off, Pencil, RadioTower, Search, Trash2, Upload, UserRound, Users } from 'lucide-react';
 import { editPerson, iclockKeys, listPeople, type IclockPerson } from '@/lib/api/iclock';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import { LinkSuggestionsDialog } from './link-suggestions';
 import { DeletePersonDialog } from './delete-person-dialog';
 import { PersonEditDialog } from './person-edit-dialog';
 import { BulkShiftDialog, InlineShiftPicker, ShiftBadge } from './shift-controls';
+import { CommandChannelBadge, SyncNamesDialog } from './device-commands';
 import { UnmappedPinInbox } from './unmapped-pin-inbox';
 import { ConsoleError } from './console-error';
 
@@ -238,6 +239,7 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
   const [editing, setEditing] = React.useState<IclockPerson | null>(null);
   const [picked, setPicked] = React.useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = React.useState(false);
+  const [syncNamesOpen, setSyncNamesOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState<IclockPerson | null>(null);
 
   const query = useApiQuery(iclockKeys.people(siteId), (signal) => listPeople(siteId, signal), {
@@ -361,6 +363,11 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
           <Upload className="size-4" />
           Import
         </Button>
+        <Button variant="outline" size="sm" onClick={() => setSyncNamesOpen(true)}>
+          <RadioTower className="size-4" />
+          Sync names
+        </Button>
+        <CommandChannelBadge />
       </div>
 
       {picked.size > 0 ? (
@@ -421,6 +428,12 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
         onOpenChange={(open) => {
           if (!open) setLinking(null);
         }}
+      />
+      <SyncNamesDialog
+        siteId={siteId}
+        siteName="this building"
+        open={syncNamesOpen}
+        onOpenChange={setSyncNamesOpen}
       />
       <BulkShiftDialog
         siteId={siteId}

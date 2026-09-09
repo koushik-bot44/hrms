@@ -59,8 +59,12 @@ public record IclockProperties(
     maxUnclaimedDevices = maxUnclaimedDevices > 0 ? maxUnclaimedDevices : 10;
     unclaimedSerialPunchCap = unclaimedSerialPunchCap > 0 ? unclaimedSerialPunchCap : 50_000;
     logRetentionDays = logRetentionDays > 0 ? logRetentionDays : 7;
-    // A queue nobody bounds is one that gets filled by a loop somebody did not mean to write.
-    maxPendingCommandsPerDevice = maxPendingCommandsPerDevice > 0 ? maxPendingCommandsPerDevice : 50;
+    // A queue nobody bounds is one that gets filled by a loop somebody did not mean to write — but
+    // the bound has to clear the largest LEGITIMATE batch, and 50 did not. A building-wide name sync
+    // is one command per person per device: 185 for Orion Towers today, and it would have thrown at
+    // the 51st. 1000 is comfortably above a full building and still orders of magnitude below a
+    // runaway, which is the thing actually being guarded against.
+    maxPendingCommandsPerDevice = maxPendingCommandsPerDevice > 0 ? maxPendingCommandsPerDevice : 1000;
     // Small on purpose. A device polls roughly every 10s, so three serves is under a minute of
     // trying before the operator is told rather than the fleet being nagged indefinitely.
     maxCommandServes = maxCommandServes > 0 ? maxCommandServes : 3;

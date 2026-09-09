@@ -7,6 +7,7 @@ import {
   MoveRight,
   Pencil,
   Router,
+  ScrollText,
   ShieldCheck,
   ShieldOff,
   Tag,
@@ -40,6 +41,12 @@ import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { GroupedList } from '@/components/console/grouped-list';
 import { Combobox } from '@/components/console/combobox';
 import { RowMenu } from '@/components/console/row-menu';
+import {
+  CommandChannelBadge,
+  DeviceCommandLog,
+  SyncNamesDialog,
+  SyncTimeButton,
+} from './device-commands';
 import { ViewToggle, usePersistedViewMode } from '@/components/console/view-toggle';
 import { istDateTime, relativeTime } from '@/lib/date';
 import { cn } from '@/lib/utils';
@@ -69,6 +76,7 @@ export function DevicesPanel({ site }: { site: IclockSite | null }) {
   const [movingBuilding, setMovingBuilding] = React.useState<IclockDevice | null>(null);
   const [renaming, setRenaming] = React.useState<IclockSite | null>(null);
   const [creatingBuilding, setCreatingBuilding] = React.useState(false);
+  const [syncingNames, setSyncingNames] = React.useState<IclockSite | null>(null);
   const [mode, setMode] = usePersistedViewMode('devices');
 
   const devicesQuery = useApiQuery(iclockKeys.devices(), (s) => listDevices(undefined, s), {
@@ -144,8 +152,24 @@ export function DevicesPanel({ site }: { site: IclockSite | null }) {
 
       <Card className="p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-semibold">Claimed terminals</h2>
-          <ViewToggle value={mode} onChange={setMode} />
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-base font-semibold">Claimed terminals</h2>
+            <CommandChannelBadge />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {site && claimed.some((d) => d.siteId === site.id) ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSyncingNames(site)}
+              >
+                <Tag className="mr-1.5 size-4" aria-hidden />
+                Sync names
+              </Button>
+            ) : null}
+            <ViewToggle value={mode} onChange={setMode} />
+          </div>
         </div>
         {claimed.length === 0 ? (
           <EmptyState
@@ -171,6 +195,12 @@ export function DevicesPanel({ site }: { site: IclockSite | null }) {
         )}
       </Card>
 
+      <SyncNamesDialog
+        siteId={syncingNames?.id ?? ''}
+        siteName={syncingNames?.name ?? ''}
+        open={Boolean(syncingNames)}
+        onOpenChange={(o) => !o && setSyncingNames(null)}
+      />
       <ClaimDialog
         device={claiming}
         buildings={buildings}
@@ -218,8 +248,10 @@ function DeviceRow({
     onSuccess: () => qc.invalidateQueries({ queryKey: iclockKeys.root }),
   });
   const claimedDevice = device.status === 'CLAIMED';
+  const [showLog, setShowLog] = React.useState(false);
 
   return (
+    <div>
     <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -244,11 +276,18 @@ function DeviceRow({
         </div>
       </div>
 
+      {claimedDevice ? <SyncTimeButton deviceId={device.id} /> : null}
+
       {claimedDevice ? (
         <RowMenu
           label={`Actions for ${device.name ?? device.serialNumber}`}
           actions={[
             { label: 'Change role…', icon: Tag, onSelect: onChangeRole },
+            {
+              label: showLog ? 'Hide command log' : 'Command log',
+              icon: ScrollText,
+              onSelect: () => setShowLog((v) => !v),
+            },
             ...(canMove ? [{ label: 'Move to another building…', icon: MoveRight, onSelect: onMove }] : []),
             {
               label: 'Unclaim',
@@ -265,6 +304,15 @@ function DeviceRow({
           Claim
         </Button>
       )}
+    </div>
+
+    {/* The command log lives under its own terminal: "what have we told this device" is a question
+        about one device, and a fleet-wide list would bury the row that matters. */}
+    {claimedDevice && showLog ? (
+      <div className="border-t border-border bg-muted/30">
+        <DeviceCommandLog deviceId={device.id} />
+      </div>
+    ) : null}
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Combobox } from '@/components/console/combobox';
+import { CommandChannelBadge, PushNameButton } from './device-commands';
 
 /**
  * One dialog for editing a person's details, shared by the People row menu and the inbox's
@@ -235,6 +236,17 @@ export function PersonEditDialog({
               earlier cycles are left alone.
             </p>
           </div>
+
+          {!creating && person ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 p-3">
+              <PushNameButton personId={person.id} disabled={!name.trim()} />
+              <span className="text-xs text-muted-foreground">
+                Sends this name to every terminal at their building. Save first — the push uses the
+                saved name, not what is typed here.
+              </span>
+              <CommandChannelBadge />
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

@@ -22,10 +22,18 @@ import java.time.format.DateTimeFormatter;
  * {@code C:<id>:} prefix is what the device echoes back when acknowledging, which is how a reply is
  * matched to the row that caused it.
  *
- * <p><b>THIS IS UNPROVEN ON THIS FLEET.</b> No terminal here has ever been sent a command — the
- * request log holds zero {@code devicecmd} rows — so the ack half of this contract is documented
- * behaviour, not observed behaviour. The canary exists to turn one into the other, and the raw
- * capture filter records whatever actually arrives even if it disagrees with everything below.
+ * <p><b>PROVEN ON BOTH PLATFORMS, 2026-09-09.</b> This was documented-not-observed until the first
+ * command was ever sent to this fleet. Both canaries acked in the documented shape, carried as a POST
+ * body to {@code /iclock/devicecmd.aspx}:
+ *
+ * <pre>
+ *   ZAM180  ZHM2252000230  ID=cmd_cfabcc060854b4933&amp;Return=0&amp;CMD=DATA   496 ms
+ *   ZAM230  NES1255300684  ID=cmd_eda0cff24b62a6a43&amp;Return=0&amp;CMD=DATA   451 ms
+ * </pre>
+ *
+ * <p>A 752-command fleet sync followed, every one {@code Return=0}, no failures. Devices re-poll
+ * immediately after acknowledging rather than waiting out their ~30s idle interval, so a queue of
+ * several hundred drains in minutes rather than the hour the idle rate suggests.
  */
 final class IclockCommandDialect {
 
@@ -78,6 +86,34 @@ final class IclockCommandDialect {
    */
   static String setTime(Instant at, ZoneId zone) {
     return "SET OPTIONS DateTime=" + DEVICE_TIME.format(at.atZone(zone));
+  }
+
+  /**
+   * Placeholder stored in a SET_TIME payload, substituted with the real clock AT SERVE TIME.
+   *
+   * <p><b>Because a queued timestamp goes stale.</b> The payload used to be built when the command
+   * was queued, which is correct only if it is served immediately. Behind a long queue — a
+   * building-wide name sync is several hundred commands — it would arrive minutes or hours old and
+   * set the terminal that far BEHIND, which is worse than not setting it at all: a device with a
+   * plausible-looking wrong clock files punches into the wrong shift day silently.
+   *
+   * <p>The first fleet sync got away with it by luck. Postgres {@code now()} is transaction-start
+   * time, so every row in that batch shared a {@code createdAt}, the time commands sorted first and
+   * were served within 28 seconds. Luck is not a mechanism.
+   */
+  static final String NOW_PLACEHOLDER = "@SERVER_NOW@";
+
+  /** A SET_TIME body whose clock is filled in when the device actually asks for it. */
+  static String setTimeDeferred() {
+    return "SET OPTIONS DateTime=" + NOW_PLACEHOLDER;
+  }
+
+  /** Substitutes the real clock into a deferred payload. Any other payload passes through. */
+  static String resolve(String payload, Instant at, ZoneId zone) {
+    if (payload == null || !payload.contains(NOW_PLACEHOLDER)) {
+      return payload;
+    }
+    return payload.replace(NOW_PLACEHOLDER, DEVICE_TIME.format(at.atZone(zone)));
   }
 
   /**

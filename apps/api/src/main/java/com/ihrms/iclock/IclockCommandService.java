@@ -116,12 +116,10 @@ public class IclockCommandService {
   @Transactional
   public IclockDeviceCommand queueTimeSync(String deviceId, String actorId) {
     IclockDevice device = claimedDevice(deviceId);
-    ZoneId zone = sites.findById(device.getSiteId())
-        .map(s -> zoneOf(s.getTimezone()))
-        .orElse(com.ihrms.attendance.ShiftConfig.ZONE);
+    // DEFERRED, not stamped now. The clock is filled in when the device actually asks for the
+    // command, so a SET_TIME sitting behind a few hundred name pushes still sets the right time.
     return queue(
-        device, "SET_TIME",
-        IclockCommandDialect.setTime(Instant.now(), zone), null, null, actorId);
+        device, "SET_TIME", IclockCommandDialect.setTimeDeferred(), null, null, actorId);
   }
 
   /**
@@ -287,18 +285,28 @@ public class IclockCommandService {
       return Optional.empty();
     }
     next.setStatus(SENT);
+    // Resolve any deferred clock HERE, at the moment of serving, and keep what was actually sent on
+    // the row so the log says what the device was told rather than what was queued.
+    ZoneId zone = sites.findById(device.getSiteId())
+        .map(s -> zoneOf(s.getTimezone()))
+        .orElse(com.ihrms.attendance.ShiftConfig.ZONE);
+    String wire = IclockCommandDialect.resolve(next.getPayload(), Instant.now(), zone);
+    if (!wire.equals(next.getPayload())) {
+      next.setPayload(wire);
+    }
     commands.save(next);
     log.info("iclock: serving command {} ({}) to {}", next.getId(), next.getKind(), serialNumber);
-    return Optional.of(IclockCommandDialect.serve(next.getId(), next.getPayload()));
+    return Optional.of(IclockCommandDialect.serve(next.getId(), wire));
   }
 
   /**
    * Records a device's reply to a command.
    *
-   * <p>Tolerant by design. The ack format is UNPROVEN on this fleet — no terminal here has ever been
-   * sent a command — so an unrecognised id or a reply shape nobody expected is logged and shrugged
-   * off rather than failed. The raw capture filter has the request verbatim either way, which is how
-   * the real format gets discovered.
+   * <p>Tolerant by design, and it stays that way now that the shape is known. Both platforms reply
+   * {@code ID=<id>&Return=0&CMD=DATA} in a POST body, as documented — but an unrecognised id or a
+   * reply nobody expected is still logged and shrugged off rather than failed, because the cost of
+   * being wrong here is a device retrying in a tight loop. The raw capture filter has the request
+   * verbatim either way.
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void recordAck(String commandId, String returnValue, String rawBody) {

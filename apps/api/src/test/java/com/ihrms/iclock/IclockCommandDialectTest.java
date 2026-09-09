@@ -92,6 +92,27 @@ class IclockCommandDialectTest {
   }
 
   @Test
+  void aDeferredClockIsFilledInWhenItIsSERVEDnotWhenItIsQueued() {
+    // The payload used to be stamped at queue time, which is only correct if it is served at once.
+    // Behind a building-wide name sync — several hundred commands — it would arrive stale and set
+    // the terminal that far BEHIND: a plausible-looking wrong clock that files punches into the
+    // wrong shift day silently. The first fleet sync escaped this by accident of row ordering.
+    String queued = IclockCommandDialect.setTimeDeferred();
+    assertThat(queued).isEqualTo("SET OPTIONS DateTime=@SERVER_NOW@");
+
+    Instant served = LocalDateTime.parse("2026-09-09T23:22:52").atZone(ShiftConfig.ZONE).toInstant();
+    assertThat(IclockCommandDialect.resolve(queued, served, ShiftConfig.ZONE))
+        .isEqualTo("SET OPTIONS DateTime=2026-09-09 23:22:52");
+  }
+
+  @Test
+  void resolveLeavesEveryOtherPayloadAlone() {
+    String name = IclockCommandDialect.updateUserInfo("2004", "Challa Kushal");
+    assertThat(IclockCommandDialect.resolve(name, Instant.now(), ShiftConfig.ZONE)).isEqualTo(name);
+    assertThat(IclockCommandDialect.resolve(null, Instant.now(), ShiftConfig.ZONE)).isNull();
+  }
+
+  @Test
   void deleteNamesOnlyThePin() {
     assertThat(IclockCommandDialect.deleteUser("7777"))
         .isEqualTo("DATA DELETE USERINFO PIN=7777");

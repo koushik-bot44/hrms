@@ -126,9 +126,11 @@ app:
     # off unless somebody turns it on. With it false the queue may fill but nothing is ever served,
     # which makes "do nothing" the safe state. Turn it on only for a supervised canary.
     commands-enabled: ${ICLOCK_COMMANDS_ENABLED:false}
-    # Most PENDING commands one terminal may hold before another is refused — a bound on a queue that
-    # would otherwise be filled by a loop nobody meant to write.
-    max-pending-commands-per-device: ${ICLOCK_MAX_PENDING_COMMANDS:50}
+    # Most PENDING commands one terminal may hold before another is refused. The bound must clear the
+    # largest LEGITIMATE batch: a building-wide name sync is one command per person per device, which
+    # is 185 for Orion Towers today. 50 was a guess made before the fleet was measured and would have
+    # thrown at the 51st row of the first real sync.
+    max-pending-commands-per-device: ${ICLOCK_MAX_PENDING_COMMANDS:1000}
     # Serves without an acknowledgement before a command gives up. A device polls ~every 10s, so
     # three attempts is under a minute of trying before the operator is told instead of the fleet
     # being nagged for ever.

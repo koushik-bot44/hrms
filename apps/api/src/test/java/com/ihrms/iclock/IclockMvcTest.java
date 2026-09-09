@@ -73,6 +73,9 @@ class IclockMvcTest {
    */
   @MockBean private IclockCommandService commands;
 
+  /** Seeds from USERINFO pushes. Mocked: this slice tests the HTTP contract, not the roster. */
+  @MockBean private IclockEnrolmentService enrolments;
+
   /** Required by WebConfig, which registers it for every path. Not under test here. */
   @MockBean private AuditInterceptor auditInterceptor;
 
