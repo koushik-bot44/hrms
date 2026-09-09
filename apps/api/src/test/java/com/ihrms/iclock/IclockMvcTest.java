@@ -65,6 +65,14 @@ class IclockMvcTest {
 
   @MockBean private IclockService service;
 
+  /**
+   * The command channel. Mocked rather than real: this slice is about the device-facing HTTP
+   * contract, and a real queue would drag in a database. Left unstubbed it returns an empty
+   * Optional, which is exactly the shipped default — nothing to serve — so every assertion below
+   * about a bare "OK" reply keeps testing what a live device sees with the channel closed.
+   */
+  @MockBean private IclockCommandService commands;
+
   /** Required by WebConfig, which registers it for every path. Not under test here. */
   @MockBean private AuditInterceptor auditInterceptor;
 

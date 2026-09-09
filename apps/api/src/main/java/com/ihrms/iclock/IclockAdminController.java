@@ -87,6 +87,7 @@ public class IclockAdminController {
   private final IclockFeedService feed;
   private final IclockSitePolicyService policies;
   private final IclockReportService reports;
+  private final IclockCommandService commands;
   private final AuditService audit;
 
   public IclockAdminController(
@@ -97,6 +98,7 @@ public class IclockAdminController {
       IclockFeedService feed,
       IclockSitePolicyService policies,
       IclockReportService reports,
+      IclockCommandService commands,
       AuditService audit) {
     this.admin = admin;
     this.inbox = inbox;
@@ -105,6 +107,7 @@ public class IclockAdminController {
     this.feed = feed;
     this.policies = policies;
     this.reports = reports;
+    this.commands = commands;
     this.audit = audit;
   }
 
@@ -397,6 +400,110 @@ public class IclockAdminController {
                 .map(AssignShiftRow::pin)
                 .toList()));
     return report;
+  }
+
+  // ------------------------------------------------------- device commands (P3)
+
+  /**
+   * Pushes one person's name to every claimed terminal at their building.
+   *
+   * <p>EXPLICIT OPERATOR ACTION. Editing a person never queues this by itself: the console offers it
+   * after a name change and somebody has to say yes. That separation is the whole safety story of the
+   * command channel, and it is why this is a POST of its own rather than a side effect of the PATCH.
+   */
+  @PostMapping("/people/{personId}/push-name")
+  public List<Map<String, Object>> pushName(
+      @PathVariable String personId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    var queued = commands.queueNameUpdate(personId, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_COMMAND_QUEUED", "IclockPerson", personId,
+        meta("kind", "UPDATE_USERINFO", "devices", queued.size(),
+            "pin", queued.isEmpty() ? null : queued.get(0).getDevicePin(),
+            "commandIds", queued.stream().map(c -> c.getId()).toList(),
+            "commandsEnabled", commands.enabled()));
+    return queued.stream().map(c -> meta(
+        "id", c.getId(), "deviceId", c.getDeviceId(), "status", c.getStatus(),
+        "payload", c.getPayload())).toList();
+  }
+
+  /** What a building-wide name push would do. Queues nothing. */
+  @PostMapping("/sites/{siteId}/push-names/preview")
+  public IclockCommandService.NameSyncReport previewNameSync(@PathVariable String siteId) {
+    return commands.previewNameSync(siteId);
+  }
+
+  /**
+   * Pushes every roster name at a building to its terminals — the pass that clears the slug and
+   * register-junk names.
+   *
+   * <p>One command per person PER DEVICE, so a two-terminal building doubles the count. The audit
+   * entry records the figure rather than leaving it to be discovered from a long queue.
+   */
+  @PostMapping("/sites/{siteId}/push-names")
+  public IclockCommandService.NameSyncReport syncNames(
+      @PathVariable String siteId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    var report = commands.syncNames(siteId, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_COMMANDS_BULK_QUEUED", "IclockSite", siteId,
+        meta("kind", "UPDATE_USERINFO", "people", report.people(), "skipped", report.skipped(),
+            "devices", report.devices(), "commandsQueued", report.commandsQueued(),
+            "commandsEnabled", commands.enabled()));
+    return report;
+  }
+
+  /** Sets a terminal's clock from the server, in that building's timezone. */
+  @PostMapping("/devices/{deviceId}/sync-time")
+  public Map<String, Object> syncTime(
+      @PathVariable String deviceId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    var c = commands.queueTimeSync(deviceId, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_COMMAND_QUEUED", "IclockDevice", deviceId,
+        meta("kind", "SET_TIME", "commandId", c.getId(), "payload", c.getPayload(),
+            "commandsEnabled", commands.enabled()));
+    return meta("id", c.getId(), "status", c.getStatus(), "payload", c.getPayload());
+  }
+
+  /**
+   * Removes an enrolment from a terminal. Guarded: refused while the pin belongs to an ACTIVE person.
+   *
+   * <p>Irreversible from here — the person has to physically re-enrol — which is why the guard lives
+   * in the service and not merely in the UI.
+   */
+  @PostMapping("/devices/{deviceId}/delete-user")
+  public Map<String, Object> deleteUserOnDevice(
+      @PathVariable String deviceId,
+      @RequestParam String pin,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    var c = commands.queueUserDelete(deviceId, pin, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_COMMAND_QUEUED", "IclockDevice", deviceId,
+        meta("kind", "DELETE_USER", "pin", c.getDevicePin(), "commandId", c.getId(),
+            "commandsEnabled", commands.enabled()));
+    return meta("id", c.getId(), "status", c.getStatus(), "payload", c.getPayload());
+  }
+
+  /** The command log for one terminal, newest first. */
+  @GetMapping("/devices/{deviceId}/commands")
+  public List<Map<String, Object>> commandLog(
+      @PathVariable String deviceId,
+      @RequestParam(defaultValue = "50") int limit) {
+    return commands.logFor(deviceId, limit).stream().map(c -> meta(
+        "id", c.getId(), "kind", c.getKind(), "status", c.getStatus(),
+        "payload", c.getPayload(), "pin", c.getDevicePin(),
+        "serveCount", c.getServeCount(), "ackReturn", c.getAckReturn(),
+        "failureReason", c.getFailureReason(), "createdBy", c.getCreatedBy(),
+        "createdAt", c.getCreatedAt(), "sentAt", c.getSentAt(),
+        "completedAt", c.getCompletedAt())).toList();
+  }
+
+  /** Whether the channel may serve at all — so the console can say so rather than imply it. */
+  @GetMapping("/commands/status")
+  public Map<String, Object> commandStatus() {
+    var out = commands.outstanding();
+    return meta("enabled", commands.enabled(), "outstanding", out.size());
   }
 
   /**

@@ -27,6 +27,17 @@ public record IclockProperties(
     int unclaimedSerialPunchCap,
     int logRetentionDays,
     boolean nullBodiesAfterTwoDays,
+    /**
+     * THE KILL SWITCH for the device command channel. Default FALSE, deliberately.
+     *
+     * <p>This is the only flag in this file that gates a WRITE TO HARDWARE. With it off nothing is
+     * ever served, whatever sits in the queue, so the safe state is the one you get by doing nothing.
+     */
+    boolean commandsEnabled,
+    /** Most PENDING commands one terminal may hold before another is refused. */
+    int maxPendingCommandsPerDevice,
+    /** Serves without an acknowledgement before a command gives up and is surfaced as FAILED. */
+    int maxCommandServes,
     Options options) {
 
   /**
@@ -48,6 +59,11 @@ public record IclockProperties(
     maxUnclaimedDevices = maxUnclaimedDevices > 0 ? maxUnclaimedDevices : 10;
     unclaimedSerialPunchCap = unclaimedSerialPunchCap > 0 ? unclaimedSerialPunchCap : 50_000;
     logRetentionDays = logRetentionDays > 0 ? logRetentionDays : 7;
+    // A queue nobody bounds is one that gets filled by a loop somebody did not mean to write.
+    maxPendingCommandsPerDevice = maxPendingCommandsPerDevice > 0 ? maxPendingCommandsPerDevice : 50;
+    // Small on purpose. A device polls roughly every 10s, so three serves is under a minute of
+    // trying before the operator is told rather than the fleet being nagged indefinitely.
+    maxCommandServes = maxCommandServes > 0 ? maxCommandServes : 3;
     options = options != null ? options : Options.defaults();
   }
 
@@ -60,7 +76,9 @@ public record IclockProperties(
    * mechanically broke the tests — which is noise that hides real failures.
    */
   public IclockProperties(boolean enabled, String ackFormat, String captureMode, Options options) {
-    this(enabled, 0, 0, ackFormat, captureMode, 0, 0, 0, 0, false, options);
+    // commandsEnabled defaults FALSE here too: a test that does not mention commands must not get a
+    // live command channel by accident.
+    this(enabled, 0, 0, ackFormat, captureMode, 0, 0, 0, 0, false, false, 0, 0, options);
   }
 
   /** True when the ATTLOG acknowledgement should be {@code OK: <n>} rather than a bare {@code OK}. */

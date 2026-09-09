@@ -122,6 +122,17 @@ app:
     # only (everything else stays full); flip it after live push is verified. Caveat: a poll body is
     # already empty, so lean saves little on its own — row RETENTION is the real volume lever.
     capture-mode: ${ICLOCK_CAPTURE_MODE:full}
+    # P3 — THE DEVICE COMMAND CHANNEL. The only flag here that gates a WRITE TO HARDWARE, so it is
+    # off unless somebody turns it on. With it false the queue may fill but nothing is ever served,
+    # which makes "do nothing" the safe state. Turn it on only for a supervised canary.
+    commands-enabled: ${ICLOCK_COMMANDS_ENABLED:false}
+    # Most PENDING commands one terminal may hold before another is refused — a bound on a queue that
+    # would otherwise be filled by a loop nobody meant to write.
+    max-pending-commands-per-device: ${ICLOCK_MAX_PENDING_COMMANDS:50}
+    # Serves without an acknowledgement before a command gives up. A device polls ~every 10s, so
+    # three attempts is under a minute of trying before the operator is told instead of the fleet
+    # being nagged for ever.
+    max-command-serves: ${ICLOCK_MAX_COMMAND_SERVES:3}
     # P1a — burst collapse. Repeated taps by the same person on the same device within this window
     # collapse to one effective punch (IN keeps the first, OUT keeps the latest). Must be > 1s to mean
     # anything: V42's content dedupe already collapses byte-identical same-second repeats. 120s is the

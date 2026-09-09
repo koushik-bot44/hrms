@@ -9,13 +9,25 @@ package com.ihrms.iclock;
  * actually delivered (the handshake fell through to the catch-all because the firmware calls
  * {@code cdata.aspx}), which is why the observed device sat in ~30s batch mode.
  *
+ * <p><b>THE FLEET IS TWO PLATFORMS, and the split is by device family, not by building.</b> Confirmed
+ * from handshake INFO across all six claimed terminals:
+ *
+ * <pre>
+ *   ZAM180-NF50VD-4.0.12   the four ZHM... GATE units - BOTH buildings
+ *                          (2A: ...000230, ...000434 | B9: ...000441, ...400653)
+ *   ZAM230-NF40VA-1.0.27   the two NES... CAFETERIA units - Building 9 only
+ * </pre>
+ *
+ * <p>Every one of them handshakes {@code pushver=2.4.1&options=all&DeviceType=att}, so the options
+ * block below is common to both. Anything that has to be proven per platform — the command channel
+ * above all — must be proven on one ZHM and one NES, which is NOT the same thing as one per building.
+ *
  * <p><b>On the registry stamps.</b> In the classic protocol these are per-table cursors: the device
- * uploads records newer than the stamp the server returns. The observed firmware
- * ({@code ZAM180-NF50VD-4.0.12-CR-1545-01}, pushver 2.4.1) instead sends a CONSTANT
- * {@code Stamp=9999} / {@code OpStamp=9999} on every push, so on this model they are not a reliable
- * high-water mark. They are persisted per device and echoed back for consistency, but what actually
- * prevents duplicate history being stored is the {@code OK: <n>} acknowledgement (which advances the
- * device's own internal pointer) plus the content-dedupe unique index from V42.
+ * uploads records newer than the stamp the server returns. Both platforms here instead send a
+ * CONSTANT {@code Stamp=9999} / {@code OpStamp=9999} on every push, so on this fleet they are not a
+ * reliable high-water mark. They are persisted per device and echoed back for consistency, but what
+ * actually prevents duplicate history being stored is the {@code OK: <n>} acknowledgement (which
+ * advances the device's own internal pointer) plus the content-dedupe unique index from V42.
  */
 final class IclockOptions {
 

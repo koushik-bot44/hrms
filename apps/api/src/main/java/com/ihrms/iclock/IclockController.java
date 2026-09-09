@@ -45,10 +45,14 @@ public class IclockController {
 
   private final IclockService service;
   private final IclockProperties props;
+  /** The command queue. Serves at most one line per poll, and only when the kill switch is on. */
+  private final IclockCommandService commands;
 
-  public IclockController(IclockService service, IclockProperties props) {
+  public IclockController(
+      IclockService service, IclockProperties props, IclockCommandService commands) {
     this.service = service;
     this.props = props;
+    this.commands = commands;
   }
 
   /**
@@ -76,18 +80,88 @@ public class IclockController {
   }
 
   /**
-   * Command poll, every {@code Delay} seconds. P0 issues no commands, so the queue is always empty
-   * and the device is told so with a bare "OK".
+   * Command poll, every {@code Delay} seconds — and since P3, the one place the server can tell a
+   * terminal to do something.
+   *
+   * <p>The reply is either a bare {@code OK} (nothing to say, which is the overwhelming majority of
+   * ~119,000 polls so far) or a single command line. One at a time: this firmware acknowledges by
+   * id, so serving a batch would leave us unable to tell which of them landed.
+   *
+   * <p><b>Failing to serve must never fail the poll.</b> A terminal that receives an error instead
+   * of a reply retries in a tight loop, so the queue lookup is wrapped: if anything goes wrong the
+   * device still gets its {@code OK} and the command stays queued for the next poll.
    */
   @GetMapping({"/iclock/getrequest", "/iclock/getrequest.aspx"})
   public ResponseEntity<byte[]> getrequest(HttpServletRequest request) {
+    String query = request.getQueryString();
+    String serial = IclockQuery.param(query, "SN");
     if (service.persistenceEnabled()) {
-      String query = request.getQueryString();
       // Some polls carry &INFO=<firmware,counters,...>; keep it, it is free dialect evidence.
       String info = IclockQuery.param(query, "INFO");
-      service.touch(IclockQuery.param(query, "SN"), false, info == null ? null : query, null, null);
+      service.touch(serial, false, info == null ? null : query, null, null);
+    }
+    if (service.persistenceEnabled()) {
+      try {
+        var next = commands.nextFor(serial);
+        if (next.isPresent()) {
+          return text(next.get());
+        }
+      } catch (RuntimeException e) {
+        log.warn("iclock: command lookup failed for SN={}; answering OK", serial, e);
+      }
     }
     return text("OK");
+  }
+
+  /**
+   * A device reporting what it did with a command.
+   *
+   * <p><b>The shape here is documented, not observed.</b> No terminal on this fleet has ever called
+   * this path — the request log holds zero rows for it — because none has ever been sent a command.
+   * The classic form is {@code ID=<id>&Return=<code>&CMD=<verb>}, carried as a POST body or as query
+   * parameters depending on firmware, so both are read.
+   *
+   * <p>Always answers OK. The capture filter has already stored the request verbatim, so an ack in a
+   * shape nobody predicted is preserved for reading rather than rejected — which is exactly how the
+   * {@code .aspx} dialect was found in the first place.
+   */
+  @RequestMapping({"/iclock/devicecmd", "/iclock/devicecmd.aspx"})
+  public ResponseEntity<byte[]> devicecmd(HttpServletRequest request) {
+    if (!service.persistenceEnabled()) {
+      return text("OK");
+    }
+    String query = request.getQueryString();
+    String body = rawBody(request);
+    service.touch(IclockQuery.param(query, "SN"), false, null, null, null);
+
+    // Either carrier. A firmware that puts these in the query string is as plausible as one that
+    // posts them, and guessing wrong would silently drop every acknowledgement.
+    String id = firstNonBlank(IclockQuery.param(query, "ID"), formValue(body, "ID"));
+    String ret = firstNonBlank(IclockQuery.param(query, "Return"), formValue(body, "Return"));
+    try {
+      commands.recordAck(id, ret, body);
+    } catch (RuntimeException e) {
+      log.warn("iclock: failed to record devicecmd ack; body captured raw: {}", body, e);
+    }
+    return text("OK");
+  }
+
+  /** Reads {@code key=value} out of an {@code &}-joined or newline-joined ack body. */
+  static String formValue(String body, String key) {
+    if (body == null || body.isBlank()) {
+      return null;
+    }
+    for (String part : body.split("[&\r\n]")) {
+      int eq = part.indexOf('=');
+      if (eq > 0 && part.substring(0, eq).trim().equalsIgnoreCase(key)) {
+        return part.substring(eq + 1).trim();
+      }
+    }
+    return null;
+  }
+
+  private static String firstNonBlank(String a, String b) {
+    return (a != null && !a.isBlank()) ? a : b;
   }
 
   /**
