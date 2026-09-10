@@ -264,6 +264,100 @@ public class IclockRegisterAuditService {
     private boolean face;
   }
 
+  // ------------------------------------------------------------------ the plain inventory
+
+  /** One user as the terminal holds them. No roster opinion attached. */
+  public record RegisterUser(
+      String pin,
+      /** The terminal's own label. Verbatim, register junk included. */
+      String deviceName,
+      int fingerCount,
+      String fingerIndexes,
+      boolean hasFace,
+      /**
+       * Whether this pin belongs to somebody ACTIVE on this building's roster.
+       *
+       * <p>Carried only so the row can say why a deletion will be refused, INLINE, before the
+       * operator selects it. It is not a verdict and this list is not an audit — see
+       * {@link #review} for the screen that compares the two sides.
+       */
+      boolean onActiveRoster) {}
+
+  /** Everything a terminal reported holding, flat. */
+  public record RegisterListing(
+      String deviceId, String deviceName, Instant fetchedAt, int users,
+      List<RegisterUser> rows) {}
+
+  /**
+   * What is on this terminal, as a list.
+   *
+   * <p><b>Deliberately opinion-free.</b> The audit exists to compare a register against the roster
+   * and group the differences, which is the right tool when the question is "what is wrong here".
+   * This is the other question — "what is actually on this machine" — and answering it with amber
+   * boxes and verdicts makes an operator read a diff when they wanted an inventory.
+   *
+   * <p>{@code readOnly = true} puts Hibernate in FlushMode.MANUAL: looking cannot change anything.
+   */
+  @Transactional(readOnly = true)
+  public RegisterListing listRegister(String deviceId) {
+    IclockDevice device = devices.findById(deviceId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Terminal not found"));
+
+    Map<String, Inventory> byPin = new LinkedHashMap<>();
+    for (IclockBiometricTemplate t : templates.findBySourceDeviceId(deviceId)) {
+      Inventory inv = byPin.computeIfAbsent(t.getPin(), p -> new Inventory());
+      if (t.getBioType() == IclockCommandDialect.TYPE_FACE) {
+        inv.face = true;
+      } else {
+        inv.fingers.add(t.getFid());
+      }
+    }
+
+    Instant fetchedAt = null;
+    Map<String, String> named = new LinkedHashMap<>();
+    for (var n : deviceNames.findByDeviceId(deviceId)) {
+      named.put(n.getPin(), n.getDeviceName());
+      // A user record and a template arrive in the same answer, so the newest sighting of either is
+      // when this listing was gathered.
+      if (fetchedAt == null || n.getSeenAt().isAfter(fetchedAt)) {
+        fetchedAt = n.getSeenAt();
+      }
+      byPin.computeIfAbsent(n.getPin(), p -> new Inventory());
+    }
+
+    List<RegisterUser> rows = new ArrayList<>();
+    for (Map.Entry<String, Inventory> e : byPin.entrySet()) {
+      Inventory inv = e.getValue();
+      boolean active = people.findBySiteIdAndPin(device.getSiteId(), e.getKey())
+          .map(IclockPerson::isActive)
+          .orElse(false);
+      rows.add(new RegisterUser(
+          e.getKey(),
+          named.get(e.getKey()),
+          inv.fingers.size(),
+          inv.fingers.isEmpty() ? null
+              : String.join(", ", inv.fingers.stream().map(String::valueOf).toList()),
+          inv.face,
+          active));
+    }
+    rows.sort(java.util.Comparator.comparing(
+        r -> {
+          try {
+            return Long.parseLong(r.pin());
+          } catch (NumberFormatException ex) {
+            return Long.MAX_VALUE;
+          }
+        }));
+
+    return new RegisterListing(
+        deviceId,
+        device.getName() == null ? device.getSerialNumber() : device.getName(),
+        fetchedAt, rows.size(), rows);
+  }
+
+  /** What a register deletion did, per pin, including the ones the guard would not allow. */
+  public record RegisterDeleteResult(int queued, List<String> refused) {}
+
   // ------------------------------------------------------------------ acting
 
   /**
@@ -277,20 +371,32 @@ public class IclockRegisterAuditService {
    * somebody active at this building is refused, whatever this screen selected.
    */
   @Transactional
-  public int deleteFromRegister(String deviceId, List<String> pins, String actorId) {
+  public RegisterDeleteResult deleteFromRegister(
+      String deviceId, List<String> pins, String actorId) {
     IclockDevice device = devices.findById(deviceId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Terminal not found"));
     int queued = 0;
+    List<String> refused = new ArrayList<>();
     for (String raw : pins) {
       String pin = IclockPin.canonicalOrNull(raw);
       if (pin == null) {
         continue;
       }
-      commands.queueUserDelete(device.getId(), pin, actorId);
-      queued++;
+      try {
+        commands.queueUserDelete(device.getId(), pin, actorId);
+        queued++;
+      } catch (ResponseStatusException e) {
+        // ONE REFUSED PIN MUST NOT COST THE OTHER NINETEEN. The active-person guard is right and
+        // stays, but a selection of twenty containing one person who still works here should clear
+        // the nineteen and name the one — not abort and leave the operator guessing which.
+        refused.add(pin);
+        log.info("iclock: register deletion refused for pin {} on {}: {}",
+            pin, device.getSerialNumber(), e.getReason());
+      }
     }
-    log.info("iclock: register cleanup queued {} deletion(s) on {}", queued, device.getSerialNumber());
-    return queued;
+    log.info("iclock: register cleanup queued {} deletion(s) on {}, {} refused",
+        queued, device.getSerialNumber(), refused.size());
+    return new RegisterDeleteResult(queued, refused);
   }
 
   /**

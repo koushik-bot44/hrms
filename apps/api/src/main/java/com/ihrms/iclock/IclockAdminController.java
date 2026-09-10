@@ -586,12 +586,23 @@ public class IclockAdminController {
       @RequestBody List<String> pins,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest http) {
-    int queued = registerAudits.deleteFromRegister(
+    var result = registerAudits.deleteFromRegister(
         deviceId, pins, actor == null ? null : actor.id());
     record(actor, http, "ICLOCK_REGISTER_CLEANUP", "IclockDevice", deviceId,
-        meta("kind", "DELETE_USER", "pins", pins, "commandsQueued", queued,
-            "commandsEnabled", commands.enabled()));
-    return meta("commandsQueued", queued);
+        meta("kind", "DELETE_USER", "pins", pins, "commandsQueued", result.queued(),
+            "refused", result.refused(), "commandsEnabled", commands.enabled()));
+    return meta("commandsQueued", result.queued(), "refused", result.refused());
+  }
+
+  /**
+   * What is on this terminal, flat and opinion-free.
+   *
+   * <p>The plain inventory, as distinct from the audit: no roster comparison, no groups. The
+   * question "what is on this machine" deserves an answer that is not a diff.
+   */
+  @GetMapping("/devices/{deviceId}/register")
+  public IclockRegisterAuditService.RegisterListing listRegister(@PathVariable String deviceId) {
+    return registerAudits.listRegister(deviceId);
   }
 
   /** What removing this person would do. Queues nothing, writes nothing. */

@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ShieldOff,
   Tag,
+  Users,
 } from 'lucide-react';
 import {
   changeDeviceRole,
@@ -48,6 +49,7 @@ import {
   SyncTimeButton,
 } from './device-commands';
 import { LastAuditedLabel, RegisterAuditDialog } from './register-audit';
+import { RegisterUsersDialog } from './register-users';
 import { ViewToggle, usePersistedViewMode } from '@/components/console/view-toggle';
 import { istDateTime, relativeTime } from '@/lib/date';
 import { cn } from '@/lib/utils';
@@ -231,6 +233,7 @@ function DeviceRow({
   const claimedDevice = device.status === 'CLAIMED';
   const [showLog, setShowLog] = React.useState(false);
   const [auditing, setAuditing] = React.useState(false);
+  const [viewingUsers, setViewingUsers] = React.useState(false);
 
   return (
     <div>
@@ -260,10 +263,24 @@ function DeviceRow({
 
       {claimedDevice ? <SyncTimeButton deviceId={device.id} /> : null}
       {claimedDevice ? (
+        <Button type="button" variant="outline" size="sm" onClick={() => setViewingUsers(true)}>
+          <Users className="mr-1.5 size-4" aria-hidden />
+          View users on terminal
+        </Button>
+      ) : null}
+      {claimedDevice ? (
         <Button type="button" variant="outline" size="sm" onClick={() => setAuditing(true)}>
           <ScanSearch className="mr-1.5 size-4" aria-hidden />
           Audit register
         </Button>
+      ) : null}
+      {claimedDevice ? (
+        <RegisterUsersDialog
+          deviceId={device.id}
+          deviceName={device.name ?? device.serialNumber}
+          open={viewingUsers}
+          onOpenChange={setViewingUsers}
+        />
       ) : null}
       {claimedDevice ? <LastAuditedLabel deviceId={device.id} /> : null}
       {claimedDevice ? (

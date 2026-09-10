@@ -531,11 +531,37 @@ export function getRegisterAudit(
   return apiFetch<AuditResult | null>(`${BASE}/devices/${deviceId}/register-audit`, { signal });
 }
 
+export interface RegisterUser {
+  pin: string;
+  deviceName: string | null;
+  fingerCount: number;
+  fingerIndexes: string | null;
+  hasFace: boolean;
+  /** Only so a row can say why its deletion will be refused. Not a verdict. */
+  onActiveRoster: boolean;
+}
+
+export interface RegisterListing {
+  deviceId: string;
+  deviceName: string;
+  fetchedAt: string | null;
+  users: number;
+  rows: RegisterUser[];
+}
+
+/** What is on this terminal, flat. No roster comparison. */
+export function getRegisterUsers(
+  deviceId: string,
+  signal?: AbortSignal,
+): Promise<RegisterListing> {
+  return apiFetch<RegisterListing>(`${BASE}/devices/${deviceId}/register`, { signal });
+}
+
 /** Registers only. No roster row, no punch. */
 export function deleteFromRegister(
   deviceId: string,
   pins: string[],
-): Promise<{ commandsQueued: number }> {
+): Promise<{ commandsQueued: number; refused: string[] }> {
   return apiFetch(`${BASE}/devices/${deviceId}/register-audit/delete`, {
     method: 'POST',
     body: pins,
@@ -945,6 +971,8 @@ export const iclockKeys = {
   root: ['iclock'] as const,
   commandStatus: () => ['iclock', 'commands', 'status'] as const,
   commandLog: (deviceId: string) => ['iclock', 'device', deviceId, 'commands'] as const,
+  registerUsers: (deviceId: string) =>
+    ['iclock', 'device', deviceId, 'register-users'] as const,
   registerAudit: (deviceId: string) =>
     ['iclock', 'device', deviceId, 'register-audit'] as const,
   biometrics: (personId: string) =>
