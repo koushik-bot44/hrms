@@ -328,23 +328,6 @@ export interface DeviceCommand {
   completedAt: string | null;
 }
 
-export interface NameSyncRow {
-  personId: string;
-  pin: string;
-  name: string | null;
-  outcome: string;
-  detail: string | null;
-}
-
-export interface NameSyncReport {
-  committed: boolean;
-  people: number;
-  skipped: number;
-  devices: number;
-  commandsQueued: number;
-  rows: NameSyncRow[];
-}
-
 export interface CommandStatus {
   enabled: boolean;
   outstanding: number;
@@ -360,16 +343,76 @@ export function pushName(personId: string): Promise<Array<Record<string, unknown
   return apiFetch(`${BASE}/people/${personId}/push-name`, { method: 'POST' });
 }
 
-export function previewNameSync(siteId: string): Promise<NameSyncReport> {
-  return apiFetch<NameSyncReport>(`${BASE}/sites/${siteId}/push-names/preview`, { method: 'POST' });
-}
-
-export function syncNames(siteId: string): Promise<NameSyncReport> {
-  return apiFetch<NameSyncReport>(`${BASE}/sites/${siteId}/push-names`, { method: 'POST' });
-}
-
 export function syncDeviceTime(deviceId: string): Promise<Record<string, unknown>> {
   return apiFetch(`${BASE}/devices/${deviceId}/sync-time`, { method: 'POST' });
+}
+
+export interface EnrolmentTrigger {
+  deviceName: string;
+  personName: string;
+  bioType: number;
+  finger: number;
+  commandIds: string[];
+  payload: string;
+}
+
+/** 1 = fingerprint, 2 = face — the devices' own numbering, carried through unchanged. */
+export const BIO_FINGERPRINT = 1;
+export const BIO_FACE = 2;
+
+export interface DeviceEnrolmentRow {
+  deviceId: string;
+  deviceName: string;
+  serialNumber: string;
+  direction: string | null;
+  fingers: number;
+  faces: number;
+  /** SOURCE, PRESENT, PENDING, FAILED or NONE. */
+  status: string;
+  failureReason: string | null;
+}
+
+export interface EnrolmentState {
+  pin: string;
+  fingersHeld: number;
+  facesHeld: number;
+  devices: number;
+  enrolledOn: number;
+  rows: DeviceEnrolmentRow[];
+}
+
+/** Where this person's biometrics are, terminal by terminal. */
+export function getEnrolmentState(
+  personId: string,
+  signal?: AbortSignal,
+): Promise<EnrolmentState> {
+  return apiFetch<EnrolmentState>(`${BASE}/people/${personId}/biometrics`, { signal });
+}
+
+/** Re-pushes every template this person has to every terminal in their building. */
+export function resyncBiometrics(personId: string): Promise<{ commandsQueued: number }> {
+  return apiFetch(`${BASE}/people/${personId}/biometrics/resync`, { method: 'POST' });
+}
+
+/**
+ * Puts ONE terminal into fingerprint capture mode for one person.
+ *
+ * <p>Not fanned out across the building like a name push: the person has to stand at a particular
+ * machine, so the operator picks which one.
+ */
+export function enrolOnDevice(
+  personId: string,
+  deviceId: string,
+  bioType: number,
+  finger: number,
+): Promise<EnrolmentTrigger> {
+  const qs = `deviceId=${encodeURIComponent(deviceId)}&type=${bioType}&finger=${finger}`;
+  return apiFetch<EnrolmentTrigger>(`${BASE}/people/${personId}/enrol?${qs}`, { method: 'POST' });
+}
+
+/** Asks a terminal for its own user table. The reply arrives through the ordinary ingest path. */
+export function queryDeviceUsers(deviceId: string): Promise<Record<string, unknown>> {
+  return apiFetch(`${BASE}/devices/${deviceId}/query-users`, { method: 'POST' });
 }
 
 export function getCommandLog(
@@ -767,6 +810,8 @@ export const iclockKeys = {
   root: ['iclock'] as const,
   commandStatus: () => ['iclock', 'commands', 'status'] as const,
   commandLog: (deviceId: string) => ['iclock', 'device', deviceId, 'commands'] as const,
+  biometrics: (personId: string) =>
+    ['iclock', 'person', personId, 'biometrics'] as const,
   companies: () => ['iclock', 'companies'] as const,
   teams: (siteId: string) => ['iclock', 'site', siteId, 'teams'] as const,
   report: (siteId: string, period: string) =>

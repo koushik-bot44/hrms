@@ -1,5 +1,6 @@
 package com.ihrms.iclock;
 
+import com.ihrms.domain.model.IclockBiometricTemplate;
 import com.ihrms.domain.model.IclockDevice;
 import com.ihrms.domain.model.IclockDeviceCommand;
 import com.ihrms.domain.model.IclockPerson;
@@ -150,9 +151,178 @@ public class IclockCommandService {
         person.map(IclockPerson::getId).orElse(null), pin, actorId);
   }
 
+  /** How many fingers a terminal will hold for one person; FID is 0-9 on this firmware family. */
+  static final int MAX_FINGER_INDEX = 9;
+
+  /** Scans the device asks for before accepting a template — the firmware's own default. */
+  private static final int ENROL_RETRIES = 3;
+
+  /** What an enrolment trigger produced: the commands queued, and what the operator must do next. */
+  public record EnrolmentTrigger(
+      List<IclockDeviceCommand> queued, String deviceName, String personName,
+      int bioType, int fingerIndex) {}
+
+  /**
+   * Puts one terminal into fingerprint capture mode for one person.
+   *
+   * <p><b>ONE device, not the building.</b> Every other command here fans out to all of a building's
+   * terminals, because a name should read the same wherever somebody walks up. This one cannot: the
+   * person has to stand at a specific machine and put a finger on it, so the operator picks which,
+   * and telling three terminals to wait for a finger would leave two of them stuck.
+   *
+   * <p><b>The user row is created first, deliberately.</b> A template attaches to a user the device
+   * already holds, so a person enrolling for the first time needs {@code UPDATE USERINFO} to land
+   * before {@code ENROLL_FP} — the queue is FIFO per device, so ordering them here is enough. That
+   * is not the forbidden auto-queue: the operator asked for an enrolment, and this is what an
+   * enrolment consists of.
+   *
+   * <p><b>An ack does not mean enrolled.</b> {@code Return=0} means the terminal understood the
+   * command. Whether a template exists afterwards depends on somebody being there to give one, and
+   * this fleet has never been sent this verb — the firmware may open a capture prompt, ignore it
+   * silently, or answer an error we have not seen. The proof of an enrolment is the person's next
+   * successful punch, and the console says so rather than claiming success from the ack.
+   */
+  @Transactional
+  public EnrolmentTrigger queueEnrolment(
+      String personId, String deviceId, int bioType, int fingerIndex, String actorId) {
+    boolean face = bioType == IclockCommandDialect.TYPE_FACE;
+    if (!face && (fingerIndex < 0 || fingerIndex > MAX_FINGER_INDEX)) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Finger must be 0-" + MAX_FINGER_INDEX + ".");
+    }
+    IclockPerson person = people.findById(personId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found"));
+    if (!person.isActive()) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "This person is deactivated. Enrolling a finger would let them back through the gate.");
+    }
+    if (person.getName() == null || person.getName().isBlank()) {
+      // The user row is created by the name push that precedes the trigger, so a nameless person
+      // would enrol against a blank screen entry nobody can identify at the terminal.
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Give this person a name first — the terminal shows it during capture.");
+    }
+    IclockDevice device = claimedDevice(deviceId);
+    if (!device.getSiteId().equals(person.getSiteId())) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "That terminal is in a different building. Enrol on a terminal where this person works.");
+    }
+
+    List<IclockDeviceCommand> queued = new ArrayList<>();
+    queued.add(queue(
+        device, "UPDATE_USERINFO",
+        IclockCommandDialect.updateUserInfo(person.getPin(), person.getName()),
+        person.getId(), person.getPin(), actorId));
+    queued.add(queue(
+        device,
+        face ? "ENROLL_BIO" : "ENROLL_FP",
+        face ? IclockCommandDialect.enrolFace(person.getPin(), ENROL_RETRIES, true)
+            : IclockCommandDialect.enrolFinger(person.getPin(), fingerIndex, ENROL_RETRIES, true),
+        person.getId(), person.getPin(), actorId));
+    log.info("iclock: {} enrolment queued for pin {}{} on {}",
+        face ? "face" : "fingerprint", person.getPin(),
+        face ? "" : " finger " + fingerIndex, device.getSerialNumber());
+    return new EnrolmentTrigger(
+        queued, device.getName() == null ? device.getSerialNumber() : device.getName(),
+        person.getName(), bioType, face ? 0 : fingerIndex);
+  }
+
+  /**
+   * Asks a terminal for its own user table.
+   *
+   * <p>The counterpart to the USERINFO ingest, which was built for a push no device here has ever
+   * volunteered. The device answers by POSTing {@code table=USERINFO} to {@code cdata}, so the reply
+   * arrives through the ordinary ingest path and seeds roster rows for pins nobody knows yet.
+   *
+   * <p>Read-only on the device's side — it changes nothing there, which makes it the one new verb
+   * that is safe to try on a live gate during a shift.
+   */
+  @Transactional
+  public IclockDeviceCommand queueUserQuery(String deviceId, String rawPin, String actorId) {
+    IclockDevice device = claimedDevice(deviceId);
+    String pin = rawPin == null || rawPin.isBlank() ? null : IclockPin.canonicalOrNull(rawPin);
+    if (rawPin != null && !rawPin.isBlank() && pin == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Not a usable pin");
+    }
+    return queue(
+        device, "QUERY_USERINFO", IclockCommandDialect.queryUserInfo(pin), null, pin, actorId);
+  }
+
+  /**
+   * Queues one fingerprint template onto one terminal.
+   *
+   * <p>Takes the device and template rows rather than ids because the only caller already holds
+   * both, having just decided that this terminal is missing this finger. Re-resolving them here
+   * would be two queries to reach the same objects and one more chance to disagree about which
+   * building is in play.
+   *
+   * <p>The payload is large by the standards of this channel - a template is 1.3-2KB of base64
+   * against about 40 bytes for a name - which is why the per-device cap matters more here than
+   * anywhere else. A building-wide re-sync is fingers MULTIPLIED BY terminals.
+   */
+  @Transactional
+  public IclockDeviceCommand queueTemplatePush(
+      IclockDevice device, IclockBiometricTemplate template, String actorId) {
+    return queue(
+        device,
+        template.getBioType() == IclockCommandDialect.TYPE_FACE
+            ? "UPDATE_BIODATA" : "UPDATE_FINGERTMP",
+        IclockCommandDialect.updateTemplate(
+            template.getBioType(), template.getPin(), template.getFid(), template.getSize(),
+            template.getValid(), template.getTemplate()),
+        template.getPersonId(),
+        template.getPin(),
+        actorId);
+  }
+
+  /**
+   * Command kinds that put a PERSON onto a terminal, and are therefore subject to the building
+   * boundary.
+   *
+   * <p>An allowlist rather than a denylist, so a verb added later is guarded until somebody decides
+   * otherwise. {@code DELETE_USER} is deliberately absent: removing somebody from a building they do
+   * not belong to is the REMEDY for a boundary breach, and a rule that blocked the cleanup along
+   * with the damage would be worse than no rule.
+   */
+  private static final java.util.Set<String> CARRIES_A_PERSON = java.util.Set.of(
+      "UPDATE_USERINFO", "ENROLL_FP", "ENROLL_BIO", "UPDATE_FINGERTMP", "UPDATE_BIODATA");
+
+  /**
+   * <b>THE BUILDING BOUNDARY.</b> No command may carry a person to a terminal in a building where
+   * they hold no ACTIVE roster row.
+   *
+   * <p>Enforced here, in the single funnel every queued command passes through, rather than in each
+   * caller. Callers were already building-scoped and the fleet name sync obeyed them exactly — and a
+   * building's terminals still ended up showing people from the other building, because the ROSTER
+   * said they worked there. Scoping a query correctly is not the same as being unable to cross the
+   * line: the first is a property of one code path, the second is a property of the system.
+   *
+   * <p>So this check does not ask what the caller intended. It asks the only question that matters
+   * at the moment of writing to hardware — does this person work in this building, right now — and
+   * refuses if the answer is no.
+   */
+  private void assertWithinBuilding(IclockDevice device, String kind, String pin) {
+    if (pin == null || device.getSiteId() == null || !CARRIES_A_PERSON.contains(kind)) {
+      return;
+    }
+    boolean belongsHere = people.findBySiteIdAndPin(device.getSiteId(), pin)
+        .map(IclockPerson::isActive)
+        .orElse(false);
+    if (!belongsHere) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "Pin " + pin + " has no active roster row in this terminal's building. Buildings do not "
+              + "share registers — add them to this building's roster first, or send this to a "
+              + "terminal where they actually work.");
+    }
+  }
+
   private IclockDeviceCommand queue(
       IclockDevice device, String kind, String payload,
       String personId, String pin, String actorId) {
+    assertWithinBuilding(device, kind, pin);
     long waiting = commands.countByDeviceIdAndStatus(device.getId(), PENDING);
     if (waiting >= props.maxPendingCommandsPerDevice()) {
       throw new ResponseStatusException(
@@ -170,80 +340,18 @@ public class IclockCommandService {
     return commands.save(c);
   }
 
-  /** One person's line in a bulk name sync, decided before anything is queued. */
-  public record NameSyncRow(String personId, String pin, String name, String outcome, String detail) {}
-
-  /** What a building-wide name sync would do, or did. */
-  public record NameSyncReport(
-      boolean committed, int people, int skipped, int devices, int commandsQueued,
-      List<NameSyncRow> rows) {}
-
   /**
-   * What a building-wide name push WOULD do. Structurally incapable of doing it.
+   * <b>BULK NAME SYNC IS GONE, DELIBERATELY.</b>
    *
-   * <p>Separate entry point rather than a boolean, per the standing rule, and
-   * {@code readOnly = true} puts Hibernate in FlushMode.MANUAL so a stray mutation cannot reach the
-   * database. The stakes are higher here than for a roster preview: the committed version writes to
-   * every screen in the building.
-   */
-  @Transactional(readOnly = true)
-  public NameSyncReport previewNameSync(String siteId) {
-    return decideNameSync(siteId, false, null);
-  }
-
-  /**
-   * Queues a name push for everybody at a building.
+   * <p>It existed as a building-wide pass and it ran once, correctly, across the fleet. What it
+   * showed is that a bulk write is only ever as right as the roster underneath it: the pass obeyed
+   * its building scope exactly and still put people from one building onto the other's screens,
+   * because the roster said they worked there. A per-person action has the same failure available to
+   * it and a hundredth of the reach, and somebody is looking at the row when they press it.
    *
-   * <p>This is the pass that fixes the slug and register-junk names in one go. It is one command per
-   * person PER DEVICE, so a two-terminal building doubles the count — the number is reported rather
-   * than left to be discovered when the queue looks unexpectedly long.
+   * <p>The replacement is {@link #queueNameUpdate} from a person's own row, plus the building
+   * boundary above, which now makes the bad write impossible rather than merely unlikely.
    */
-  @Transactional
-  public NameSyncReport syncNames(String siteId, String actorId) {
-    return decideNameSync(siteId, true, actorId);
-  }
-
-  private NameSyncReport decideNameSync(String siteId, boolean commit, String actorId) {
-    List<IclockDevice> targets = claimedDevicesAt(siteId);
-    if (targets.isEmpty()) {
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "No claimed terminal at this building to push to.");
-    }
-    List<NameSyncRow> rows = new ArrayList<>();
-    int people = 0, skipped = 0, queued = 0;
-
-    for (IclockPerson person : people_findActive(siteId)) {
-      if (person.getName() == null || person.getName().isBlank()) {
-        // Pushing an empty name would blank the screen — worse than the slug it replaces.
-        skipped++;
-        rows.add(new NameSyncRow(person.getId(), person.getPin(), null, "SKIPPED",
-            "no name on the roster yet"));
-        continue;
-      }
-      String onWire = IclockCommandDialect.sanitiseName(person.getName());
-      people++;
-      if (commit) {
-        for (IclockDevice device : targets) {
-          queue(device, "UPDATE_USERINFO",
-              IclockCommandDialect.updateUserInfo(person.getPin(), person.getName()),
-              person.getId(), person.getPin(), actorId);
-          queued++;
-        }
-      } else {
-        queued += targets.size();
-      }
-      rows.add(new NameSyncRow(person.getId(), person.getPin(), onWire,
-          commit ? "QUEUED" : "WOULD_QUEUE",
-          onWire.equals(person.getName().trim()) ? null
-              : "shortened for the device screen from: " + person.getName().trim()));
-    }
-    return new NameSyncReport(commit, people, skipped, targets.size(), queued, rows);
-  }
-
-  private List<IclockPerson> people_findActive(String siteId) {
-    return people.findBySiteIdAndActiveTrue(siteId);
-  }
-
   // ------------------------------------------------------------------ serving
 
   /**
@@ -309,15 +417,15 @@ public class IclockCommandService {
    * verbatim either way.
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void recordAck(String commandId, String returnValue, String rawBody) {
+  public Optional<AckOutcome> recordAck(String commandId, String returnValue, String rawBody) {
     if (commandId == null || commandId.isBlank()) {
       log.warn("iclock: devicecmd ack with no command id; body captured raw: {}", rawBody);
-      return;
+      return Optional.empty();
     }
     IclockDeviceCommand c = commands.findById(commandId).orElse(null);
     if (c == null) {
       log.warn("iclock: devicecmd ack for unknown command {}; body: {}", commandId, rawBody);
-      return;
+      return Optional.empty();
     }
     boolean ok = IclockCommandDialect.isSuccess(returnValue);
     c.setAckRaw(rawBody);
@@ -329,7 +437,17 @@ public class IclockCommandService {
     }
     commands.save(c);
     log.info("iclock: command {} {} (Return={})", commandId, ok ? "ACKED" : "FAILED", returnValue);
+    return Optional.of(new AckOutcome(commandId, c.getKind(), ok, returnValue));
   }
+
+  /**
+   * What an acknowledgement turned out to be.
+   *
+   * <p>Returned rather than acted on here so that a template ack can update the enrolment picture
+   * without this service knowing about the one that owns it - which would be a cycle, since
+   * propagation queues its commands through this service.
+   */
+  public record AckOutcome(String commandId, String kind, boolean ok, String returnValue) {}
 
   // ------------------------------------------------------------------ reading
 

@@ -44,7 +44,7 @@ import { RowMenu } from '@/components/console/row-menu';
 import {
   CommandChannelBadge,
   DeviceCommandLog,
-  SyncNamesDialog,
+  QueryUsersButton,
   SyncTimeButton,
 } from './device-commands';
 import { ViewToggle, usePersistedViewMode } from '@/components/console/view-toggle';
@@ -76,7 +76,6 @@ export function DevicesPanel({ site }: { site: IclockSite | null }) {
   const [movingBuilding, setMovingBuilding] = React.useState<IclockDevice | null>(null);
   const [renaming, setRenaming] = React.useState<IclockSite | null>(null);
   const [creatingBuilding, setCreatingBuilding] = React.useState(false);
-  const [syncingNames, setSyncingNames] = React.useState<IclockSite | null>(null);
   const [mode, setMode] = usePersistedViewMode('devices');
 
   const devicesQuery = useApiQuery(iclockKeys.devices(), (s) => listDevices(undefined, s), {
@@ -156,20 +155,7 @@ export function DevicesPanel({ site }: { site: IclockSite | null }) {
             <h2 className="text-base font-semibold">Claimed terminals</h2>
             <CommandChannelBadge />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {site && claimed.some((d) => d.siteId === site.id) ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setSyncingNames(site)}
-              >
-                <Tag className="mr-1.5 size-4" aria-hidden />
-                Sync names
-              </Button>
-            ) : null}
-            <ViewToggle value={mode} onChange={setMode} />
-          </div>
+          <ViewToggle value={mode} onChange={setMode} />
         </div>
         {claimed.length === 0 ? (
           <EmptyState
@@ -195,12 +181,6 @@ export function DevicesPanel({ site }: { site: IclockSite | null }) {
         )}
       </Card>
 
-      <SyncNamesDialog
-        siteId={syncingNames?.id ?? ''}
-        siteName={syncingNames?.name ?? ''}
-        open={Boolean(syncingNames)}
-        onOpenChange={(o) => !o && setSyncingNames(null)}
-      />
       <ClaimDialog
         device={claiming}
         buildings={buildings}
@@ -277,6 +257,7 @@ function DeviceRow({
       </div>
 
       {claimedDevice ? <SyncTimeButton deviceId={device.id} /> : null}
+      {claimedDevice ? <QueryUsersButton deviceId={device.id} /> : null}
 
       {claimedDevice ? (
         <RowMenu

@@ -72,6 +72,7 @@ class IclockMvcTest {
    * about a bare "OK" reply keeps testing what a live device sees with the channel closed.
    */
   @MockBean private IclockCommandService commands;
+  @MockBean private IclockBiometricService biometrics;
 
   /** Seeds from USERINFO pushes. Mocked: this slice tests the HTTP contract, not the roster. */
   @MockBean private IclockEnrolmentService enrolments;

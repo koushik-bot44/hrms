@@ -88,6 +88,7 @@ public class IclockAdminController {
   private final IclockSitePolicyService policies;
   private final IclockReportService reports;
   private final IclockCommandService commands;
+  private final IclockBiometricService biometrics;
   private final AuditService audit;
 
   public IclockAdminController(
@@ -99,6 +100,7 @@ public class IclockAdminController {
       IclockSitePolicyService policies,
       IclockReportService reports,
       IclockCommandService commands,
+      IclockBiometricService biometrics,
       AuditService audit) {
     this.admin = admin;
     this.inbox = inbox;
@@ -108,6 +110,7 @@ public class IclockAdminController {
     this.policies = policies;
     this.reports = reports;
     this.commands = commands;
+    this.biometrics = biometrics;
     this.audit = audit;
   }
 
@@ -427,32 +430,6 @@ public class IclockAdminController {
         "payload", c.getPayload())).toList();
   }
 
-  /** What a building-wide name push would do. Queues nothing. */
-  @PostMapping("/sites/{siteId}/push-names/preview")
-  public IclockCommandService.NameSyncReport previewNameSync(@PathVariable String siteId) {
-    return commands.previewNameSync(siteId);
-  }
-
-  /**
-   * Pushes every roster name at a building to its terminals — the pass that clears the slug and
-   * register-junk names.
-   *
-   * <p>One command per person PER DEVICE, so a two-terminal building doubles the count. The audit
-   * entry records the figure rather than leaving it to be discovered from a long queue.
-   */
-  @PostMapping("/sites/{siteId}/push-names")
-  public IclockCommandService.NameSyncReport syncNames(
-      @PathVariable String siteId,
-      @AuthenticationPrincipal IhrmsPrincipal.User actor,
-      HttpServletRequest http) {
-    var report = commands.syncNames(siteId, actor == null ? null : actor.id());
-    record(actor, http, "ICLOCK_COMMANDS_BULK_QUEUED", "IclockSite", siteId,
-        meta("kind", "UPDATE_USERINFO", "people", report.people(), "skipped", report.skipped(),
-            "devices", report.devices(), "commandsQueued", report.commandsQueued(),
-            "commandsEnabled", commands.enabled()));
-    return report;
-  }
-
   /** Sets a terminal's clock from the server, in that building's timezone. */
   @PostMapping("/devices/{deviceId}/sync-time")
   public Map<String, Object> syncTime(
@@ -483,6 +460,87 @@ public class IclockAdminController {
         meta("kind", "DELETE_USER", "pin", c.getDevicePin(), "commandId", c.getId(),
             "commandsEnabled", commands.enabled()));
     return meta("id", c.getId(), "status", c.getStatus(), "payload", c.getPayload());
+  }
+
+  /**
+   * Puts one terminal into fingerprint capture mode for one person.
+   *
+   * <p>Queues two commands in order — the user row, then the capture trigger — because a template
+   * attaches to a user the device already holds. The response says plainly that an acknowledgement
+   * is not an enrolment: the terminal can answer {@code Return=0} for "understood" and still capture
+   * nothing, since the outcome depends on a person standing at it.
+   */
+  @PostMapping("/people/{personId}/enrol")
+  public Map<String, Object> enrolOnDevice(
+      @PathVariable String personId,
+      @RequestParam String deviceId,
+      @RequestParam(defaultValue = "1") int type,
+      @RequestParam(defaultValue = "0") int finger,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    var t = commands.queueEnrolment(
+        personId, deviceId, type, finger, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_ENROLMENT_QUEUED", "IclockPerson", personId,
+        meta("kind", t.bioType() == 2 ? "ENROLL_BIO" : "ENROLL_FP",
+            "deviceId", deviceId, "type", t.bioType(), "finger", t.fingerIndex(),
+            "commandIds", t.queued().stream().map(c -> c.getId()).toList(),
+            "commandsEnabled", commands.enabled()));
+    return meta(
+        "deviceName", t.deviceName(),
+        "personName", t.personName(),
+        "bioType", t.bioType(),
+        "finger", t.fingerIndex(),
+        "commandIds", t.queued().stream().map(c -> c.getId()).toList(),
+        "payload", t.queued().get(t.queued().size() - 1).getPayload());
+  }
+
+  /**
+   * Asks a terminal for its own user table, which arrives back through the ordinary USERINFO ingest.
+   *
+   * <p>Read-only on the device. This is what gives the enrolment-seeding path a live input: the fleet
+   * has never volunteered a USERINFO push, so we ask for one.
+   */
+  @PostMapping("/devices/{deviceId}/query-users")
+  public Map<String, Object> queryUsers(
+      @PathVariable String deviceId,
+      @RequestParam(required = false) String pin,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    var c = commands.queueUserQuery(deviceId, pin, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_COMMAND_QUEUED", "IclockDevice", deviceId,
+        meta("kind", "QUERY_USERINFO", "pin", c.getDevicePin(), "commandId", c.getId(),
+            "commandsEnabled", commands.enabled()));
+    return meta("id", c.getId(), "status", c.getStatus(), "payload", c.getPayload());
+  }
+
+  /**
+   * Where this person's fingerprints are, terminal by terminal.
+   *
+   * <p>The console's "enrolled on 4 of 4", and when it is not 4 of 4, which door is the problem.
+   */
+  @GetMapping("/people/{personId}/biometrics")
+  public IclockBiometricService.EnrolmentState biometrics(@PathVariable String personId) {
+    return biometrics.stateFor(personId);
+  }
+
+  /**
+   * Re-pushes every finger this person has to every terminal in their building.
+   *
+   * <p>The repair action. Propagation already happens by itself when somebody enrols, so pressing
+   * this means something went wrong — a terminal offline at the time, a full queue, a swapped
+   * device. Deliberately unconditional: it does not skip terminals that claim to hold the finger
+   * already, because the reason somebody is here is that the claim looks wrong.
+   */
+  @PostMapping("/people/{personId}/biometrics/resync")
+  public Map<String, Object> resyncBiometrics(
+      @PathVariable String personId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    int queued = biometrics.resync(personId, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_BIOMETRIC_RESYNC", "IclockPerson", personId,
+        meta("kind", "UPDATE_FINGERTMP", "commandsQueued", queued,
+            "commandsEnabled", commands.enabled()));
+    return meta("commandsQueued", queued);
   }
 
   /** The command log for one terminal, newest first. */

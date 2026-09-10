@@ -223,37 +223,28 @@ class IclockCommandQueueTest {
     assertThat(forGhost.getPersonId()).as("nobody behind it").isNull();
   }
 
-  // ------------------------------------------------------------- bulk preview
+  // ------------------------------------------------------------- the building boundary
 
   @Test
-  void theBulkPreviewQueuesNothing() {
-    person("5110", "Bulk One " + tag, true);
-    person("5111", null, true);
+  void aPersonWithNoACTIVERowAtThisBuildingCannotBePushedToItsTerminals() {
+    // THE INCIDENT, IN ONE ASSERTION. The bulk sync that used to live here obeyed its building scope
+    // exactly and still put one building's people onto the other's screens, because the roster said
+    // they worked there. The scope was never the safeguard; this is.
+    var moved = person("5114", "Moved On " + tag, false);
 
-    var preview = commands.previewNameSync(site.getId());
-
-    assertThat(preview.committed()).isFalse();
-    assertThat(preview.people()).isEqualTo(1);
-    assertThat(preview.skipped()).as("the unnamed one is skipped, not blanked").isEqualTo(1);
-    assertThat(preview.devices()).isEqualTo(2);
-    assertThat(preview.commandsQueued()).as("1 person x 2 terminals").isEqualTo(2);
-    assertThat(repo.findByDeviceIdOrderByCreatedAtDesc(
-        gateIn.getId(), org.springframework.data.domain.PageRequest.of(0, 10)))
-        .as("a preview writes nothing")
-        .isEmpty();
+    assertThatThrownBy(() -> commands.queueNameUpdate(moved.getId(), "usr_test"))
+        .isInstanceOf(ResponseStatusException.class);
+    assertThat(repo.countByDeviceIdAndStatus(gateIn.getId(), "PENDING")).isZero();
   }
 
   @Test
-  void theBulkCommitQueuesOnePerPersonPerDevice() {
-    person("5112", "Bulk A " + tag, true);
-    person("5113", "Bulk B " + tag, true);
-
-    var report = commands.syncNames(site.getId(), "usr_test");
-
-    assertThat(report.committed()).isTrue();
-    assertThat(report.people()).isEqualTo(2);
-    assertThat(report.commandsQueued()).isEqualTo(4);
-    assertThat(repo.countByDeviceIdAndStatus(gateIn.getId(), "PENDING")).isEqualTo(2);
-    assertThat(repo.countByDeviceIdAndStatus(gateOut.getId(), "PENDING")).isEqualTo(2);
+  void theBulkNameSyncNoLongerEXISTS() {
+    // Asserted as an absence. It ran once across the fleet, correctly scoped, and the damage it did
+    // was not something a better query would have prevented — a bulk write is only as right as the
+    // roster beneath it, and nobody is watching at the moment it fires. The replacement is the
+    // per-person push, from a row somebody is looking at.
+    assertThat(IclockCommandService.class.getMethods())
+        .extracting(java.lang.reflect.Method::getName)
+        .doesNotContain("syncNames", "previewNameSync");
   }
 }

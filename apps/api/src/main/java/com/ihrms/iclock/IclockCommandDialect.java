@@ -65,16 +65,40 @@ final class IclockCommandDialect {
   }
 
   /**
+   * The ONLY privilege level this system is capable of emitting: an ordinary user.
+   *
+   * <p>Higher values on this protocol are enroller, manager and administrator — a device admin can
+   * stand at the terminal and change its clock, its users and its network settings. Granting that is
+   * a physical act performed from the device menu by somebody who is already there, and it is
+   * deliberately outside this system's reach: a console with a privilege dropdown is a console where
+   * a mis-click makes somebody an administrator of the door.
+   */
+  static final int PRIVILEGE_USER = 0;
+
+  /**
    * Body of a name update for one enrolled user.
    *
-   * <p>Only PIN and Name are set. Every other field the record can carry — Pri, Passwd, Card, Grp,
-   * TZ — is DELIBERATELY OMITTED rather than sent blank: on this protocol a present-but-empty field
-   * is an instruction to clear it, so sending the full record would wipe the card number, group and
-   * timezone of every person whose name we corrected. That is the difference between fixing a
-   * display name and locking somebody out of the building.
+   * <p><b>PIN, Name and Pri — and nothing else.</b> Passwd, Card, Grp and TZ are DELIBERATELY
+   * OMITTED rather than sent blank: on this protocol a present-but-empty field is an instruction to
+   * clear it, so a "complete" record would wipe the card number, group and timezone of every person
+   * whose name we corrected. That is the difference between fixing a display name and locking
+   * somebody out of the building.
+   *
+   * <p>{@code Pri} is the exception, and it is sent as a VALUE rather than omitted, which is a
+   * different decision from the one above. Omitting it would leave whatever the terminal already
+   * held; sending {@code Pri=0} states it. The rule is that no command this system emits may ever
+   * carry an elevated privilege — see {@link #PRIVILEGE_USER} — and stating it beats trusting it.
+   *
+   * <p><b>The cost, said plainly:</b> pushing a name to somebody who was made a device admin at the
+   * terminal demotes them back to an ordinary user. That is the intended direction. Device-admin
+   * rights are granted from the device menu and this system does not track them, so it cannot
+   * preserve what it cannot see — and quietly preserving an elevation nobody here recorded is the
+   * worse of the two failures.
    */
   static String updateUserInfo(String pin, String name) {
-    return "DATA UPDATE USERINFO PIN=" + pin + TAB + "Name=" + sanitiseName(name);
+    return "DATA UPDATE USERINFO PIN=" + pin
+        + TAB + "Name=" + sanitiseName(name)
+        + TAB + "Pri=" + PRIVILEGE_USER;
   }
 
   /**
@@ -114,6 +138,140 @@ final class IclockCommandDialect {
       return payload;
     }
     return payload.replace(NOW_PLACEHOLDER, DEVICE_TIME.format(at.atZone(zone)));
+  }
+
+  /**
+   * Body of a remote fingerprint enrolment — the command that puts a terminal into capture mode.
+   *
+   * <p><b>UNPROVEN ON THIS FLEET.</b> Everything above has been observed acking; this verb has not
+   * been sent to a device here. It is the documented pushver trigger, and it is the one command in
+   * this class whose success cannot be established from an ack alone: a terminal can answer
+   * {@code Return=0} meaning "understood" and then do nothing visible, because the outcome depends
+   * on a person standing at it. See {@code IclockCommandService.queueEnrolment} for what counts as
+   * evidence.
+   *
+   * <p>Fields, all of which this firmware family expects present:
+   *
+   * <ul>
+   *   <li>{@code FID} — which finger, 0-9. A person may hold several templates; enrolling FID 1
+   *       leaves FID 0 alone, which is how a second finger is added without risking the working one.
+   *   <li>{@code RETRY} — how many scans the device asks for before it accepts a template. Three is
+   *       the firmware default and what the on-device menu uses.
+   *   <li>{@code OVERWRITE} — whether an existing template at that FID may be replaced. Sent as 1:
+   *       the reason to enrol remotely is almost always that the stored print stopped reading, and
+   *       an enrolment that silently refuses to replace it would look like the trigger failed.
+   * </ul>
+   */
+  static String enrolFinger(String pin, int fingerIndex, int retries, boolean overwrite) {
+    return "ENROLL_FP PIN=" + pin
+        + TAB + "FID=" + fingerIndex
+        + TAB + "RETRY=" + retries
+        + TAB + "OVERWRITE=" + (overwrite ? 1 : 0);
+  }
+
+  /**
+   * Body of a fingerprint push - one template onto one terminal.
+   *
+   * <p><b>This shape is not a guess; it is the fleet's own.</b> Every other outbound verb here was
+   * taken from documentation and confirmed by an ack. This one is the exact record these terminals
+   * already POST to us when somebody enrols, with the verb changed from the inbound {@code FP} to
+   * the outbound {@code DATA UPDATE FINGERTMP}. Sending a device back its own serialisation of a
+   * template is the strongest evidence available short of trying it:
+   *
+   * <pre>
+   *   received:  FP PIN=8003\tFID=6\tSize=1544\tValid=1\tTMP=TcdTUzIx...
+   *   sent:      DATA UPDATE FINGERTMP PIN=8003\tFID=6\tSize=1544\tValid=1\tTMP=TcdTUzIx...
+   * </pre>
+   *
+   * <p><b>Size and Valid are echoed, not recomputed.</b> Size is the DECODED byte count the source
+   * device reported. Recomputing it from the base64 would be arithmetic on an assumption about
+   * padding; echoing it hands the receiving terminal precisely what its sibling said, and if the two
+   * ever disagree that is a fact worth seeing rather than one to paper over.
+   *
+   * <p><b>Portability across firmware families is UNPROVEN here.</b> All five templates this fleet
+   * has produced came from ZAM180 gates; no ZAM230 cafeteria terminal has ever sent one, so whether
+   * a ZAM180 template is accepted by a ZAM230 is a question only the wire can answer. The command is
+   * built the same either way and the failure, if it comes, arrives as a negative {@code Return} on
+   * a single command rather than as silent corruption.
+   */
+  static String updateFingerTemplate(String pin, int fid, int size, int valid, String template) {
+    return "DATA UPDATE FINGERTMP PIN=" + pin
+        + TAB + "FID=" + fid
+        + TAB + "Size=" + size
+        + TAB + "Valid=" + valid
+        + TAB + "TMP=" + template;
+  }
+
+  /** Biometric type numbering, as the devices themselves use it. */
+  static final int TYPE_FINGERPRINT = 1;
+
+  static final int TYPE_FACE = 2;
+
+  /**
+   * Body of a remote FACE enrolment.
+   *
+   * <p><b>Beta, and honestly so.</b> The fingerprint trigger has a single documented spelling that
+   * this firmware family has used for years. Face does not: the newer push specs carry it as
+   * {@code ENROLL_BIO} with a {@code TYPE}, while some builds answer to {@code ENROLL_FACE}. This
+   * fleet has produced no evidence either way — no face template has ever reached the server, and no
+   * BIODATA push has ever arrived at all.
+   *
+   * <p>{@code ENROLL_BIO} is sent because it is the form the current specification documents and it
+   * generalises to palm and vein if those ever matter. If this firmware wants the other spelling the
+   * command comes back with a negative {@code Return} rather than failing silently, and the command
+   * log will say so — which is the whole reason to try it on one terminal before offering it as a
+   * finished feature.
+   */
+  static String enrolFace(String pin, int retries, boolean overwrite) {
+    return "ENROLL_BIO PIN=" + pin
+        + TAB + "TYPE=" + TYPE_FACE
+        + TAB + "RETRY=" + retries
+        + TAB + "OVERWRITE=" + (overwrite ? 1 : 0);
+  }
+
+  /**
+   * Body of a face-template push.
+   *
+   * <p>The face counterpart to {@link #updateFingerTemplate}, and weaker evidence than that one by a
+   * wide margin: the fingerprint form is the fleet's own serialisation handed back, while this shape
+   * comes from the specification alone. No face template has ever been seen here to copy.
+   */
+  static String updateBioData(String pin, int fid, int size, int valid, String template) {
+    return "DATA UPDATE BIODATA PIN=" + pin
+        + TAB + "No=" + fid
+        + TAB + "Index=0"
+        + TAB + "Valid=" + valid
+        + TAB + "Duress=0"
+        + TAB + "Type=" + TYPE_FACE
+        + TAB + "MajorVer=0"
+        + TAB + "MinorVer=0"
+        + TAB + "Format=0"
+        + TAB + "Tmp=" + template;
+  }
+
+  /** The right push for a stored template, by its type. */
+  static String updateTemplate(int bioType, String pin, int fid, int size, int valid, String tmp) {
+    return bioType == TYPE_FACE
+        ? updateBioData(pin, fid, size, valid, tmp)
+        : updateFingerTemplate(pin, fid, size, valid, tmp);
+  }
+
+  /**
+   * Body of a request for a terminal's own user table.
+   *
+   * <p><b>This is the missing input.</b> The USERINFO parser was written for a push no device on
+   * this fleet has ever volunteered — 129,747 requests, zero {@code Name=}. Rather than wait for one,
+   * ask: the device answers a QUERY by POSTing {@code table=USERINFO} to {@code cdata}, which lands
+   * in the ingest path already built for it. It is a read on the device's side and changes nothing
+   * there, which makes it the safest of the new verbs to try first.
+   *
+   * <p>With no pin it asks for every user, which on a 250-person terminal is a large body arriving
+   * in one push; a pin narrows it to one.
+   */
+  static String queryUserInfo(String pin) {
+    return pin == null || pin.isBlank()
+        ? "DATA QUERY USERINFO"
+        : "DATA QUERY USERINFO PIN=" + pin;
   }
 
   /**

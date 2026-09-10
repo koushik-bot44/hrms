@@ -2,18 +2,35 @@
 
 import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Clock, RadioTower, Send, TriangleAlert, X } from 'lucide-react';
 import {
+  Check,
+  Clock,
+  Fingerprint,
+  RadioTower,
+  RefreshCw,
+  ScanFace,
+  Send,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
+import {
+  BIO_FACE,
+  BIO_FINGERPRINT,
+  enrolOnDevice,
   getCommandLog,
+  getEnrolmentState,
   getCommandStatus,
   iclockKeys,
-  previewNameSync,
+  listDevices,
   pushName,
+  queryDeviceUsers,
+  resyncBiometrics,
   syncDeviceTime,
-  syncNames,
   type CommandStatus,
   type DeviceCommand,
-  type NameSyncReport,
+  type EnrolmentState,
+  type EnrolmentTrigger,
+  type IclockDevice,
 } from '@/lib/api/iclock';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
@@ -140,128 +157,406 @@ export function SyncTimeButton({ deviceId }: { deviceId: string }) {
   );
 }
 
+/** Which finger, in the words somebody standing at a terminal would use. */
+const FINGERS = [
+  { index: 0, label: 'Right index' },
+  { index: 1, label: 'Right thumb' },
+  { index: 2, label: 'Right middle' },
+  { index: 3, label: 'Left index' },
+  { index: 4, label: 'Left thumb' },
+  { index: 5, label: 'Left middle' },
+  { index: 6, label: 'Right ring' },
+  { index: 7, label: 'Right little' },
+  { index: 8, label: 'Left ring' },
+  { index: 9, label: 'Left little' },
+];
+
+/** What the console says about one terminal's hold on a person. */
+const ENROLMENT_TONE: Record<string, string> = {
+  SOURCE: 'text-success',
+  PRESENT: 'text-success',
+  PENDING: 'text-muted-foreground',
+  FAILED: 'text-destructive',
+  NONE: 'text-muted-foreground',
+};
+
+const ENROLMENT_WORD: Record<string, string> = {
+  SOURCE: 'enrolled here',
+  PRESENT: 'enrolled',
+  PENDING: 'sending…',
+  FAILED: 'refused',
+  NONE: 'not enrolled',
+};
+
 /**
- * Building-level "Sync names", preview first.
+ * "Enrol on device" — arms ONE terminal to capture, after which the building looks after itself.
  *
- * <p>The preview is a separate server call that queues nothing, per the standing rule — and it
- * matters more here than for a roster preview, because the committed version writes to every screen
- * in the building. The count it reports is people MULTIPLIED BY terminals, which is not what an
- * operator expects until they see it.
+ * <p>Two pickers and nothing else: which machine the person will walk to, and what it should ask
+ * them for. Everything after the button is automatic — the terminal captures, pushes the template
+ * back unprompted, and the server spreads it to the other doors.
+ *
+ * <p>This dialog cannot report success, and does not pretend to. The terminal acknowledges that it
+ * understood the command; whether a finger arrived depends on somebody being there to give one.
  */
-export function SyncNamesDialog({
+export function EnrolOnDeviceDialog({
+  personId,
+  personName,
   siteId,
-  siteName,
   open,
   onOpenChange,
 }: {
+  personId: string;
+  personName: string;
   siteId: string;
-  siteName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const [report, setReport] = React.useState<NameSyncReport | null>(null);
-  const [done, setDone] = React.useState<NameSyncReport | null>(null);
+  const [deviceId, setDeviceId] = React.useState('');
+  const [bioType, setBioType] = React.useState<number>(BIO_FINGERPRINT);
+  const [finger, setFinger] = React.useState(0);
+  const [sent, setSent] = React.useState<EnrolmentTrigger | null>(null);
+
+  const devicesQuery = useApiQuery<IclockDevice[]>(
+    iclockKeys.devices(),
+    (signal) => listDevices(undefined, signal),
+    { retry: false },
+  );
+  const here = (devicesQuery.data ?? []).filter(
+    (d) => d.status === 'CLAIMED' && d.siteId === siteId,
+  );
 
   React.useEffect(() => {
     if (!open) {
-      setReport(null);
-      setDone(null);
+      setSent(null);
+      setFinger(0);
+      setBioType(BIO_FINGERPRINT);
     }
   }, [open]);
+  React.useEffect(() => {
+    if (open && !deviceId && here.length > 0) setDeviceId(here[0].id);
+  }, [open, deviceId, here]);
 
-  const preview = useApiMutation(() => previewNameSync(siteId), {
-    onSuccess: (r: NameSyncReport) => setReport(r),
-  });
-  const commit = useApiMutation(() => syncNames(siteId), {
-    onSuccess: (r: NameSyncReport) => {
-      setDone(r);
+  const trigger = useApiMutation(() => enrolOnDevice(personId, deviceId, bioType, finger), {
+    onSuccess: (t: EnrolmentTrigger) => {
+      setSent(t);
       qc.invalidateQueries({ queryKey: iclockKeys.root });
     },
   });
 
-  React.useEffect(() => {
-    if (open && !report && !preview.isPending) preview.mutate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  const face = bioType === BIO_FACE;
+  const target = here.find((d) => d.id === deviceId);
+  const others = here.length - 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Sync names to terminals</DialogTitle>
+          <DialogTitle>Enrol {personName}</DialogTitle>
           <DialogDescription>
-            Pushes every roster name at {siteName} to its terminals — the pass that clears slug and
-            register names from the device screens.
+            Arms one terminal to capture. What it captures is copied to the other terminals in the
+            building automatically.
           </DialogDescription>
         </DialogHeader>
 
-        {done ? (
-          <div className="space-y-3">
-            <div className="rounded-lg border border-border bg-card p-3 text-sm">
+        {sent ? (
+          <div className="space-y-3 text-sm">
+            <div className="rounded-lg border border-border bg-card p-3">
               <p>
-                <strong className="tabular-nums">{done.commandsQueued}</strong> commands queued —{' '}
-                {done.people} people across {done.devices} terminal{done.devices === 1 ? '' : 's'}.
+                <strong>{sent.deviceName}</strong> opens capture on its next poll — within about
+                half a minute.
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Terminals take one command per poll, so a large building takes a few minutes to work
-                through. Progress shows in each terminal’s command log.
+              <p className="mt-2 text-muted-foreground">
+                {sent.personName} {sent.bioType === BIO_FACE
+                  ? 'looks at the camera when the screen asks.'
+                  : 'presses the same finger three times when the screen asks.'}
               </p>
             </div>
+            {others > 0 ? (
+              <div className="rounded-lg border border-border bg-muted/40 p-3">
+                <p className="inline-flex items-center gap-1.5">
+                  <RadioTower className="size-3.5" aria-hidden />
+                  Then it copies itself to the other {others} terminal
+                  {others === 1 ? '' : 's'} here.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  No second visit. Watch the count on this person’s row go to {here.length} of{' '}
+                  {here.length}.
+                </p>
+              </div>
+            ) : null}
+            {/* An ack is not an enrolment. Saying otherwise would send somebody away believing their
+                finger works, which they find out at a gate at 7pm. */}
+            <p className="text-xs text-muted-foreground">
+              The terminal confirms it understood the command, which is not the same as a capture
+              having happened. The proof is their next punch going through.
+            </p>
             <div className="flex justify-end">
               <Button onClick={() => onOpenChange(false)}>Done</Button>
             </div>
           </div>
-        ) : preview.isPending || !report ? (
-          <LoadingSkeleton lines={4} />
         ) : (
           <div className="space-y-4">
-            <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
-              <p>
-                <strong className="tabular-nums">{report.commandsQueued}</strong> commands —{' '}
-                {report.people} named {report.people === 1 ? 'person' : 'people'} ×{' '}
-                {report.devices} terminal{report.devices === 1 ? '' : 's'}.
+            {here.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No claimed terminal at this building to enrol on.
               </p>
-              {report.skipped > 0 ? (
-                <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-warning">
-                  <TriangleAlert className="size-3.5" aria-hidden />
-                  {report.skipped} skipped — no name on the roster yet. Pushing an empty name would
-                  blank the screen.
-                </p>
-              ) : null}
-            </div>
-
-            {report.rows.some((r) => r.detail) ? (
-              <div className="max-h-48 overflow-auto rounded-lg border border-border">
-                <ul className="divide-y divide-border text-xs">
-                  {report.rows
-                    .filter((r) => r.detail)
-                    .map((r) => (
-                      <li key={r.personId} className="px-3 py-1.5">
-                        <span className="font-mono">{r.pin}</span>{' '}
-                        <span className="font-medium">{r.name ?? '—'}</span>
-                        <span className="ml-2 text-muted-foreground">{r.detail}</span>
-                      </li>
+            ) : (
+              <>
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-medium">Terminal</span>
+                  <select
+                    className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                    value={deviceId}
+                    onChange={(e) => setDeviceId(e.target.value)}
+                  >
+                    {here.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name ?? d.serialNumber}
+                        {d.direction ? ' — ' + d.direction : ''}
+                      </option>
                     ))}
-                </ul>
-              </div>
-            ) : null}
+                  </select>
+                  <span className="block text-xs text-muted-foreground">
+                    Whichever one they can get to. It reaches the rest by itself.
+                  </span>
+                </label>
 
-            <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+                <fieldset className="space-y-1.5">
+                  <legend className="text-sm font-medium">Capture</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBioType(BIO_FINGERPRINT)}
+                      className={cn(
+                        'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                        !face
+                          ? 'border-primary bg-primary/5 text-foreground'
+                          : 'border-border text-muted-foreground hover:bg-muted/50',
+                      )}
+                    >
+                      <Fingerprint className="size-4" aria-hidden />
+                      Fingerprint
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBioType(BIO_FACE)}
+                      className={cn(
+                        'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                        face
+                          ? 'border-primary bg-primary/5 text-foreground'
+                          : 'border-border text-muted-foreground hover:bg-muted/50',
+                      )}
+                    >
+                      <ScanFace className="size-4" aria-hidden />
+                      Face
+                      <Badge variant="outline" className="ml-auto text-[10px]">beta</Badge>
+                    </button>
+                  </div>
+                </fieldset>
+
+                {face ? (
+                  /* Marked beta because it IS: no face template has ever reached this server, and
+                     the trigger has two competing spellings in the specifications. Saying so is
+                     cheaper than an operator concluding the terminal is broken. */
+                  <p className="inline-flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/5 p-2.5 text-xs text-warning">
+                    <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                    <span>
+                      No face has ever been captured on this fleet, so this is the first test of it.
+                      If the terminal ignores the command it shows as refused in its command log —
+                      fingerprint is the proven path today.
+                    </span>
+                  </p>
+                ) : (
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">Finger</span>
+                    <select
+                      className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                      value={finger}
+                      onChange={(e) => setFinger(Number(e.target.value))}
+                    >
+                      {FINGERS.map((f) => (
+                        <option key={f.index} value={f.index}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="block text-xs text-muted-foreground">
+                      Each finger is stored separately. Re-enrolling one replaces only that one.
+                    </span>
+                  </label>
+                )}
+              </>
+            )}
+
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
+              <CommandChannelBadge />
+              <div className="flex-1" />
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button
-                onClick={() => commit.mutate()}
-                disabled={commit.isPending || report.commandsQueued === 0}
+                onClick={() => trigger.mutate()}
+                disabled={trigger.isPending || !deviceId || here.length === 0}
               >
-                {commit.isPending ? 'Queueing…' : `Send ${report.commandsQueued}`}
+                {face ? (
+                  <ScanFace className="mr-1.5 size-4" aria-hidden />
+                ) : (
+                  <Fingerprint className="mr-1.5 size-4" aria-hidden />
+                )}
+                {trigger.isPending
+                  ? 'Sending…'
+                  : target
+                    ? `Arm ${target.name ?? target.serialNumber}`
+                    : 'Start capture'}
               </Button>
             </div>
           </div>
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Where this person's biometrics actually are — "enrolled on 4 of 4", and when they are not, which
+ * door is the problem.
+ *
+ * <p>Reads the enrolment state rather than the command log, because the log says what was ATTEMPTED
+ * and the question being asked is whether this person can get through that door. The two differ
+ * exactly when something has gone wrong, which is the only time anybody looks.
+ */
+export function EnrolmentStatePanel({
+  personId,
+  siteId,
+  personName,
+}: {
+  personId: string;
+  siteId: string;
+  personName: string;
+}) {
+  const qc = useQueryClient();
+  const [enrolling, setEnrolling] = React.useState(false);
+  const query = useApiQuery<EnrolmentState>(
+    iclockKeys.biometrics(personId),
+    (signal) => getEnrolmentState(personId, signal),
+    { retry: false, refetchInterval: 15000 },
+  );
+  const resync = useApiMutation(() => resyncBiometrics(personId), {
+    successMessage: (r: { commandsQueued: number }) =>
+      `Re-sending on ${r.commandsQueued} terminal${r.commandsQueued === 1 ? '' : 's'}.`,
+    onSuccess: () => qc.invalidateQueries({ queryKey: iclockKeys.root }),
+  });
+
+  const state = query.data;
+  const held = (state?.fingersHeld ?? 0) + (state?.facesHeld ?? 0);
+  const complete = state != null && state.devices > 0 && state.enrolledOn === state.devices;
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">Biometrics</span>
+        {state ? (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 text-sm tabular-nums',
+              complete ? 'text-success' : 'text-muted-foreground',
+            )}
+          >
+            <Fingerprint className="size-3.5" aria-hidden />
+            enrolled on {state.enrolledOn} of {state.devices}
+          </span>
+        ) : null}
+        <div className="flex-1" />
+        <Button type="button" variant="outline" size="sm" onClick={() => setEnrolling(true)}>
+          <Fingerprint className="mr-1.5 size-4" aria-hidden />
+          Enrol…
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={resync.isPending || held === 0}
+          title={
+            held === 0
+              ? 'Nothing to send — no template has reached the server for this person yet.'
+              : 'Copy this person’s stored fingerprints to the other terminals in THEIR building.'
+          }
+          onClick={() => resync.mutate()}
+        >
+          <RefreshCw className="mr-1.5 size-4" aria-hidden />
+          {resync.isPending ? 'Sending…' : 'Sync to building devices'}
+        </Button>
+      </div>
+
+      {state && state.rows.length > 0 ? (
+        <ul className="divide-y divide-border rounded-md border border-border bg-card text-xs">
+          {state.rows.map((r) => (
+            <li key={r.deviceId} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5">
+              <span className="font-medium">{r.deviceName}</span>
+              {r.direction ? (
+                <span className="text-muted-foreground">{r.direction}</span>
+              ) : null}
+              <div className="flex-1" />
+              {r.fingers > 0 ? (
+                <span className="text-muted-foreground tabular-nums">
+                  {r.fingers} finger{r.fingers === 1 ? '' : 's'}
+                </span>
+              ) : null}
+              {r.faces > 0 ? <span className="text-muted-foreground">face</span> : null}
+              <span className={ENROLMENT_TONE[r.status] ?? 'text-muted-foreground'}>
+                {ENROLMENT_WORD[r.status] ?? r.status}
+              </span>
+              {r.failureReason ? (
+                <span className="w-full text-destructive">{r.failureReason}</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {state && held === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No template has reached the server for {personName} yet. It arrives by itself the moment
+          they enrol at a terminal — nothing here needs to ask for it.
+        </p>
+      ) : null}
+
+      <EnrolOnDeviceDialog
+        personId={personId}
+        personName={personName}
+        siteId={siteId}
+        open={enrolling}
+        onOpenChange={setEnrolling}
+      />
+    </div>
+  );
+}
+
+/**
+ * "Fetch users" - asks a terminal for its own user table.
+ *
+ * <p>Read-only on the device. It is how the enrolment-seeding path gets a live input at all: this
+ * fleet has never volunteered a USERINFO push, so the console asks for one.
+ */
+export function QueryUsersButton({ deviceId }: { deviceId: string }) {
+  const qc = useQueryClient();
+  const ask = useApiMutation(() => queryDeviceUsers(deviceId), {
+    successMessage:
+      'Asked the terminal for its user list. Whatever it sends back seeds pins nobody knows yet.',
+    onSuccess: () => qc.invalidateQueries({ queryKey: iclockKeys.commandLog(deviceId) }),
+  });
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={ask.isPending}
+      onClick={() => ask.mutate()}
+    >
+      <RadioTower className="mr-1.5 size-4" aria-hidden />
+      {ask.isPending ? 'Asking...' : 'Fetch users'}
+    </Button>
   );
 }
 

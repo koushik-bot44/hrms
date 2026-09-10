@@ -91,6 +91,9 @@ public class IclockEnrolmentService {
         continue;
       }
 
+      // NOTE ON PRIVILEGE: the device's Pri field is read past, never stored and never echoed. A
+      // terminal reporting somebody as an administrator is reporting a physical act performed at the
+      // device menu; this system neither tracks that nor is capable of granting it.
       IclockPerson person = new IclockPerson();
       person.setSiteId(device.getSiteId());
       person.setPin(r.pin());

@@ -47,6 +47,7 @@ public class IclockController {
   private final IclockProperties props;
   /** The command queue. Serves at most one line per poll, and only when the kill switch is on. */
   private final IclockCommandService commands;
+  private final IclockBiometricService biometrics;
   /** Seeds roster rows from a device's own user table, when one ever arrives. */
   private final IclockEnrolmentService enrolments;
 
@@ -54,10 +55,12 @@ public class IclockController {
       IclockService service,
       IclockProperties props,
       IclockCommandService commands,
+      IclockBiometricService biometrics,
       IclockEnrolmentService enrolments) {
     this.service = service;
     this.props = props;
     this.commands = commands;
+    this.biometrics = biometrics;
     this.enrolments = enrolments;
   }
 
@@ -145,7 +148,13 @@ public class IclockController {
     String id = firstNonBlank(IclockQuery.param(query, "ID"), formValue(body, "ID"));
     String ret = firstNonBlank(IclockQuery.param(query, "Return"), formValue(body, "Return"));
     try {
-      commands.recordAck(id, ret, body);
+      // A template ack is routed onward: it says a terminal has taken a fingerprint into its own
+      // store, which is what "enrolled on 4 of 4" is counting. Routed HERE rather than inside the
+      // command service, because propagation queues through that service and the dependency would
+      // otherwise point both ways.
+      commands.recordAck(id, ret, body)
+          .filter(a -> "UPDATE_FINGERTMP".equals(a.kind()))
+          .ifPresent(a -> biometrics.recordTemplateAck(a.commandId(), a.returnValue()));
     } catch (RuntimeException e) {
       log.warn("iclock: failed to record devicecmd ack; body captured raw: {}", body, e);
     }
@@ -214,10 +223,25 @@ public class IclockController {
       return text("OK");
     }
     if (table == null || !table.equalsIgnoreCase("ATTLOG")) {
-      // OPERLOG / BIODATA / unknown: raw-logged only, but still record liveness and the cursor.
-      // OPERLOG on this fleet is OPLOG operation records — numeric op-code, operator, timestamp and
-      // a pin — which say that something happened to a user but never what they are called.
+      // OPERLOG / unknown: raw-logged, liveness and cursor recorded — and, for OPERLOG, mined for
+      // fingerprints.
+      //
+      // THE TEMPLATES RIDE IN HERE. The OPLOG lines are operation records that say something
+      // happened to a pin and never what that person is called, which is why this branch used to do
+      // nothing. But the same body carries FP records when somebody enrols at the terminal, and
+      // those are complete fingerprint templates arriving unasked. That is the capture half of
+      // building-wide propagation, free.
       service.touch(serial, false, null, stamp, opStamp);
+      if (table != null && table.equalsIgnoreCase("OPERLOG")) {
+        try {
+          biometrics.capture(serial, rawBody(request));
+        } catch (RuntimeException e) {
+          // Never cost the push. A terminal that gets an error retries the batch forever, and the
+          // body is captured raw regardless, so a failure here loses a propagation and not a
+          // fingerprint — and there is a re-sync action for exactly that.
+          log.warn("iclock: SN={} OPERLOG template capture failed; body captured raw", serial, e);
+        }
+      }
       return text("OK");
     }
     if (serial != null && service.overPunchCap(serial)) {

@@ -24,7 +24,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Combobox } from '@/components/console/combobox';
-import { CommandChannelBadge, PushNameButton } from './device-commands';
+import {
+  CommandChannelBadge,
+  EnrolmentStatePanel,
+  PushNameButton,
+} from './device-commands';
 
 /**
  * One dialog for editing a person's details, shared by the People row menu and the inbox's
@@ -131,6 +135,7 @@ export function PersonEditDialog({
   const canSave = pin.length > 0 && !save.isPending;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -238,13 +243,22 @@ export function PersonEditDialog({
           </div>
 
           {!creating && person ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 p-3">
-              <PushNameButton personId={person.id} disabled={!name.trim()} />
-              <span className="text-xs text-muted-foreground">
-                Sends this name to every terminal at their building. Save first — the push uses the
-                saved name, not what is typed here.
-              </span>
-              <CommandChannelBadge />
+            <div className="space-y-3">
+              <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <PushNameButton personId={person.id} disabled={!name.trim()} />
+                  <CommandChannelBadge />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Sends this name to every terminal at their building. Save first — the push uses
+                  the SAVED name, not what is typed here.
+                </p>
+              </div>
+              <EnrolmentStatePanel
+                personId={person.id}
+                siteId={siteId}
+                personName={person.name ?? person.pin}
+              />
             </div>
           ) : null}
 
@@ -259,5 +273,6 @@ export function PersonEditDialog({
         </form>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
