@@ -90,6 +90,7 @@ public class IclockAdminController {
   private final IclockCommandService commands;
   private final IclockBiometricService biometrics;
   private final IclockRegisterAuditService registerAudits;
+  private final IclockPersonRemovalService removals;
   private final AuditService audit;
 
   public IclockAdminController(
@@ -103,6 +104,7 @@ public class IclockAdminController {
       IclockCommandService commands,
       IclockBiometricService biometrics,
       IclockRegisterAuditService registerAudits,
+      IclockPersonRemovalService removals,
       AuditService audit) {
     this.admin = admin;
     this.inbox = inbox;
@@ -114,6 +116,7 @@ public class IclockAdminController {
     this.commands = commands;
     this.biometrics = biometrics;
     this.registerAudits = registerAudits;
+    this.removals = removals;
     this.audit = audit;
   }
 
@@ -588,6 +591,76 @@ public class IclockAdminController {
         meta("kind", "DELETE_USER", "pins", pins, "commandsQueued", queued,
             "commandsEnabled", commands.enabled()));
     return meta("commandsQueued", queued);
+  }
+
+  /** What removing this person would do. Queues nothing, writes nothing. */
+  @PostMapping("/people/{personId}/remove/preview")
+  public IclockPersonRemovalService.RemovalReport previewRemoveOne(@PathVariable String personId) {
+    return removals.previewOne(personId);
+  }
+
+  /**
+   * Removes one person from the terminals AND the roster.
+   *
+   * <p>Both halves in one action, because doing them separately is how the register and the roster
+   * drift apart. Punches are untouched.
+   */
+  @PostMapping("/people/{personId}/remove")
+  public IclockPersonRemovalService.RemovalReport removeOne(
+      @PathVariable String personId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    var report = removals.removeOne(personId, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_PERSON_REMOVED", "IclockPerson", personId,
+        meta("rosterOutcome", report.rows().isEmpty() ? null : report.rows().get(0).rosterOutcome(),
+            "pin", report.rows().isEmpty() ? null : report.rows().get(0).pin(),
+            "terminals", report.commandsQueued(),
+            "commandsEnabled", commands.enabled()));
+    return report;
+  }
+
+  /** What removing a selection would do. */
+  @PostMapping("/sites/{siteId}/people/remove/preview")
+  public IclockPersonRemovalService.RemovalReport previewRemove(
+      @PathVariable String siteId, @RequestBody List<String> personIds) {
+    return removals.preview(siteId, personIds);
+  }
+
+  /** Removes a selection from the terminals and the roster. Building-bounded. */
+  @PostMapping("/sites/{siteId}/people/remove")
+  public IclockPersonRemovalService.RemovalReport removeMany(
+      @PathVariable String siteId,
+      @RequestBody List<String> personIds,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    var report = removals.remove(siteId, personIds, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_PEOPLE_REMOVED", "IclockSite", siteId,
+        meta("people", report.people(), "deleted", report.toDelete(),
+            "deactivated", report.toDeactivate(), "commandsQueued", report.commandsQueued(),
+            "recentlyActive", report.recentlyActive(),
+            "pins", report.rows().stream().map(r -> r.pin()).toList(),
+            "commandsEnabled", commands.enabled()));
+    return report;
+  }
+
+  /**
+   * Roster-only removal — for people the terminals hold nothing for.
+   *
+   * <p>The audit screen's template-gap list. No register to clear, so no commands are queued.
+   */
+  @PostMapping("/sites/{siteId}/people/remove/roster-only")
+  public IclockPersonRemovalService.RemovalReport removeRosterOnly(
+      @PathVariable String siteId,
+      @RequestBody List<String> personIds,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    var report = removals.removeFromRosterOnly(
+        siteId, personIds, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_PEOPLE_REMOVED_ROSTER_ONLY", "IclockSite", siteId,
+        meta("people", report.people(), "deleted", report.toDelete(),
+            "deactivated", report.toDeactivate(), "recentlyActive", report.recentlyActive(),
+            "pins", report.rows().stream().map(r -> r.pin()).toList()));
+    return report;
   }
 
   /** The command log for one terminal, newest first. */

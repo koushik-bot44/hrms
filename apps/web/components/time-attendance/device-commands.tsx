@@ -214,9 +214,10 @@ export function EnrolOnDeviceDialog({
 }) {
   const qc = useQueryClient();
   const [deviceId, setDeviceId] = React.useState('');
-  // FACE BY DEFAULT, because that is what this fleet is: 98.5% of passes are a face, 1.1% a finger.
-  // Offering fingerprint first would put the rare path in front of every operator, every time.
-  const [bioType, setBioType] = React.useState<number>(BIO_FACE);
+  // Fingerprint until the face verb is PROVEN on this firmware. This fleet is 98.5% face and the
+  // default belongs there eventually — but a default that opens the wrong capture is worse than an
+  // unfashionable one, and that is exactly what shipped for one release.
+  const [bioType, setBioType] = React.useState<number>(BIO_FINGERPRINT);
   const [finger, setFinger] = React.useState(0);
   const [sent, setSent] = React.useState<EnrolmentTrigger | null>(null);
 
@@ -233,7 +234,7 @@ export function EnrolOnDeviceDialog({
     if (!open) {
       setSent(null);
       setFinger(0);
-      setBioType(BIO_FACE);
+      setBioType(BIO_FINGERPRINT);
     }
   }, [open]);
   React.useEffect(() => {
@@ -365,9 +366,10 @@ export function EnrolOnDeviceDialog({
                   <p className="inline-flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/5 p-2.5 text-xs text-warning">
                     <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                     <span>
-                      Face is how 98.5% of people here actually pass, but no face capture has been
-                      triggered from this console yet. If the terminal ignores the command it shows
-                      as refused in its command log — fingerprint is the proven fallback.
+                      <strong>Not yet working.</strong> No face capture has been successfully
+                      triggered from this console — the verb this firmware wants is still being
+                      established. Use fingerprint, or start face capture from the terminal&rsquo;s
+                      own menu, which works today.
                     </span>
                   </p>
                 ) : (

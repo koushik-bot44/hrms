@@ -356,9 +356,17 @@ export interface EnrolmentTrigger {
   payload: string;
 }
 
-/** 1 = fingerprint, 2 = face — the devices' own numbering, carried through unchanged. */
+/**
+ * The devices' own biometric numbering: 1 = fingerprint, 9 = FACE.
+ *
+ * Nine, not two. The specification says two and this hardware says nine, proven by every BIODATA
+ * record it has ever sent. This constant said 2 while the server said 9 for one release, and the
+ * effect was not an error — the server read the unrecognised 2, fell through to fingerprint, and
+ * opened FINGERPRINT capture on a terminal where somebody was standing waiting to enrol their face.
+ * The server now refuses an unknown value rather than choosing a biometric on the caller's behalf.
+ */
 export const BIO_FINGERPRINT = 1;
-export const BIO_FACE = 2;
+export const BIO_FACE = 9;
 
 export interface DeviceEnrolmentRow {
   deviceId: string;
@@ -451,6 +459,62 @@ export interface AuditResult {
   unknown: number;
   rows: AuditRow[];
   gaps: TemplateGap[];
+}
+
+export interface RemovalRow {
+  personId: string;
+  pin: string;
+  name: string | null;
+  /** DELETE when the roster row can go entirely; DEACTIVATE when history holds it. */
+  rosterOutcome: string;
+  rosterReason: string;
+  terminals: number;
+  punchCount: number;
+  lastPunchAt: string | null;
+  /** Punched within the last week — the "are you sure" flag. */
+  recentlyActive: boolean;
+}
+
+export interface RemovalReport {
+  committed: boolean;
+  people: number;
+  toDelete: number;
+  toDeactivate: number;
+  commandsQueued: number;
+  recentlyActive: number;
+  rows: RemovalRow[];
+}
+
+/** What removing one person would do. Writes nothing. */
+export function previewRemoveOne(personId: string): Promise<RemovalReport> {
+  return apiFetch(`${BASE}/people/${personId}/remove/preview`, { method: 'POST' });
+}
+
+/** Removes one person from the terminals AND the roster. Punches untouched. */
+export function removeOne(personId: string): Promise<RemovalReport> {
+  return apiFetch(`${BASE}/people/${personId}/remove`, { method: 'POST' });
+}
+
+export function previewRemoveMany(
+  siteId: string,
+  personIds: string[],
+): Promise<RemovalReport> {
+  return apiFetch(`${BASE}/sites/${siteId}/people/remove/preview`, {
+    method: 'POST',
+    body: personIds,
+  });
+}
+
+export function removeMany(siteId: string, personIds: string[]): Promise<RemovalReport> {
+  return apiFetch(`${BASE}/sites/${siteId}/people/remove`, { method: 'POST', body: personIds });
+}
+
+/** Roster-only — for people the terminals hold nothing for. Queues no commands. */
+export function removeRosterOnly(siteId: string, personIds: string[]): Promise<RemovalReport> {
+  return apiFetch(`${BASE}/sites/${siteId}/people/remove/roster-only`, {
+    method: 'POST',
+    body: personIds,
+  });
 }
 
 /** Asks one terminal for its register. One at a time — a dump is megabytes. */

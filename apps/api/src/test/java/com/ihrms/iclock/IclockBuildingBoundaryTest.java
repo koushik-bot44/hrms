@@ -122,6 +122,32 @@ class IclockBuildingBoundaryTest {
         .doesNotContain("syncNames", "previewNameSync");
   }
 
+  @Test
+  void anUNKNOWNbiometricTypeIsREFUSEDneverInterpretedAsTheOtherOne() {
+    // THE BUG THIS EXISTS FOR. The check used to read "anything that is not face is a fingerprint".
+    // The web client still carried the specification's face value (2) after the server moved to the
+    // hardware's real value (9), so a face enrolment arrived as 2, failed the equality test, and
+    // opened FINGERPRINT capture on a terminal with somebody standing at it waiting to enrol a face.
+    // No error was raised anywhere. Choosing a modality for the caller is not a safe default.
+    assertThatThrownBy(() -> commands.queueEnrolment(
+        worksHere.getId(), terminalHere.getId(), 2, 0, "test"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Unknown biometric type");
+
+    assertThatThrownBy(() -> commands.queueEnrolment(
+        worksHere.getId(), terminalHere.getId(), 0, 0, "test"))
+        .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
+  void faceIsNINEandFingerprintIsONEandBothAreAccepted() {
+    assertDoesNotThrow(() -> commands.queueEnrolment(
+        worksHere.getId(), terminalHere.getId(), IclockCommandDialect.TYPE_FACE, 0, "test"));
+    assertDoesNotThrow(() -> commands.queueEnrolment(
+        worksHere.getId(), terminalHere.getId(), IclockCommandDialect.TYPE_FINGERPRINT, 0, "test"));
+    assertThat(IclockCommandDialect.TYPE_FACE).isEqualTo(9);
+  }
+
   // ------------------------------------------------------------------ fixtures
 
   private IclockSite site(String name) {

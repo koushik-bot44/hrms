@@ -154,5 +154,14 @@ public interface IclockPunchRepository extends JpaRepository<IclockPunch, String
 
   long countByPersonId(String personId);
 
+  /**
+   * When this person last came through a door.
+   *
+   * <p>The removal preview's warning flag reads it: somebody who punched this week is almost
+   * certainly not who the operator meant to remove, and a bulk selection is exactly where that
+   * mistake hides.
+   */
+  Optional<IclockPunch> findFirstByPersonIdOrderByPunchedAtDesc(String personId);
+
   List<IclockPunch> findByAnomalyIsNotNullOrderByEffectiveAtDesc(Pageable pageable);
 }

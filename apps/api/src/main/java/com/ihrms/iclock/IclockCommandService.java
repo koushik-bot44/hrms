@@ -185,6 +185,18 @@ public class IclockCommandService {
   @Transactional
   public EnrolmentTrigger queueEnrolment(
       String personId, String deviceId, int bioType, int fingerIndex, String actorId) {
+    // AN UNRECOGNISED TYPE IS REFUSED, NEVER INTERPRETED. This used to read "anything that is not
+    // face is a fingerprint", which is how a caller sending a stale face constant got fingerprint
+    // capture opened in front of somebody waiting to enrol their face — no error anywhere, just the
+    // wrong biometric. Choosing a modality on the caller's behalf is not a safe default.
+    if (bioType != IclockCommandDialect.TYPE_FACE
+        && bioType != IclockCommandDialect.TYPE_FINGERPRINT) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Unknown biometric type " + bioType + ". Fingerprint is "
+              + IclockCommandDialect.TYPE_FINGERPRINT + " and face is "
+              + IclockCommandDialect.TYPE_FACE + " on this hardware.");
+    }
     boolean face = bioType == IclockCommandDialect.TYPE_FACE;
     if (!face && (fingerIndex < 0 || fingerIndex > MAX_FINGER_INDEX)) {
       throw new ResponseStatusException(

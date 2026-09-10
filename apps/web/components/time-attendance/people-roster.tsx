@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownUp, CalendarClock, Eye, EyeOff, Link2, Link2Off, Pencil, Search, Trash2, Upload, UserPlus, UserRound, Users } from 'lucide-react';
+import { ArrowDownUp, CalendarClock, Eye, EyeOff, Link2, Link2Off, Pencil, Search, Trash2, Upload, UserMinus, UserPlus, UserRound, Users } from 'lucide-react';
 import { editPerson, iclockKeys, listPeople, type IclockPerson } from '@/lib/api/iclock';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { RosterImportDialog } from './roster-import-dialog';
 import { LinkSuggestionsDialog } from './link-suggestions';
 import { DeletePersonDialog } from './delete-person-dialog';
 import { PersonEditDialog } from './person-edit-dialog';
+import { RemovePersonDialog } from './remove-person-dialog';
 import { BulkShiftDialog, InlineShiftPicker, ShiftBadge } from './shift-controls';
 import { CommandChannelBadge } from './device-commands';
 import { UnmappedPinInbox } from './unmapped-pin-inbox';
@@ -119,6 +120,7 @@ function PersonRow({
   onLink,
   onEdit,
   onDelete,
+  onRemove,
   selected,
   onSelect,
 }: {
@@ -127,6 +129,7 @@ function PersonRow({
   onLink: (p: IclockPerson) => void;
   onEdit: (p: IclockPerson) => void;
   onDelete: (p: IclockPerson) => void;
+  onRemove: (p: IclockPerson) => void;
   selected: boolean;
   onSelect: (id: string, checked: boolean) => void;
 }) {
@@ -214,6 +217,15 @@ function PersonRow({
               danger: person.active,
             },
             {
+              label: 'Remove person…',
+              icon: UserMinus,
+              // Both halves: clears the terminals in their building AND takes them off the roster.
+              // The roster-only entry below stays for the case where the terminals are already
+              // clear and only the row is wrong.
+              onSelect: () => onRemove(person),
+              danger: true,
+            },
+            {
               label: 'Delete from roster…',
               icon: Trash2,
               onSelect: () => onDelete(person),
@@ -236,6 +248,8 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
   const [search, setSearch] = React.useState('');
   const [importOpen, setImportOpen] = React.useState(false);
   const [addingPerson, setAddingPerson] = React.useState(false);
+  const [removing, setRemoving] = React.useState<IclockPerson | null>(null);
+  const [bulkRemoveOpen, setBulkRemoveOpen] = React.useState(false);
   const [linking, setLinking] = React.useState<IclockPerson | null>(null);
   const [editing, setEditing] = React.useState<IclockPerson | null>(null);
   const [picked, setPicked] = React.useState<Set<string>>(new Set());
@@ -377,6 +391,10 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
             <CalendarClock className="mr-1.5 size-4" aria-hidden />
             Assign shift
           </Button>
+          <Button size="sm" variant="destructive" onClick={() => setBulkRemoveOpen(true)}>
+            <UserMinus className="mr-1.5 size-4" aria-hidden />
+            Remove selected
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => setPicked(new Set())}>
             Clear
           </Button>
@@ -398,6 +416,7 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
             onLink={setLinking}
             onEdit={setEditing}
             onDelete={setDeleting}
+            onRemove={setRemoving}
             selected={picked.has(p.id)}
             onSelect={(id, checked) =>
               setPicked((prev) => {
@@ -441,6 +460,19 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
         person={editing}
         open={editing != null}
         onOpenChange={(o) => !o && setEditing(null)}
+      />
+      <RemovePersonDialog
+        siteId={siteId}
+        singlePersonId={removing?.id}
+        open={removing != null}
+        onOpenChange={(o) => !o && setRemoving(null)}
+      />
+      <RemovePersonDialog
+        siteId={siteId}
+        personIds={[...picked]}
+        open={bulkRemoveOpen}
+        onOpenChange={setBulkRemoveOpen}
+        onDone={() => setPicked(new Set())}
       />
       {/* The SAME dialog as the row edit and the inbox flow, with nothing pre-filled. One component
           means a field added for one entry point cannot go missing from the other two. */}
