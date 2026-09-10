@@ -46,9 +46,19 @@ public class IclockBiometricTemplate {
   @Column(name = "fid", nullable = false)
   private int fid;
 
-  /** 1 = fingerprint, 2 = face, following the device's own Type numbering. */
+  /** 1 = fingerprint, 9 = face, following the device's own Type numbering. */
   @Column(name = "bioType", nullable = false)
   private int bioType = 1;
+
+  /**
+   * The face algorithm version the SOURCE terminal reported. Null for fingerprints, which carry no
+   * version on this firmware, and null for anything captured before V52.
+   */
+  @Column(name = "algoMajor")
+  private Integer algoMajor;
+
+  @Column(name = "algoMinor")
+  private Integer algoMinor;
 
   /** Base64, exactly as received. */
   @Column(name = "template", nullable = false)

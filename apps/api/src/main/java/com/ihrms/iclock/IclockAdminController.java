@@ -89,6 +89,7 @@ public class IclockAdminController {
   private final IclockReportService reports;
   private final IclockCommandService commands;
   private final IclockBiometricService biometrics;
+  private final IclockRegisterAuditService registerAudits;
   private final AuditService audit;
 
   public IclockAdminController(
@@ -101,6 +102,7 @@ public class IclockAdminController {
       IclockReportService reports,
       IclockCommandService commands,
       IclockBiometricService biometrics,
+      IclockRegisterAuditService registerAudits,
       AuditService audit) {
     this.admin = admin;
     this.inbox = inbox;
@@ -111,6 +113,7 @@ public class IclockAdminController {
     this.reports = reports;
     this.commands = commands;
     this.biometrics = biometrics;
+    this.registerAudits = registerAudits;
     this.audit = audit;
   }
 
@@ -539,6 +542,50 @@ public class IclockAdminController {
     int queued = biometrics.resync(personId, actor == null ? null : actor.id());
     record(actor, http, "ICLOCK_BIOMETRIC_RESYNC", "IclockPerson", personId,
         meta("kind", "UPDATE_FINGERTMP", "commandsQueued", queued,
+            "commandsEnabled", commands.enabled()));
+    return meta("commandsQueued", queued);
+  }
+
+  /**
+   * Asks a terminal for its register, so it can be compared against the roster.
+   *
+   * <p>One terminal at a time: a single dump was 10 MB across 635 requests, and the terminals doing
+   * it are the ones people are queueing at.
+   */
+  @PostMapping("/devices/{deviceId}/register-audit")
+  public Map<String, Object> requestRegisterAudit(
+      @PathVariable String deviceId,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    var audit = registerAudits.request(deviceId, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_REGISTER_AUDIT_REQUESTED", "IclockDevice", deviceId,
+        meta("auditId", audit.getId(), "commandId", audit.getCommandId(),
+            "commandsEnabled", commands.enabled()));
+    return meta("auditId", audit.getId(), "status", audit.getStatus());
+  }
+
+  /** The newest audit for a terminal, grouped into its four evidence-backed findings. */
+  @GetMapping("/devices/{deviceId}/register-audit")
+  public IclockRegisterAuditService.AuditResult latestRegisterAudit(@PathVariable String deviceId) {
+    return registerAudits.latestFor(deviceId).orElse(null);
+  }
+
+  /**
+   * Removes selected pins from ONE terminal's register.
+   *
+   * <p>Registers only — no roster row and no punch is touched. The active-person guard still stands
+   * underneath, so a pin belonging to somebody who works here is refused whatever was selected.
+   */
+  @PostMapping("/devices/{deviceId}/register-audit/delete")
+  public Map<String, Object> deleteFromRegister(
+      @PathVariable String deviceId,
+      @RequestBody List<String> pins,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest http) {
+    int queued = registerAudits.deleteFromRegister(
+        deviceId, pins, actor == null ? null : actor.id());
+    record(actor, http, "ICLOCK_REGISTER_CLEANUP", "IclockDevice", deviceId,
+        meta("kind", "DELETE_USER", "pins", pins, "commandsQueued", queued,
             "commandsEnabled", commands.enabled()));
     return meta("commandsQueued", queued);
   }

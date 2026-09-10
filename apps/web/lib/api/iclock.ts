@@ -419,6 +419,63 @@ export function enrolOnDevice(
   return apiFetch<EnrolmentTrigger>(`${BASE}/people/${personId}/enrol?${qs}`, { method: 'POST' });
 }
 
+export interface AuditRow {
+  pin: string;
+  /** CLEAN, STALE or UNKNOWN. NAME DRIFT is absent — this firmware never sends names. */
+  verdict: string;
+  personId: string | null;
+  personName: string | null;
+  fingerCount: number;
+  fingerIndexes: string | null;
+  hasFace: boolean;
+  hasPhoto: boolean;
+}
+
+/** An active person the terminal holds nothing for — they cannot open this door. */
+export interface TemplateGap {
+  personId: string;
+  pin: string;
+  name: string | null;
+}
+
+export interface AuditResult {
+  auditId: string;
+  deviceId: string;
+  deviceName: string;
+  status: string;
+  requestedAt: string;
+  completedAt: string | null;
+  pinsOnDevice: number;
+  clean: number;
+  stale: number;
+  unknown: number;
+  rows: AuditRow[];
+  gaps: TemplateGap[];
+}
+
+/** Asks one terminal for its register. One at a time — a dump is megabytes. */
+export function requestRegisterAudit(deviceId: string): Promise<{ auditId: string }> {
+  return apiFetch(`${BASE}/devices/${deviceId}/register-audit`, { method: 'POST' });
+}
+
+export function getRegisterAudit(
+  deviceId: string,
+  signal?: AbortSignal,
+): Promise<AuditResult | null> {
+  return apiFetch<AuditResult | null>(`${BASE}/devices/${deviceId}/register-audit`, { signal });
+}
+
+/** Registers only. No roster row, no punch. */
+export function deleteFromRegister(
+  deviceId: string,
+  pins: string[],
+): Promise<{ commandsQueued: number }> {
+  return apiFetch(`${BASE}/devices/${deviceId}/register-audit/delete`, {
+    method: 'POST',
+    body: pins,
+  });
+}
+
 /** Asks a terminal for its own user table. The reply arrives through the ordinary ingest path. */
 export function queryDeviceUsers(deviceId: string): Promise<Record<string, unknown>> {
   return apiFetch(`${BASE}/devices/${deviceId}/query-users`, { method: 'POST' });
@@ -822,6 +879,8 @@ export const iclockKeys = {
   root: ['iclock'] as const,
   commandStatus: () => ['iclock', 'commands', 'status'] as const,
   commandLog: (deviceId: string) => ['iclock', 'device', deviceId, 'commands'] as const,
+  registerAudit: (deviceId: string) =>
+    ['iclock', 'device', deviceId, 'register-audit'] as const,
   biometrics: (personId: string) =>
     ['iclock', 'person', personId, 'biometrics'] as const,
   companies: () => ['iclock', 'companies'] as const,

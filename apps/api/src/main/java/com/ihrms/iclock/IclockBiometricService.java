@@ -106,6 +106,23 @@ public class IclockBiometricService {
       return new CaptureResult(found.size(), 0, 0, 0);
     }
 
+    // LEARN THE TERMINAL'S OWN FACE VERSION from what it just sent us. This is the only way it is
+    // ever discovered: nothing in the protocol announces it, and without it the funnel cannot tell a
+    // compatible push from an incompatible one.
+    found.stream()
+        .filter(t -> t.bioType() == IclockCommandDialect.TYPE_FACE && t.algoMajor() != null)
+        .findFirst()
+        .ifPresent(t -> {
+          if (!java.util.Objects.equals(source.getFaceAlgoMajor(), t.algoMajor())
+              || !java.util.Objects.equals(source.getFaceAlgoMinor(), t.algoMinor())) {
+            source.setFaceAlgoMajor(t.algoMajor());
+            source.setFaceAlgoMinor(t.algoMinor());
+            devices.save(source);
+            log.info("iclock: {} reports face algorithm {}.{}",
+                serialNumber, t.algoMajor(), t.algoMinor());
+          }
+        });
+
     int stored = 0, unchanged = 0;
     for (IclockOperlog.Template t : found) {
       String digest = digestOf(t.template());
@@ -130,6 +147,8 @@ public class IclockBiometricService {
       row.setSize(t.size());
       row.setValid(t.valid());
       row.setFingerprint(digest);
+      row.setAlgoMajor(t.algoMajor());
+      row.setAlgoMinor(t.algoMinor());
       row.setSourceDeviceId(source.getId());
       row.setCapturedAt(Instant.now());
       row.setPersonId(people.findBySiteIdAndPin(source.getSiteId(), t.pin())

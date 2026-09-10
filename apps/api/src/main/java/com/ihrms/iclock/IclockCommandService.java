@@ -265,13 +265,15 @@ public class IclockCommandService {
   @Transactional
   public IclockDeviceCommand queueTemplatePush(
       IclockDevice device, IclockBiometricTemplate template, String actorId) {
+    assertSameFaceAlgorithm(device, template);
     return queue(
         device,
         template.getBioType() == IclockCommandDialect.TYPE_FACE
             ? "UPDATE_BIODATA" : "UPDATE_FINGERTMP",
         IclockCommandDialect.updateTemplate(
             template.getBioType(), template.getPin(), template.getFid(), template.getSize(),
-            template.getValid(), template.getTemplate()),
+            template.getValid(), template.getTemplate(),
+            template.getAlgoMajor(), template.getAlgoMinor()),
         template.getPersonId(),
         template.getPin(),
         actorId);
@@ -316,6 +318,45 @@ public class IclockCommandService {
           "Pin " + pin + " has no active roster row in this terminal's building. Buildings do not "
               + "share registers — add them to this building's roster first, or send this to a "
               + "terminal where they actually work.");
+    }
+  }
+
+  /**
+   * <b>A FACE TEMPLATE MAY ONLY GO TO A TERMINAL RUNNING THE SAME ALGORITHM.</b>
+   *
+   * <p>Measured, not feared: the NES cafeteria readers report face version 36.1 and the ZHM gates
+   * report 39.3. Those are not two revisions of one format that might interoperate, they are the
+   * reason a cross-family push would land as a stored template that never matches a live face — a
+   * failure with no error, discovered by somebody standing at a door.
+   *
+   * <p>REFUSED HERE rather than attempted and read afterwards. An attempt costs a person their
+   * enrolment on that terminal and leaves a plausible-looking row behind; the refusal costs an error
+   * message. An UNKNOWN version on either side is also a refusal — this is a proof requirement, and
+   * "we have never asked that terminal" is not proof.
+   *
+   * <p>Fingerprints are exempt. They carry no version on this firmware and have been observed moving
+   * between both families, so they propagate fleet-wide as before.
+   */
+  private void assertSameFaceAlgorithm(IclockDevice target, IclockBiometricTemplate template) {
+    if (template.getBioType() != IclockCommandDialect.TYPE_FACE) {
+      return;
+    }
+    Integer tMaj = template.getAlgoMajor(), tMin = template.getAlgoMinor();
+    Integer dMaj = target.getFaceAlgoMajor(), dMin = target.getFaceAlgoMinor();
+    if (tMaj == null || dMaj == null) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "Face templates only move between terminals proven to run the same algorithm, and "
+              + (tMaj == null ? "this template has no recorded version"
+                  : "that terminal has never been audited")
+              + ". Audit the terminal first, or enrol the face on it directly.");
+    }
+    if (!tMaj.equals(dMaj) || !java.util.Objects.equals(tMin, dMin)) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "That face was captured on algorithm " + tMaj + "." + tMin + " and this terminal runs "
+              + dMaj + "." + dMin + ". A template does not convert between them - the person has to "
+              + "enrol their face on this terminal.");
     }
   }
 

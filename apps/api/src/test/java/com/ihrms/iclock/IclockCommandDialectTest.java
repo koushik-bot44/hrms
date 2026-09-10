@@ -59,7 +59,7 @@ class IclockCommandDialectTest {
         IclockCommandDialect.enrolFinger("1", 0, 3, true),
         IclockCommandDialect.enrolFace("1", 3, true),
         IclockCommandDialect.updateFingerTemplate("1", 6, 1544, 1, "AAAA"),
-        IclockCommandDialect.updateBioData("1", 0, 10, 1, "AAAA"));
+        IclockCommandDialect.updateBioData("1", 0, 1, "AAAA", 39, 3));
 
     assertThat(everyCommandWeCanBuild).allSatisfy(body -> {
       // Either the field is absent — leaving the terminal's own value alone — or it is the ordinary
@@ -218,23 +218,38 @@ class IclockCommandDialectTest {
   }
 
   @Test
-  void aFaceRoutesToTheBiodataVerbAndAFingerDoesNot() {
+  void faceIsTypeNINEbecauseTheWireSaysSoAndTheSpecificationIsWrong() {
+    // The spec documents Type=2. The first DATA QUERY USERINFO on this fleet came back with
+    // "BIODATA ... Type=9 MajorVer=36 MinorVer=1" from every terminal that answered. Had the spec
+    // value ever been sent, every face command would have addressed a modality this hardware does
+    // not have, and failed in a way indistinguishable from the feature being broken.
+    assertThat(IclockCommandDialect.TYPE_FACE).isEqualTo(9);
     assertThat(IclockCommandDialect.updateTemplate(
-        IclockCommandDialect.TYPE_FACE, "6011", 0, 10, 1, "ZmFjZQ=="))
+        IclockCommandDialect.TYPE_FACE, "6011", 0, 10, 1, "ZmFjZQ==", 39, 3))
         .startsWith("DATA UPDATE BIODATA")
-        .contains("Type=2");
+        .contains("Type=9");
     assertThat(IclockCommandDialect.updateTemplate(
-        IclockCommandDialect.TYPE_FINGERPRINT, "6011", 6, 10, 1, "Zmluz2Vy"))
+        IclockCommandDialect.TYPE_FINGERPRINT, "6011", 6, 10, 1, "Zmluz2Vy", null, null))
         .startsWith("DATA UPDATE FINGERTMP");
   }
 
   @Test
+  void aFaceTemplateCarriesTheVersionItWasCapturedUnderNeverZero() {
+    // 36.1 on the NES cafeteria readers, 39.3 on the ZHM gates. Sending "version 0" would either be
+    // rejected or, worse, accepted and stored against a version the terminal cannot match a live
+    // face to — a failure with no error, discovered by somebody standing at a door.
+    assertThat(IclockCommandDialect.updateBioData("6011", 0, 1, "ZmFjZQ==", 36, 1))
+        .contains("MajorVer=36")
+        .contains("MinorVer=1")
+        .doesNotContain("MajorVer=0");
+  }
+
+  @Test
   void aFaceEnrolmentCarriesItsTypeSoTheTerminalKnowsWhatToOpen() {
-    // Beta and marked so in the console: this fleet has produced no face evidence at all, and the
-    // specification's ENROLL_BIO competes with an older ENROLL_FACE spelling. A wrong guess comes
-    // back as a negative Return on one command rather than failing silently.
+    // ENROLL_BIO competes with an older ENROLL_FACE spelling and neither has been sent to this
+    // fleet yet. A wrong guess comes back as a negative Return on one command rather than silently.
     assertThat(IclockCommandDialect.enrolFace("6011", 3, true))
-        .isEqualTo("ENROLL_BIO PIN=6011	TYPE=2	RETRY=3	OVERWRITE=1");
+        .isEqualTo("ENROLL_BIO PIN=6011	TYPE=9	RETRY=3	OVERWRITE=1");
   }
 
   // ------------------------------------------------------------------ framing and ack

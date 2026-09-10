@@ -17,4 +17,10 @@ public interface IclockBiometricTemplateRepository
       String siteId, String pin);
 
   List<IclockBiometricTemplate> findByPersonIdOrderByFidAsc(String personId);
+
+  /** Everything captured at one building — the register audit's inventory, filtered per device. */
+  List<IclockBiometricTemplate> findBySiteId(String siteId);
+
+  /** What one terminal reported holding. */
+  List<IclockBiometricTemplate> findBySourceDeviceId(String sourceDeviceId);
 }

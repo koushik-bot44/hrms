@@ -205,7 +205,21 @@ final class IclockCommandDialect {
   /** Biometric type numbering, as the devices themselves use it. */
   static final int TYPE_FINGERPRINT = 1;
 
-  static final int TYPE_FACE = 2;
+  /**
+   * Face is <b>9</b> on this hardware, not the 2 the specification documents.
+   *
+   * <p>Corrected from the wire on 2026-09-10, when the first {@code DATA QUERY USERINFO} produced
+   * {@code BIODATA ... Type=9 MajorVer=36 MinorVer=1}. The spec value was in this file for a day and
+   * had never been sent; had it been, every face command would have addressed a modality this fleet
+   * does not have and failed in a way that looked like the feature was broken.
+   */
+  static final int TYPE_FACE = 9;
+
+  /**
+   * A third modality seen once, on one ZHM pin: {@code Type=8, MajorVer=12, MinorVer=0}. Recorded
+   * here rather than acted on — five records on a single person is not a mandate to build a path.
+   */
+  static final int TYPE_OTHER_BIOMETRIC_OBSERVED = 8;
 
   /**
    * Body of a remote FACE enrolment.
@@ -236,23 +250,30 @@ final class IclockCommandDialect {
    * wide margin: the fingerprint form is the fleet's own serialisation handed back, while this shape
    * comes from the specification alone. No face template has ever been seen here to copy.
    */
-  static String updateBioData(String pin, int fid, int size, int valid, String template) {
+  static String updateBioData(
+      String pin, int fid, int valid, String template, Integer major, Integer minor) {
+    // The version is ECHOED from the template's own source, never zeroed. A face template belongs to
+    // an algorithm version — 36.1 on the NES cafeteria readers, 39.3 on the ZHM gates — and telling
+    // the receiving terminal "version 0" would either be rejected or, worse, accepted and stored
+    // against a version it cannot match a live face to.
     return "DATA UPDATE BIODATA PIN=" + pin
         + TAB + "No=" + fid
         + TAB + "Index=0"
         + TAB + "Valid=" + valid
         + TAB + "Duress=0"
         + TAB + "Type=" + TYPE_FACE
-        + TAB + "MajorVer=0"
-        + TAB + "MinorVer=0"
+        + TAB + "MajorVer=" + (major == null ? 0 : major)
+        + TAB + "MinorVer=" + (minor == null ? 0 : minor)
         + TAB + "Format=0"
         + TAB + "Tmp=" + template;
   }
 
   /** The right push for a stored template, by its type. */
-  static String updateTemplate(int bioType, String pin, int fid, int size, int valid, String tmp) {
+  static String updateTemplate(
+      int bioType, String pin, int fid, int size, int valid, String tmp,
+      Integer major, Integer minor) {
     return bioType == TYPE_FACE
-        ? updateBioData(pin, fid, size, valid, tmp)
+        ? updateBioData(pin, fid, valid, tmp, major, minor)
         : updateFingerTemplate(pin, fid, size, valid, tmp);
   }
 

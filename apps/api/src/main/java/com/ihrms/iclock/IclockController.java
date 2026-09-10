@@ -48,6 +48,7 @@ public class IclockController {
   /** The command queue. Serves at most one line per poll, and only when the kill switch is on. */
   private final IclockCommandService commands;
   private final IclockBiometricService biometrics;
+  private final IclockRegisterAuditService registerAudits;
   /** Seeds roster rows from a device's own user table, when one ever arrives. */
   private final IclockEnrolmentService enrolments;
 
@@ -56,11 +57,13 @@ public class IclockController {
       IclockProperties props,
       IclockCommandService commands,
       IclockBiometricService biometrics,
+      IclockRegisterAuditService registerAudits,
       IclockEnrolmentService enrolments) {
     this.service = service;
     this.props = props;
     this.commands = commands;
     this.biometrics = biometrics;
+    this.registerAudits = registerAudits;
     this.enrolments = enrolments;
   }
 
@@ -232,14 +235,24 @@ public class IclockController {
       // those are complete fingerprint templates arriving unasked. That is the capture half of
       // building-wide propagation, free.
       service.touch(serial, false, null, stamp, opStamp);
-      if (table != null && table.equalsIgnoreCase("OPERLOG")) {
+      // OPERLOG carries FP records; BIODATA carries face templates. Both are mined, because a
+      // terminal answering DATA QUERY USERINFO splits its inventory across the two tables and
+      // reading only one of them would capture the 1% modality and drop the 98%.
+      if (table != null
+          && (table.equalsIgnoreCase("OPERLOG") || table.equalsIgnoreCase("BIODATA"))) {
         try {
-          biometrics.capture(serial, rawBody(request));
+          var captured = biometrics.capture(serial, rawBody(request));
+          if (captured.templates() > 0) {
+            // A dump that is delivering templates is a dump that has arrived. Marking it here rather
+            // than waiting on a timer means the review screen is readable as soon as there is
+            // something to read.
+            registerAudits.noteDumpArrived(serial);
+          }
         } catch (RuntimeException e) {
           // Never cost the push. A terminal that gets an error retries the batch forever, and the
           // body is captured raw regardless, so a failure here loses a propagation and not a
           // fingerprint — and there is a re-sync action for exactly that.
-          log.warn("iclock: SN={} OPERLOG template capture failed; body captured raw", serial, e);
+          log.warn("iclock: SN={} {} template capture failed; body captured raw", serial, table, e);
         }
       }
       return text("OK");

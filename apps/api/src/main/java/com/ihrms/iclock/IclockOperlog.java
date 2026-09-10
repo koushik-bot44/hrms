@@ -39,7 +39,10 @@ final class IclockOperlog {
    *
    * @param template base64, exactly as received
    */
-  record Template(String pin, int bioType, int fid, int size, int valid, String template) {}
+  record Template(
+      String pin, int bioType, int fid, int size, int valid, String template,
+      /** Face algorithm version, as the SOURCE terminal reported it. Null for fingerprints. */
+      Integer algoMajor, Integer algoMinor) {}
 
   /**
    * An operation record. The op-code vocabulary is firmware-specific and only partly documented; the
@@ -94,7 +97,7 @@ final class IclockOperlog {
     Integer size = intField(line, "Size");
     Integer valid = intField(line, "Valid");
     return new Template(pin, IclockCommandDialect.TYPE_FINGERPRINT, fid,
-        size == null ? tmp.length() : size, valid == null ? 1 : valid, tmp);
+        size == null ? tmp.length() : size, valid == null ? 1 : valid, tmp, null, null);
   }
 
   /**
@@ -115,7 +118,8 @@ final class IclockOperlog {
     Integer type = intField(line, "Type");
     Integer valid = intField(line, "Valid");
     return new Template(pin, type == null ? IclockCommandDialect.TYPE_FACE : type,
-        no == null ? 0 : no, tmp.length(), valid == null ? 1 : valid, tmp);
+        no == null ? 0 : no, tmp.length(), valid == null ? 1 : valid, tmp,
+        intField(line, "MajorVer"), intField(line, "MinorVer"));
   }
 
   /** Operation records carried in one OPERLOG body. */

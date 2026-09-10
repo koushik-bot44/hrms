@@ -74,6 +74,9 @@ class IclockMvcTest {
   @MockBean private IclockCommandService commands;
   @MockBean private IclockBiometricService biometrics;
 
+  /** Marks a register dump as settled. Mocked: this slice tests the HTTP contract. */
+  @MockBean private IclockRegisterAuditService registerAudits;
+
   /** Seeds from USERINFO pushes. Mocked: this slice tests the HTTP contract, not the roster. */
   @MockBean private IclockEnrolmentService enrolments;
 

@@ -105,6 +105,17 @@ public class IclockDevice {
   @Column(name = "opStamp")
   private String opStamp;
 
+  /**
+   * What this terminal last said about its own face algorithm — 36.1 on the NES cafeteria readers,
+   * 39.3 on the ZHM gates. Null until it has been audited once. The command funnel reads it to
+   * decide whether a face template from elsewhere is even the same format.
+   */
+  @Column(name = "faceAlgoMajor")
+  private Integer faceAlgoMajor;
+
+  @Column(name = "faceAlgoMinor")
+  private Integer faceAlgoMinor;
+
   @CreationTimestamp
   @JdbcTypeCode(SqlTypes.TIMESTAMP_WITH_TIMEZONE)
   @Column(name = "createdAt", nullable = false, updatable = false)

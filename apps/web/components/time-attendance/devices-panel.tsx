@@ -7,6 +7,7 @@ import {
   MoveRight,
   Pencil,
   Router,
+  ScanSearch,
   ScrollText,
   ShieldCheck,
   ShieldOff,
@@ -44,9 +45,9 @@ import { RowMenu } from '@/components/console/row-menu';
 import {
   CommandChannelBadge,
   DeviceCommandLog,
-  QueryUsersButton,
   SyncTimeButton,
 } from './device-commands';
+import { LastAuditedLabel, RegisterAuditDialog } from './register-audit';
 import { ViewToggle, usePersistedViewMode } from '@/components/console/view-toggle';
 import { istDateTime, relativeTime } from '@/lib/date';
 import { cn } from '@/lib/utils';
@@ -229,6 +230,7 @@ function DeviceRow({
   });
   const claimedDevice = device.status === 'CLAIMED';
   const [showLog, setShowLog] = React.useState(false);
+  const [auditing, setAuditing] = React.useState(false);
 
   return (
     <div>
@@ -257,7 +259,21 @@ function DeviceRow({
       </div>
 
       {claimedDevice ? <SyncTimeButton deviceId={device.id} /> : null}
-      {claimedDevice ? <QueryUsersButton deviceId={device.id} /> : null}
+      {claimedDevice ? (
+        <Button type="button" variant="outline" size="sm" onClick={() => setAuditing(true)}>
+          <ScanSearch className="mr-1.5 size-4" aria-hidden />
+          Audit register
+        </Button>
+      ) : null}
+      {claimedDevice ? <LastAuditedLabel deviceId={device.id} /> : null}
+      {claimedDevice ? (
+        <RegisterAuditDialog
+          deviceId={device.id}
+          deviceName={device.name ?? device.serialNumber}
+          open={auditing}
+          onOpenChange={setAuditing}
+        />
+      ) : null}
 
       {claimedDevice ? (
         <RowMenu
