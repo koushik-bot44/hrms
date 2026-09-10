@@ -8,6 +8,7 @@ import com.ihrms.domain.model.IclockRegisterAudit;
 import com.ihrms.domain.model.IclockRegisterEntry;
 import com.ihrms.domain.repository.IclockBiometricTemplateRepository;
 import com.ihrms.domain.repository.IclockDeviceRepository;
+import com.ihrms.domain.repository.IclockDeviceUserNameRepository;
 import com.ihrms.domain.repository.IclockPersonRepository;
 import com.ihrms.domain.repository.IclockRegisterAuditRepository;
 import com.ihrms.domain.repository.IclockRegisterEntryRepository;
@@ -33,15 +34,20 @@ import org.springframework.web.server.ResponseStatusException;
  * leaves, their roster row is deactivated, and their face stays on the door for months. Nothing
  * surfaces it: they simply stop appearing in reports while remaining able to walk in.
  *
- * <p><b>What the terminal will and will not tell us.</b> {@code DATA QUERY USERINFO} does not return
- * a user table on this firmware — it returns the biometric inventory, as BIODATA, BIOPHOTO and FP
- * records. So the four findings below are all keyed on PIN, and NAME DRIFT is not among them: with
- * no names on the wire there is nothing to compare a roster name against. Pushing a corrected name
- * stays available per person from their own row; it just cannot be an audit finding, because no
- * evidence for it exists on this hardware.
+ * <p><b>What the terminal tells us.</b> {@code DATA QUERY USERINFO} returns the biometric inventory
+ * — BIODATA, BIOPHOTO and FP records — AND a {@code USER} record per pin carrying the terminal's own
+ * name for that person.
+ *
+ * <p>An earlier version of this file claimed the names were not there and dropped NAME DRIFT on that
+ * basis. They were always there: a single query to one terminal returned 141 of them. The claim came
+ * from an evidence query that used {@code LIMIT 5} while BIOPHOTO rows matched its {@code Name=}
+ * pattern through {@code FileName=}, so the USER rows never reached the screen. An evidence query
+ * gets no LIMIT, or one LIMIT per record type — a sample is not a census.
  *
  * <ul>
- *   <li><b>CLEAN</b> — an active roster row at this building.
+ *   <li><b>CLEAN</b> — an active roster row at this building, named the same on both sides.
+ *   <li><b>NAME DRIFT</b> — active here, but the terminal calls them something else. Offers a name
+ *       push and never a deletion: a disagreement about a label is not evidence somebody has left.
  *   <li><b>STALE</b> — a roster row here, deactivated. The register is holding somebody who left.
  *   <li><b>UNKNOWN</b> — never rostered here. Register debris, or somebody nobody has added.
  *   <li><b>TEMPLATE GAP</b> — the mirror image: an active person with NO biometric on this terminal,
@@ -63,6 +69,7 @@ public class IclockRegisterAuditService {
   private final IclockRegisterEntryRepository entries;
   private final IclockBiometricTemplateRepository templates;
   private final IclockDeviceRepository devices;
+  private final IclockDeviceUserNameRepository deviceNames;
   private final IclockPersonRepository people;
   private final IclockCommandService commands;
 
@@ -71,12 +78,14 @@ public class IclockRegisterAuditService {
       IclockRegisterEntryRepository entries,
       IclockBiometricTemplateRepository templates,
       IclockDeviceRepository devices,
+      IclockDeviceUserNameRepository deviceNames,
       IclockPersonRepository people,
       IclockCommandService commands) {
     this.audits = audits;
     this.entries = entries;
     this.templates = templates;
     this.devices = devices;
+    this.deviceNames = deviceNames;
     this.people = people;
     this.commands = commands;
   }
@@ -118,6 +127,8 @@ public class IclockRegisterAuditService {
   /** One pin's line in the review. */
   public record AuditRow(
       String pin, String verdict, String personId, String personName,
+      /** What the TERMINAL calls them, when it differs from the roster. */
+      String deviceName,
       int fingerCount, String fingerIndexes, boolean hasFace, boolean hasPhoto) {}
 
   /** An active person who cannot open this door, because the terminal holds nothing for them. */
@@ -127,7 +138,7 @@ public class IclockRegisterAuditService {
   public record AuditResult(
       String auditId, String deviceId, String deviceName, String status,
       Instant requestedAt, Instant completedAt,
-      int pinsOnDevice, int clean, int stale, int unknown,
+      int pinsOnDevice, int clean, int nameDrift, int stale, int unknown,
       List<AuditRow> rows, List<TemplateGap> gaps) {}
 
   /**
@@ -175,27 +186,40 @@ public class IclockRegisterAuditService {
       }
     }
 
+    Map<String, String> namedByDevice = new LinkedHashMap<>();
+    for (var n : deviceNames.findByDeviceId(device.getId())) {
+      namedByDevice.put(n.getPin(), n.getDeviceName());
+    }
+
     List<AuditRow> rows = new ArrayList<>();
-    int clean = 0, stale = 0, unknown = 0;
+    int clean = 0, nameDrift = 0, stale = 0, unknown = 0;
     for (Map.Entry<String, Inventory> e : byPin.entrySet()) {
       String pin = e.getKey();
       Inventory inv = e.getValue();
       Optional<IclockPerson> person = people.findBySiteIdAndPin(device.getSiteId(), pin);
+      String onDevice = namedByDevice.get(pin);
       String verdict;
       if (person.isEmpty()) {
         verdict = IclockRegisterEntry.UNKNOWN;
         unknown++;
-      } else if (person.get().isActive()) {
-        verdict = IclockRegisterEntry.CLEAN;
-        clean++;
-      } else {
+      } else if (!person.get().isActive()) {
         verdict = IclockRegisterEntry.STALE;
         stale++;
+      } else if (namesDisagree(person.get().getName(), onDevice)) {
+        // A LABEL DISAGREEMENT IS NOT A REASON TO DELETE ANYBODY. This verdict offers a name push
+        // and nothing else — the person works here, the terminal is simply calling them by the slug
+        // they were enrolled under.
+        verdict = NAME_DRIFT;
+        nameDrift++;
+      } else {
+        verdict = IclockRegisterEntry.CLEAN;
+        clean++;
       }
       rows.add(new AuditRow(
           pin, verdict,
           person.map(IclockPerson::getId).orElse(null),
           person.map(IclockPerson::getName).orElse(null),
+          onDevice,
           inv.fingers.size(),
           inv.fingers.isEmpty() ? null : String.join(", ",
               inv.fingers.stream().map(String::valueOf).toList()),
@@ -214,7 +238,25 @@ public class IclockRegisterAuditService {
         audit.getId(), device.getId(),
         device.getName() == null ? device.getSerialNumber() : device.getName(),
         audit.getStatus(), audit.getRequestedAt(), audit.getCompletedAt(),
-        byPin.size(), clean, stale, unknown, rows, gaps);
+        byPin.size(), clean, nameDrift, stale, unknown, rows, gaps);
+  }
+
+  /** The fifth finding: active here, but the terminal calls them something else. */
+  public static final String NAME_DRIFT = "NAME_DRIFT";
+
+  /**
+   * Whether the roster and the terminal disagree about who a pin is.
+   *
+   * <p>Case and surrounding whitespace are ignored, because "ANIL KUMAR" and "Anil Kumar" are the
+   * same person and flagging that would bury the drift that matters. A blank on either side is not
+   * drift either: an unnamed roster row is a gap somebody is already working on, and a terminal that
+   * reports no name is telling us nothing to disagree with.
+   */
+  static boolean namesDisagree(String roster, String onDevice) {
+    if (roster == null || roster.isBlank() || onDevice == null || onDevice.isBlank()) {
+      return false;
+    }
+    return !roster.trim().equalsIgnoreCase(onDevice.trim());
   }
 
   private static final class Inventory {

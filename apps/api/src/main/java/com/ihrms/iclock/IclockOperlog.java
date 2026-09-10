@@ -60,6 +60,20 @@ final class IclockOperlog {
   static final int OP_DELETE = 103;
 
   /**
+   * A FACE was enrolled at the terminal's own menu.
+   *
+   * <p>Observed 2026-09-10 23:20:17 for pin 100045, immediately before the {@link #OP_ENROL} record,
+   * and twice before that in the archive with no meaning attached.
+   *
+   * <p><b>This op-code has to be acted on, because a face never announces itself any other way.</b>
+   * A fingerprint enrolment posts the template unprompted, in the same OPERLOG batch. A face posts
+   * 46 bytes of operation record and nothing else — the template stays on the terminal until
+   * somebody asks for it. Without a pull triggered here, every face enrolled at a terminal menu is
+   * invisible to this system until a full register audit happens to run.
+   */
+  static final int OP_FACE_ENROLLED = 114;
+
+  /**
    * Templates carried in one OPERLOG body.
    *
    * <p>Anything unparseable is skipped rather than rejected. A body mixes operation records and

@@ -354,6 +354,8 @@ export interface EnrolmentTrigger {
   finger: number;
   commandIds: string[];
   payload: string;
+  /** Face cannot be triggered remotely on this firmware — the operator finishes at the terminal. */
+  finishAtTerminal: boolean;
 }
 
 /**

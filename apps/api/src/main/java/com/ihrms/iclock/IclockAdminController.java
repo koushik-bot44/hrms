@@ -496,6 +496,7 @@ public class IclockAdminController {
         "personName", t.personName(),
         "bioType", t.bioType(),
         "finger", t.fingerIndex(),
+        "finishAtTerminal", t.finishAtTerminal(),
         "commandIds", t.queued().stream().map(c -> c.getId()).toList(),
         "payload", t.queued().get(t.queued().size() - 1).getPayload());
   }

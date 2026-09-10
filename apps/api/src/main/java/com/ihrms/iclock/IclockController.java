@@ -241,7 +241,11 @@ public class IclockController {
       if (table != null
           && (table.equalsIgnoreCase("OPERLOG") || table.equalsIgnoreCase("BIODATA"))) {
         try {
-          var captured = biometrics.capture(serial, rawBody(request));
+          String operlogBody = rawBody(request);
+          // A face enrolled at the terminal's own menu announces itself with OPLOG 114 and sends
+          // nothing else. Ask for it now, while we know it happened.
+          biometrics.pullFacesAnnouncedBy(serial, operlogBody);
+          var captured = biometrics.capture(serial, operlogBody);
           if (captured.templates() > 0) {
             // A dump that is delivering templates is a dump that has arrived. Marking it here rather
             // than waiting on a timer means the review screen is readable as soon as there is

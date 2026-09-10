@@ -160,7 +160,15 @@ public class IclockCommandService {
   /** What an enrolment trigger produced: the commands queued, and what the operator must do next. */
   public record EnrolmentTrigger(
       List<IclockDeviceCommand> queued, String deviceName, String personName,
-      int bioType, int fingerIndex) {}
+      int bioType, int fingerIndex,
+      /**
+       * True when the operator has to finish this at the terminal itself.
+       *
+       * <p>Face enrolment cannot be triggered remotely on this firmware — see
+       * {@link #queueEnrolment}. The console prepares the user record and then says so plainly
+       * rather than pretending a button did the whole job.
+       */
+      boolean finishAtTerminal) {}
 
   /**
    * Puts one terminal into fingerprint capture mode for one person.
@@ -227,18 +235,24 @@ public class IclockCommandService {
         device, "UPDATE_USERINFO",
         IclockCommandDialect.updateUserInfo(person.getPin(), person.getName()),
         person.getId(), person.getPin(), actorId));
-    queued.add(queue(
-        device,
-        face ? "ENROLL_BIO" : "ENROLL_FP",
-        face ? IclockCommandDialect.enrolFace(person.getPin(), ENROL_RETRIES, true)
-            : IclockCommandDialect.enrolFinger(person.getPin(), fingerIndex, ENROL_RETRIES, true),
-        person.getId(), person.getPin(), actorId));
-    log.info("iclock: {} enrolment queued for pin {}{} on {}",
-        face ? "face" : "fingerprint", person.getPin(),
+    // FACE IS PREPARED, NOT TRIGGERED. Three forms of ENROLL_BIO were sent to a ZAM180 gate on
+    // 2026-09-10 and every one came back Return=-1003 with the verb echoed — recognised, arguments
+    // refused. ENROLL_FACE returned -1002 with no echo at all, meaning unknown verb. The terminal's
+    // own menu does the capture perfectly well, announces it with OPLOG 114, and the server pulls
+    // the template on that announcement. So the honest thing is to prepare the user record and hand
+    // the operator the one instruction that works, rather than queue a command known to be refused.
+    if (!face) {
+      queued.add(queue(
+          device, "ENROLL_FP",
+          IclockCommandDialect.enrolFinger(person.getPin(), fingerIndex, ENROL_RETRIES, true),
+          person.getId(), person.getPin(), actorId));
+    }
+    log.info("iclock: {} enrolment {} for pin {}{} on {}",
+        face ? "face" : "fingerprint", face ? "prepared" : "queued", person.getPin(),
         face ? "" : " finger " + fingerIndex, device.getSerialNumber());
     return new EnrolmentTrigger(
         queued, device.getName() == null ? device.getSerialNumber() : device.getName(),
-        person.getName(), bioType, face ? 0 : fingerIndex);
+        person.getName(), bioType, face ? 0 : fingerIndex, face);
   }
 
   /**

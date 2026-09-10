@@ -6,6 +6,7 @@ import {
   Check,
   Clock,
   Fingerprint,
+  Info,
   RadioTower,
   RefreshCw,
   ScanFace,
@@ -267,13 +268,23 @@ export function EnrolOnDeviceDialog({
           <div className="space-y-3 text-sm">
             <div className="rounded-lg border border-border bg-card p-3">
               <p>
-                <strong>{sent.deviceName}</strong> opens capture on its next poll — within about
-                half a minute.
+                {sent.finishAtTerminal ? (
+                  <>
+                    <strong>{sent.personName}</strong> is ready to enrol on{' '}
+                    <strong>{sent.deviceName}</strong>.
+                  </>
+                ) : (
+                  <>
+                    <strong>{sent.deviceName}</strong> opens capture on its next poll — within about
+                    half a minute.
+                  </>
+                )}
               </p>
               <p className="mt-2 text-muted-foreground">
-                {sent.personName} {sent.bioType === BIO_FACE
-                  ? 'looks at the camera when the screen asks.'
-                  : 'presses the same finger three times when the screen asks.'}
+                {sent.finishAtTerminal
+                  ? `Now start face enrolment for ${sent.personName} from the terminal's own menu. The
+                     system notices when it finishes and collects the template — nothing else to do here.`
+                  : `${sent.personName} presses the same finger three times when the screen asks.`}
               </p>
             </div>
             {others > 0 ? (
@@ -354,22 +365,23 @@ export function EnrolOnDeviceDialog({
                     >
                       <ScanFace className="size-4" aria-hidden />
                       Face
-                      <Badge variant="outline" className="ml-auto text-[10px]">beta</Badge>
+                      <Badge variant="outline" className="ml-auto text-[10px]">at terminal</Badge>
                     </button>
                   </div>
                 </fieldset>
 
                 {face ? (
-                  /* Marked beta because it IS: no face template has ever reached this server, and
-                     the trigger has two competing spellings in the specifications. Saying so is
-                     cheaper than an operator concluding the terminal is broken. */
-                  <p className="inline-flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/5 p-2.5 text-xs text-warning">
-                    <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                    <span>
-                      <strong>Not yet working.</strong> No face capture has been successfully
-                      triggered from this console — the verb this firmware wants is still being
-                      established. Use fingerprint, or start face capture from the terminal&rsquo;s
-                      own menu, which works today.
+                  /* Not a warning any more — an instruction. Face capture cannot be triggered
+                     remotely on this hardware (three ENROLL_BIO forms refused, ENROLL_FACE unknown),
+                     but the terminal's own menu does it perfectly and announces it, and the server
+                     collects the template from there. So the console does its half and says so. */
+                  <p className="inline-flex items-start gap-1.5 rounded-md border border-border bg-muted/40 p-2.5 text-xs">
+                    <Info className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
+                    <span className="text-muted-foreground">
+                      Face capture is started <strong className="text-foreground">at the terminal</strong> — this
+                      firmware does not accept a remote face trigger. Sending prepares their record;
+                      then start face enrolment from the terminal&rsquo;s menu and the system
+                      collects the template by itself.
                     </span>
                   </p>
                 ) : (

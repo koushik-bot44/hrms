@@ -182,6 +182,50 @@ public class IclockBiometricService {
     enrolments.save(row);
   }
 
+  /**
+   * Asks for a face the terminal has just captured but will not send.
+   *
+   * <p><b>Faces do not self-push, and that asymmetry is the whole reason this exists.</b> Enrol a
+   * finger at a terminal and the template arrives in the same breath; enrol a face and the terminal
+   * logs {@code OPLOG 114} and keeps the template to itself. So the operation record is the only
+   * announcement there is, and this turns it into a pull for that one pin — cheap, scoped, and
+   * nothing like the megabytes a full register dump costs.
+   *
+   * <p>Runs in its own transaction from the ingest path: a failure to queue the follow-up must never
+   * cost the push that told us about it.
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public int pullFacesAnnouncedBy(String serialNumber, String body) {
+    List<IclockOperlog.Operation> ops = IclockOperlog.operations(body);
+    if (ops.isEmpty()) {
+      return 0;
+    }
+    IclockDevice device = devices.findBySerialNumber(serialNumber).orElse(null);
+    if (device == null || !"CLAIMED".equals(device.getStatus())) {
+      return 0;
+    }
+    int asked = 0;
+    for (IclockOperlog.Operation op : ops) {
+      if (op.opCode() != IclockOperlog.OP_FACE_ENROLLED || op.target() == null) {
+        continue;
+      }
+      try {
+        commands.queueUserQuery(device.getId(), op.target(), AUTOMATIC_PULL);
+        asked++;
+        log.info("iclock: {} enrolled a face for pin {} at its own menu; asking for the template",
+            serialNumber, op.target());
+      } catch (ResponseStatusException e) {
+        // A full queue must not cost the push. The register audit is the fallback that finds it.
+        log.warn("iclock: could not ask {} for pin {}'s face: {}",
+            serialNumber, op.target(), e.getReason());
+      }
+    }
+    return asked;
+  }
+
+  /** The author on a command the system asked for because a terminal announced an enrolment. */
+  static final String AUTOMATIC_PULL = "face-pull-on-enrol";
+
   // ------------------------------------------------------------------ propagation
 
   /**

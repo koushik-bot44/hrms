@@ -2,7 +2,9 @@ package com.ihrms.iclock;
 
 import com.ihrms.domain.model.IclockDevice;
 import com.ihrms.domain.model.IclockPerson;
+import com.ihrms.domain.model.IclockDeviceUserName;
 import com.ihrms.domain.repository.IclockDeviceRepository;
+import com.ihrms.domain.repository.IclockDeviceUserNameRepository;
 import com.ihrms.domain.repository.IclockPersonRepository;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,15 +33,37 @@ public class IclockEnrolmentService {
 
   private static final Logger log = LoggerFactory.getLogger(IclockEnrolmentService.class);
 
+  /**
+   * Records the terminal's own label for a pin.
+   *
+   * <p>Stored raw. A name differing only by trimming is a different finding from a name that is
+   * somebody else entirely, and normalising here would collapse the two.
+   */
+  private void rememberDeviceName(String deviceId, IclockUserInfo.Record r) {
+    IclockDeviceUserName row = deviceNames.findByDeviceIdAndPin(deviceId, r.pin())
+        .orElseGet(IclockDeviceUserName::new);
+    row.setDeviceId(deviceId);
+    row.setPin(r.pin());
+    row.setDeviceName(r.name());
+    row.setPrivilege(r.privilege());
+    row.setSeenAt(java.time.Instant.now());
+    deviceNames.save(row);
+  }
+
   /** Marks a person the system invented from a terminal rather than from an import or an operator. */
   static final String FROM_DEVICE = "device-enrolment";
 
   private final IclockPersonRepository people;
   private final IclockDeviceRepository devices;
+  private final IclockDeviceUserNameRepository deviceNames;
 
-  public IclockEnrolmentService(IclockPersonRepository people, IclockDeviceRepository devices) {
+  public IclockEnrolmentService(
+      IclockPersonRepository people,
+      IclockDeviceRepository devices,
+      IclockDeviceUserNameRepository deviceNames) {
     this.people = people;
     this.devices = devices;
+    this.deviceNames = deviceNames;
   }
 
   /** What one USERINFO push did. Counted so the ingest log can say so without a row-by-row dump. */
@@ -68,6 +92,10 @@ public class IclockEnrolmentService {
     int created = 0, suggestions = 0, ignored = 0;
     List<String> seeded = new ArrayList<>();
     for (IclockUserInfo.Record r : records) {
+      // WHAT THE TERMINAL CALLS THEM, kept verbatim and separately from the roster name. This is the
+      // input NAME DRIFT was wrongly declared impossible for: it was always arriving, 141 records in
+      // a single query, and an evidence query with a LIMIT hid them.
+      rememberDeviceName(device.getId(), r);
       Optional<IclockPerson> existing = people.findBySiteIdAndPin(device.getSiteId(), r.pin());
 
       if (existing.isPresent()) {
