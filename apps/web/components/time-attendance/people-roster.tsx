@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownUp, CalendarClock, Eye, EyeOff, Link2, Link2Off, Pencil, Search, Trash2, Upload, UserRound, Users } from 'lucide-react';
+import { ArrowDownUp, CalendarClock, Eye, EyeOff, Link2, Link2Off, Pencil, Search, Trash2, Upload, UserPlus, UserRound, Users } from 'lucide-react';
 import { editPerson, iclockKeys, listPeople, type IclockPerson } from '@/lib/api/iclock';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
@@ -235,6 +235,7 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
   const [sort, setSort] = React.useState<SortBy>('name');
   const [search, setSearch] = React.useState('');
   const [importOpen, setImportOpen] = React.useState(false);
+  const [addingPerson, setAddingPerson] = React.useState(false);
   const [linking, setLinking] = React.useState<IclockPerson | null>(null);
   const [editing, setEditing] = React.useState<IclockPerson | null>(null);
   const [picked, setPicked] = React.useState<Set<string>>(new Set());
@@ -358,6 +359,10 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
             ? `${people.length} on the roster`
             : `${rows.length} of ${people.length}`}
         </span>
+        <Button size="sm" onClick={() => setAddingPerson(true)}>
+          <UserPlus className="size-4" />
+          Add person
+        </Button>
         <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
           <Upload className="size-4" />
           Import
@@ -436,6 +441,14 @@ export function PeopleRoster({ siteId }: { siteId: string }) {
         person={editing}
         open={editing != null}
         onOpenChange={(o) => !o && setEditing(null)}
+      />
+      {/* The SAME dialog as the row edit and the inbox flow, with nothing pre-filled. One component
+          means a field added for one entry point cannot go missing from the other two. */}
+      <PersonEditDialog
+        siteId={siteId}
+        person={null}
+        open={addingPerson}
+        onOpenChange={setAddingPerson}
       />
       <DeletePersonDialog
         person={deleting}

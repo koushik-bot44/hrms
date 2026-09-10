@@ -110,8 +110,43 @@ public class IclockRosterService {
   }
 
   /**
-   * Creates or updates a person by {@code (siteId, pin)} — the console's "assign this pin" flow,
-   * which turns an inbox entry into a roster row in two clicks.
+   * Adds a person to a building's roster. REFUSES a pin that is already there.
+   *
+   * <p>The console's add dialog and the inbox's "assign this pin" flow both land here.
+   */
+  @Transactional
+  public PersonView createPerson(String siteId, UpsertPersonRequest req) {
+    requireSite(siteId);
+    String pin = IclockPin.canonicalOrNull(req.pin());
+    if (pin == null) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "'" + req.pin() + "' is not a usable pin (digits only, not all zeros)");
+    }
+    // A SEPARATE ENTRY POINT, not a flag on the upsert. "Add person" and "import a roster" want
+    // opposite things from a pin that already exists: the importer is correcting a row it expects to
+    // find, while somebody typing into a dialog believes they are creating a new one. Silently
+    // updating the second case would let an operator overwrite a colleague's name, company and shift
+    // by mistyping a pin, and the only symptom would be that person's report going wrong later.
+    people.findBySiteIdAndPin(siteId, pin).ifPresent(existing -> {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "Pin " + pin + " is already on this building's roster"
+              + (existing.getName() == null ? "" : " as " + existing.getName())
+              + (existing.isActive() ? "." : " (deactivated - reactivate them instead of adding a "
+                  + "second row)."));
+    });
+    IclockPerson person = new IclockPerson();
+    person.setSiteId(siteId);
+    person.setPin(pin);
+    apply(person, req);
+    return view(people.save(person), java.util.Set.of());
+  }
+
+  /**
+   * Creates or corrects a roster row by pin. The IMPORT path: a pin already present is the expected
+   * case, and updating it is the point. See {@link #createPerson} for the console's add dialog,
+   * which must refuse instead.
    */
   @Transactional
   public PersonView upsertPerson(String siteId, UpsertPersonRequest req) {

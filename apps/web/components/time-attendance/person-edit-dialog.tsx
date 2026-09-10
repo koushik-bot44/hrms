@@ -71,6 +71,8 @@ export function PersonEditDialog({
   const [companyId, setCompanyId] = React.useState<string | null>(null);
   const [team, setTeam] = React.useState<string | null>(null);
   const [shift, setShift] = React.useState<string>('NIGHT');
+  const [pinInput, setPinInput] = React.useState('');
+  const [excluded, setExcluded] = React.useState(false);
   /** Teams typed inline; held here so the option survives until the save round-trips. */
   const [newTeams, setNewTeams] = React.useState<string[]>([]);
 
@@ -93,6 +95,8 @@ export function PersonEditDialog({
     setCompanyId(person?.companyId ?? null);
     setTeam(person?.team ?? null);
     setShift(person?.shiftProfile ?? 'NIGHT');
+    setPinInput(person?.pin ?? presetPin ?? '');
+    setExcluded(person?.excludedFromReports ?? false);
     setNewTeams([]);
   }, [open, person]);
 
@@ -110,7 +114,7 @@ export function PersonEditDialog({
   const save = useApiMutation(
     () => {
       const body = {
-        pin: person?.pin ?? presetPin ?? '',
+        pin,
         name: name.trim(),
         email: email.trim(),
         // An empty string is meaningful here: it CLEARS the field. Sending null would mean "leave it
@@ -118,6 +122,7 @@ export function PersonEditDialog({
         companyId: companyId ?? '',
         team: team ?? '',
         shiftProfile: shift,
+        excludedFromReports: excluded,
       };
       return creating ? upsertPerson(siteId, body) : editPerson(person!.id, body);
     },
@@ -131,8 +136,12 @@ export function PersonEditDialog({
     },
   );
 
-  const pin = person?.pin ?? presetPin ?? '';
-  const canSave = pin.length > 0 && !save.isPending;
+  // A pin arrives one of three ways: an existing person's own, the inbox handing one over, or
+  // somebody typing it. The third had no field at all, so Save could never enable and "Add person"
+  // was unreachable from the People screen.
+  const pin = (person?.pin ?? presetPin ?? pinInput).trim();
+  const pinLooksUsable = /^\d+$/.test(pin) && /[1-9]/.test(pin);
+  const canSave = pinLooksUsable && !save.isPending;
 
   return (
     <>
@@ -154,6 +163,26 @@ export function PersonEditDialog({
             if (canSave) save.mutate();
           }}
         >
+          {creating && !presetPin ? (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium" htmlFor="pe-pin">
+                Pin <span className="text-destructive">*</span>
+              </label>
+              <Input
+                id="pe-pin"
+                inputMode="numeric"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                placeholder="e.g. 22193"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                The number the terminal knows them by. Digits only. A pin already on this
+                building&rsquo;s roster is refused rather than overwritten.
+              </p>
+            </div>
+          ) : null}
+
           <div className="space-y-1.5">
             <label className="text-sm font-medium" htmlFor="pe-name">Name</label>
             <Input
@@ -241,6 +270,24 @@ export function PersonEditDialog({
               earlier cycles are left alone.
             </p>
           </div>
+
+          <label className="flex items-start gap-2.5 rounded-lg border border-border p-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-primary"
+              checked={excluded}
+              onChange={(e) => setExcluded(e.target.checked)}
+            />
+            <span className="space-y-0.5">
+              <span className="block text-sm font-medium">Leave out of reports</span>
+              {/* Reporting only. Their punches still resolve, still promote, still show on the live
+                  board — anything else would look like the terminal had stopped seeing them. */}
+              <span className="block text-xs text-muted-foreground">
+                Keeps them off the monthly report, payroll export and warning letters. They still
+                appear on the live board and their punches are still recorded.
+              </span>
+            </span>
+          </label>
 
           {!creating && person ? (
             <div className="space-y-3">

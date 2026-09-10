@@ -1,6 +1,7 @@
 package com.ihrms.iclock;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ihrms.attendance.ShiftConfig;
 import com.ihrms.domain.model.Company;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Editing a person: company from a closed list, team from an open one, and the two things the edit
@@ -190,5 +192,50 @@ class IclockPersonEditTest {
     assertThat(view.companyName()).isEqualTo(combino.getName());
     assertThat(view.team()).isEqualTo("Accounts " + tag);
     assertThat(view.pin()).as("the pin is untouched by a details edit").isEqualTo("8001");
+  }
+
+  // ------------------------------------------------------------------ adding a person
+
+  @Test
+  void addingAPersonWithAPinTHATALREADYEXISTSIsRefusedNotSilentlyMerged() {
+    // The add dialog and the roster importer want opposite things from a pin already present. The
+    // importer is correcting a row it expects to find; somebody typing into a dialog believes they
+    // are creating a new person. Merging the second case lets a mistyped pin overwrite a colleague's
+    // name, company and shift, and the only symptom is that person's report going wrong weeks later.
+    roster.createPerson(siteId, req("40001", "First Arrival " + tag, null, null, null));
+
+    assertThatThrownBy(() ->
+        roster.createPerson(siteId, req("40001", "Typo Twin " + tag, null, null, null)))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("already on this building's roster");
+
+    assertThat(people.findBySiteIdAndPin(siteId, "40001"))
+        .get()
+        .extracting(IclockPerson::getName)
+        .asString()
+        .startsWith("First Arrival");
+  }
+
+  @Test
+  void aDeactivatedPersonBlocksTheirPinTooAndSaysSo() {
+    // Otherwise "add" quietly creates a second row for somebody who is already there, and the
+    // building ends up with two histories for one pin.
+    var created = roster.createPerson(siteId, req("40002", "Gone Away " + tag, null, null, null));
+    IclockPerson p = people.findById(created.id()).orElseThrow();
+    p.setActive(false);
+    people.save(p);
+
+    assertThatThrownBy(() ->
+        roster.createPerson(siteId, req("40002", "Second Row " + tag, null, null, null)))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("reactivate");
+  }
+
+  @Test
+  void anUnusablePinIsRefusedBeforeAnythingIsWritten() {
+    assertThatThrownBy(() -> roster.createPerson(siteId, req("0000", "Zeroes " + tag, null, null, null)))
+        .isInstanceOf(ResponseStatusException.class);
+    assertThatThrownBy(() -> roster.createPerson(siteId, req("abc", "Letters " + tag, null, null, null)))
+        .isInstanceOf(ResponseStatusException.class);
   }
 }

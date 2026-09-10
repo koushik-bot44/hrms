@@ -350,7 +350,7 @@ public class IclockAdminController {
       @Valid @RequestBody UpsertPersonRequest req,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest http) {
-    PersonView person = roster.upsertPerson(siteId, req);
+    PersonView person = roster.createPerson(siteId, req);
     record(actor, http, "ICLOCK_PERSON_UPSERTED", "IclockPerson", person.id(),
         meta("siteId", siteId, "pin", person.pin(), "name", person.name(),
             "companyId", person.companyId()));
