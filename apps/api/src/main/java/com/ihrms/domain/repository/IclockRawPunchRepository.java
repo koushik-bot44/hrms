@@ -182,6 +182,7 @@ public interface IclockRawPunchRepository extends JpaRepository<IclockRawPunch, 
                  p."id"          AS person_id,
                  p."name"        AS person_name,
                  c."name"        AS company_name,
+                 r."verifyMode"  AS verify_mode,
                  EXISTS (SELECT 1 FROM "iclock_punch_members" m
                           WHERE m."rawPunchId" = r."id"
                             AND NOT EXISTS (SELECT 1 FROM "iclock_punches" q
@@ -212,6 +213,26 @@ public interface IclockRawPunchRepository extends JpaRepository<IclockRawPunch, 
       @Param("rosteredOnly") boolean rosteredOnly,
       @Param("limit") int limit,
       @Param("offset") int offset);
+
+  /**
+   * How one pin has actually been passing, by verify mode.
+   *
+   * <p>Reads the RAW table rather than the promoted one, because a burst-collapsed punch was still a
+   * real presentation of a face or a finger — the question here is which credential the person uses,
+   * not which row survived de-duplication.
+   */
+  @Query(
+      value =
+          """
+          SELECT r."verifyMode", count(*)
+            FROM "iclock_raw_punches" r
+            LEFT JOIN "iclock_devices" d ON d."id" = r."deviceId"
+           WHERE regexp_replace(r."devicePin", '^0+', '') = :pin
+             AND (:siteId IS NULL OR d."siteId" = :siteId)
+           GROUP BY r."verifyMode"
+          """,
+      nativeQuery = true)
+  List<Object[]> countByVerifyModeForPin(@Param("pin") String pin, @Param("siteId") String siteId);
 
   /** Total matching the same filters, so the feed can paginate honestly rather than guessing. */
   @Query(

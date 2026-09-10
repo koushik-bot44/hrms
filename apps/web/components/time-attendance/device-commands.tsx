@@ -45,6 +45,7 @@ import {
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { istDateTime, relativeTime } from '@/lib/date';
 import { cn } from '@/lib/utils';
+import { VerifyModeBadge } from './verify-mode';
 
 /**
  * The console surface for the device command channel — the one path that WRITES to hardware.
@@ -213,7 +214,9 @@ export function EnrolOnDeviceDialog({
 }) {
   const qc = useQueryClient();
   const [deviceId, setDeviceId] = React.useState('');
-  const [bioType, setBioType] = React.useState<number>(BIO_FINGERPRINT);
+  // FACE BY DEFAULT, because that is what this fleet is: 98.5% of passes are a face, 1.1% a finger.
+  // Offering fingerprint first would put the rare path in front of every operator, every time.
+  const [bioType, setBioType] = React.useState<number>(BIO_FACE);
   const [finger, setFinger] = React.useState(0);
   const [sent, setSent] = React.useState<EnrolmentTrigger | null>(null);
 
@@ -230,7 +233,7 @@ export function EnrolOnDeviceDialog({
     if (!open) {
       setSent(null);
       setFinger(0);
-      setBioType(BIO_FINGERPRINT);
+      setBioType(BIO_FACE);
     }
   }, [open]);
   React.useEffect(() => {
@@ -362,9 +365,9 @@ export function EnrolOnDeviceDialog({
                   <p className="inline-flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/5 p-2.5 text-xs text-warning">
                     <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                     <span>
-                      No face has ever been captured on this fleet, so this is the first test of it.
-                      If the terminal ignores the command it shows as refused in its command log —
-                      fingerprint is the proven path today.
+                      Face is how 98.5% of people here actually pass, but no face capture has been
+                      triggered from this console yet. If the terminal ignores the command it shows
+                      as refused in its command log — fingerprint is the proven fallback.
                     </span>
                   </p>
                 ) : (
@@ -513,6 +516,21 @@ export function EnrolmentStatePanel({
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {state && state.passesBy.length > 0 ? (
+        /* WHAT ACTUALLY OPENS THE DOOR, next to what is enrolled. A person can hold fingerprints on
+           every terminal and pass by face every day — the counts above would look healthy while the
+           credential keeping them in the building is one this system has never seen. */
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>Passes by</span>
+          {state.passesBy.map((m) => (
+            <span key={m.mode} className="inline-flex items-center gap-1 tabular-nums">
+              <VerifyModeBadge mode={m.mode} label={m.label} withLabel />
+              {m.percent}%
+            </span>
+          ))}
+        </p>
       ) : null}
 
       {state && held === 0 ? (

@@ -372,6 +372,13 @@ export interface DeviceEnrolmentRow {
   failureReason: string | null;
 }
 
+export interface PassesBy {
+  mode: string;
+  label: string;
+  punches: number;
+  percent: number;
+}
+
 export interface EnrolmentState {
   pin: string;
   fingersHeld: number;
@@ -379,6 +386,8 @@ export interface EnrolmentState {
   devices: number;
   enrolledOn: number;
   rows: DeviceEnrolmentRow[];
+  /** How they actually get through the door — not the same question as what is enrolled. */
+  passesBy: PassesBy[];
 }
 
 /** Where this person's biometrics are, terminal by terminal. */
@@ -677,6 +686,9 @@ export interface FeedRow {
   personId: string | null;
   personName: string | null;
   companyName: string | null;
+  /** WHICH CREDENTIAL got them through: FACE, FINGER, CARD, PALM, PASSWORD or OTHER. */
+  verifyMode: string;
+  verifyLabel: string;
   /** Absorbed into a burst whose kept punch is a different row. Real data the board hides. */
   collapsedAway: boolean;
 }

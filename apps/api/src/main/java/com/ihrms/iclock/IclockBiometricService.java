@@ -9,6 +9,7 @@ import com.ihrms.domain.repository.IclockBiometricTemplateRepository;
 import com.ihrms.domain.repository.IclockDeviceEnrolmentRepository;
 import com.ihrms.domain.repository.IclockDeviceRepository;
 import com.ihrms.domain.repository.IclockPersonRepository;
+import com.ihrms.domain.repository.IclockRawPunchRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -60,18 +61,21 @@ public class IclockBiometricService {
   private final IclockDeviceRepository devices;
   private final IclockPersonRepository people;
   private final IclockCommandService commands;
+  private final IclockRawPunchRepository rawPunches;
 
   public IclockBiometricService(
       IclockBiometricTemplateRepository templates,
       IclockDeviceEnrolmentRepository enrolments,
       IclockDeviceRepository devices,
       IclockPersonRepository people,
-      IclockCommandService commands) {
+      IclockCommandService commands,
+      IclockRawPunchRepository rawPunches) {
     this.templates = templates;
     this.enrolments = enrolments;
     this.devices = devices;
     this.people = people;
     this.commands = commands;
+    this.rawPunches = rawPunches;
   }
 
   /** What one OPERLOG push produced, so the ingest log can say so in one line. */
@@ -188,10 +192,20 @@ public class IclockBiometricService {
       String deviceId, String deviceName, String serialNumber, String direction,
       int fingers, int faces, String status, String failureReason) {}
 
+  /** One credential and how often this person actually uses it. */
+  public record PassesBy(String mode, String label, long punches, int percent) {}
+
   /** Where this person's fingers are, terminal by terminal. */
   public record EnrolmentState(
       String pin, int fingersHeld, int facesHeld, int devices, int enrolledOn,
-      List<DeviceEnrolmentRow> rows) {}
+      List<DeviceEnrolmentRow> rows,
+      /**
+       * HOW THEY ACTUALLY GET THROUGH THE DOOR, which is not the same question as what is enrolled.
+       * A person can hold two fingerprints on every terminal and pass by face every single day; the
+       * enrolment counts above would look healthy while the thing keeping them in the building is a
+       * template this system has never seen.
+       */
+      List<PassesBy> passesBy) {}
 
   /**
    * "Enrolled on 4 of 4" — and, when it is not 4 of 4, which door is the problem.
@@ -234,7 +248,8 @@ public class IclockBiometricService {
         person.getPin(),
         (int) held.stream().filter(t -> t.getBioType() != IclockCommandDialect.TYPE_FACE).count(),
         (int) held.stream().filter(t -> t.getBioType() == IclockCommandDialect.TYPE_FACE).count(),
-        here.size(), enrolledOn, rows);
+        here.size(), enrolledOn, rows,
+        passesBy(person.getPin(), person.getSiteId()));
   }
 
   /**
@@ -257,6 +272,35 @@ public class IclockBiometricService {
       return IclockDeviceEnrolment.SOURCE;
     }
     return IclockDeviceEnrolment.PRESENT;
+  }
+
+  /**
+   * How this person has actually been passing, biggest share first.
+   *
+   * <p>Counted from the RAW punches rather than the promoted ones: a burst-collapsed row was still a
+   * real presentation of a face or a finger, and the question is which credential somebody uses, not
+   * which row survived de-duplication.
+   *
+   * <p>Percentages are rounded and may not total 100. That is preferable to inventing a largest
+   * remainder — the number is here to say "this person is a face user", not to be summed.
+   */
+  private List<PassesBy> passesBy(String pin, String siteId) {
+    List<Object[]> rows = rawPunches.countByVerifyModeForPin(pin, siteId);
+    long total = rows.stream().mapToLong(r -> ((Number) r[1]).longValue()).sum();
+    if (total == 0) {
+      return List.of();
+    }
+    java.util.Map<IclockVerifyMode, Long> byMode = new java.util.EnumMap<>(IclockVerifyMode.class);
+    for (Object[] r : rows) {
+      byMode.merge(
+          IclockVerifyMode.of((String) r[0]), ((Number) r[1]).longValue(), Long::sum);
+    }
+    return byMode.entrySet().stream()
+        .sorted(java.util.Map.Entry.<IclockVerifyMode, Long>comparingByValue().reversed())
+        .map(e -> new PassesBy(
+            e.getKey().name(), e.getKey().label(), e.getValue(),
+            (int) Math.round(100.0 * e.getValue() / total)))
+        .toList();
   }
 
   /**

@@ -58,6 +58,13 @@ public class IclockFeedService {
       String personName,
       String companyName,
       /**
+       * WHICH CREDENTIAL GOT THEM THROUGH. Face on 98.5% of this fleet's punches, finger on 1.1%.
+       * Carried on every row because "they badged" and "their face was recognised" are different
+       * facts, and only one of them is replaceable by a template this system can push.
+       */
+      String verifyMode,
+      String verifyLabel,
+      /**
        * True when this raw row was absorbed into a burst whose KEPT punch is a different row. It is
        * real data that the effective view deliberately hides, so the feed says so rather than
        * pretending the punch never happened.
@@ -133,7 +140,9 @@ public class IclockFeedService {
               (String) r[10],
               (String) r[11],
               (String) r[12],
-              Boolean.TRUE.equals(r[13])));
+              IclockVerifyMode.of((String) r[13]).name(),
+              IclockVerifyMode.of((String) r[13]).label(),
+              Boolean.TRUE.equals(r[14])));
     }
 
     long total = rawPunches.countFeed(siteId, deviceId, from, to, unknownOnly, rosteredOnly);

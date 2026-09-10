@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Layers, Radio, UserPlus } from 'lucide-react';
+import { VerifyModeBadge } from './verify-mode';
 import {
   getPunchFeed,
   iclockKeys,
@@ -230,6 +231,8 @@ function FeedRowView({ row, siteId }: { row: FeedRow; siteId: string }) {
             ) : null}
           </span>
         )}
+
+        <VerifyModeBadge mode={row.verifyMode} label={row.verifyLabel} />
 
         {row.collapsedAway ? (
           <Badge
