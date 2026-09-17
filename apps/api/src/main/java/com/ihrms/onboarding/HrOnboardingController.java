@@ -12,6 +12,7 @@ import com.ihrms.onboarding.dto.OnboardingDtos.PresignedUpload;
 import com.ihrms.onboarding.dto.OnboardingDtos.PresignedView;
 import com.ihrms.onboarding.dto.OnboardingDtos.SignatureRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.SignatureView;
+import com.ihrms.review.ReviewService;
 import com.ihrms.review.dto.ReviewDtos.DecisionResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -41,19 +42,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class HrOnboardingController {
 
   private final HrOnboardingService entry;
+  private final ReviewService review;
 
-  public HrOnboardingController(HrOnboardingService entry) {
+  public HrOnboardingController(HrOnboardingService entry, ReviewService review) {
     this.entry = entry;
+    this.review = review;
   }
 
   @GetMapping
-  public OnboardingDashboard dashboard(
+  public OnboardingDashboard hrOnboardingDashboard(
       @PathVariable String id, @AuthenticationPrincipal IhrmsPrincipal.User actor) {
     return entry.dashboard(actor, id);
   }
 
   @PutMapping("/form1")
-  public Form1View saveForm1(
+  public Form1View hrSaveForm1(
       @PathVariable String id,
       @Valid @RequestBody Form1Request body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
@@ -62,7 +65,7 @@ public class HrOnboardingController {
   }
 
   @PutMapping("/form3")
-  public List<Form3EntryView> saveForm3(
+  public List<Form3EntryView> hrSaveForm3(
       @PathVariable String id,
       @Valid @RequestBody Form3Request body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
@@ -71,7 +74,7 @@ public class HrOnboardingController {
   }
 
   @PutMapping("/signature")
-  public SignatureView saveSignature(
+  public SignatureView hrSaveSignature(
       @PathVariable String id,
       @Valid @RequestBody SignatureRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
@@ -81,7 +84,7 @@ public class HrOnboardingController {
 
   @PostMapping("/documents")
   @ResponseStatus(HttpStatus.CREATED)
-  public PresignedUpload requestUpload(
+  public PresignedUpload hrRequestUpload(
       @PathVariable String id,
       @Valid @RequestBody DocumentUploadRequest body,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
@@ -91,7 +94,7 @@ public class HrOnboardingController {
 
   @PostMapping("/documents/{documentId}/confirm")
   @ResponseStatus(HttpStatus.CREATED)
-  public DocumentView confirmUpload(
+  public DocumentView hrConfirmUpload(
       @PathVariable String id,
       @PathVariable String documentId,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
@@ -100,7 +103,7 @@ public class HrOnboardingController {
   }
 
   @DeleteMapping("/documents/{documentId}")
-  public OnboardingDashboard deleteDocument(
+  public OnboardingDashboard hrDeleteDocument(
       @PathVariable String id,
       @PathVariable String documentId,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
@@ -109,7 +112,7 @@ public class HrOnboardingController {
   }
 
   @GetMapping("/documents/{documentId}/url")
-  public PresignedView documentViewUrl(
+  public PresignedView hrDocumentUrl(
       @PathVariable String id,
       @PathVariable String documentId,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
@@ -122,13 +125,14 @@ public class HrOnboardingController {
    * kept as the code, the team's manager is notified — and no email is sent.
    */
   @PostMapping("/approve")
-  public DecisionResult approve(
+  public DecisionResult approveExisting(
       @PathVariable String id,
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     DecisionResult result = entry.approve(actor, id, request.getRemoteAddr());
-    // Post-commit + best-effort: regenerate the PDFs with the kept ID stamped on them. A failure here must
-    // never undo the approval that already committed above.
+    // Post-commit + best-effort: push the team's manager (same channel as a new-hire approval) and
+    // regenerate the PDFs with the kept ID stamped on them. A failure here must never undo the approval.
+    review.pushApprovalToManager(id);
     entry.regeneratePdfsQuietly(id);
     return result;
   }

@@ -135,13 +135,18 @@ public class HrOnboardingService {
 
   // --- reads ------------------------------------------------------------------
 
-  /** The record's onboarding data for HR entry — the same shape the employee's own dashboard uses. */
+  /**
+   * The record's onboarding data for HR entry — the same shape the employee's own dashboard uses. Locked
+   * once approved (like every write): this surface returns Form 1's sensitive values in PLAIN, which is
+   * right while HR is typing them but would bypass the masked-record + audited-reveal invariant (§6)
+   * afterwards. Post-approval reads go through /employees/{id}/record.
+   */
   public OnboardingDashboard dashboard(IhrmsPrincipal.User actor, String employeeId) {
-    return onboarding.dashboardOf(loadForEntry(actor, employeeId, false));
+    return onboarding.dashboardOf(loadForEntry(actor, employeeId, true));
   }
 
   public PresignedView documentViewUrl(IhrmsPrincipal.User actor, String employeeId, String documentId, String ip) {
-    Employee employee = loadForEntry(actor, employeeId, false);
+    Employee employee = loadForEntry(actor, employeeId, true);
     Document doc = loadDocument(employee.getId(), documentId);
     String url = storage.presignedGetUrl(doc.getStorageKey(), VIEW_TTL_SECONDS);
     audit(actor, employee, "DOCUMENT_VIEWED", "Document", documentId,
@@ -371,6 +376,8 @@ public class HrOnboardingService {
     List<Form3PrevEmployment> f3 = form3s.findByEmployeeIdOrderByOrderIndexAsc(employeeId);
     f3.forEach(r -> r.setStatus(SectionStatus.VERIFIED));
     form3s.saveAll(f3);
+    f2.setStatus(SectionStatus.VERIFIED); // HR-authored + HR-entered — verified in the same action
+    form2s.save(f2);
     docs.stream()
         .filter(d -> d.getStatus() == DocumentStatus.UPLOADED)
         .forEach(d -> d.setStatus(DocumentStatus.VERIFIED));
@@ -432,8 +439,9 @@ public class HrOnboardingService {
 
   /**
    * Load the record for HR entry: 404 unless the actor may access it (HR own-onboarded — the URL rule +
-   * {@code @PreAuthorize} already restrict the surface to HR), 409 unless it is an EXISTING employee, and —
-   * for writes — 409 once approved (GETs keep working so the record stays viewable).
+   * {@code @PreAuthorize} already restrict the surface to HR), 409 unless it is an EXISTING employee, and
+   * 409 once approved — reads included, because this surface is PLAIN-mode (§6); the approved record is
+   * viewed through the masked /employees/{id}/record instead.
    */
   private Employee loadForEntry(IhrmsPrincipal.User actor, String employeeId, boolean write) {
     Employee employee =

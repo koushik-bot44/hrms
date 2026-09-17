@@ -46,7 +46,9 @@ export function SuperAdminEmployeeRecord({ employeeId }: { employeeId: string })
       record={record}
       editable={false}
       form2EditAction={
-        record.status === 'INVITED' ? (
+        // Form 2 stays editable until approval for an HR-entered EXISTING employee (born IN_PROGRESS).
+        record.status === 'INVITED' ||
+        (record.onboardingType === 'EXISTING_EMPLOYEE' && record.status === 'IN_PROGRESS') ? (
           <EditEmployeeInfoDialog
             employeeId={record.id}
             form2={record.form2}

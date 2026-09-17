@@ -46,6 +46,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -123,12 +124,14 @@ public class EmployeesService {
    * NO offer, NO invite token and NO email of any kind: the employee never signs in to onboard. HR then enters
    * Forms 1/3/4 + a scanned signature via {@code /employees/{id}/onboarding} and approves, keeping the ID.
    */
+  @Transactional
   public OnboardEmployeeResult onboardExisting(
       OnboardExistingEmployeeRequest input, IhrmsPrincipal.User actor, String ip) {
     return createExisting(companyOf(actor), actor.userId(), input.form2(), actor, ip);
   }
 
   /** SUPER_ADMIN onboards an EXISTING employee into a chosen company via a team; that team's HR enters the record. */
+  @Transactional
   public OnboardEmployeeResult onboardExistingForCompany(
       String companyId, SuperAdminOnboardExistingRequest input, IhrmsPrincipal.User actor, String ip) {
     return createExisting(companyId, teamHrFor(companyId, input.teamId()), input.form2(), actor, ip);

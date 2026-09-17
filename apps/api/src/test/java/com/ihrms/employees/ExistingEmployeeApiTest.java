@@ -336,11 +336,15 @@ class ExistingEmployeeApiTest {
             id);
     assertThat(unverifiedDocs).isZero();
 
-    // Locked after approval: writes 409, reads keep working, Form 2 locks too.
+    // Locked after approval — reads too: this surface is PLAIN-mode, so the approved record is viewed
+    // through the masked /employees/{id}/record + audited reveal instead (§6).
     mvc.perform(entryPut(id, "/form1", form1Body())).andExpect(status().isConflict());
     mvc.perform(post("/employees/" + id + "/onboarding/approve").header("Authorization", "Bearer " + hrToken))
         .andExpect(status().isConflict());
-    mvc.perform(entryGet(id, "")).andExpect(status().isOk());
+    mvc.perform(entryGet(id, "")).andExpect(status().isConflict());
+    mvc.perform(get("/employees/" + id + "/record").header("Authorization", "Bearer " + hrToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.form2.status").value("VERIFIED"));
     mvc.perform(patchForm2(id, form2Body("Ravi Kumar", "ravi@p.test", "DI-0877")))
         .andExpect(status().isConflict());
   }
