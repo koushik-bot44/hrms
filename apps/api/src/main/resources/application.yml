@@ -235,3 +235,10 @@ spring:
   config:
     activate:
       on-profile: prod
+# The API map is not for the public internet: springdoc stays a dev/local tool (audit finding — the
+# docs endpoints were reachable on the deployed API). The web's gen:types runs against a LOCAL API.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
