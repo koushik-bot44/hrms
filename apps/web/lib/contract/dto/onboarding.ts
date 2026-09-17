@@ -162,7 +162,10 @@ export const Form2Schema = z.object({
     .max(180),
   designation: z.string().trim().min(2, 'Designation is required').max(150),
   dateOfJoining: z.string().regex(FORM2_DATE_ISO, 'Select a date of joining'),
-  // Assigned later — inert for now (never required, never blocks submit).
+  // A new hire's ID is minted on approval, so this is ignored for them. An EXISTING employee keeps the ID they
+  // already have — HR enters it here (required by OnboardExistingEmployeeSchema).
+  employeeId: optional(40),
+  // New hire: assigned later — inert (never required, never blocks submit). Existing employee: HR enters it.
   officialEmail: optional(180),
 });
 export type Form2Values = z.output<typeof Form2Schema>;

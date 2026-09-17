@@ -132,7 +132,10 @@ export type OnboardingDashboard = Omit<
   employeeCode: string | null;
   fullName: string | null;
   designation: string | null;
-  // The Offer Letter gate (§3.2): null when there is no offer (a pre-feature employee is ungated).
+  // The Offer Letter gate (§3.2): null when there is no offer (a pre-feature employee is ungated). An
+  // EXISTING_EMPLOYEE also has no offer, but never self-onboards — HR enters their record (/employees/{id}/onboarding).
+  // form2.employeeId for an EXISTING_EMPLOYEE is the HR-entered ID from creation on (employeeCode stays null until
+  // approval).
   offer: OfferSummary | null;
   form1: Form1View | null;
   form3: Form3EntryView[];

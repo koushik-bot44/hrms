@@ -51,6 +51,7 @@ export function SuperAdminEmployeeRecord({ employeeId }: { employeeId: string })
             employeeId={record.id}
             form2={record.form2}
             employeeCode={record.employeeCode}
+            onboardingType={record.onboardingType}
             onSaved={() => queryClient.invalidateQueries({ queryKey: recordKey(employeeId) })}
           />
         ) : null

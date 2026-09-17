@@ -20,7 +20,7 @@ import {
   type Form3Values,
   type OnboardingDashboard,
 } from '@/lib/contract';
-import { saveForm1, saveForm3, saveSignature, submitOnboarding } from '@/lib/api/onboarding';
+import { submitOnboarding } from '@/lib/api/onboarding';
 import { useApiMutation } from '@/lib/api/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { surface } from '@/components/ui/surface';
 import { DocumentUploader } from '@/components/employee/document-uploader';
 import { LazySignatureCapture } from '@/components/signature/lazy-signature-capture';
+import { useOnboardingTarget } from '@/components/employee/onboarding-target';
 
 // Form 2 (Employee Info) is HR/SA-authored at onboard (§3.2) — it is NOT a step the employee fills.
 const STEPS = ['Personal', 'Prev. Employment', 'Documents', 'Review', 'Sign & Submit'];
@@ -49,7 +50,18 @@ export function OnboardingStepper({
 
   return (
     <div className="space-y-5">
-      <Stepper step={step} onStep={setStep} dashboard={dashboard} />
+      <Stepper
+        steps={STEPS}
+        step={step}
+        onStep={setStep}
+        done={[
+          Boolean(dashboard.form1?.name),
+          dashboard.form3.length > 0,
+          dashboard.documents.length > 0,
+          false,
+          Boolean(dashboard.signature),
+        ]}
+      />
       {step === 0 && (
         <Form1Step form1={dashboard.form1} disabled={disabled} onSaved={refetch} onNext={goNext} />
       )}
@@ -65,25 +77,21 @@ export function OnboardingStepper({
   );
 }
 
-function Stepper({
+/** The step chips: click to jump; `done[i]` shows a check. Shared with HR's existing-employee entry. */
+export function Stepper({
+  steps,
   step,
   onStep,
-  dashboard,
+  done,
 }: {
+  steps: readonly string[];
   step: number;
   onStep: (n: number) => void;
-  dashboard: OnboardingDashboard;
+  done: boolean[];
 }) {
-  const done = [
-    Boolean(dashboard.form1?.name),
-    dashboard.form3.length > 0,
-    dashboard.documents.length > 0,
-    false,
-    Boolean(dashboard.signature),
-  ];
   return (
     <div className="flex flex-wrap gap-2.5">
-      {STEPS.map((label, i) => (
+      {steps.map((label, i) => (
         <button
           key={label}
           type="button"
@@ -208,13 +216,17 @@ export function Form1Step({
   onSaved,
   onNext,
   submitLabel,
+  declarationLabel = 'I have read and confirm the declaration above.',
 }: {
   form1: Form1View | null;
   disabled: boolean;
   onSaved: () => void;
   onNext?: () => void;
   submitLabel?: string;
+  /** The declaration checkbox label — HR confirming an existing employee's signed declaration words it differently. */
+  declarationLabel?: string;
 }) {
+  const queryClient = useQueryClient();
   const { register, control, handleSubmit, watch, setValue, formState } = useForm<Form1Values>({
     resolver: zodResolver(Form1Schema),
     defaultValues: form1Defaults(form1),
@@ -225,9 +237,12 @@ export function Form1Step({
   const fam = useFieldArray({ control, name: 'familyDetails' });
   const refs = useFieldArray({ control, name: 'characterReferences' });
 
-  const save = useApiMutation((v: Form1Values) => saveForm1(v), {
+  const target = useOnboardingTarget();
+  const save = useApiMutation((v: Form1Values) => target.saveForm1(v), {
     successMessage: 'Form 1 saved',
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      // Cache the saved view now so stepping back before the refetch lands never shows (and re-saves) old values.
+      queryClient.setQueryData<OnboardingDashboard>(target.queryKey, (d) => (d ? { ...d, form1: saved } : d));
       onSaved();
       onNext?.();
     },
@@ -328,7 +343,7 @@ export function Form1Step({
                   })
                 }
               />
-              <span>I have read and confirm the declaration above.</span>
+              <span>{declarationLabel}</span>
             </label>
           </div>
 
@@ -416,6 +431,9 @@ export function Form3Step({
   onNext,
   onBack,
   submitLabel,
+  title = 'Form 2 — Previous Employment',
+  savedMessage = 'Form 2 saved',
+  emptyText = 'No previous employment. Add an employer, or continue if this is your first job.',
 }: {
   form3: OnboardingDashboard['form3'];
   disabled: boolean;
@@ -423,7 +441,12 @@ export function Form3Step({
   onNext?: () => void;
   onBack?: () => void;
   submitLabel?: string;
+  /** Labels default to the employee's numbering; HR's entry page passes its own (§3.2). */
+  title?: string;
+  savedMessage?: string;
+  emptyText?: string;
 }) {
+  const queryClient = useQueryClient();
   const { register, control, handleSubmit } = useForm<Form3Values>({
     resolver: zodResolver(Form3Schema),
     defaultValues: {
@@ -443,9 +466,11 @@ export function Form3Step({
     },
   });
   const entries = useFieldArray({ control, name: 'entries' });
-  const save = useApiMutation((v: Form3Values) => saveForm3(v), {
-    successMessage: 'Form 2 saved',
-    onSuccess: () => {
+  const target = useOnboardingTarget();
+  const save = useApiMutation((v: Form3Values) => target.saveForm3(v), {
+    successMessage: savedMessage,
+    onSuccess: (saved) => {
+      queryClient.setQueryData<OnboardingDashboard>(target.queryKey, (d) => (d ? { ...d, form3: saved } : d));
       onSaved();
       onNext?.();
     },
@@ -460,7 +485,7 @@ export function Form3Step({
     <form onSubmit={handleSubmit((v) => save.mutate(v))} noValidate>
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">Form 2 — Previous Employment</CardTitle>
+          <CardTitle className="text-base">{title}</CardTitle>
           {!disabled ? (
             <Button type="button" size="sm" variant="outline" onClick={() => entries.append(blank)}>
               <Plus className="size-4" />
@@ -470,9 +495,7 @@ export function Form3Step({
         </CardHeader>
         <CardContent className="space-y-4">
           {entries.fields.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No previous employment. Add an employer, or continue if this is your first job.
-            </p>
+            <p className="text-sm text-muted-foreground">{emptyText}</p>
           ) : (
             entries.fields.map((row, i) => (
               <div key={row.id} className={cn(surface(), 'space-y-3 p-3')}>
@@ -511,21 +534,23 @@ export function Form3Step({
 // Form 4 — Documents (uploads) — internal identity; shown to the employee as "Form 3".
 // ---------------------------------------------------------------------------
 
-function Form4Step({
+export function Form4Step({
   dashboard,
   disabled,
   onNext,
   onBack,
+  title = 'Form 3 — Documents',
 }: {
   dashboard: OnboardingDashboard;
   disabled: boolean;
   onNext: () => void;
   onBack: () => void;
+  title?: string;
 }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Form 3 — Documents</CardTitle>
+        <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <DocGroup title="Educational">
@@ -633,7 +658,7 @@ function SummaryRow({ label, value, ok }: { label: string; value: string; ok: bo
 }
 
 /** The adopted signature PNG (Blob) → a data URL, so it stores via the existing signature endpoint unchanged. */
-function blobToDataUrl(blob: Blob): Promise<string> {
+export function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
@@ -664,9 +689,10 @@ function SignStep({
   // The adopted signature is a PNG blob (whatever the capture mode); it is stored exactly as before — the
   // same PUT /me/onboarding/signature with the same data-URL shape. `type` is fixed so downstream (storage,
   // PDF stamp) can't tell which mode produced it.
+  const target = useOnboardingTarget();
   const saveSig = useApiMutation(
     async (blob: Blob) =>
-      saveSignature({ imageDataUrl: await blobToDataUrl(blob), type: 'DRAWN' }),
+      target.saveSignature({ imageDataUrl: await blobToDataUrl(blob), type: 'DRAWN' }),
     { successMessage: 'Signature saved', onSuccess: onSaved },
   );
 

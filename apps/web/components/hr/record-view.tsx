@@ -102,6 +102,8 @@ export function RecordView({
     (session.role === UserRole.HR ||
       session.role === UserRole.COMPANY_ADMIN ||
       session.role === UserRole.SUPER_ADMIN);
+  // Onboarded as an existing employee (§3.2): already joined, and no offer letter in their flow.
+  const existingEmployee = record.onboardingType === 'EXISTING_EMPLOYEE';
   const f1 = revealed?.form1 ?? record.form1;
   const f2 = revealed?.form2 ?? record.form2;
   const f3 = revealed ? revealed.form3 : record.form3;
@@ -117,7 +119,9 @@ export function RecordView({
             <p className="truncate text-sm text-muted-foreground">{record.email}</p>
             <p className="text-xs text-muted-foreground">
               {record.designation ?? '—'}
-              {record.dateOfJoining ? ` · joins ${record.dateOfJoining}` : ''}
+              {record.dateOfJoining
+                ? ` · ${existingEmployee ? 'joined' : 'joins'} ${record.dateOfJoining}`
+                : ''}
               {record.employeeCode ? (
                 <>
                   {' · '}
@@ -144,7 +148,7 @@ export function RecordView({
             ) : null}
             <StatusBadge status={record.status} />
             {record.accountDeactivated ? <Badge variant="danger">Deactivated</Badge> : null}
-            {viewerIsHr && record.status === 'INVITED' ? (
+            {viewerIsHr && record.status === 'INVITED' && !existingEmployee ? (
               <ResendInviteButton employeeId={record.id} sentAt={record.inviteSentAt} />
             ) : null}
             {editable && onDecided ? (
@@ -308,6 +312,16 @@ export function RecordView({
           offer={record.offer}
           canDownload={viewerCanDownloadOffer}
         />
+      ) : existingEmployee ? (
+        // Onboarded as an existing employee (§3.2): no offer letter was ever created — say so in its place.
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground">Offer letter</h3>
+          <div className={cn(surface('subtle'), 'flex items-center gap-3 p-3')}>
+            <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <p className="min-w-0 flex-1 text-sm font-medium">Existing employee — no offer letter</p>
+            <Badge variant="neutral">Existing</Badge>
+          </div>
+        </section>
       ) : null}
 
       {record.generatedDocuments.length > 0 ? (

@@ -19,15 +19,37 @@ const FORM2_FIELDS = [
   'personalEmail',
   'designation',
   'dateOfJoining',
+  'employeeId',
   'officialEmail',
 ] as const;
 type Form2FieldName = (typeof FORM2_FIELDS)[number];
+
+/**
+ * Where a Form-2 onboard/edit 400/409 lands: a joining-date rejection (e.g. an existing employee's date in the
+ * future) on the date field, an employee-ID rejection (e.g. already in use) on the ID, anything else — duplicate
+ * or invalid email — on the personal email.
+ */
+export function form2ErrorField(
+  message: string,
+): 'dateOfJoining' | 'employeeId' | 'officialEmail' | 'personalEmail' {
+  if (/joining/i.test(message)) return 'dateOfJoining';
+  if (/employee\s*id/i.test(message)) return 'employeeId';
+  if (/official\s*email/i.test(message)) return 'officialEmail';
+  return 'personalEmail';
+}
+
+/** The personal-email hint for an EXISTING employee — their record is HR-entered and nothing is sent (§3.2). */
+export const EXISTING_EMAIL_HINT =
+  'Nothing is sent now. If you later assign them a mailbox, its sign-in details go to this address.';
 
 export function EmployeeInfoFields<T extends FieldValues>({
   register,
   errors,
   employeeCode,
   dojMin,
+  dojMax,
+  personalEmailHint,
+  enterCompanyIdentity = false,
   disabled,
   idPrefix = 'f2',
 }: {
@@ -37,6 +59,15 @@ export function EmployeeInfoFields<T extends FieldValues>({
   employeeCode?: string | null;
   /** Optional min date for Date of Joining (onboard uses today). */
   dojMin?: string;
+  /** Optional max date for Date of Joining (an existing employee has already joined — today at the latest). */
+  dojMax?: string;
+  /** Replace the personal-email hint (an existing employee is never emailed). */
+  personalEmailHint?: string;
+  /**
+   * An EXISTING employee (§3.2): HR enters the employee ID + official email they already have (required, kept
+   * on approval). Otherwise both are system-assigned and shown greyed.
+   */
+  enterCompanyIdentity?: boolean;
   disabled?: boolean;
   idPrefix?: string;
 }) {
@@ -57,7 +88,10 @@ export function EmployeeInfoFields<T extends FieldValues>({
           label="Personal Email"
           error={err('personalEmail')}
           required
-          hint="The employee signs in with their name + this email (via OTP); the invitation is sent here."
+          hint={
+            personalEmailHint ??
+            'The employee signs in with their name + this email (via OTP); the invitation is sent here.'
+          }
         >
           <Input id={id('personalEmail')} type="email" placeholder="alex@personal.com" disabled={disabled}
             aria-invalid={Boolean(err('personalEmail'))} {...reg('personalEmail')} />
@@ -67,28 +101,48 @@ export function EmployeeInfoFields<T extends FieldValues>({
             aria-invalid={Boolean(err('designation'))} {...reg('designation')} />
         </Field>
         <Field id={id('dateOfJoining')} label="Date of Joining" error={err('dateOfJoining')} required>
-          <Input id={id('dateOfJoining')} type="date" min={dojMin} disabled={disabled}
+          <Input id={id('dateOfJoining')} type="date" min={dojMin} max={dojMax} disabled={disabled}
             aria-invalid={Boolean(err('dateOfJoining'))} {...reg('dateOfJoining')} />
         </Field>
       </Section>
 
-      <Section
-        title="System-assigned"
-        description="Filled in automatically — not entered here."
-      >
-        <Field id={id('employeeId')} label="Employee ID">
-          <Input
-            id={id('employeeId')}
-            value={employeeCode ?? ''}
-            placeholder="Auto-assigned on approval"
-            readOnly
-            disabled
-          />
-        </Field>
-        <Field id={id('officialEmail')} label="Official Email" hint="Assigned later.">
-          <Input id={id('officialEmail')} type="email" value="" placeholder="Assigned later" readOnly disabled />
-        </Field>
-      </Section>
+      {/* Distinct keys: the entered (uncontrolled) and system-assigned (controlled, read-only) inputs must not be
+          reused across a mode switch — React would warn about a controlled input becoming uncontrolled. */}
+      {enterCompanyIdentity ? (
+        <Section
+          key="company-identity"
+          title="Company ID & email"
+          description="They already work here — enter the employee ID and official email they already have."
+        >
+          <Field id={id('employeeId')} label="Employee ID" error={err('employeeId')} required>
+            <Input id={id('employeeId')} placeholder="EMP-1042" disabled={disabled}
+              aria-invalid={Boolean(err('employeeId'))} {...reg('employeeId')} />
+          </Field>
+          <Field id={id('officialEmail')} label="Official Email" error={err('officialEmail')} required>
+            <Input id={id('officialEmail')} type="email" placeholder="alex@company.com" disabled={disabled}
+              aria-invalid={Boolean(err('officialEmail'))} {...reg('officialEmail')} />
+          </Field>
+        </Section>
+      ) : (
+        <Section
+          key="system-assigned"
+          title="System-assigned"
+          description="Filled in automatically — not entered here."
+        >
+          <Field id={id('employeeId')} label="Employee ID">
+            <Input
+              id={id('employeeId')}
+              value={employeeCode ?? ''}
+              placeholder="Auto-assigned on approval"
+              readOnly
+              disabled
+            />
+          </Field>
+          <Field id={id('officialEmail')} label="Official Email" hint="Assigned later.">
+            <Input id={id('officialEmail')} type="email" value="" placeholder="Assigned later" readOnly disabled />
+          </Field>
+        </Section>
+      )}
     </div>
   );
 }

@@ -29,6 +29,17 @@ export const EmployeeStatus = {
 } as const;
 export type EmployeeStatus = (typeof EmployeeStatus)[keyof typeof EmployeeStatus];
 
+/**
+ * How the record was opened (§3.2): a NEW_HIRE gets the offer letter + selection email and onboards themselves; an
+ * EXISTING_EMPLOYEE (already works at the company, no IHRMS record yet) gets no offer and no email — HR enters their
+ * record via /employees/{id}/onboarding and approves it, keeping the employee ID they already have.
+ */
+export const OnboardingType = {
+  NEW_HIRE: 'NEW_HIRE',
+  EXISTING_EMPLOYEE: 'EXISTING_EMPLOYEE',
+} as const;
+export type OnboardingType = (typeof OnboardingType)[keyof typeof OnboardingType];
+
 /** Status of each form (Form 1/2/3) and review item. */
 export const SectionStatus = {
   DRAFT: 'DRAFT',
@@ -149,6 +160,7 @@ export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
 export const SHARED_ENUMS = {
   UserRole,
   EmployeeStatus,
+  OnboardingType,
   SectionStatus,
   DocumentType,
   DocumentStatus,

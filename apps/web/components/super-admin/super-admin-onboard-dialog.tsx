@@ -5,10 +5,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { UserPlus } from 'lucide-react';
-import { SuperAdminOnboardSchema, type SuperAdminOnboardInput } from '@/lib/contract';
+import {
+  OnboardingType,
+  SuperAdminOnboardExistingSchema,
+  SuperAdminOnboardSchema,
+  type SuperAdminOnboardInput,
+} from '@/lib/contract';
 import { listCompanies } from '@/lib/api/companies';
 import { listTeams, teamsKey } from '@/lib/api/teams';
-import { onboardForCompany } from '@/lib/api/employees';
+import { onboardExistingForCompany, onboardForCompany } from '@/lib/api/employees';
 import { useApiMutation, useApiQuery } from '@/lib/api/hooks';
 import { istTodayIso } from '@/lib/date';
 import { Button } from '@/components/ui/button';
@@ -20,9 +25,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { EmployeeInfoFields } from '@/components/employee-info/employee-info-fields';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import {
+  EXISTING_EMAIL_HINT,
+  EmployeeInfoFields,
+  form2ErrorField,
+} from '@/components/employee-info/employee-info-fields';
 import { OfferTermsFields } from '@/components/employee-info/offer-terms-fields';
-import { OnboardedConfirmation } from '@/components/hr/onboard-employee-dialog';
+import {
+  ExistingEmployeeNoOffer,
+  OnboardedConfirmation,
+  OnboardingModeTabsList,
+} from '@/components/hr/onboard-employee-dialog';
 
 const SELECT_CLASS =
   'flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
@@ -34,27 +48,40 @@ const EMPTY: SuperAdminOnboardInput = {
   personalEmail: '',
   designation: '',
   dateOfJoining: '',
+  employeeId: '',
   officialEmail: '',
   salary: '', // no pre-fill — salary is required (zod min(1) + server @NotBlank); the field shows a placeholder
   location: 'Hyderabad',
 };
 
-/** Super Admin onboards into any company (§2): pick company → team (→ that team's HR) → fill Form 2. */
+// One form for both modes (see the HR dialog): the resolver follows the mode, so existing mode skips the offer.
+const NEW_HIRE_RESOLVER = zodResolver(SuperAdminOnboardSchema);
+const EXISTING_RESOLVER = zodResolver(SuperAdminOnboardExistingSchema) as unknown as typeof NEW_HIRE_RESOLVER;
+
+/**
+ * Super Admin onboards into any company (§2): pick company → team (→ that team's HR) → fill Form 2. A NEW hire
+ * also gets the offer letter; an EXISTING employee gets Form 2 only (§3.2).
+ */
 export function SuperAdminOnboardDialog() {
   const [open, setOpen] = React.useState(false);
-  const [result, setResult] = React.useState<{ email: string } | null>(null);
+  const [mode, setMode] = React.useState<OnboardingType>(OnboardingType.NEW_HIRE);
+  const [result, setResult] = React.useState<{ email: string; mode: OnboardingType } | null>(null);
   const queryClient = useQueryClient();
+  const existing = mode === OnboardingType.EXISTING_EMPLOYEE;
 
   const {
     register,
     handleSubmit,
     reset,
     watch,
+    getValues,
     setValue,
     setError,
-    formState: { errors, isSubmitting },
+    clearErrors,
+    trigger,
+    formState: { errors, isSubmitting, isSubmitted },
   } = useForm<SuperAdminOnboardInput>({
-    resolver: zodResolver(SuperAdminOnboardSchema),
+    resolver: existing ? EXISTING_RESOLVER : NEW_HIRE_RESOLVER,
     defaultValues: EMPTY,
   });
 
@@ -71,18 +98,24 @@ export function SuperAdminOnboardDialog() {
   const teamHasNoHr = Boolean(teamId) && teams.isSuccess && !derivedHr;
 
   const mutation = useApiMutation(
-    (values: SuperAdminOnboardInput) => {
+    ({ mode: m, values }: { mode: OnboardingType; values: SuperAdminOnboardInput }) => {
       const { companyId: cid, teamId: tid, salary, location, ...form2 } = values;
+      if (m === OnboardingType.EXISTING_EMPLOYEE) {
+        return onboardExistingForCompany(cid, { teamId: tid, form2 }); // incl. their existing ID — no offer letter
+      }
       return onboardForCompany(cid, {
         teamId: tid,
-        form2,
+        form2: { ...form2, employeeId: undefined }, // a new hire's ID is minted on approval
         offer: { salary, location: location || undefined },
       });
     },
     {
-      successMessage: (data) => `${data.employee.fullName} onboarded`,
-      onSuccess: (data) => {
-        setResult({ email: data.employee.email });
+      successMessage: (data, vars) =>
+        vars.mode === OnboardingType.EXISTING_EMPLOYEE
+          ? `Record created for ${data.employee.fullName}`
+          : `${data.employee.fullName} onboarded`,
+      onSuccess: (data, vars) => {
+        setResult({ email: data.employee.email, mode: vars.mode });
         reset(EMPTY);
         void queryClient.invalidateQueries({ queryKey: ['company', companyId] });
         void queryClient.invalidateQueries({ queryKey: ['companies'] });
@@ -91,7 +124,7 @@ export function SuperAdminOnboardDialog() {
       },
       onError: (error) => {
         if (error.status === 400 || error.status === 409) {
-          setError('personalEmail', { message: error.message });
+          setError(form2ErrorField(error.message), { message: error.message });
         }
       },
     },
@@ -99,14 +132,35 @@ export function SuperAdminOnboardDialog() {
 
   const onSubmit = handleSubmit((values) => {
     if (teamHasNoHr) return;
-    mutation.mutate(values);
+    mutation.mutate({ mode, values });
   });
+
+  const changeMode = (next: OnboardingType) => {
+    // A past joining date is valid only for an existing employee — don't carry it silently into a new hire.
+    if (next === OnboardingType.NEW_HIRE) {
+      const doj = getValues('dateOfJoining');
+      if (doj && doj < istTodayIso()) setValue('dateOfJoining', '');
+      // A new hire's ID is minted on approval and their official email is assigned later — drop what was typed.
+      setValue('employeeId', '');
+      setValue('officialEmail', '');
+    }
+    setMode(next);
+  };
+
+  // Re-check against the NEW mode's schema once its resolver is live (see the HR dialog).
+  React.useEffect(() => {
+    if (isSubmitted) void trigger();
+    else clearErrors();
+  }, [mode, isSubmitted, trigger, clearErrors]);
 
   const close = () => {
     setOpen(false);
     setResult(null);
+    setMode(OnboardingType.NEW_HIRE);
     reset(EMPTY);
   };
+
+  const busy = isSubmitting || mutation.isPending;
 
   return (
     <Dialog
@@ -115,6 +169,7 @@ export function SuperAdminOnboardDialog() {
         setOpen(next);
         if (!next) {
           setResult(null);
+          setMode(OnboardingType.NEW_HIRE);
           reset(EMPTY);
         }
       }}
@@ -127,7 +182,12 @@ export function SuperAdminOnboardDialog() {
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         {result ? (
-          <OnboardedConfirmation email={result.email} onAgain={() => setResult(null)} onDone={close} />
+          <OnboardedConfirmation
+            email={result.email}
+            onboardingType={result.mode}
+            onAgain={() => setResult(null)}
+            onDone={close}
+          />
         ) : (
           <>
             <DialogHeader>
@@ -135,89 +195,112 @@ export function SuperAdminOnboardDialog() {
               <DialogDescription>
                 Choose the company and team — the employee attaches to that team&apos;s HR — then fill
                 their Employee Info (Form 2).
+                {existing ? (
+                  <>
+                    {' '}
+                    For someone who already works there: this only creates the record — no offer letter and no
+                    email. The team&apos;s HR then enters their details and documents, and approves.
+                  </>
+                ) : null}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={onSubmit} className="space-y-6" noValidate>
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold">Company &amp; team</h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FieldWrap id="sa-onb-company" label="Company" error={errors.companyId?.message} required>
-                    <select
-                      id="sa-onb-company"
-                      className={SELECT_CLASS}
-                      aria-invalid={Boolean(errors.companyId)}
-                      {...register('companyId')}
-                      onChange={(e) => {
-                        setValue('companyId', e.target.value, { shouldValidate: true });
-                        setValue('teamId', '');
-                      }}
-                    >
-                      <option value="">Select a company…</option>
-                      {(companies.data ?? []).map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.code})
-                        </option>
-                      ))}
-                    </select>
-                  </FieldWrap>
+              <Tabs
+                value={mode}
+                onValueChange={(value) => changeMode(value as OnboardingType)}
+                className="space-y-6"
+              >
+                <OnboardingModeTabsList disabled={busy} />
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold">Company &amp; team</h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FieldWrap id="sa-onb-company" label="Company" error={errors.companyId?.message} required>
+                      <select
+                        id="sa-onb-company"
+                        className={SELECT_CLASS}
+                        aria-invalid={Boolean(errors.companyId)}
+                        {...register('companyId')}
+                        onChange={(e) => {
+                          setValue('companyId', e.target.value, { shouldValidate: true });
+                          setValue('teamId', '');
+                        }}
+                      >
+                        <option value="">Select a company…</option>
+                        {(companies.data ?? []).map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.code})
+                          </option>
+                        ))}
+                      </select>
+                    </FieldWrap>
 
-                  <FieldWrap id="sa-onb-team" label="Team" error={errors.teamId?.message} required>
-                    <select
-                      id="sa-onb-team"
-                      className={SELECT_CLASS}
-                      disabled={!companyId || teams.isLoading}
-                      aria-invalid={Boolean(errors.teamId)}
-                      {...register('teamId')}
-                    >
-                      <option value="">
-                        {!companyId
-                          ? 'Choose a company first'
-                          : teams.isLoading
-                            ? 'Loading teams…'
-                            : (teams.data ?? []).length === 0
-                              ? 'No teams in this company'
-                              : 'Select a team…'}
-                      </option>
-                      {(teams.data ?? []).map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
+                    <FieldWrap id="sa-onb-team" label="Team" error={errors.teamId?.message} required>
+                      <select
+                        id="sa-onb-team"
+                        className={SELECT_CLASS}
+                        disabled={!companyId || teams.isLoading}
+                        aria-invalid={Boolean(errors.teamId)}
+                        {...register('teamId')}
+                      >
+                        <option value="">
+                          {!companyId
+                            ? 'Choose a company first'
+                            : teams.isLoading
+                              ? 'Loading teams…'
+                              : (teams.data ?? []).length === 0
+                                ? 'No teams in this company'
+                                : 'Select a team…'}
                         </option>
-                      ))}
-                    </select>
-                  </FieldWrap>
-                </div>
-
-                {teamId ? (
-                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                    <span className="text-muted-foreground">Onboarding HR: </span>
-                    {derivedHr ? (
-                      <span className="font-medium">
-                        {derivedHr.name}{' '}
-                        <span className="text-muted-foreground">· {derivedHr.email}</span>
-                      </span>
-                    ) : (
-                      <span className="text-destructive">
-                        This team has no HR assigned — assign one before onboarding.
-                      </span>
-                    )}
+                        {(teams.data ?? []).map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </FieldWrap>
                   </div>
-                ) : null}
-              </section>
 
-              <EmployeeInfoFields
-                register={register}
-                errors={errors}
-                dojMin={istTodayIso()}
-                idPrefix="sa-onb"
-              />
-              <OfferTermsFields register={register} errors={errors} idPrefix="sa-onb" />
+                  {teamId ? (
+                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                      <span className="text-muted-foreground">Onboarding HR: </span>
+                      {derivedHr ? (
+                        <span className="font-medium">
+                          {derivedHr.name}{' '}
+                          <span className="text-muted-foreground">· {derivedHr.email}</span>
+                        </span>
+                      ) : (
+                        <span className="text-destructive">
+                          This team has no HR assigned — assign one before onboarding.
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
+                </section>
+
+                <EmployeeInfoFields
+                  register={register}
+                  errors={errors}
+                  // A new hire joins from today on; an existing employee has already joined (today at the latest).
+                  dojMin={existing ? undefined : istTodayIso()}
+                  dojMax={existing ? istTodayIso() : undefined}
+                  personalEmailHint={existing ? EXISTING_EMAIL_HINT : undefined}
+                  enterCompanyIdentity={existing}
+                  idPrefix="sa-onb"
+                />
+                <TabsContent value={OnboardingType.NEW_HIRE} className="mt-0" tabIndex={-1}>
+                  <OfferTermsFields register={register} errors={errors} idPrefix="sa-onb" />
+                </TabsContent>
+                <TabsContent value={OnboardingType.EXISTING_EMPLOYEE} className="mt-0" tabIndex={-1}>
+                  <ExistingEmployeeNoOffer />
+                </TabsContent>
+              </Tabs>
 
               <div className="sticky bottom-0 -mx-6 -mb-6 flex justify-end gap-2 border-t bg-background px-6 py-4">
-                <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                <Button type="button" variant="ghost" onClick={close}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting || mutation.isPending || teamHasNoHr}>
-                  {isSubmitting || mutation.isPending ? 'Onboarding…' : 'Onboard & email'}
+                <Button type="submit" disabled={busy || teamHasNoHr}>
+                  {existing ? (busy ? 'Creating…' : 'Create record') : busy ? 'Onboarding…' : 'Onboard & email'}
                 </Button>
               </div>
             </form>

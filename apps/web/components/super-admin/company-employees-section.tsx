@@ -7,6 +7,7 @@ import type { EmployeeStatus } from '@/lib/contract';
 import { getCompanyEmployees } from '@/lib/api/employees';
 import { useApiQuery } from '@/lib/api/hooks';
 import { companyParam } from '@/lib/company-url';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -128,7 +129,15 @@ export function CompanyEmployeesSection({ companyId, companySlug }: { companyId:
               <tbody>
                 {data.content.map((e) => (
                   <tr key={e.id} className="border-t hover:bg-accent/40">
-                    <td className="px-4 py-3 font-medium">{e.fullName ?? '—'}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {e.fullName ?? '—'}
+                      {/* Onboarded as an existing employee (§3.2) — no offer letter in their flow. */}
+                      {e.onboardingType === 'EXISTING_EMPLOYEE' ? (
+                        <Badge variant="neutral" className="ml-2 align-middle">
+                          Existing
+                        </Badge>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">{e.email}</td>
                     <td className="px-4 py-3 text-muted-foreground">{e.designation ?? '—'}</td>
                     <td className="px-4 py-3">

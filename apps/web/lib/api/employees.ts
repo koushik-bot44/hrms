@@ -68,6 +68,29 @@ export function onboardForCompany(
 }
 
 /**
+ * Onboard an EXISTING employee (§3.2) — someone who already works at the company but has no record. Creates the
+ * record from Form 2 (incl. the employee ID + official email they already have): no offer letter and no email.
+ * HR then enters the rest of their record and approves.
+ */
+export function onboardExistingEmployee(form2: Form2Values): Promise<OnboardEmployeeResult> {
+  return apiFetch<OnboardEmployeeResult>('/employees/existing', {
+    method: 'POST',
+    body: { form2 },
+  });
+}
+
+/** SUPER_ADMIN onboards an EXISTING employee into a chosen company by selecting a team (Form 2 only). */
+export function onboardExistingForCompany(
+  companyId: string,
+  body: { teamId: string; form2: Form2Values },
+): Promise<OnboardEmployeeResult> {
+  return apiFetch<OnboardEmployeeResult>(`/companies/${companyId}/employees/existing`, {
+    method: 'POST',
+    body,
+  });
+}
+
+/**
  * Edit an INVITED employee's Form 2 (§3.2) — HR (own onboarded) / SUPER_ADMIN (any). The API rejects a
  * manual edit once the employee starts onboarding (409). Changing the personal email re-sends the invite
  * to the new address.

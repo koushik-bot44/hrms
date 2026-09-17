@@ -2277,6 +2277,373 @@
         }
       }
     },
+    "/employees/existing": {
+      "post": {
+        "tags": [
+          "employees-controller"
+        ],
+        "operationId": "onboardExisting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardExistingEmployeeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardEmployeeResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/onboarding": {
+      "get": {
+        "tags": [
+          "hr-onboarding-controller"
+        ],
+        "operationId": "hrOnboardingDashboard",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingDashboard"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/onboarding/form1": {
+      "put": {
+        "tags": [
+          "hr-onboarding-controller"
+        ],
+        "operationId": "hrSaveForm1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Form1Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Form1View"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/onboarding/form3": {
+      "put": {
+        "tags": [
+          "hr-onboarding-controller"
+        ],
+        "operationId": "hrSaveForm3",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Form3Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Form3EntryView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/onboarding/signature": {
+      "put": {
+        "tags": [
+          "hr-onboarding-controller"
+        ],
+        "operationId": "hrSaveSignature",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignatureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignatureView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/onboarding/documents": {
+      "post": {
+        "tags": [
+          "hr-onboarding-controller"
+        ],
+        "operationId": "hrRequestUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedUpload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/onboarding/documents/{documentId}/confirm": {
+      "post": {
+        "tags": [
+          "hr-onboarding-controller"
+        ],
+        "operationId": "hrConfirmUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/onboarding/documents/{documentId}": {
+      "delete": {
+        "tags": [
+          "hr-onboarding-controller"
+        ],
+        "operationId": "hrDeleteDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingDashboard"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/onboarding/documents/{documentId}/url": {
+      "get": {
+        "tags": [
+          "hr-onboarding-controller"
+        ],
+        "operationId": "hrDocumentUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}/onboarding/approve": {
+      "post": {
+        "tags": [
+          "hr-onboarding-controller"
+        ],
+        "operationId": "approveExisting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/employees/{id}/reveal": {
       "post": {
         "tags": [
@@ -3383,6 +3750,46 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SuperAdminOnboardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardEmployeeResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{companyId}/employees/existing": {
+      "post": {
+        "tags": [
+          "company-employees-controller"
+        ],
+        "operationId": "onboardExisting_1",
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuperAdminOnboardExistingRequest"
               }
             }
           },
@@ -8065,6 +8472,13 @@
             "items": {
               "$ref": "#/components/schemas/GeneratedDocumentView"
             }
+          },
+          "onboardingType": {
+            "type": "string",
+            "enum": [
+              "NEW_HIRE",
+              "EXISTING_EMPLOYEE"
+            ]
           }
         }
       },
@@ -8715,6 +9129,11 @@
             "pattern": "|\\d{4}-\\d{2}-\\d{2}",
             "type": "string"
           },
+          "employeeId": {
+            "maxLength": 40,
+            "minLength": 0,
+            "type": "string"
+          },
           "officialEmail": {
             "maxLength": 180,
             "minLength": 0,
@@ -8765,6 +9184,17 @@
           }
         }
       },
+      "OnboardExistingEmployeeRequest": {
+        "required": [
+          "form2"
+        ],
+        "type": "object",
+        "properties": {
+          "form2": {
+            "$ref": "#/components/schemas/Form2Request"
+          }
+        }
+      },
       "EmployeeSummaryView": {
         "type": "object",
         "properties": {
@@ -8801,6 +9231,13 @@
           },
           "createdAt": {
             "type": "string"
+          },
+          "onboardingType": {
+            "type": "string",
+            "enum": [
+              "NEW_HIRE",
+              "EXISTING_EMPLOYEE"
+            ]
           }
         }
       },
@@ -9550,6 +9987,21 @@
           }
         }
       },
+      "SuperAdminOnboardExistingRequest": {
+        "required": [
+          "form2",
+          "teamId"
+        ],
+        "type": "object",
+        "properties": {
+          "teamId": {
+            "type": "string"
+          },
+          "form2": {
+            "$ref": "#/components/schemas/Form2Request"
+          }
+        }
+      },
       "OtpVerifyRequest": {
         "required": [
           "email",
@@ -9823,6 +10275,13 @@
           },
           "inviteSentAt": {
             "type": "string"
+          },
+          "onboardingType": {
+            "type": "string",
+            "enum": [
+              "NEW_HIRE",
+              "EXISTING_EMPLOYEE"
+            ]
           }
         }
       },

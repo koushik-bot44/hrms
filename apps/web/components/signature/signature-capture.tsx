@@ -19,9 +19,12 @@ import {
 const ADOPT_TEXT =
   'By adopting it you agree it is the legal equivalent of your handwritten signature.';
 const MAX_UPLOAD = 5 * 1024 * 1024; // 5MB
+// The legal line under Adopt — overridable when someone adopts a signature on another person's behalf.
+const AdoptNoticeContext = React.createContext(ADOPT_TEXT);
 const ACCEPT = 'image/png,image/jpeg,image/webp';
 
-type Mode = 'draw' | 'generate' | 'upload' | 'clean';
+export type SignatureMode = 'draw' | 'generate' | 'upload' | 'clean';
+type Mode = SignatureMode;
 
 const MODES: { id: Mode; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'draw', label: 'Draw', icon: PenLine },
@@ -95,43 +98,52 @@ export function SignatureCapture({
   fullName,
   onAdopt,
   disabled,
+  modes,
+  adoptNotice = ADOPT_TEXT,
 }: {
   fullName?: string;
   onAdopt: (blob: Blob) => void;
   disabled?: boolean;
+  /** Restrict the offered modes (in this order); all four by default. */
+  modes?: SignatureMode[];
+  /** Replace the legal line under Adopt (e.g. HR adopting an employee's scanned signature). */
+  adoptNotice?: string;
 }) {
-  const [mode, setMode] = React.useState<Mode>('draw');
+  const offered = modes ? MODES.filter((m) => modes.includes(m.id)) : MODES;
+  const [mode, setMode] = React.useState<Mode>(offered[0]?.id ?? 'draw');
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Signature method">
-        {MODES.map((m) => {
-          const Icon = m.icon;
-          return (
-            <Button
-              key={m.id}
-              type="button"
-              size="sm"
-              role="tab"
-              aria-selected={mode === m.id}
-              variant={mode === m.id ? 'default' : 'outline'}
-              onClick={() => setMode(m.id)}
-              disabled={disabled}
-            >
-              <Icon className="size-4" />
-              {m.label}
-            </Button>
-          );
-        })}
-      </div>
+    <AdoptNoticeContext.Provider value={adoptNotice}>
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Signature method">
+          {offered.map((m) => {
+            const Icon = m.icon;
+            return (
+              <Button
+                key={m.id}
+                type="button"
+                size="sm"
+                role="tab"
+                aria-selected={mode === m.id}
+                variant={mode === m.id ? 'default' : 'outline'}
+                onClick={() => setMode(m.id)}
+                disabled={disabled}
+              >
+                <Icon className="size-4" />
+                {m.label}
+              </Button>
+            );
+          })}
+        </div>
 
-      {mode === 'draw' ? <DrawMode onAdopt={onAdopt} disabled={disabled} /> : null}
-      {mode === 'generate' ? (
-        <GenerateMode fullName={fullName} onAdopt={onAdopt} disabled={disabled} />
-      ) : null}
-      {mode === 'upload' ? <UploadMode clean={false} onAdopt={onAdopt} disabled={disabled} /> : null}
-      {mode === 'clean' ? <UploadMode clean onAdopt={onAdopt} disabled={disabled} /> : null}
-    </div>
+        {mode === 'draw' ? <DrawMode onAdopt={onAdopt} disabled={disabled} /> : null}
+        {mode === 'generate' ? (
+          <GenerateMode fullName={fullName} onAdopt={onAdopt} disabled={disabled} />
+        ) : null}
+        {mode === 'upload' ? <UploadMode clean={false} onAdopt={onAdopt} disabled={disabled} /> : null}
+        {mode === 'clean' ? <UploadMode clean onAdopt={onAdopt} disabled={disabled} /> : null}
+      </div>
+    </AdoptNoticeContext.Provider>
   );
 }
 
@@ -145,10 +157,11 @@ function AdoptFooter({
   disabled: boolean;
   hint?: string;
 }) {
+  const notice = React.useContext(AdoptNoticeContext);
   return (
     <div className="space-y-2">
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      <p className="text-xs text-muted-foreground">{ADOPT_TEXT}</p>
+      <p className="text-xs text-muted-foreground">{notice}</p>
       <Button type="button" size="sm" onClick={onAdopt} disabled={disabled}>
         Adopt signature
       </Button>

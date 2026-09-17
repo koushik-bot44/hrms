@@ -903,6 +903,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/existing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["onboardExisting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["hrOnboardingDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/onboarding/form1": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["hrSaveForm1"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/onboarding/form3": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["hrSaveForm3"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/onboarding/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["hrSaveSignature"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/onboarding/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["hrRequestUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/onboarding/documents/{documentId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["hrConfirmUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/onboarding/documents/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["hrDeleteDocument"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/onboarding/documents/{documentId}/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["hrDocumentUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}/onboarding/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approveExisting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees/{id}/reveal": {
         parameters: {
             query?: never;
@@ -1297,6 +1457,22 @@ export interface paths {
         get: operations["list_5"];
         put?: never;
         post: operations["onboard_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/employees/existing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["onboardExisting_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3180,6 +3356,8 @@ export interface components {
             documents?: components["schemas"]["DocumentView"][];
             signature?: components["schemas"]["SignatureView"];
             generatedDocuments?: components["schemas"]["GeneratedDocumentView"][];
+            /** @enum {string} */
+            onboardingType?: "NEW_HIRE" | "EXISTING_EMPLOYEE";
         };
         AcceptOfferRequest: {
             consentAccepted?: boolean;
@@ -3368,6 +3546,7 @@ export interface components {
         Form2Request: {
             fullName: string;
             dateOfJoining?: string;
+            employeeId?: string;
             officialEmail?: string;
             personalEmail: string;
             designation: string;
@@ -3380,6 +3559,9 @@ export interface components {
             form2: components["schemas"]["Form2Request"];
             offer: components["schemas"]["OfferTermsRequest"];
         };
+        OnboardExistingEmployeeRequest: {
+            form2: components["schemas"]["Form2Request"];
+        };
         EmployeeSummaryView: {
             id?: string;
             employeeCode?: string;
@@ -3390,6 +3572,8 @@ export interface components {
             /** @enum {string} */
             status?: "INVITED" | "IN_PROGRESS" | "SUBMITTED" | "REVISION_REQUESTED" | "HR_VERIFIED" | "APPROVED" | "REJECTED" | "OFFBOARDED";
             createdAt?: string;
+            /** @enum {string} */
+            onboardingType?: "NEW_HIRE" | "EXISTING_EMPLOYEE";
         };
         OnboardEmployeeResult: {
             employee?: components["schemas"]["EmployeeSummaryView"];
@@ -3617,6 +3801,10 @@ export interface components {
             form2: components["schemas"]["Form2Request"];
             offer: components["schemas"]["OfferTermsRequest"];
         };
+        SuperAdminOnboardExistingRequest: {
+            teamId: string;
+            form2: components["schemas"]["Form2Request"];
+        };
         OtpVerifyRequest: {
             email: string;
             otp: string;
@@ -3703,6 +3891,8 @@ export interface components {
             offer?: components["schemas"]["OfferRecordView"];
             accountDeactivated?: boolean;
             inviteSentAt?: string;
+            /** @enum {string} */
+            onboardingType?: "NEW_HIRE" | "EXISTING_EMPLOYEE";
         };
         OfferRecordView: {
             /** @enum {string} */
@@ -6287,6 +6477,247 @@ export interface operations {
             };
         };
     };
+    onboardExisting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardExistingEmployeeRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OnboardEmployeeResult"];
+                };
+            };
+        };
+    };
+    hrOnboardingDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OnboardingDashboard"];
+                };
+            };
+        };
+    };
+    hrSaveForm1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Form1Request"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Form1View"];
+                };
+            };
+        };
+    };
+    hrSaveForm3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Form3Request"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Form3EntryView"][];
+                };
+            };
+        };
+    };
+    hrSaveSignature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignatureRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SignatureView"];
+                };
+            };
+        };
+    };
+    hrRequestUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedUpload"];
+                };
+            };
+        };
+    };
+    hrConfirmUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DocumentView"];
+                };
+            };
+        };
+    };
+    hrDeleteDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OnboardingDashboard"];
+                };
+            };
+        };
+    };
+    hrDocumentUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedView"];
+                };
+            };
+        };
+    };
+    approveExisting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DecisionResult"];
+                };
+            };
+        };
+    };
     reveal: {
         parameters: {
             query?: never;
@@ -6967,6 +7398,32 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SuperAdminOnboardRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OnboardEmployeeResult"];
+                };
+            };
+        };
+    };
+    onboardExisting_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuperAdminOnboardExistingRequest"];
             };
         };
         responses: {

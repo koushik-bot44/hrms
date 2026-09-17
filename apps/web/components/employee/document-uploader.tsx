@@ -12,13 +12,13 @@ import {
   type DocumentDto,
   type DocumentType,
 } from '@/lib/contract';
-import { deleteDocument, getDocumentViewUrl, uploadDocument } from '@/lib/api/onboarding';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { surface } from '@/components/ui/surface';
 import { StatusBadge } from '@/components/status-badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
+import { useOnboardingTarget } from '@/components/employee/onboarding-target';
 
 /** One Form 4 upload slot (docType + optional employment groupIndex 1..4). */
 export function DocumentUploader({
@@ -37,6 +37,8 @@ export function DocumentUploader({
   disabled?: boolean;
 }) {
   const queryClient = useQueryClient();
+  // The employee's own record, or an existing employee's record HR is entering (§3.2).
+  const target = useOnboardingTarget();
   const [progress, setProgress] = React.useState<number | null>(null);
   const [removingId, setRemovingId] = React.useState<string | null>(null);
   const mine = documents.filter(
@@ -55,16 +57,16 @@ export function DocumentUploader({
       if (!file) return;
       setProgress(0);
       try {
-        await uploadDocument(file, docType, groupIndex, setProgress);
+        await target.uploadDocument(file, docType, groupIndex, setProgress);
         toast.success(`${file.name} uploaded`);
-        await queryClient.invalidateQueries({ queryKey: ['onboarding'] });
+        await queryClient.invalidateQueries({ queryKey: target.queryKey });
       } catch (error) {
         toast.error(error instanceof ApiError ? error.message : 'Upload failed');
       } finally {
         setProgress(null);
       }
     },
-    [docType, groupIndex, queryClient],
+    [docType, groupIndex, queryClient, target],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -77,7 +79,7 @@ export function DocumentUploader({
 
   const view = async (id: string) => {
     try {
-      const { url } = await getDocumentViewUrl(id);
+      const { url } = await target.getDocumentViewUrl(id);
       window.open(url, '_blank', 'noopener');
     } catch {
       toast.error('Could not open the document');
@@ -87,9 +89,9 @@ export function DocumentUploader({
   const remove = async (id: string) => {
     setRemovingId(id);
     try {
-      await deleteDocument(id);
+      await target.deleteDocument(id);
       toast.success('Document removed');
-      await queryClient.invalidateQueries({ queryKey: ['onboarding'] });
+      await queryClient.invalidateQueries({ queryKey: target.queryKey });
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : 'Could not remove the document');
     } finally {

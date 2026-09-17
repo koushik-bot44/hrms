@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { istTodayIso } from '../../date';
 import { Form2Schema } from './onboarding';
 import { MailLocalPartSchema } from './mail';
 
@@ -46,3 +47,46 @@ export const SuperAdminOnboardSchema = Form2Schema.extend(OfferTermsSchema.shape
   teamId: z.string().min(1, 'Select a team'),
 });
 export type SuperAdminOnboardInput = z.infer<typeof SuperAdminOnboardSchema>;
+
+/**
+ * An EXISTING employee's joining date (§3.2): they already work here, so any past date is valid — but not a
+ * future one (today in IST is the latest). Compared as yyyy-MM-dd strings once the Form-2 format check passes.
+ */
+const ExistingDateOfJoiningSchema = Form2Schema.shape.dateOfJoining.refine(
+  (v) => v <= istTodayIso(),
+  'Date of joining cannot be in the future',
+);
+
+/**
+ * "Existing employee" onboarding (§3.2): someone who already works at the company but has no record. HR fills
+ * Form 2 — no offer terms, no offer letter, no email — including the employee ID and official email they
+ * ALREADY have (kept on approval, never minted). HR then enters the rest of their record and approves.
+ * Body: `POST /employees/existing` `{ form2 }`.
+ */
+export const OnboardExistingEmployeeSchema = Form2Schema.extend({
+  dateOfJoining: ExistingDateOfJoiningSchema,
+  employeeId: z
+    .string()
+    .trim()
+    .min(1, 'Employee ID is required')
+    .max(40, 'Employee ID is too long')
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, 'Use letters, numbers, and . _ -'),
+  officialEmail: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, 'Official email is required')
+    .email('Enter a valid email')
+    .max(180),
+});
+export type OnboardExistingEmployeeInput = z.infer<typeof OnboardExistingEmployeeSchema>;
+
+/**
+ * SUPER_ADMIN variant of the existing-employee onboard (§2): company → team → Form 2 only.
+ * Body: `POST /companies/{companyId}/employees/existing` `{ teamId, form2 }`.
+ */
+export const SuperAdminOnboardExistingSchema = OnboardExistingEmployeeSchema.extend({
+  companyId: z.string().min(1, 'Select a company'),
+  teamId: z.string().min(1, 'Select a team'),
+});
+export type SuperAdminOnboardExistingInput = z.infer<typeof SuperAdminOnboardExistingSchema>;

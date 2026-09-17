@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import {
@@ -32,6 +33,12 @@ import { EditEmployeeInfoDialog } from '@/components/employee-info/edit-employee
 type ReviewVars = { kind: ItemKind; id: string; decision: ReviewDecision; reason?: string };
 
 const recordKey = (id: string) => ['hr-record', id] as const;
+
+// HR entry for an existing employee pulls in the whole onboarding stepper — loaded only when such a record opens.
+const ExistingEmployeeEntry = dynamic(
+  () => import('@/components/hr/existing-employee-entry').then((m) => m.ExistingEmployeeEntry),
+  { loading: () => <RecordSkeleton /> },
+);
 
 /**
  * Apply a decision locally so the badges + approve/reject gate + derived employee status react
@@ -141,6 +148,29 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
     );
   }
 
+  // An EXISTING employee's record is entered by HR until approved (§3.2) — no invite, no verify step.
+  if (
+    record.onboardingType === 'EXISTING_EMPLOYEE' &&
+    (record.status === 'INVITED' || record.status === 'IN_PROGRESS')
+  ) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" size="sm" onClick={() => router.push(cp('/hr/employees'))}>
+          <ArrowLeft className="size-4" />
+          Back to queue
+        </Button>
+        <ExistingEmployeeEntry
+          record={record}
+          onChanged={() => {
+            void queryClient.invalidateQueries({ queryKey: recordKey(employeeId) });
+            void queryClient.invalidateQueries({ queryKey: ['hr-employees'] });
+            void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+          }}
+        />
+      </div>
+    );
+  }
+
   function verify(kind: ItemKind, id: string) {
     reviewMutation.mutate({ kind, id, decision: 'VERIFIED' });
   }
@@ -180,6 +210,7 @@ export function VerificationWorkspace({ employeeId }: { employeeId: string }) {
               employeeId={record.id}
               form2={record.form2}
               employeeCode={record.employeeCode}
+              onboardingType={record.onboardingType}
               onSaved={() => queryClient.invalidateQueries({ queryKey: recordKey(employeeId) })}
             />
           ) : null
