@@ -1,6 +1,7 @@
 package com.ihrms.domain.model;
 
 import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.domain.enums.OnboardingType;
 import com.ihrms.domain.support.CuidId;
 import com.ihrms.domain.support.EncryptedStringConverter;
 import jakarta.persistence.Column;
@@ -69,6 +70,16 @@ public class Employee {
   @JdbcTypeCode(SqlTypes.NAMED_ENUM)
   @Column(name = "status", nullable = false)
   private EmployeeStatus status = EmployeeStatus.INVITED;
+
+  /**
+   * How the record was opened (§3.2): a NEW_HIRE self-onboards behind the offer gate; an EXISTING_EMPLOYEE's
+   * record is HR-entered (no offer, no emails) and approval keeps the ID HR typed — which lives in
+   * form2_info.data until then, because a non-null {@code employeeCode} means "approved" to viewer roles (§6).
+   */
+  @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+  @Column(name = "onboardingType", nullable = false)
+  private OnboardingType onboardingType = OnboardingType.NEW_HIRE;
 
   /**
    * Whether Form 4 requires an ITR upload for this employee (§3.2). Set true for NEW onboardings; existing

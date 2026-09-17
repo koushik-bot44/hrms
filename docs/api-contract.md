@@ -186,6 +186,12 @@ type EmployeeSummary = { id; employeeCode; email; status: EmployeeStatus; create
 |---|---|---|---|---|
 | GET | `/employees` | — | `200 EmployeeSummary[]` | Only employees this HR onboarded. |
 | POST | `/employees` | `{ email: string }` | `201 { employee: EmployeeSummary; loginUrl: string }` | Mints `{CODE}-EMP-{NNNNNN}` (atomic per-company), status `INVITED`, emails the ID + login link. |
+| POST | `/employees/existing` | `{ form2 }` (incl. `employeeId` + `officialEmail` the person ALREADY has) | `201 { employee: EmployeeSummary; loginUrl: null }` | EXISTING employee (§3.2, records-only): status `IN_PROGRESS`, no offer, no invite token, **no email**. `dateOfJoining` ≤ today (IST) else `400`; entered ID must be globally unused (`409`) and not `{CODE}-EMP-{NNNNNN}`-shaped (`400`). `employeeCode` stays `null` until approval. |
+| POST | `/companies/:companyId/employees/existing` | `{ teamId; form2 }` | `201` (as above) | `SUPER_ADMIN` variant — attaches to the chosen team's HR, who enters the record. |
+| GET | `/employees/:id/onboarding` | — | `200 OnboardingDashboard` | HR entry for an EXISTING employee (own onboarded; `409` for a new hire). Readable after approval. |
+| PUT | `/employees/:id/onboarding/form1` \| `/form3` \| `/signature` | as `/me/onboarding/*` | `200` | HR-entered writes (audited with the HR actor); `409` once approved. The signature is a scan of the employee's own signature. |
+| POST | `/employees/:id/onboarding/documents` (+ `/:documentId/confirm`, `DELETE /:documentId`, `GET /:documentId/url`) | as `/me/onboarding/documents*` | `201`/`200` | Same presigned upload flow, driven by HR. |
+| POST | `/employees/:id/onboarding/approve` | _none_ | `200 DecisionResult` | Completeness re-checked (`409` names the first missing item); sections/documents flip to `VERIFIED`; the ENTERED ID becomes `employeeCode` (never minted; uniqueness re-checked `409`); ApprovalRequest + manager notification as usual; **no email**. |
 
 ### 3.6 Employee onboarding (`/me/onboarding`) — `EMPLOYEE` (own record)
 

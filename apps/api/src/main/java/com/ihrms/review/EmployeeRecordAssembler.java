@@ -117,7 +117,8 @@ public class EmployeeRecordAssembler {
         offerService.recordOffer(employee.getId()),
         employee.isAccountDeactivated(),
         // "Invite last sent" — the active invite token's createdAt; drives the HR resend surface (§3.2/§6).
-        toIso(inviteTokens.sentAt(employee.getId())));
+        toIso(inviteTokens.sentAt(employee.getId())),
+        employee.getOnboardingType());
   }
 
   private static String toIso(java.time.Instant instant) {

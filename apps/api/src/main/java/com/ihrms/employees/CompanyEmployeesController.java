@@ -4,6 +4,7 @@ import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.employees.dto.EmployeeDtos.EmployeePage;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeResult;
+import com.ihrms.employees.dto.EmployeeDtos.SuperAdminOnboardExistingRequest;
 import com.ihrms.employees.dto.EmployeeDtos.SuperAdminOnboardRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -47,6 +48,20 @@ public class CompanyEmployeesController {
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     return employees.onboardForCompany(companyId, body, actor, request.getRemoteAddr());
+  }
+
+  /**
+   * SUPER_ADMIN onboards an EXISTING employee into a chosen company (§3.2): record only, attached to the
+   * selected team's HR — no offer, no invite, no email. That HR enters the record and approves, keeping the ID.
+   */
+  @PostMapping("/existing")
+  @ResponseStatus(HttpStatus.CREATED)
+  public OnboardEmployeeResult onboardExisting(
+      @PathVariable String companyId,
+      @Valid @RequestBody SuperAdminOnboardExistingRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return employees.onboardExistingForCompany(companyId, body, actor, request.getRemoteAddr());
   }
 
   /**

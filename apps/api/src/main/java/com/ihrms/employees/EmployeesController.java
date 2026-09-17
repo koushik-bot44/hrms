@@ -5,6 +5,7 @@ import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.employees.dto.EmployeeDtos.EmployeePage;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeRequest;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeResult;
+import com.ihrms.employees.dto.EmployeeDtos.OnboardExistingEmployeeRequest;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2Request;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,6 +45,19 @@ public class EmployeesController {
       @AuthenticationPrincipal IhrmsPrincipal.User actor,
       HttpServletRequest request) {
     return employees.onboard(body, actor, request.getRemoteAddr());
+  }
+
+  /**
+   * HR onboards an EXISTING employee (§3.2): record only — Form 2 incl. the employee ID + official email they
+   * already have; no offer, no invite, no email. HR enters the rest via {@code /employees/{id}/onboarding}.
+   */
+  @PostMapping("/existing")
+  @ResponseStatus(HttpStatus.CREATED)
+  public OnboardEmployeeResult onboardExisting(
+      @Valid @RequestBody OnboardExistingEmployeeRequest body,
+      @AuthenticationPrincipal IhrmsPrincipal.User actor,
+      HttpServletRequest request) {
+    return employees.onboardExisting(body, actor, request.getRemoteAddr());
   }
 
   /**

@@ -6,8 +6,11 @@ import com.ihrms.auth.AccountEmails;
 import com.ihrms.auth.AuthorizationService;
 import com.ihrms.auth.IhrmsPrincipal;
 import com.ihrms.auth.MailService;
+import com.ihrms.attendance.ShiftConfig;
 import com.ihrms.domain.enums.EmployeeStatus;
+import com.ihrms.domain.enums.OnboardingType;
 import com.ihrms.domain.enums.UserRole;
+import com.ihrms.domain.support.EmployeeCodes;
 import com.ihrms.domain.model.Company;
 import com.ihrms.domain.model.Employee;
 import com.ihrms.domain.model.Form2Info;
@@ -20,6 +23,8 @@ import com.ihrms.employees.dto.EmployeeDtos.EmployeePage;
 import com.ihrms.employees.dto.EmployeeDtos.EmployeeSummaryView;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeRequest;
 import com.ihrms.employees.dto.EmployeeDtos.OnboardEmployeeResult;
+import com.ihrms.employees.dto.EmployeeDtos.OnboardExistingEmployeeRequest;
+import com.ihrms.employees.dto.EmployeeDtos.SuperAdminOnboardExistingRequest;
 import com.ihrms.employees.dto.EmployeeDtos.SuperAdminOnboardRequest;
 import com.ihrms.onboarding.FormMappers;
 import com.ihrms.onboarding.OfferService;
@@ -31,6 +36,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -106,9 +112,96 @@ public class EmployeesService {
    */
   public OnboardEmployeeResult onboardForCompany(
       String companyId, SuperAdminOnboardRequest input, IhrmsPrincipal.User actor, String ip) {
+    return createAndInvite(companyId, teamHrFor(companyId, input.teamId()), input.form2(), input.offer(), actor, ip);
+  }
+
+  // --- EXISTING employees (§3.2): records-only onboarding, entered by HR -------
+
+  /**
+   * HR onboards an EXISTING employee (already on the payroll, no IHRMS record) into their own company. The
+   * record is created from Form 2 — including the employee ID + official email the person ALREADY has — with
+   * NO offer, NO invite token and NO email of any kind: the employee never signs in to onboard. HR then enters
+   * Forms 1/3/4 + a scanned signature via {@code /employees/{id}/onboarding} and approves, keeping the ID.
+   */
+  public OnboardEmployeeResult onboardExisting(
+      OnboardExistingEmployeeRequest input, IhrmsPrincipal.User actor, String ip) {
+    return createExisting(companyOf(actor), actor.userId(), input.form2(), actor, ip);
+  }
+
+  /** SUPER_ADMIN onboards an EXISTING employee into a chosen company via a team; that team's HR enters the record. */
+  public OnboardEmployeeResult onboardExistingForCompany(
+      String companyId, SuperAdminOnboardExistingRequest input, IhrmsPrincipal.User actor, String ip) {
+    return createExisting(companyId, teamHrFor(companyId, input.teamId()), input.form2(), actor, ip);
+  }
+
+  /**
+   * Shared existing-employee creation (§3.2): validate Form 2 (joining date not in the future, the entered
+   * employee ID + official email present, well-formed and globally unused), create the record straight into
+   * {@code IN_PROGRESS} (there is no invite phase), and audit. The entered ID is kept in form2_info.data —
+   * {@code employeeCode} stays NULL until approval copies it over, because a non-null code means "approved"
+   * to the read-only viewer roles (§6). Nothing is emailed, ever.
+   */
+  private OnboardEmployeeResult createExisting(
+      String companyId, String onboardingHrId, Form2Request form2, IhrmsPrincipal.User actor, String ip) {
+    companies
+        .findById(companyId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
+
+    String email = norm(form2.personalEmail());
+    accountEmails.assertAvailableForEmployee(email); // unique across staff + employees (§6)
+    String fullName = form2.fullName().trim();
+    String designation = form2.designation().trim();
+    LocalDate dateOfJoining = parseDateOfJoining(form2.dateOfJoining());
+    assertJoiningNotInFuture(dateOfJoining); // they already work here — today (IST) at the latest
+    ExistingIdentity identity = validateExistingIdentity(form2, "");
+
+    Employee employee = new Employee();
+    employee.setFullName(fullName);
+    employee.setEmail(email);
+    employee.setDesignation(designation);
+    employee.setDateOfJoining(dateOfJoining);
+    employee.setCompanyId(companyId);
+    employee.setOnboardingHrId(onboardingHrId);
+    employee.setStatus(EmployeeStatus.IN_PROGRESS); // HR is entering the record — never INVITED
+    employee.setOnboardingType(OnboardingType.EXISTING_EMPLOYEE);
+    employee.setItrRequired(true); // same document bar as a new onboarding (§3.2, decision D3)
+    try {
+      employees.saveAndFlush(employee); // surfaces the global-unique-email violation as a 409
+    } catch (DataIntegrityViolationException e) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "An employee with this email already exists");
+    }
+
+    Form2Info f2 = new Form2Info();
+    f2.setEmployeeId(employee.getId());
+    Map<String, Object> data = FormMappers.toForm2Data(form2, null);
+    data.put("employeeId", identity.employeeId());
+    data.put("officialEmail", identity.officialEmail());
+    f2.setData(data);
+    form2s.save(f2);
+
+    audit.record(
+        new AuditActor("USER", actor.userId(), companyId),
+        "EMPLOYEE_ONBOARDED",
+        "Employee",
+        employee.getId(),
+        Map.of(
+            "email", email,
+            "fullName", fullName,
+            "designation", designation,
+            "onboardingType", OnboardingType.EXISTING_EMPLOYEE.name(),
+            "employeeId", identity.employeeId()),
+        ip);
+
+    // No invite link — nothing was sent and the employee never signs in to onboard.
+    return new OnboardEmployeeResult(summary(employee), null);
+  }
+
+  /** Resolve a SUPER_ADMIN's chosen team to its HR — shared by both SA onboarding modes (§2). */
+  private String teamHrFor(String companyId, String teamId) {
     Team team =
         teams
-            .findByIdAndCompanyId(input.teamId(), companyId)
+            .findByIdAndCompanyId(teamId, companyId)
             .orElseThrow(
                 () ->
                     new ResponseStatusException(
@@ -117,7 +210,7 @@ public class EmployeesService {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "The selected team has no HR assigned yet");
     }
-    return createAndInvite(companyId, team.getHrUserId(), input.form2(), input.offer(), actor, ip);
+    return team.getHrUserId();
   }
 
   /**
@@ -181,7 +274,11 @@ public class EmployeesService {
         "EMPLOYEE_ONBOARDED",
         "Employee",
         employee.getId(),
-        Map.of("email", email, "fullName", fullName, "designation", designation),
+        Map.of(
+            "email", email,
+            "fullName", fullName,
+            "designation", designation,
+            "onboardingType", OnboardingType.NEW_HIRE.name()),
         ip);
 
     return new OnboardEmployeeResult(summary(employee), loginUrl);
@@ -197,7 +294,15 @@ public class EmployeesService {
   public Form2View editForm2(
       String employeeId, Form2Request form2, IhrmsPrincipal.User actor, String ip) {
     Employee employee = loadAccessible(actor, employeeId);
-    if (employee.getStatus() != EmployeeStatus.INVITED) {
+    boolean existing = employee.getOnboardingType() == OnboardingType.EXISTING_EMPLOYEE;
+    if (existing) {
+      // HR enters an existing employee's record (§3.2) — Form 2 stays editable until approval.
+      if (employee.getStatus() != EmployeeStatus.INVITED
+          && employee.getStatus() != EmployeeStatus.IN_PROGRESS) {
+        throw new ResponseStatusException(
+            HttpStatus.CONFLICT, "Form 2 is locked once the employee is approved");
+      }
+    } else if (employee.getStatus() != EmployeeStatus.INVITED) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "Form 2 is locked once the employee starts onboarding");
     }
@@ -207,6 +312,11 @@ public class EmployeesService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
 
     LocalDate dateOfJoining = parseDateOfJoining(form2.dateOfJoining());
+    ExistingIdentity identity = null;
+    if (existing) {
+      assertJoiningNotInFuture(dateOfJoining);
+      identity = validateExistingIdentity(form2, employeeId);
+    }
     String newEmail = norm(form2.personalEmail());
     String oldEmail = employee.getEmail();
     boolean emailChanged = !newEmail.equals(oldEmail);
@@ -235,10 +345,17 @@ public class EmployeesService {
                   created.setEmployeeId(employeeId);
                   return created;
                 });
-    f2.setData(FormMappers.toForm2Data(form2, f2.getData()));
+    Map<String, Object> data = FormMappers.toForm2Data(form2, f2.getData());
+    if (identity != null) {
+      data.put("employeeId", identity.employeeId());
+      data.put("officialEmail", identity.officialEmail());
+    }
+    f2.setData(data);
     form2s.save(f2);
 
-    if (emailChanged) {
+    // An EXISTING employee is never emailed (§3.2) — an email change updates the record, nothing more.
+    boolean reinvited = emailChanged && !existing;
+    if (reinvited) {
       // The personal email IS the login identity — re-invite the new address (a fresh token that revokes the
       // prior link) to the new address; the old gets nothing.
       String token = inviteTokens.issueFor(employee.getId());
@@ -258,7 +375,7 @@ public class EmployeesService {
         "FORM2_UPDATED",
         "Form2Info",
         f2.getId(),
-        Map.of("employeeId", employeeId, "reinvited", emailChanged),
+        Map.of("employeeId", employeeId, "reinvited", reinvited),
         ip);
 
     return FormMappers.form2View(f2, employee.getEmployeeCode());
@@ -290,6 +407,10 @@ public class EmployeesService {
    */
   public OnboardEmployeeResult resendInvite(String employeeId, IhrmsPrincipal.User actor, String ip) {
     Employee employee = loadAccessible(actor, employeeId);
+    if (employee.getOnboardingType() == OnboardingType.EXISTING_EMPLOYEE) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "An existing employee is onboarded by HR — there is no invite to resend");
+    }
     if (employee.getStatus() != EmployeeStatus.INVITED) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "The invite can only be resent while the employee is still invited");
@@ -413,7 +534,62 @@ public class EmployeesService {
         e.getDesignation(),
         e.getDateOfJoining() == null ? null : e.getDateOfJoining().toString(),
         e.getStatus(),
-        e.getCreatedAt().toString());
+        e.getCreatedAt().toString(),
+        e.getOnboardingType());
+  }
+
+  /** Charset for an HR-entered employee ID (§3.2) — mirrors the web's OnboardExistingEmployeeSchema. */
+  private static final Pattern EXISTING_EMPLOYEE_ID = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]*$");
+
+  /** Loose email shape for the entered official email (the web enforces the strict zod .email()). */
+  private static final Pattern OFFICIAL_EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+
+  private record ExistingIdentity(String employeeId, String officialEmail) {}
+
+  /**
+   * The company identity an EXISTING employee already has (§3.2): a required, well-formed employee ID that is
+   * unused anywhere (minted codes + other pending entries, case-insensitive; {@code excludeEmployeeRowId}
+   * lets an edit keep its own), never shaped like a system-mintable code, plus a required official email.
+   * Every message names its field ("Employee ID …" / "Official email …" / "… joining …") — the web routes
+   * server errors onto the matching input by that wording.
+   */
+  private ExistingIdentity validateExistingIdentity(Form2Request form2, String excludeEmployeeRowId) {
+    String id = form2.employeeId() == null ? "" : form2.employeeId().trim();
+    if (id.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee ID is required");
+    }
+    if (id.length() > 40) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee ID is too long");
+    }
+    if (!EXISTING_EMPLOYEE_ID.matcher(id).matches()) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Employee ID may use letters, numbers, and . _ -");
+    }
+    // A {CODE}-EMP-{NNNNNN} shape could collide with a code the sequence mints later (§5) — refuse it.
+    if (EmployeeCodes.isValid(id.toUpperCase(java.util.Locale.ROOT))) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "This employee ID format is reserved for system-assigned IDs");
+    }
+    if (employees.enteredEmployeeIdInUse(id, excludeEmployeeRowId)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "This employee ID is already in use");
+    }
+    String official =
+        form2.officialEmail() == null ? "" : form2.officialEmail().trim().toLowerCase();
+    if (official.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Official email is required");
+    }
+    if (!OFFICIAL_EMAIL.matcher(official).matches()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enter a valid official email");
+    }
+    return new ExistingIdentity(id, official);
+  }
+
+  /** An existing employee has already joined (§3.2): the date may be any past day, today (IST) at the latest. */
+  private static void assertJoiningNotInFuture(LocalDate dateOfJoining) {
+    if (dateOfJoining.isAfter(LocalDate.now(ShiftConfig.ZONE))) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Date of joining cannot be in the future");
+    }
   }
 
   private String companyOf(IhrmsPrincipal.User actor) {

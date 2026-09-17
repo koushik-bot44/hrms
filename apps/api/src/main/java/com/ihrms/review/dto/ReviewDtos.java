@@ -5,6 +5,7 @@ import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.DocumentType;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.GeneratedDocumentKind;
+import com.ihrms.domain.enums.OnboardingType;
 import com.ihrms.onboarding.dto.OfferDtos.OfferRecordView;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form1View;
 import com.ihrms.onboarding.dto.OnboardingDtos.Form2View;
@@ -112,7 +113,9 @@ public final class ReviewDtos {
       boolean accountDeactivated,
       // When the active onboarding invite was last sent (§3.2/§6) — drives the HR "Resend invite" surface for
       // INVITED employees. Null once there is no active token (e.g. after onboarding completes).
-      String inviteSentAt) {}
+      String inviteSentAt,
+      // How the record was opened (§3.2) — an EXISTING_EMPLOYEE's record is HR-entered (no offer, no invite).
+      OnboardingType onboardingType) {}
 
   /** The plaintext sensitive values returned by the explicit, audited reveal action (§6). */
   public record RevealedSensitive(

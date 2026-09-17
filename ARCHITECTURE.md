@@ -301,6 +301,29 @@ trusted image; *Upload & clean* does in-browser grayscale → adaptive threshold
 is an **explicit action** carrying the line *"By adopting it you agree it is the legal equivalent of your
 handwritten signature."* Future flows MUST reuse this component — never re-implement capture.
 
+### 3.2a Existing-employee onboarding (records-only, HR-entered)
+
+Some people ALREADY work at the company but have no IHRMS record. For them onboarding is a
+**data-entry exercise, not a hiring flow**: there is **no offer letter, no invite and no email of any
+kind** — the employee never signs in to onboard.
+
+- **Create** — HR (`POST /employees/existing`) or Super Admin (`POST /companies/{id}/employees/existing`,
+  choosing the team whose HR will enter the record) submits Form 2 **including the employee ID and
+  official email the person already has**. The record is born `IN_PROGRESS` with
+  `onboardingType = EXISTING_EMPLOYEE`. The entered ID must be globally unused (against minted codes AND
+  other pending entries, case-insensitive) and may not be shaped like a system-mintable
+  `{CODE}-EMP-{NNNNNN}` code; the joining date may be any past day, today (IST) at the latest.
+- **The entered ID is NOT the employee code yet.** It lives in `form2_info.data` until approval —
+  `employees.employeeCode` stays NULL, because a non-null code means "approved" to the read-only viewer
+  roles (§6). Form 2 stays editable (HR/SA) until approval; a personal-email change re-invites nobody.
+- **Entry** — HR fills Forms 1/3/4 and uploads a **scan of the employee's signature** through
+  `/employees/{id}/onboarding` (the same shapes and storage as the employee's own `/me/onboarding`,
+  with the HR user as the audited actor and no offer gate).
+- **Approve** — no separate verify step (HR entered the data): `POST /employees/{id}/onboarding/approve`
+  re-checks the same completeness bar as the employee submit, flips every section/document to
+  `VERIFIED`, copies the entered ID onto `employeeCode` (uniqueness re-checked; never minted), writes
+  the ApprovalRequest + manager notification exactly like a normal approval — and sends **no email**.
+
 ### 3.3 Verification & approval
 **Form 2 is not verified** — HR/SA authored it at onboard, so it carries no Verify / Send-back action
 and is **not** part of the routing-to-Manager gate. HR verifies **Forms 1, 3, 4 (+ documents)** only;

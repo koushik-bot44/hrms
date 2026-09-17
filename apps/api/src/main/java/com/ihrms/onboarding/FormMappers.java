@@ -174,7 +174,8 @@ public final class FormMappers {
     Map<String, Object> d = e.getData() == null ? Map.of() : e.getData();
     return new Form2View(
         str(d, "fullName"),
-        employeeCode,
+        // A minted/kept code once approved; before that an EXISTING employee's HR-entered ID (§3.2).
+        employeeCode != null ? employeeCode : str(d, "employeeId"),
         str(d, "dateOfJoining"),
         str(d, "officialEmail"),
         str(d, "personalEmail"),

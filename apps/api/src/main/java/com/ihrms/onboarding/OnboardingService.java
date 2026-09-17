@@ -14,6 +14,7 @@ import com.ihrms.domain.model.Form1Personal;
 import com.ihrms.domain.model.Form2Info;
 import com.ihrms.domain.model.Form3PrevEmployment;
 import com.ihrms.domain.enums.NotificationType;
+import com.ihrms.domain.enums.OnboardingType;
 import com.ihrms.domain.model.GeneratedDocument;
 import com.ihrms.domain.model.Notification;
 import com.ihrms.domain.model.Signature;
@@ -493,7 +494,8 @@ public class OnboardingService {
 
   // --- internals ------------------------------------------------------------
 
-  private OnboardingDashboard dashboardOf(Employee employee) {
+  /** The dashboard for a given record — shared with HR's existing-employee entry surface (§3.2). */
+  OnboardingDashboard dashboardOf(Employee employee) {
     // Form 1's view surfaces the relocated fields from their form2_info storage (§3.2); Form 2 itself is
     // HR/SA-authored and NEVER exposed to the employee.
     Form2Info f2 = form2s.findByEmployeeId(employee.getId()).orElse(null);
@@ -530,7 +532,8 @@ public class OnboardingService {
         form3,
         docs,
         signature,
-        gen);
+        gen,
+        employee.getOnboardingType());
   }
 
   private List<Form3EntryView> form3Views(String employeeId, FormMappers.Mode mode) {

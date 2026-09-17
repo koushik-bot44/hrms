@@ -121,4 +121,19 @@ public interface EmployeeRepository
               + " COUNT(*) FROM \"employees\" GROUP BY ym",
       nativeQuery = true)
   List<Object[]> joinedPerIstMonth();
+
+  /**
+   * Is this HR-entered employee ID already taken (§3.2)? Case-insensitive, across ALL companies, against
+   * both minted/kept codes and OTHER pending existing-employee entries (whose ID still lives in
+   * form2_info.data until approval). {@code excludeId} lets an edit keep its own ID ('' on create).
+   */
+  @Query(
+      value =
+          "SELECT EXISTS (SELECT 1 FROM \"employees\" e WHERE upper(e.\"employeeCode\") = upper(:code)"
+              + " AND e.\"id\" <> :excludeId)"
+              + " OR EXISTS (SELECT 1 FROM \"form2_info\" f JOIN \"employees\" e ON e.\"id\" = f.\"employeeId\""
+              + " WHERE e.\"onboardingType\" = 'EXISTING_EMPLOYEE' AND e.\"employeeCode\" IS NULL"
+              + " AND upper(f.\"data\"->>'employeeId') = upper(:code) AND e.\"id\" <> :excludeId)",
+      nativeQuery = true)
+  boolean enteredEmployeeIdInUse(@Param("code") String code, @Param("excludeId") String excludeId);
 }

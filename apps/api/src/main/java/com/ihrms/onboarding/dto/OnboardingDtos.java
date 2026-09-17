@@ -4,6 +4,7 @@ import com.ihrms.domain.enums.DocumentStatus;
 import com.ihrms.domain.enums.DocumentType;
 import com.ihrms.domain.enums.EmployeeStatus;
 import com.ihrms.domain.enums.GeneratedDocumentKind;
+import com.ihrms.domain.enums.OnboardingType;
 import com.ihrms.domain.enums.SectionStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -114,9 +115,12 @@ public final class OnboardingDtos {
   // Father's name, date of birth, blood group, mobile and documents-submitted were REMOVED from Form 2's
   // display + PDF (§3.2) — additive-only: their form2_info.data keys stay and prior values are preserved
   // (carried over on re-save), just no longer captured here. (DOB/blood group/mobile remain on Form 1.)
+  // employeeId: ignored for a NEW_HIRE (their code is minted on approval, §5); REQUIRED for an
+  // EXISTING_EMPLOYEE — the ID they already have, validated + kept in EmployeesService (§3.2).
   public record Form2Request(
       @NotBlank(message = "Full name is required") @Size(max = 150) String fullName,
       @Pattern(regexp = "|\\d{4}-\\d{2}-\\d{2}", message = "Use YYYY-MM-DD") String dateOfJoining,
+      @Size(max = 40, message = "Employee ID is too long") String employeeId,
       @Size(max = 180) String officialEmail,
       @NotBlank(message = "Personal email is required")
           @Email(message = "Enter a valid email")
@@ -248,7 +252,8 @@ public final class OnboardingDtos {
       List<Form3EntryView> form3,
       List<DocumentView> documents,
       SignatureView signature,
-      List<GeneratedDocumentView> generatedDocuments) {}
+      List<GeneratedDocumentView> generatedDocuments,
+      OnboardingType onboardingType) {}
 
   public record PresignedUpload(
       String documentId,
